@@ -1,5 +1,5 @@
 use super::*;
-use crate::models::scoped_time::{TimeEntryPage, TimeEntryQuery};
+use crate::ops::time_reads::{TimeEntryPage, TimeEntryQuery};
 use crate::ops::{self, Caller, OpError};
 use crate::testing::time_entry;
 use horae_core::types::EntryState;

@@ -3,7 +3,7 @@
 use horae_core::permissions::catalog::Permission;
 
 use super::super::require_time_reads;
-use super::{REPORT_FORBIDDEN, REPORT_INVALID, unavailable};
+use super::{REPORT_FORBIDDEN, REPORT_INVALID, billable_filter, unavailable};
 use crate::models::time_report::{
     TimeReportGroup, TimeReportGroupCursor, TimeReportGroupPage, TimeReportGroupQuery,
     TimeReportGrouping, TimeReportTotals,
@@ -96,7 +96,7 @@ pub(crate) async fn read(
         query.after.as_ref().map(|cursor| cursor.name.as_str()),
         query.after.as_ref().map(|cursor| cursor.id),
         query.active_projects_only,
-        query.billability.filter(),
+        billable_filter(query.billability),
     ).fetch_all(&mut **tx).await?;
     let stats = rows.first().ok_or_else(unavailable)?;
     let totals = TimeReportTotals {

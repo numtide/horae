@@ -277,7 +277,7 @@ pub async fn built_in_profile(
         .await
         .unwrap()?;
     match state.source {
-        crate::models::permissions::PermissionSource::BuiltIn(profile) => {
+        crate::ops::permissions::PermissionSource::BuiltIn(profile) => {
             assert_eq!(state.grants, profile.selection());
             Some((profile, state.is_administrator))
         }

@@ -76,9 +76,7 @@ mod models {
     pub use super::{
         client::Client,
         organization::{OrgBranding, branding_value_error},
-        project::{
-            Project, ProjectBudgetOverview, ProjectBudgetProgress, ProjectDetails, ProjectTagLink,
-        },
+        project::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink},
     };
 }
 

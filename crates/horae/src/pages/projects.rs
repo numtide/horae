@@ -107,7 +107,7 @@ fn configured_row_spend(progress: &ProjectBudgetOverview) -> Option<RowSpend> {
 #[cfg(test)]
 mod budget_display_tests {
     use super::*;
-    use crate::models::ProjectBudgetProgress;
+    use crate::models::project::ProjectBudgetProgress;
 
     #[test]
     fn project_spend_keeps_withheld_money_distinct_from_zero_and_visible_hours() {

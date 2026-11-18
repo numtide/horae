@@ -5,12 +5,12 @@ pub(crate) use horae_core::types::{EntryState, InvoiceStatus};
 #[cfg(all(test, feature = "server"))]
 pub(crate) use horae_core::types::{BudgetKind, ProjectRole, ProjectType};
 
-#[cfg(feature = "server")]
-pub(crate) use crate::models::User;
 pub(crate) use crate::models::{
     Approval, ApprovalSummary, Client, DetailedReportRow, Invoice, InvoiceWithLines, OrgBranding,
     Project, ProjectSpend, ReportRow, Task, TimeEntry,
 };
+#[cfg(feature = "server")]
+pub(crate) use crate::ops::people::User;
 
 // HTTP status codes for `ServerFnError::ServerError { code, .. }` — named so
 // error paths read at a glance (see AGENTS.md conventions). Server-only: on the
@@ -142,11 +142,11 @@ pub(crate) fn parse_enum<T: std::str::FromStr>(s: &str, field: &str) -> Result<T
 /// `active = true` filter is what actually revokes a deactivated user's access
 /// (FR-002).
 #[cfg(feature = "server")]
-pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError> {
+pub(crate) async fn require_user() -> Result<User, ServerFnError> {
     let user_id = session_user_id().await?;
     let state = crate::state::global_state().await;
     sqlx::query_as!(
-        crate::models::User,
+        User,
         r#"SELECT id, org_id, email, name, oidc_subject,
                 cost_rate_cents, billable_rate_cents, active,
                 created_at as "created_at: chrono::DateTime<chrono::Utc>"

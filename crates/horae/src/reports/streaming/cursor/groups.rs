@@ -3,6 +3,7 @@
 use super::*;
 use crate::models::time_report::{TimeReportGrouping, TimeReportQuery};
 use crate::ops::permissions::StoredPersonPermissions;
+use crate::ops::time_reads::reports::billable_filter;
 use horae_core::permissions::catalog::Permission;
 
 pub(in crate::reports::streaming) async fn declare(
@@ -83,7 +84,7 @@ pub(in crate::reports::streaming) async fn declare(
         org_id, actor_id, query.date_from as _, query.date_to as _, &query.client_ids,
         &query.project_ids, &query.user_ids, &query.task_ids, &query.tag_ids, dimension,
         query.active_projects_only,
-        query.billability.filter(),
+        billable_filter(query.billability),
     ).execute(connection).await.map_err(database_error)?;
     Ok(())
 }

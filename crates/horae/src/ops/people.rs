@@ -13,8 +13,10 @@
 //! Answers carry identity only (`UserListItem`): a people grant does not open
 //! rates or sign-in details.
 
+use chrono::{DateTime, Utc};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use horae_core::permissions::person_management::may_change_active;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::permissions::provisioning;
@@ -52,6 +54,35 @@ fn unavailable_email(email: &str) -> String {
 /// The most people one request may add, matching the importer's bounded list
 /// of missing people.
 const MAX_NEW_PEOPLE: usize = 500;
+
+/// The whole account row, rates and sign-in binding included. Server-only:
+/// answers to the browser use `UserListItem` or `CurrentUser`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct User {
+    pub id: Uuid,
+    pub org_id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub oidc_subject: Option<String>,
+    pub cost_rate_cents: Option<i64>,
+    pub billable_rate_cents: Option<i64>,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Trimmed fields, the email standing in for a blank name. `None` when there
+/// is no usable email.
+pub(crate) fn normalize(person: &NewPerson) -> Option<NewPerson> {
+    let email = person.email.trim();
+    if email.is_empty() || !email.contains('@') {
+        return None;
+    }
+    let name = person.name.trim();
+    Some(NewPerson {
+        email: email.to_owned(),
+        name: if name.is_empty() { email } else { name }.to_owned(),
+    })
+}
 
 /// What adding people does with an email an account already uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,9 +164,7 @@ pub(crate) async fn add(
     let people = people
         .iter()
         .map(|person| {
-            person
-                .clone()
-                .normalized()
+            normalize(person)
                 .ok_or_else(|| OpError::invalid("email", "Every person needs an email address"))
         })
         .collect::<Result<Vec<_>, _>>()?;

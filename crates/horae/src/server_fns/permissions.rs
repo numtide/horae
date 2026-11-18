@@ -3,7 +3,7 @@
 
 // The tests below reach the storage functions through `use super::*`.
 #[cfg(test)]
-use crate::models::permissions::{PermissionSource, PersonPermissions};
+use crate::ops::permissions::{PermissionSource, PersonPermissions};
 #[cfg(test)]
 use crate::ops::permissions::{load_permission_template, load_person_permissions};
 #[cfg(test)]

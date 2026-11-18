@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Invoice {
     pub id: Uuid,
     pub org_id: Uuid,
@@ -48,7 +47,6 @@ impl Invoice {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct InvoiceLine {
     pub id: Uuid,
     pub invoice_id: Uuid,
@@ -85,7 +83,6 @@ pub struct InvoiceDetailView {
 /// Editable invoice values, copied from projects rather than linked to them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct InvoiceDefaults {
     pub terms_days: i16,
     pub po_number: String,

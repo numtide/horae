@@ -7,10 +7,19 @@ use horae_core::permissions::catalog::Permission;
 use super::{require_time_reads, time_reads};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
-    TimeReportAccess, TimeReportCursor, TimeReportEntry, TimeReportPage, TimeReportQuery,
-    TimeReportTotals,
+    TimeReportAccess, TimeReportBillability, TimeReportCursor, TimeReportEntry, TimeReportPage,
+    TimeReportQuery, TimeReportTotals,
 };
 use crate::ops::{Actor, OpError, Tx};
+
+/// The `billable` value a report query matches, or `None` for every entry.
+pub(crate) fn billable_filter(billability: TimeReportBillability) -> Option<bool> {
+    match billability {
+        TimeReportBillability::All => None,
+        TimeReportBillability::Billable => Some(true),
+        TimeReportBillability::NonBillable => Some(false),
+    }
+}
 
 const REPORT_FORBIDDEN: &str = "Current time-report access or identity has changed";
 const REPORT_INVALID: &str = "Invalid time-report date range or cursor";
@@ -115,7 +124,7 @@ pub(crate) async fn entries(
         query.after.as_ref().map(|cursor| cursor.task_name.as_str()),
         query.after.as_ref().map(|cursor| cursor.id),
         query.active_projects_only,
-        query.billability.filter(),
+        billable_filter(query.billability),
     ).fetch_all(&mut **tx).await?;
     let stats = records.first().ok_or_else(unavailable)?;
     let totals = TimeReportTotals {

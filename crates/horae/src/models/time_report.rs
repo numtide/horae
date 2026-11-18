@@ -16,17 +16,6 @@ pub enum TimeReportBillability {
     NonBillable,
 }
 
-impl TimeReportBillability {
-    #[cfg(feature = "server")]
-    pub(crate) fn filter(self) -> Option<bool> {
-        match self {
-            Self::All => None,
-            Self::Billable => Some(true),
-            Self::NonBillable => Some(false),
-        }
-    }
-}
-
 /// Which Reports view one authenticated requester gets; not reusable authority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -29,7 +29,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
-use crate::models::invoice::{InvoiceDetailView, InvoiceListItem};
+use crate::models::invoice::{InvoiceDetailView, InvoiceLine, InvoiceListItem};
 use crate::models::{Invoice, InvoiceWithLines};
 use crate::plugin::AppEvent;
 use crate::plugin::event::invoice_payload;
@@ -305,7 +305,7 @@ pub(crate) async fn fetch_invoice_from(
     connection: &mut sqlx::PgConnection,
     invoice_id: uuid::Uuid,
     org_id: uuid::Uuid,
-) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
+) -> Result<Option<(crate::models::Invoice, Vec<InvoiceLine>)>, sqlx::Error> {
     let Some(invoice) = fetch_invoice_metadata(&mut *connection, invoice_id, org_id).await? else {
         return Ok(None);
     };
@@ -342,9 +342,9 @@ pub(crate) async fn fetch_invoice_metadata(
 fn stream_invoice_lines<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     invoice_id: uuid::Uuid,
-) -> impl Stream<Item = Result<crate::models::InvoiceLine, sqlx::Error>> + 'e {
+) -> impl Stream<Item = Result<InvoiceLine, sqlx::Error>> + 'e {
     sqlx::query_as!(
-        crate::models::InvoiceLine,
+        InvoiceLine,
         r#"SELECT id, invoice_id, time_entry_id, fee_occurrence_id, description,
                   minutes, rate_cents, amount_cents
            FROM invoice_line_items

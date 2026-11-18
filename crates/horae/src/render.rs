@@ -5,7 +5,8 @@
 use typst::foundations::{Dict, IntoValue, Value};
 use typst_as_lib::TypstEngine;
 
-use crate::models::{Invoice, InvoiceLine, OrgBranding};
+use crate::models::invoice::InvoiceLine;
+use crate::models::{Invoice, OrgBranding};
 
 static INVOICE_TEMPLATE: &str = include_str!("../templates/invoice.typ");
 

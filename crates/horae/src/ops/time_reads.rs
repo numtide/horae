@@ -3,16 +3,36 @@
 //! writes. Run them on [`super::begin_read`]: the actor's locks keep the
 //! organization, its activity and grants stable until rows are materialized.
 
+use chrono::NaiveDate;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use horae_core::types::EntryState;
+use uuid::Uuid;
 
 use super::{Actor, OpError, Tx};
 use crate::models::people::PeopleCursor;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
-    TimeEntryCursor, TimeEntryPage, TimeEntryQuery, TimesheetPage, TimesheetPeoplePage,
-    TimesheetPeopleQuery, TimesheetPerson, TimesheetQuery, VisibleTimeEntry,
+    TimeEntryCursor, TimesheetPage, TimesheetPeoplePage, TimesheetPeopleQuery, TimesheetPerson,
+    TimesheetQuery, VisibleTimeEntry,
 };
+
+/// Inclusive dates and optional narrowing filters, applied after scope checks.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TimeEntryQuery {
+    pub date_from: NaiveDate,
+    pub date_to: NaiveDate,
+    pub user_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub after: Option<TimeEntryCursor>,
+}
+
+/// Reauthorized on every page. Exhaust pages before presenting period totals.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TimeEntryPage {
+    pub requester: PermissionRequester,
+    pub entries: Vec<VisibleTimeEntry>,
+    pub next_after: Option<TimeEntryCursor>,
+}
 
 pub(crate) mod reports;
 #[cfg(test)]
