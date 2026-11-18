@@ -228,7 +228,7 @@ if (!selectionOnly && !fixturesOnly) {
     await page.unroute('**/api/**');
     const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-XAt', '-v', 'ON_ERROR_STOP=1', '-c', query], { encoding: 'utf8' }).trim();
     const history = () => ['projects', 'tasks', 'project_tasks', 'assignments', 'time_entries', 'invoices', 'invoice_line_items']
-      .map(table => sql(`SELECT coalesce(jsonb_agg(${table === 'projects' ? "to_jsonb(t) - 'active' - 'edit_revision'" : 'to_jsonb(t)'} ORDER BY to_jsonb(t)), '[]') FROM ${table} t`));
+      .map(table => sql(`SELECT coalesce(jsonb_agg(${table === 'projects' ? "to_jsonb(t) - 'active' - 'edit_revision' - 'updated_at'" : 'to_jsonb(t)'} ORDER BY to_jsonb(t)), '[]') FROM ${table} t`));
     const revisions = () => JSON.parse(sql('SELECT jsonb_object_agg(id, edit_revision) FROM projects'));
     const originalRevisions = revisions();
     const originalHistory = history();
