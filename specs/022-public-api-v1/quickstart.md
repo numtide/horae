@@ -13,6 +13,13 @@ process-compose up            # PostgreSQL, migrations, seed, the app on :8080 w
 
 Sign in at <http://localhost:8080/auth/login> ("Sign in as Admin").
 
+The dev stack sets no cursor key, so the start log shows the development-fallback warning and
+cursors stop working after a restart. That is expected locally. To check the production path,
+write `openssl rand -hex 32` to a file outside the repository, start with
+`HORAE_API_CURSOR_KEY_FILE=<that file>`, and see that the warning is gone and that a cursor taken
+before a restart still works after it. On NixOS, `services.horae.api.cursorKeyFile` does this
+(runbook in [contracts/configuration.md](contracts/configuration.md)).
+
 ## US1: a script reads with a token
 
 1. Personal settings → API tokens → create "quickstart". Copy the token (shown once).

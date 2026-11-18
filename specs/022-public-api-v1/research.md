@@ -141,9 +141,10 @@ nixpkgs has no attribute of that name).
 - **Rationale**: the snapshot keeps the contract visible in review; the baseline stops a pull
   request that edits both the code and the snapshot from hiding a break. Additions pass. The
   check runs in `nix flake check` with no network.
-- **Residual risk**: a pull request that also edits the baseline can still break `v1`. That edit is
-  a visible diff of a file that otherwise never changes, and the plan names it in review
-  (*Layering* rule 5).
+- **Residual risk (accepted by the maintainer, 2026-11-18)**: a pull request that also edits the
+  baseline can still break `v1`. That edit is a visible diff of a file that otherwise never
+  changes, and review of `v1.baseline.json` is the mitigation (*Layering* rule 5). No extra CI job
+  compares against master's baseline.
 - **Alternatives**: `openapi-changes` (pb33f, also unpackaged, larger); a Rust comparison written
   for Horae (a second, weaker oasdiff); comparing against `origin/master` (needs git history in the
   sandbox).
@@ -181,9 +182,18 @@ nixpkgs has no attribute of that name).
   so a cursor cannot be replayed on another list or with other filters. A cursor older than 24
   hours, from another list, with other filters or a bad MAC answers 400 `invalid_cursor`.
   Responses are `{ "data": [...], "next_cursor": string | null }`; no totals.
-- **Key**: `HORAE_API_CURSOR_KEY` (64 hex characters) from configuration or the secret file. When
-  unset, the server draws a random key at start and logs once that cursors will not survive a
-  restart. Cursors carry no secret data, so the key's only job is tamper evidence.
+- **Key** (maintainer, 2026-11-18): in production the key comes from a secret. The server reads
+  `HORAE_API_CURSOR_KEY_FILE` (a file holding 64 hex characters; the NixOS option
+  `services.horae.api.cursorKeyFile` passes it through systemd `LoadCredential`), or
+  `HORAE_API_CURSOR_KEY` with the value itself. A file that is missing, unreadable or malformed
+  refuses to start. When neither is set, the server draws a random key at start as a
+  **development fallback only** and logs a warning at start that cursors will not survive a
+  restart and that production must set the key; the NixOS module also emits an evaluation warning
+  while `cursorKeyFile` is unset. Cursors carry no secret data, so the key's job is tamper
+  evidence, and a stable key keeps cursors valid across restarts and deployments.
+- **Accepted defaults** (maintainer, 2026-11-18): cursors expire after 24 hours;
+  `/api/v1/openapi.json` is public; an unknown body field is 422 `unknown_field`; restart applies
+  only to today's entries and answers 409 otherwise (R-11).
 - **Incremental sync**: `updated_since` is a filter, not an order. A client stores the time it
   started its previous run and passes it next time; a record changed during a walk has
   `updated_at` after that time and comes back on the next run (quickstart).

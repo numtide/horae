@@ -43,7 +43,7 @@ ______________________________________________________________________
 **Independent test**: `/api/v2/users/me` answers 404 while `/harvest/v2/users/me` and
 `/v2/users/me` still answer; the constitution reads 7.0.0.
 
-- [ ] T001 [US3] Once the maintainer has approved the wording, apply the text of `specs/022-public-api-v1/constitution-amendment.md` to `.specify/memory/constitution.md`: retitle Principle IV "Mutations Through Shared Operations", replace the Harvest clause with the token-authenticated APIs clause, generalise the rationale's last two sentences, add the 7.0.0 Sync Impact Report and bump the version line (renumber if spec 020's amendment landed first)
+- [ ] T001 [US3] Apply the text (approved 2026-11-18) of `specs/022-public-api-v1/constitution-amendment.md` to `.specify/memory/constitution.md`: retitle Principle IV "Mutations Through Shared Operations", replace the Harvest clause with the token-authenticated APIs clause, generalise the rationale's last two sentences, add the 7.0.0 Sync Impact Report and bump the version line (renumber if spec 020's amendment landed first)
 - [ ] T002 [P] [US4] Remove the `/api/v2` nest from `harvest::router` and its comment in `crates/horae/src/harvest.rs`
 - [ ] T003 [P] [US4] Replace the `/api/v2` alias assertions with a test that `/api/v2/users/me` and `/api/v2/users/me.json` answer 404 in `crates/horae/src/harvest/api_tests.rs`
 - [ ] T004 [P] Update *Base paths* in `specs/021-harvest-api-compat/contracts/harvest-api-v2.md` and FR-026 in `specs/021-harvest-api-compat/spec.md` with a note pointing to 022 FR-052
@@ -168,9 +168,9 @@ matches the snapshot; removing a field fails the snapshot test and the `api-comp
 
 - [ ] T057 Add `utoipa` 5, `utoipa-axum` 0.2, `hmac`, `sha2`, `base64` and dev-dependency `jsonschema` to `crates/api/Cargo.toml`
 - [ ] T058 [US3] `Problem` type and the single `OpError` mapping (research R-4), plus a JSON extractor that refuses unknown fields with 422 `unknown_field` and malformed bodies with 400, in `crates/api/src/problem.rs`
-- [ ] T059 [US6] HMAC cursors (research R-5) in `crates/api/src/cursor.rs`; `cursor_key` from `HORAE_API_CURSOR_KEY` or a random key logged once, in `crates/server/src/config.rs`
+- [ ] T059 [US6] HMAC cursors (research R-5) in `crates/api/src/cursor.rs`; in `crates/server/src/config.rs`, `cursor_key` from the file named by `HORAE_API_CURSOR_KEY_FILE`, else `HORAE_API_CURSOR_KEY`, else a random development key with a warning logged at start; a missing, unreadable or malformed key file refuses to start. Config tests for each case
 - [ ] T060 [US1] Per-token fixed-window limiter as Axum middleware keyed by `Channel::Token`'s id in `crates/api/src/rate_limit.rs`; `rate_limit` from `HORAE_API_RATE_LIMIT` in `crates/server/src/config.rs`
-- [ ] T061 [P] [US1] NixOS option `services.horae.api.rateLimit` in `nix/modules/nixos/horae.nix`; name `HORAE_API_CURSOR_KEY` in the `secretKeyFile` description
+- [ ] T061 [P] [US1] NixOS options `services.horae.api.rateLimit` and `services.horae.api.cursorKeyFile` in `nix/modules/nixos/horae.nix` (the key file through `LoadCredential` and `HORAE_API_CURSOR_KEY_FILE=%d/api-cursor-key`, an evaluation warning while it is `null`); set a test key file in `nix/checks/e2e.nix`; add the cursor-key runbook of `contracts/configuration.md` to `README.md` and the PR description, and note there that io and shipyard need the key in the deployment that ships PR F
 - [ ] T062 [US2] `v1` router with `OpenApiRouter`, security scheme, `GET /api/v1/openapi.json` (no auth) and the `Page<T>` and `Money` types in `crates/api/src/v1.rs` and `crates/api/src/v1/types.rs`; mount it from `horae_api::router`
 - [ ] T063 [US1] `GET /me`, `/me/trackable` (`ops::time::tracking`) and `/me/timer` (`ops::time::current_timer`) in `crates/api/src/v1/me.rs`, using `ApiCaller`, `ops::begin_read` and `ReadTx::finish`
 - [ ] T064 [US2] Generate and commit `crates/api/openapi/v1.json`; copy it to `crates/api/openapi/v1.baseline.json`; delete `specs/022-public-api-v1/contracts/openapi-v1.draft.yaml` or mark it superseded, and correct `contracts/api-v1.md` where the generated document differs

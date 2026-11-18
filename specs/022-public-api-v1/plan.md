@@ -24,7 +24,8 @@ dependencies in *PR split*.
 | --- | --- | --- |
 | P-1 | `/harvest/v2` needs the shared tokens (C) and limiter (F), but PR D depends only on B | **D2**: a separate PR after C, D and F connects `/harvest/v2` to tokens and the limiter. D stays "move + switch" |
 | P-2 | Restart does not exist, and starting a timer while one runs is refused (021 D-6 unimplemented) | PR E adds restart **and** D-6: start and restart stop the running timer, in the web app too |
-| P-3 | Shape of the Principle IV amendment | A general clause for Horae's token-authenticated HTTP APIs, and the principle renamed "Mutations Through Shared Operations" ([constitution-amendment.md](constitution-amendment.md)) |
+| P-3 | Shape of the Principle IV amendment | A general clause for Horae's token-authenticated HTTP APIs, and the principle renamed "Mutations Through Shared Operations" ([constitution-amendment.md](constitution-amendment.md)); text approved 2026-11-18 |
+| P-4 | Plan approval (2026-11-18) | Plan approved with the recommendations. The R-3 residual risk is accepted (no extra CI job; review of the baseline file mitigates it). Defaults accepted: 24 h cursors, public `openapi.json`, 422 for unknown fields, restart only today's entries (409 otherwise). Change: in production the cursor key comes from a secret file (`services.horae.api.cursorKeyFile`); the random key per process is a development fallback with a start-up warning (research R-5, contracts/configuration.md) |
 
 Earlier decisions this plan follows: the approach handed to planning (utoipa, schema validation
 in tests, a Nix breaking-change check, HMAC cursors with keyset pagination, 021's tokens, one
@@ -146,7 +147,7 @@ crates/server/src/ops/actor.rs                # load person for Channel::Token (
 crates/server/src/ops/time.rs                 # RestartTimer, D-6 (PR E); patch (PR H)
 crates/server/src/ops/time_reads.rs           # list, get (PR H)
 crates/server/src/ops/{projects/reads,clients,projects/task_catalog,people}.rs  # page, get (PR G)
-crates/server/src/config.rs                   # HORAE_HARVEST_API (D), cursor key, rate limit (F)
+crates/server/src/config.rs                   # HORAE_HARVEST_API (D), cursor key file, rate limit (F)
 crates/server/migrations/000N_catalogue_updated_at.sql   # PR E (next free number when it merges)
 crates/server/migrations/000N_api_tokens.sql             # PR C (next free number when it merges)
 crates/core/src/time_entry_timer.rs           # restart eligibility (PR E)
@@ -156,7 +157,7 @@ crates/horae/src/server_fns/api_tokens.rs     # PR C
 crates/horae/src/pages/settings/api_tokens.rs # PR C
 crates/horae/src/pages/admin/api_tokens.rs    # PR C
 crates/horae/Dioxus.toml                      # watch_path for ../api and ../harvest-api (PRs B, D)
-nix/modules/nixos/horae.nix                   # harvestApi.enable (D), api.rateLimit (F)
+nix/modules/nixos/horae.nix                   # harvestApi.enable (D), api.rateLimit and api.cursorKeyFile (F)
 nix/packages/oasdiff.nix                      # PR F
 nix/checks/{api-compat,api-v1}.nix            # PRs F and I
 nix/checks/{tests,clippy}.nix                 # -p horae-api (B), -p horae-harvest-api (D)

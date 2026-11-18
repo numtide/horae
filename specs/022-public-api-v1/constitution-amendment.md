@@ -1,8 +1,8 @@
 # Constitution amendment for 022 Public API `/api/v1`
 
-**Status**: Proposed. Shape chosen by the maintainer on 2026-11-18: a general clause for
-token-authenticated APIs, and the principle renamed. The text below waits for the maintainer's
-approval of the wording; PR A applies it verbatim to `.specify/memory/constitution.md`.
+**Status**: Approved by the maintainer on 2026-11-18. Shape chosen the same day: a general
+clause for token-authenticated APIs, and the principle renamed. PR A applies the text below
+verbatim to `.specify/memory/constitution.md`.
 
 **Version change**: 6.0.0 → 7.0.0 (MAJOR: Principle IV is redefined and renamed). If the
 multi-tenant amendment (spec 020, which plans its own 7.0.0) lands first, this becomes the next

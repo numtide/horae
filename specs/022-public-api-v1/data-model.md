@@ -115,5 +115,5 @@ Shapes are in [contracts/api-v1.md](contracts/api-v1.md); the draft schema is
 | Setting | Variable | NixOS option | Default |
 | --- | --- | --- | --- |
 | Harvest-compatible API on/off (PR D) | `HORAE_HARVEST_API` | `services.horae.harvestApi.enable` | off |
-| Cursor signing key (PR F) | `HORAE_API_CURSOR_KEY` (secret file) | via `secretKeyFile` | random per process |
+| Cursor signing key (PR F) | `HORAE_API_CURSOR_KEY_FILE` (secret file; `HORAE_API_CURSOR_KEY` for development) | `services.horae.api.cursorKeyFile` | random per process, development fallback with a start-up warning |
 | Rate limit (PR F) | `HORAE_API_RATE_LIMIT` (`<requests>/<seconds>`) | `services.horae.api.rateLimit` | `100/15` |
