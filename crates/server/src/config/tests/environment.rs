@@ -70,6 +70,16 @@ fn secure_cookies_use_the_documented_prefixed_variable() {
 }
 
 #[test]
+fn harvest_api_is_off_unless_the_switch_is_set() {
+    for value in ["1", "true", "TRUE"] {
+        probe("harvest-api", &[("HORAE_HARVEST_API", value)]);
+    }
+    for value in ["0", "false", "", "yes"] {
+        probe("defaults", &[("HORAE_HARVEST_API", value)]);
+    }
+}
+
+#[test]
 fn partial_oidc_configuration_remains_disabled_without_a_callback() {
     probe(
         "defaults",
@@ -241,6 +251,7 @@ fn environment_probe() {
             );
             assert!(!config.dev_login);
             assert_eq!(config.secure_cookies, mode == "secure");
+            assert!(!config.harvest_api);
             assert!(config.oidc.is_none());
             assert!(config.harvest.client.is_none());
             assert!(config.harvest.redirect_url.is_none());
@@ -295,6 +306,7 @@ fn environment_probe() {
                 Some(64)
             );
         }
+        "harvest-api" => assert!(config.harvest_api),
         "job-policy" => {
             let requested: i32 = std::env::var("HORAE_JOB_MAX_ATTEMPTS")
                 .unwrap()

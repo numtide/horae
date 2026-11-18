@@ -26,7 +26,8 @@ core crate and is unit-tested in isolation.
 - **Permissions** — built-in profiles, templates, or individual grants scoped to own, managed, or all, plus an explicit Administrator identity.
 - **Reports** — grouped time reports with CSV and XLSX export.
 - **Invoices** — draft invoices with CSV, XLSX, and PDF export.
-- **Harvest-style API** — a read-only `/harvest/v2/*` subset with session authentication.
+- **Harvest-style API** — an optional, read-only `/harvest/v2/*` subset with session
+  authentication, off unless the operator turns it on.
 - **Auth** — OIDC single sign-on in production; a one-click dev login for local work.
 
 The authenticated SPA is organized by route:
@@ -518,6 +519,12 @@ GET /harvest/v2/tasks[/{id}]
 GET /harvest/v2/users
 ```
 
+The subset is off by default: `/harvest/v2/*` and `/v2/*` answer `404` with an empty body. Turn it
+on with `services.horae.harvestApi.enable = true` in the NixOS module, or `HORAE_HARVEST_API=1`
+elsewhere; the setting is read at start. The Harvest importer works either way. There is no
+`/api/v2` alias: a Harvest client configured with a base URL ending in `/api` switches to the
+host root or `/harvest`.
+
 Authentication is session-cookie based. Bearer-token auth is planned but not yet implemented.
 IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and
 maximum `per_page` of 100; follow the returned links to retain filters. Nonpositive page
@@ -540,7 +547,7 @@ GET /api/invoices/{id}/export/{csv,xlsx,pdf}
 - **One feature-gated app crate (`crates/horae/`), two build targets.** `main.rs` defines three
   `cfg`-selected entry points: `server` (Axum + Tokio + the CLI), `web` (compiled to WASM), and a
   stub. Default features are empty, so builds and tests must select `--features server` (or use
-  `dx`). Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `reports`, `seed`,
+  `dx`). Server-only modules (`auth`, `cli`, `config`, `db`, `reports`, `seed`,
   `state`, …) are gated; the shared UI modules compile for both targets.
 - **A pure domain crate (`horae-core`).** Duration parsing, rounding, money, totals, and the entry
   state machine live here with no I/O dependencies, and are unit-tested in isolation.

@@ -3327,7 +3327,7 @@ dependencies = [
  "gloo-timers",
  "horae-api",
  "horae-core",
- "horae-harvest",
+ "horae-harvest-api",
  "horae-server",
  "horae-types",
  "openidconnect",
@@ -3418,6 +3418,28 @@ dependencies = [
  "tracing",
  "ureq 2.12.1",
  "url",
+]
+
+[[package]]
+name = "horae-harvest-api"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "form_urlencoded",
+ "horae-api",
+ "horae-core",
+ "horae-harvest",
+ "horae-server",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sqlx",
+ "tokio",
+ "tower",
+ "tower-sessions",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

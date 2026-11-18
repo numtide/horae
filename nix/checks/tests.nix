@@ -49,7 +49,9 @@ perSystem.self.default.overrideAttrs (old: {
     cargo test -p horae-server -- --test-threads "$database_test_threads"
     # horae-api: the HTTP routes (exports, import error downloads, /auth/*).
     cargo test -p horae-api -- --test-threads "$database_test_threads"
-    # horae: server functions, the Harvest API, the CLI and the UI.
+    # horae-harvest-api: the Harvest-compatible API and its switch.
+    cargo test -p horae-harvest-api -- --test-threads "$database_test_threads"
+    # horae: server functions, the CLI and the UI.
     cargo test -p horae --features server -- --test-threads "$database_test_threads"
 
     pg_ctl -D "$PGDATA" stop

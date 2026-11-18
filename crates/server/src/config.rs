@@ -21,6 +21,9 @@ pub struct AppConfig {
     /// Harvest settings from the environment. An organization's stored OAuth
     /// client fills in what is missing; see `importers::harvest::client_settings`.
     pub harvest: HarvestDeployment,
+    /// `HORAE_HARVEST_API=1` mounts the Harvest-compatible API (`/harvest/v2`,
+    /// `/v2`). Off by default; the importer's OAuth callback does not need it.
+    pub harvest_api: bool,
     /// Execution limits copied into newly enqueued jobs.
     pub job_policy: JobPolicy,
     /// Optional budget email transport; no process is started when absent.
@@ -402,6 +405,9 @@ impl AppConfig {
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
             harvest: HarvestDeployment::from_env(),
+            harvest_api: std::env::var("HORAE_HARVEST_API")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
             job_policy: JobPolicy::from_env()?,
             mail: MailConfig::parse(
                 non_empty("HORAE_SENDMAIL_PATH").as_deref(),

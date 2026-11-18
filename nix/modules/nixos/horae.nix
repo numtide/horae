@@ -133,6 +133,11 @@ in
       default = false;
       description = "Whether to open the firewall for the Horae port.";
     };
+
+    harvestApi.enable = lib.mkEnableOption ''
+      the Harvest-compatible API (`/harvest/v2`, `/v2`), by setting
+      HORAE_HARVEST_API=1. When off, those paths answer 404. The Harvest
+      importer does not need it'';
   };
 
   config = lib.mkIf cfg.enable {
@@ -185,6 +190,8 @@ in
             "postgres:///horae"
           else
             "postgres://localhost/horae";
+      } // lib.optionalAttrs cfg.harvestApi.enable {
+        HORAE_HARVEST_API = "1";
       } // lib.optionalAttrs (cfg.api.cursorKeyFile != null) {
         # %d is the service's credentials directory.
         HORAE_API_CURSOR_KEY_FILE = "%d/api-cursor-key";

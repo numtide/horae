@@ -4,8 +4,6 @@
 
 #[cfg(feature = "server")]
 mod cli;
-#[cfg(feature = "server")]
-mod harvest;
 
 // The backend lives in `horae-server`; keep the `crate::ops` (…) paths.
 #[cfg(all(test, feature = "server"))]
@@ -312,7 +310,7 @@ fn main() -> anyhow::Result<()> {
                         },
                         v1: horae_api::v1::V1State::new(pool.clone(), &cfg.api),
                     }))
-                    .merge(harvest::router(pool.clone()))
+                    .merge(horae_harvest_api::mount(cfg.harvest_api, pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated.
                     .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))

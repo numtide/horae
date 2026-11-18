@@ -274,12 +274,15 @@ mod tests {
     }
 
     /// `catalogue_updated_at` backfills existing rows from their creation time,
-    /// without counting as a project edit, and every later update moves it.
+    /// without counting as a project edit, and a later edit moves it.
     #[sqlx::test(migrations = false)]
     async fn catalogue_update_times_are_backfilled_and_follow_updates(pool: sqlx::PgPool) {
-        let (before, catalogue): (Vec<_>, Vec<_>) = super::MIGRATOR
+        // Only the migrations before it: later ones may rely on its columns.
+        let at = super::MIGRATOR
             .iter()
-            .partition(|migration| migration.description != "catalogue updated at");
+            .position(|migration| migration.description == "catalogue updated at")
+            .expect("the catalogue_updated_at migration");
+        let (before, catalogue) = super::MIGRATOR.migrations.split_at(at);
         for migration in before {
             sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
         }
@@ -304,10 +307,10 @@ mod tests {
         };
         let revision_before = revision().await;
 
-        let [migration] = catalogue[..] else {
-            panic!("one catalogue_updated_at migration: {catalogue:?}");
-        };
-        sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        sqlx::raw_sql(&catalogue[0].sql)
+            .execute(&pool)
+            .await
+            .unwrap();
 
         let times = || async {
             sqlx::query!(
@@ -350,5 +353,83 @@ mod tests {
         assert!(updated.user > backfilled.user);
         assert!(updated.task > backfilled.task);
         assert_eq!(updated.task_created, backfilled.task_created);
+    }
+
+    /// An UPDATE that writes the same values keeps `updated_at` and the
+    /// project's edit revision; one that changes a value moves both.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn updated_at_moves_only_when_a_row_changes(pool: sqlx::PgPool) {
+        let ids = crate::testing::seed_tenant(&pool).await;
+        let entry =
+            crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open).await;
+        let stamps = || async {
+            sqlx::query!(
+                r#"SELECT
+                     (SELECT updated_at FROM projects WHERE id = $1) AS "project!: chrono::DateTime<chrono::Utc>",
+                     (SELECT edit_revision FROM projects WHERE id = $1) AS "revision!",
+                     (SELECT updated_at FROM clients WHERE id = $2) AS "client!: chrono::DateTime<chrono::Utc>",
+                     (SELECT updated_at FROM users WHERE id = $3) AS "user!: chrono::DateTime<chrono::Utc>",
+                     (SELECT updated_at FROM tasks WHERE id = $4) AS "task!: chrono::DateTime<chrono::Utc>",
+                     (SELECT updated_at FROM time_entries WHERE id = $5) AS "entry!: chrono::DateTime<chrono::Utc>""#,
+                ids.project_id,
+                ids.client_id,
+                ids.user_id,
+                ids.task_id,
+                entry,
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        let before = stamps().await;
+
+        sqlx::raw_sql(
+            "UPDATE projects SET name = name;
+             UPDATE clients SET name = name;
+             UPDATE users SET name = name;
+             UPDATE tasks SET name = name;
+             UPDATE time_entries SET minutes = minutes, notes = notes;",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let unchanged = stamps().await;
+        assert_eq!(
+            (
+                unchanged.project,
+                unchanged.revision,
+                unchanged.client,
+                unchanged.user,
+                unchanged.task,
+                unchanged.entry
+            ),
+            (
+                before.project,
+                before.revision,
+                before.client,
+                before.user,
+                before.task,
+                before.entry
+            ),
+            "a write of the same values is no change"
+        );
+
+        sqlx::raw_sql(
+            "UPDATE projects SET name = name || '!';
+             UPDATE clients SET name = name || '!';
+             UPDATE users SET name = name || '!';
+             UPDATE tasks SET name = name || '!';
+             UPDATE time_entries SET minutes = minutes + 1;",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let changed = stamps().await;
+        assert!(changed.project > before.project);
+        assert_eq!(changed.revision, before.revision + 1);
+        assert!(changed.client > before.client);
+        assert!(changed.user > before.user);
+        assert!(changed.task > before.task);
+        assert!(changed.entry > before.entry);
     }
 }

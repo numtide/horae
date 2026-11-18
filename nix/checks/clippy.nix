@@ -19,6 +19,7 @@ perSystem.self.default.overrideAttrs (old: {
     cargo clippy -p horae-harvest --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-server --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-api --all-targets -- -D warnings -W clippy::perf
+    cargo clippy -p horae-harvest-api --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae --features server --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-dioxus-lint --all-targets -- -D warnings -W clippy::perf
     runHook postBuild
