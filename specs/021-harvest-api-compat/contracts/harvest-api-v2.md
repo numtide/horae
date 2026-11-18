@@ -7,9 +7,11 @@ Harvest's public API v2 reference; this document records only where Horae differ
 ## Base paths
 
 - Canonical: `/harvest/v2/...`.
-- Aliases served identically (FR-026): `/v2/...`, `/api/v2/...`, and any path with a `.json`
-  suffix. A client configured with base URL `https://<host>` or `https://<host>/api` therefore
-  works with a one-line host change.
+- Aliases served identically (FR-026): `/v2/...` and any path with a `.json` suffix. A client
+  configured with base URL `https://<host>` therefore works with a one-line host change.
+- Amended by spec 022 FR-052: the `/api/v2/...` alias is removed, because `/api/` belongs to
+  Horae's own API. A client configured with base URL `https://<host>/api` switches to the host
+  root or `https://<host>/harvest`.
 
 ## Authentication (step 2)
 

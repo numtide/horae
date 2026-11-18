@@ -130,16 +130,22 @@ async fn every_alias_serves_the_canonical_response(pool: PgPool) {
     let app = signed_in(&pool, ids.user_id).await;
     let canonical = page(&app, "/harvest/v2/users/me").await;
 
-    for alias in [
-        "/v2/users/me",
-        "/api/v2/users/me",
-        "/harvest/v2/users/me.json",
-        "/api/v2/users/me.json",
-    ] {
+    for alias in ["/v2/users/me", "/harvest/v2/users/me.json"] {
         assert_eq!(page(&app, alias).await, canonical, "{alias}");
     }
     let projects = page(&app, "/v2/projects.json").await;
     assert_eq!(projects["total_entries"], 1);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_api_v2_prefix_is_not_a_harvest_alias(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let app = signed_in(&pool, ids.user_id).await;
+
+    for path in ["/api/v2/users/me", "/api/v2/users/me.json"] {
+        let (status, _) = request(&app, path).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+    }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
