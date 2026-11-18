@@ -5,7 +5,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
     let target = user(pool, ids.org_id).await;
     // The timer read loads the person's stored state, as every person has.
     crate::server_fns::provisioning::provision(
@@ -16,11 +16,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     )
     .await
     .unwrap();
-    let target_ids = crate::server_fns::test_seed::SeedIds {
+    let target_ids = crate::testing::SeedIds {
         user_id: target,
         ..ids
     };
-    let entry = crate::server_fns::test_seed::time_entry(pool, &target_ids, EntryState::Open).await;
+    let entry = crate::testing::time_entry(pool, &target_ids, EntryState::Open).await;
     let invoice = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)

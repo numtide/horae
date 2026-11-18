@@ -3,7 +3,7 @@
 
 use super::tests::{approve_periods, caller, insert_entry, reopen_period, submit_user_week};
 use super::*;
-use crate::server_fns::test_seed::{assert_minutes_cannot_rise, legacy_minutes, seed};
+use crate::testing::{assert_minutes_cannot_rise, legacy_minutes, seed};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 

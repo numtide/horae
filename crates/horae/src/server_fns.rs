@@ -256,14 +256,14 @@ mod session_caller_tests {
 // using `server_fns::<fn>` regardless of which submodule a function lives in.
 #[cfg(all(test, feature = "server"))]
 pub(crate) mod budget_tests;
-#[cfg(all(test, feature = "server"))]
-pub(crate) mod test_seed;
 
 mod approvals;
 mod auth;
 mod clients;
 mod importers;
 mod invoices;
+#[cfg(all(test, feature = "server"))]
+mod op_error_tests;
 mod organization;
 #[cfg(all(test, feature = "server"))]
 mod parse_tests;

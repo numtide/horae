@@ -90,7 +90,7 @@ async fn canonical_budget_financial_revocation_withholds_allowance_and_consumpti
     .execute(&pool)
     .await
     .unwrap();
-    crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     let rows = read(&pool, &ids).await;
     assert_eq!(
         (rows[0].budget, rows[0].consumed),
@@ -158,8 +158,8 @@ async fn canonical_shared_budget_does_not_disclose_other_person_allocations(pool
         .await
         .unwrap();
     }
-    crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
-    let other_entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
+    let other_entry = crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE time_entries SET user_id=$2 WHERE id=$1",
         other_entry,
@@ -249,7 +249,7 @@ async fn canonical_budget_skips_hidden_monetary_overflow(pool: PgPool) {
     configured(&pool, &ids).await;
     sqlx::query!("UPDATE projects SET budget_kind='amount', budget_amount_cents=86753, rate_cents=$2 WHERE id=$1",
         ids.project_id, i64::MAX).execute(&pool).await.unwrap();
-    let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    let entry = crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!("UPDATE time_entries SET minutes=120 WHERE id=$1", entry)
         .execute(&pool)
         .await
@@ -371,8 +371,7 @@ async fn canonical_budget_summaries_exclude_unallocated_hours_and_money_but_not_
                 VALUES ($1,$2,$3,$4,$5,$6)", Uuid::now_v7(), ids.org_id, ids.project_id, task,
                 if monetary { None } else { allowance },
                 if monetary { allowance.map(|minutes| minutes * 100) } else { None }).execute(&pool).await.unwrap();
-            let entry =
-                crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+            let entry = crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
             sqlx::query!(
                 "UPDATE time_entries SET task_id=$2, minutes=$3 WHERE id=$1",
                 entry,

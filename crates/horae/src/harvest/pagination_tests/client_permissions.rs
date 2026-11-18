@@ -158,7 +158,7 @@ async fn client_api_observes_revocation_after_waiting_for_current_authority(pool
             "/harvest/v2/clients".to_owned()
         };
         let pending = tokio::spawn(async move { request(&app, &uri).await });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+        crate::testing::wait_for_blocked(&pool, blocker).await;
         let grants: Vec<String> =
             serde_json::from_value(serde_json::json!(PermissionSelection::new(&[]))).unwrap();
         sqlx::query!(
@@ -210,7 +210,7 @@ async fn client_api_rechecks_activity_after_session_authentication(pool: PgPool)
             "/harvest/v2/clients".to_owned()
         };
         let pending = tokio::spawn(async move { request(&app, &uri).await });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+        crate::testing::wait_for_blocked(&pool, blocker).await;
         hold.commit().await.unwrap();
         let (status, body) = pending.await.unwrap();
         assert_eq!(status, StatusCode::FORBIDDEN, "{body}");

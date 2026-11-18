@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, clear_state, seed};
+use crate::testing::{SeedIds, clear_state, seed};
 use horae_core::permissions::catalog::{
     BuiltInProfile, Permission, PermissionSelection, validate_template_name,
 };

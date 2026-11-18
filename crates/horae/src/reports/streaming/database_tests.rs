@@ -1,7 +1,7 @@
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 
-use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use crate::testing::{SeedIds, seed, time_entry};
 
 use super::*;
 

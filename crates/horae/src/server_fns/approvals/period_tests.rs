@@ -4,7 +4,7 @@
 use super::tests::{approve_periods, caller, insert_entry, reopen_period, submit_user_week};
 use super::*;
 use crate::ops::Caller;
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::testing::{SeedIds, seed};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;

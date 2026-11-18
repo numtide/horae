@@ -6,7 +6,7 @@ use super::calls::{
 use super::*;
 use crate::ops::OpError;
 use crate::ops::testing::save_state;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -79,9 +79,7 @@ async fn a_refused_profile_command_releases_the_organization(pool: PgPool) {
         execute(&pool, ids.org_id, ids.user_id, &request).await,
         Err(e) if e == forbidden()
     ));
-    assert!(crate::server_fns::test_seed::organization_lockable(
-        &pool, ids.org_id
-    ));
+    assert!(crate::testing::organization_lockable(&pool, ids.org_id));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

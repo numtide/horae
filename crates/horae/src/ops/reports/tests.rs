@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::*;
 use crate::ops::testing::provision;
 use crate::ops::{Caller, OpError, begin_read};
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::testing::{SeedIds, seed};
 
 /// The day every fixture entry is on.
 const DAY: &str = "2026-09-07";

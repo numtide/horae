@@ -5,7 +5,7 @@ use crate::models::DetailedReportRow;
 use crate::models::invoice::{InvoiceDetailView, InvoiceListItem};
 use crate::ops::reports::ReportFilters;
 use crate::ops::{Caller, OpError, SnapshotLimits, begin_read, begin_read_snapshot};
-use crate::server_fns::test_seed::{SeedIds, seed, time_entry, wait_for_blocked};
+use crate::testing::{SeedIds, seed, time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::{EntryState, InvoiceStatus};
 use serde_json::{Value, json};

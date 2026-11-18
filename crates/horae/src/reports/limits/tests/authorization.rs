@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{wait_for_blocked, wait_for_other_transactions};
+use crate::testing::{wait_for_blocked, wait_for_other_transactions};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};

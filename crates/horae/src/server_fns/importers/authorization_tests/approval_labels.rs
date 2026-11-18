@@ -31,8 +31,8 @@ async fn approval(
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::ExecutiveManager).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let person = |profile| add_person(pool, &ids, profile);
     let admin = person(BuiltInProfile::Administrator).await.user_id;
     let member = person(BuiltInProfile::Member).await.user_id;

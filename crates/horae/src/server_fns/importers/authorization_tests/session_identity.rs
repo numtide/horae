@@ -4,8 +4,8 @@ use super::*;
 use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let manager = user(pool, ids.org_id).await;
     let member = user(pool, ids.org_id).await;
     sqlx::query!(

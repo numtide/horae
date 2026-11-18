@@ -95,7 +95,7 @@ mod tests {
         assert_eq!(users[0].email, "ops@contoso.example");
         assert_eq!(users[0].name, "Ops");
         assert_eq!(
-            crate::server_fns::test_seed::built_in_profile(&pool, org[0].id, users[0].id).await,
+            crate::testing::built_in_profile(&pool, org[0].id, users[0].id).await,
             Some((BuiltInProfile::Administrator, true))
         );
         assert!(users[0].active);

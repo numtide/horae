@@ -1,7 +1,7 @@
 use super::canonical_fields::canonical_actor;
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::server_fns::test_seed::SeedIds;
+use crate::testing::SeedIds;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
@@ -429,7 +429,7 @@ async fn editor_catalog_rechecks_revocation_after_waiting_for_the_organization(p
             .await
         })
     };
-    crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+    crate::testing::wait_for_blocked(&pool, pid).await;
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),

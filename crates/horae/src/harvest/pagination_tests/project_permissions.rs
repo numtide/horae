@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::SeedIds;
+use crate::testing::SeedIds;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
@@ -28,7 +28,7 @@ pub(super) async fn canonical(
     permissions: &[Permission],
 ) -> (SeedIds, Router) {
     let ids = seed(pool, profile).await;
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,'{}',false,'individual')",

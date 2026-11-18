@@ -4,7 +4,7 @@ use super::calls::{forbidden, history_unavailable, state_unavailable};
 use super::*;
 use crate::models::permission_audit::AuditPrincipal;
 use crate::ops::OpError;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use serde_json::json;
 use sqlx::PgPool;
@@ -19,7 +19,7 @@ async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
         serde_json::to_value(BuiltInProfile::Administrator.selection()).unwrap(),
     )
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
         VALUES ($1, $2, $3, 1, $4, $5, 'individual')",
         Uuid::now_v7(), ids.org_id, ids.user_id, &grants, administrator).execute(pool).await.unwrap();

@@ -82,11 +82,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             Some(8000),
         ),
     ] {
-        let ids = crate::server_fns::test_seed::seed(pool, profile).await;
+        let ids = crate::testing::seed(pool, profile).await;
         let grants = PermissionSelection::new(&grants);
         let may_read_rate = grants.contains(Permission::BillableRateReadAll);
         let stored: Vec<String> = serde_json::from_value(json!(grants)).unwrap();
-        crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+        crate::testing::clear_state(pool, ids.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();

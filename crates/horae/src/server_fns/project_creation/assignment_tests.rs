@@ -2,7 +2,7 @@ use super::{finalize_draft_record, load_draft_record, save_draft_record};
 use crate::models::project_creation::{
     ProjectForm, ProjectMemberInput, ProjectTaskInput, TaskAccess, TaskSource,
 };
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use dioxus::prelude::ServerFnError;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::project::BudgetMode;
@@ -211,7 +211,7 @@ async fn finalization_designates_eligible_managers_like_the_editor(pool: PgPool)
     let creator = seed(&pool, BuiltInProfile::ProjectManager).await;
     let teammate = member(&pool, creator.org_id, true).await;
     let plain = member(&pool, creator.org_id, true).await;
-    crate::server_fns::test_seed::clear_state(&pool, plain).await;
+    crate::testing::clear_state(&pool, plain).await;
     let mut connection = pool.acquire().await.unwrap();
     crate::server_fns::provisioning::provision(
         &mut connection,

@@ -7,7 +7,7 @@ async fn canonical(pool: &PgPool, profile: BuiltInProfile, permissions: &[Permis
         serde_json::to_value(PermissionSelection::new(permissions)).unwrap(),
     )
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,$4,false,'individual')",

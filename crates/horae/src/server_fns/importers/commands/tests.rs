@@ -1,6 +1,6 @@
 use super::*;
 use crate::ops::testing::{Recorder, assign_profile, revoke};
-use crate::server_fns::test_seed::{SeedIds, organization_lockable, seed, wait_for_blocked};
+use crate::testing::{SeedIds, organization_lockable, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
 

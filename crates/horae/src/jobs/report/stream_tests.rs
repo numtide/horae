@@ -38,7 +38,7 @@ impl ArchivedJob {
 }
 
 async fn archived_job(pool: &PgPool) -> ArchivedJob {
-    let seeded = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let seeded = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let (org, actor) = (seeded.org_id, seeded.user_id);
     let id = jobs::enqueue(
         pool,
@@ -173,7 +173,7 @@ async fn download_rechecks_after_buffered_pages_and_before_the_captured_tail(poo
 async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(pool: PgPool) {
     use axum::http::StatusCode;
     let job = archived_job(&pool).await;
-    let foreign = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     for (org, actor, id, expected) in [
         (job.org, foreign.user_id, job.id, StatusCode::FORBIDDEN),
         (job.org, Uuid::now_v7(), job.id, StatusCode::FORBIDDEN),
@@ -303,7 +303,7 @@ async fn read_boundary(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_boundaries_recheck_after_organization_and_actor_waits(pool: PgPool) {
-    use crate::server_fns::test_seed::wait_for_blocked;
+    use crate::testing::wait_for_blocked;
     let reading = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
         .after_connect(|connection, _| {
@@ -376,7 +376,7 @@ async fn download_boundaries_recheck_after_organization_and_actor_waits(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_readers_retain_authority_through_their_bounded_reads(pool: PgPool) {
-    use crate::server_fns::test_seed::wait_for_blocked;
+    use crate::testing::wait_for_blocked;
     let job = archived_job(&pool).await;
     for boundary in [Boundary::Preparation, Boundary::Page] {
         assign_profile(&pool, job.org, job.actor, BuiltInProfile::Administrator).await;

@@ -4,8 +4,8 @@ use super::*;
 use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::ExecutiveManager).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET project_type='fixed_fee', starts_on='2026-09-01' WHERE id=$1",
         ids.project_id

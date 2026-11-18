@@ -41,7 +41,7 @@ async fn call(api: &Api, cookie: &str, args: &[&str]) -> (u8, Value) {
 pub(super) async fn exercise(
     api: &Api,
     pool: &PgPool,
-    owner: &crate::server_fns::test_seed::SeedIds,
+    owner: &crate::testing::SeedIds,
     admin: &str,
     rejected: &[&str],
     outsider: &str,

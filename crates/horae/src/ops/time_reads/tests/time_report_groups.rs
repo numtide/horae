@@ -3,7 +3,7 @@ use crate::models::time_report::{
     TimeReportGroupCursor, TimeReportGroupPage, TimeReportGroupQuery, TimeReportGrouping,
 };
 use crate::ops::{self, Caller, OpError};
-use crate::server_fns::test_seed::time_entry;
+use crate::testing::time_entry;
 use horae_core::types::EntryState;
 
 /// `list_visible_time_report_groups` without the session.

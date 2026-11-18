@@ -1017,7 +1017,7 @@ async fn users_page(
 mod tests {
     use super::*;
     use crate::ops::testing::provision;
-    use crate::server_fns::test_seed::{SeedIds, seed};
+    use crate::testing::{SeedIds, seed};
     use horae_core::permissions::catalog::BuiltInProfile;
     use horae_core::types::EntryState;
 
@@ -1438,7 +1438,7 @@ mod tests {
     /// caller's `FOR SHARE` locks do not outlive the response.
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn refusals_release_the_read_locks(pool: PgPool) {
-        use crate::server_fns::test_seed::organization_lockable;
+        use crate::testing::organization_lockable;
         let ids = seed(&pool, BuiltInProfile::Member).await;
         let other = colleague(&pool, &ids).await;
         let theirs = insert_entry(&pool, &ids, other, "theirs").await;

@@ -1,7 +1,7 @@
 //! Saving the profile is tested in `ops::profile`.
 
 use super::*;
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;

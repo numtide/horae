@@ -1,6 +1,6 @@
 use super::canonical_read_tests::project_team;
 use super::*;
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -60,9 +60,7 @@ async fn project_rate_helper_has_no_public_execute_grant(pool: PgPool) {
     assert!(!public_execute);
 }
 
-async fn project_with_assignment(
-    pool: &PgPool,
-) -> (User, Uuid, crate::server_fns::test_seed::SeedIds) {
+async fn project_with_assignment(pool: &PgPool) -> (User, Uuid, crate::testing::SeedIds) {
     let ids = seed(pool, BuiltInProfile::Member).await;
     let colleague = Uuid::now_v7();
     sqlx::query!(

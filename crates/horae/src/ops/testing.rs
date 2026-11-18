@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{AppEvent, EventSink};
-use crate::server_fns::test_seed::{SeedIds, clear_state};
+use crate::testing::{SeedIds, clear_state};
 
 /// Keeps dispatched events so a test can inspect them.
 #[derive(Default)]

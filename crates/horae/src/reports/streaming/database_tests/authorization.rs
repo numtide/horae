@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::wait_for_blocked;
 use horae_core::permissions::catalog::BuiltInProfile;
 
 #[derive(Clone, Copy)]
