@@ -15,7 +15,7 @@ server = [
   "horae-core/sqlx",
   "dep:horae-server",
   "dep:horae-api",
-  "dep:horae-harvest",
+  "dep:horae-harvest-api",
   "dioxus/server",
   "dep:tokio",
   "dep:axum",
@@ -47,7 +47,7 @@ wasm-bindgen = "=0.2.126"
 # server-only
 horae-server = { path = "../server", optional = true }
 horae-api = { path = "../api", optional = true }
-horae-harvest = { path = "../harvest", optional = true }
+horae-harvest-api = { path = "../harvest-api", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 axum = { version = "0.8", features = ["macros", "multipart"], optional = true }
 tower-http = { version = "0.6", features = [
@@ -75,7 +75,6 @@ gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 csv = "1"
 dioxus-html = { version = "0.7", features = ["serialize"] }
 horae-api = { path = "../api", features = ["test-support"] }
-horae-harvest = { path = "../harvest", features = ["test-support"] }
 horae-server = { path = "../server", features = ["test-support"] }
 # The OAuth tests parse the authorize URL with the `url` it re-exports.
 openidconnect = { version = "3", features = ["ureq"] }

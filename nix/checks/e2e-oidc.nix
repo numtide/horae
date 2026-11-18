@@ -152,6 +152,8 @@ pkgs.testers.nixosTest {
 
     services.horae.enable = true;
     services.horae.database.createLocally = true;
+    # The sign-in checks probe the session through /harvest/v2.
+    services.horae.harvestApi.enable = true;
     # The test restarts Horae once per configuration it exercises, faster than
     # the default start limit allows on a quick builder.
     systemd.services.horae.unitConfig.StartLimitIntervalSec = 0;

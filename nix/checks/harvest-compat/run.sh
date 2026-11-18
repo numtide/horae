@@ -39,7 +39,7 @@ if curl -s --max-time 1 -o /dev/null "$url/health"; then
   exit 1
 fi
 cd "$(dirname "$HORAE_TEST_SERVER")"
-DEV_LOGIN=1 IP=127.0.0.1 PORT=8094 RUST_LOG=warn "$HORAE_TEST_SERVER" serve >"$test_dir/server.log" 2>&1 &
+DEV_LOGIN=1 HORAE_HARVEST_API=1 IP=127.0.0.1 PORT=8094 RUST_LOG=warn "$HORAE_TEST_SERVER" serve >"$test_dir/server.log" 2>&1 &
 app_pid=$!
 for _attempt in {1..100}; do
   kill -0 "$app_pid"

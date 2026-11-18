@@ -6,6 +6,7 @@ members = [
   "crates/core",
   "crates/types",
   "crates/harvest",
+  "crates/harvest-api",
   "crates/dioxus-lint",
 ]
 exclude = [

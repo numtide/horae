@@ -65,8 +65,9 @@ pkgs.testers.nixosTest {
     assert "DEV_LOGIN=1 grants an admin session" in output, output
 
     machine.succeed(
+        # The auth bypass check below probes the session through /harvest/v2.
         "podman run -d --name horae --network=host --read-only --tmpfs /tmp "
-        f"{database} {image}"
+        f"-e HORAE_HARVEST_API=1 {database} {image}"
     )
     try:
         machine.wait_for_open_port(3000, timeout=300)

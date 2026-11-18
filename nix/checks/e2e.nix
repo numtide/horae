@@ -33,6 +33,7 @@ pkgs.testers.nixosTest {
     services.horae.enable = true;
     services.horae.database.createLocally = true;
     systemd.services.horae.environment.DEV_LOGIN = "1";
+    services.horae.harvestApi.enable = true;
     # Restart explicitly so crash recovery cannot race the test's assertions.
     systemd.services.horae.serviceConfig.Restart = lib.mkForce "no";
     # Put horae on PATH so the test script can call `horae seed`
@@ -107,6 +108,29 @@ pkgs.testers.nixosTest {
     )
     assert '"time_entries"' in result, f"Expected Harvest envelope, got: {result[:200]}"
     assert '"per_page"' in result, f"Missing pagination field in: {result[:200]}"
+
+    # Switched off, as a deployment is by default, the Harvest paths answer an
+    # empty 404 even to a signed-in session, not the web app's HTML shell.
+    switch = "/run/systemd/system/horae.service.d/harvest-api-off.conf"
+    def restart_horae():
+        server.succeed("systemctl daemon-reload && systemctl restart horae.service")
+        server.wait_for_unit("horae.service")
+        server.wait_for_open_port(3000)
+    server.succeed(
+        f"mkdir -p {switch.rsplit('/', 1)[0]} && "
+        f"printf '%s\\n' '[Service]' 'Environment=HORAE_HARVEST_API=0' > {switch}"
+    )
+    restart_horae()
+    for path in ("/harvest/v2/users/me", "/v2/users/me"):
+        status = server.succeed(
+            "curl -s -b /tmp/cookies.txt -o /tmp/harvest-off.body -w '%{http_code}' "
+            f"http://localhost:3000{path}"
+        ).strip()
+        assert status == "404", f"{path} with the Harvest API off: {status}"
+        size = server.succeed("stat -c %s /tmp/harvest-off.body").strip()
+        assert size == "0", f"{path} with the Harvest API off has a {size}-byte body"
+    server.succeed(f"rm {switch}")
+    restart_horae()
 
     # Exports are plain Axum routes under /api/, a prefix the login guard lets
     # through because everything else there is a server function that checks its
