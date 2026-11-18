@@ -6,7 +6,7 @@ use dioxus::prelude::dioxus_fullstack::reqwest;
 use sqlx::{ConnectOptions, PgPool};
 use tokio::process::Command;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn favicon_is_public_and_every_page_links_it(pool: PgPool) {
     let database = pool.connect_options().to_url_lossy().to_string();

@@ -28,7 +28,7 @@ perSystem.self.default.overrideAttrs (old: {
 
     # The rest of the suite is #[sqlx::test]: every test creates a throwaway
     # database — so the role needs CREATEDB, which `postgres` has as a
-    # superuser — and applies crates/horae/migrations into it itself. Unix
+    # superuser — and applies crates/server/migrations into it itself. Unix
     # socket only, no TCP, because the build sandbox has no network. The
     # cluster dies with the build directory, so durability buys nothing.
     export PGDATA=$(mktemp -d)
@@ -45,6 +45,9 @@ perSystem.self.default.overrideAttrs (old: {
     # Database creation and migrations share one PostgreSQL instance and disk;
     # large CPU budgets must not turn fixture setup into unbounded I/O contention.
     database_test_threads=$((NIX_BUILD_CORES < 8 ? NIX_BUILD_CORES : 8))
+    # horae-server: the backend's own tests (operations, jobs, importers, …).
+    cargo test -p horae-server -- --test-threads "$database_test_threads"
+    # horae: server functions, HTTP routes, the CLI and the UI.
     cargo test -p horae --features server -- --test-threads "$database_test_threads"
 
     pg_ctl -D "$PGDATA" stop

@@ -9,7 +9,7 @@ let
     runtimeInputs = with pkgs; [ sqlx-cli process-compose git ];
     text = ''
       cd "$(git rev-parse --show-toplevel)"
-      sqlx migrate run --source crates/horae/migrations
+      sqlx migrate run --source crates/server/migrations
 
       # A new migration changes what the query macros compile against, so the app
       # needs a rebuild rather than a restart — which is what restarting dx does.

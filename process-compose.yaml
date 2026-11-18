@@ -54,7 +54,7 @@ processes:
     # sqlx query macros are checked against the live database at compile time, so
     # the schema has to exist before the app is *built*, not just before it runs.
     # sqlx-cli applies migrations without compiling anything.
-    command: sqlx migrate run --source crates/horae/migrations
+    command: sqlx migrate run --source crates/server/migrations
     depends_on:
       postgres:
         condition: process_healthy

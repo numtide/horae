@@ -523,7 +523,7 @@ GET /api/invoices/{id}/export/{csv,xlsx,pdf}
   read-only Harvest API — on top of the Dioxus fullstack router, all under a Postgres-backed
   session layer. The SPA performs mutations through session-authenticated Dioxus `#[server]`
   functions.
-- **PostgreSQL only.** Migrations live in `crates/horae/migrations/` and apply via `sqlx`.
+- **PostgreSQL only.** Migrations live in `crates/server/migrations/` and apply via `sqlx`.
 
 Domain invariants worth knowing: durations are stored as integer minutes, money as integer minor
 units (cents) plus an ISO currency code (never floats), and primary keys are UUID v7.

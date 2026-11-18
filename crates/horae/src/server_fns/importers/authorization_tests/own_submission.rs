@@ -1,8 +1,7 @@
 //! Weekly submission must remain bound to the page that initiated it.
 
 use super::*;
-use crate::ops::approvals::tests::add_person;
-use crate::testing::{seed, time_entry};
+use crate::testing::{add_person, seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {

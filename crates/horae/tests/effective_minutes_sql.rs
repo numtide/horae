@@ -120,7 +120,7 @@ async fn mismatches(
     found
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn sql_effective_minutes_matches_the_domain_rounding(pool: PgPool) {
     let found = mismatches(&pool, stored_case(), 4_096, |sql, rust| {
@@ -138,7 +138,7 @@ async fn sql_effective_minutes_matches_the_domain_rounding(pool: PgPool) {
 /// Above the day cap the twins part where the result leaves `integer`: SQL
 /// raises "integer out of range" exactly where Rust's `u32` exceeds
 /// `i32::MAX`, and they agree everywhere else.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn sql_effective_minutes_errors_where_the_result_leaves_integer(pool: PgPool) {
     // The smallest such input, so the property below is never vacuous.

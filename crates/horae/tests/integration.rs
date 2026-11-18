@@ -316,7 +316,7 @@ async fn insert_money_entry(
 // Test 1: Timer start / stop flow
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn timer_start_stop_records_minutes(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -395,7 +395,7 @@ async fn timer_start_stop_records_minutes(pool: PgPool) {
 // (exactness: totals are never inflated).
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn timer_under_a_minute_records_zero(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -454,7 +454,7 @@ async fn timer_under_a_minute_records_zero(pool: PgPool) {
 // Test 2: One running timer per user (partial unique index)
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn one_timer_per_user_enforced(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -498,7 +498,7 @@ async fn one_timer_per_user_enforced(pool: PgPool) {
 // Test 3: Submitted entries cannot be updated via state='open' guard
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn submitted_entries_cannot_be_updated(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -559,7 +559,7 @@ async fn submitted_entries_cannot_be_updated(pool: PgPool) {
 // Test 4: Rounding applied on submit
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn rounding_applied_on_submit(pool: PgPool) {
     use horae_core::rounding::round;
@@ -653,7 +653,7 @@ async fn rounding_applied_on_submit(pool: PgPool) {
 // Test 5: Assignment validation
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn unassigned_user_cannot_create_entry(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -677,7 +677,7 @@ async fn unassigned_user_cannot_create_entry(pool: PgPool) {
 // Test 6: Approval workflow -- approve and reject paths
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn approval_workflow_approve_and_reject(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -850,7 +850,7 @@ async fn approval_workflow_approve_and_reject(pool: PgPool) {
 // Like the rest of this file, the test replicates `reject_submission`'s SQL
 // rather than calling the server fn (the crate exposes no library target); it
 // documents the intended transition, not the fn's wiring.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn reject_after_approve_reopens_entries(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -949,7 +949,7 @@ async fn reject_after_approve_reopens_entries(pool: PgPool) {
 // Like the rest of this file, the test replicates `submit_week`'s SQL rather
 // than calling the server fn (the crate exposes no library target); it
 // documents the intended transition, not the fn's wiring.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn resubmit_after_approve_is_refused(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1067,7 +1067,7 @@ async fn resubmit_after_approve_is_refused(pool: PgPool) {
 
 // Test 6b: the Approvals list aggregates a period's tracked minutes, splitting
 // billable from total and excluding entries outside [period_start, period_end].
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn approval_hours_aggregate_billable_within_period(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1130,7 +1130,7 @@ async fn approval_hours_aggregate_billable_within_period(pool: PgPool) {
 /// A newly created org task is not loggable on a project until it is linked;
 /// once linked it appears on the project's task picker and a time entry can be
 /// recorded against it.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn new_task_becomes_loggable_on_project(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1216,7 +1216,7 @@ async fn new_task_becomes_loggable_on_project(pool: PgPool) {
 
 /// Deactivating a project removes it from new-entry pickers (which filter
 /// `active = true`) but leaves existing time entries linked to it (FR-011).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn inactive_project_hidden_from_picker_but_kept_on_history(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1277,7 +1277,7 @@ async fn inactive_project_hidden_from_picker_but_kept_on_history(pool: PgPool) {
 /// Generate an invoice from billable time entries. The invoice total must
 /// equal the exact sum of line item amounts, and entries must be marked
 /// invoiced with their invoice_id set (FR-012, FR-013, SC-002).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn generate_invoice_totals_match(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1490,7 +1490,7 @@ async fn generate_invoice_totals_match(pool: PgPool) {
 
 /// After invoicing, the same entries cannot be billed again — a second
 /// generate for the same period should find nothing (FR-013).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn invoiced_entries_cannot_be_rebilled(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1557,7 +1557,7 @@ async fn invoiced_entries_cannot_be_rebilled(pool: PgPool) {
 
 /// Voiding an invoice restores its entries to open / un-invoiced state,
 /// allowing them to be billed again (data-model.md state machine).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn void_invoice_restores_entries(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1665,7 +1665,7 @@ async fn void_invoice_restores_entries(pool: PgPool) {
 /// pending an approval decision) and already-invoiced time are not. Uses the
 /// same selection predicate as generate_invoice (FR-012, spec.md assumption
 /// "billable, un-invoiced time is directly invoiceable").
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn approved_entries_are_invoiceable(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1724,7 +1724,7 @@ async fn approved_entries_are_invoiceable(pool: PgPool) {
 /// Marking entries invoiced re-checks state and invoice_id, so an entry that
 /// was concurrently billed onto another invoice is left untouched instead of
 /// being silently re-billed (FR-013).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn invoicing_update_skips_already_invoiced_entries(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1803,7 +1803,7 @@ async fn invoicing_update_skips_already_invoiced_entries(pool: PgPool) {
 
 /// Invoice numbers are unique per org at the database level, so concurrent
 /// generation cannot mint the same number twice (FR-014).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn duplicate_invoice_numbers_rejected(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1832,7 +1832,7 @@ async fn duplicate_invoice_numbers_rejected(pool: PgPool) {
 // ---------------------------------------------------------------------------
 
 /// Admin can create a user; duplicate emails are rejected (FR-002).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn admin_creates_user_and_duplicate_rejected(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1878,7 +1878,7 @@ async fn admin_creates_user_and_duplicate_rejected(pool: PgPool) {
 /// Deactivating a user blocks them from the active-user queries used by
 /// authentication (`require_user` and `Actor::load` both filter on `active`),
 /// while their historical time entries remain intact (FR-002).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -1993,7 +1993,7 @@ async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
 // ---------------------------------------------------------------------------
 
 /// With no project rate, task and assignment rates override the user default.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn rate_resolution_cascade(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2151,7 +2151,7 @@ async fn rate_resolution_cascade(pool: PgPool) {
 // out-of-range start or one whose duration would cross midnight (feature 003).
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn start_minute_round_trips_and_is_constrained(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2254,7 +2254,7 @@ async fn start_minute_round_trips_and_is_constrained(pool: PgPool) {
 // 003), mirroring the stop_timer server fn's derivation.
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn stopping_timer_records_start_minute(pool: PgPool) {
     use chrono::Timelike;
@@ -2315,7 +2315,7 @@ async fn stopping_timer_records_start_minute(pool: PgPool) {
 // FR-011 / SC-003 / SC-004).
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn totals_unaffected_by_start_minute(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2361,7 +2361,7 @@ async fn totals_unaffected_by_start_minute(pool: PgPool) {
 // entry and is rejected on a locked one (feature 003, FR-013).
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn reschedule_moves_open_entry_and_rejects_locked(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2428,7 +2428,7 @@ async fn reschedule_moves_open_entry_and_rejects_locked(pool: PgPool) {
     assert!(rejected.is_none(), "a locked entry must not be rescheduled");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn reorder_untimed_orders_and_moves_across_days(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2511,7 +2511,7 @@ async fn reorder_untimed_orders_and_moves_across_days(pool: PgPool) {
 // running-timer guard and its NOT EXISTS predicate on the transition).
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn submit_week_with_running_timer_is_refused(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2639,7 +2639,7 @@ async fn submit_week_with_running_timer_is_refused(pool: PgPool) {
 // state predicate).
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn stop_timer_refuses_entry_that_left_open(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2714,7 +2714,7 @@ async fn stop_timer_refuses_entry_that_left_open(pool: PgPool) {
 // concurrent start surface as a raw unique violation.
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn a_second_running_timer_is_refused_by_the_insert(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2777,7 +2777,7 @@ async fn a_second_running_timer_is_refused_by_the_insert(pool: PgPool) {
 // the next tick arriving while the first is still dispatching) sees nothing.
 // ---------------------------------------------------------------------------
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn the_long_timer_sweep_claims_each_timer_once(pool: PgPool) {
     let org_id = seed_org(&pool).await;
@@ -2852,7 +2852,7 @@ async fn the_long_timer_sweep_claims_each_timer_once(pool: PgPool) {
 /// per-line amounts on an invoice, and as a SQL function, which
 /// lets the grouped reports sum without shipping a row per time entry. Drive
 /// both from one table of inputs and require exact equality.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
     // (rate_cents, minutes, why this case is here)
@@ -2930,7 +2930,7 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
     assert_eq!(no_rate, None, "a NULL rate must produce no amount");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn line_amount_cents_sql_and_rust_reject_final_overflow(pool: PgPool) {
     for (rate, minutes) in [
@@ -2958,7 +2958,7 @@ async fn line_amount_cents_sql_and_rust_reject_final_overflow(pool: PgPool) {
 /// The Projects overview's Spent column groups in SQL. Seed entries whose rates
 /// come from each level of the FR-024 cascade, then check the grouped query
 /// against the per-entry fold in Rust it replaced.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
     let org_id = seed_org(&pool).await;

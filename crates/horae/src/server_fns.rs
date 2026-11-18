@@ -196,14 +196,6 @@ fn unavailable_unless_unauthorized(error: ServerFnError, unavailable: &str) -> S
     }
 }
 
-/// Test fixtures hold a whole `User`; the read helpers take its caller.
-#[cfg(all(test, feature = "server"))]
-impl From<&User> for crate::ops::Caller {
-    fn from(user: &User) -> Self {
-        Self::session(user.org_id, user.id)
-    }
-}
-
 #[cfg(all(test, feature = "server"))]
 mod session_caller_tests {
     use super::*;

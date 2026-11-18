@@ -1,0 +1,68 @@
+[package]
+name = "horae-server"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[features]
+# The `testing` fixtures, for the `horae` crate's own tests.
+test-support = ["horae-harvest/test-support"]
+
+[dependencies]
+horae-core = { path = "../core", features = ["sqlx"] }
+horae-types = { path = "../types" }
+horae-harvest = { path = "../harvest" }
+serde = { version = "1", features = ["derive"] }
+# Exact JSON numbers, as the server binary has always parsed them.
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v7", "serde"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+futures-util = "0.3"
+tokio = { version = "1", features = ["full"] }
+bytes = "1"
+sqlx = { version = "0.8", features = [
+  "runtime-tokio",
+  "postgres",
+  "uuid",
+  "chrono",
+  "json",
+  "migrate",
+] }
+# `ureq` client feature gives a blocking, rustls-backed HTTP client for OIDC
+# discovery and token exchange — no system OpenSSL, consistent with the ureq dep.
+openidconnect = { version = "3", features = ["ureq"] }
+csv = "1"
+typst = "0.15"
+typst-as-lib = { version = "0.16", features = [
+  "typst-kit-fonts",
+  "typst-kit-embed-fonts",
+] }
+typst-pdf = "0.15"
+typst-layout = "0.15"
+extism = "1"
+# Match Extism's engine major: its allocation budget alone does not cap each
+# linear memory, so configure the engine's hard memory limits as well.
+wasmtime = { version = "43", default-features = false, features = [
+  "pooling-allocator",
+] }
+toml = "0.8"
+# Blocking HTTP client for the `horae_http_post` plugin host function. extism host
+# functions are synchronous, so a blocking client avoids bridging to the async
+# runtime. rustls (default) keeps the build free of a system OpenSSL dependency.
+# The Harvest importer's API + OAuth calls use horae-harvest's own ureq 2
+# dependency (the same lockfile entry), not this one.
+ureq = "2"
+# AEAD (XChaCha20-Poly1305) sealing the Harvest OAuth tokens at rest. Audited
+# RustCrypto crate; pinned. `getrandom` gives the OS RNG for per-message nonces.
+chacha20poly1305 = { version = "=0.10.1", features = ["getrandom"] }
+# IANA time zones on chrono's own types, for each person's "today".
+chrono-tz = "0.10"
+
+[dev-dependencies]
+horae-harvest = { path = "../harvest", features = ["test-support"] }
+serial_test = "3"
+tempfile = "3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

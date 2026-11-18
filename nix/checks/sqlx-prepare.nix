@@ -25,7 +25,7 @@ perSystem.self.default.overrideAttrs (old: {
     export DATABASE_URL="postgres://postgres@localhost/horae?host=$PGDATA"
 
     # Apply migrations then verify the .sqlx/ cache is up-to-date.
-    cargo sqlx migrate run --source crates/horae/migrations
+    cargo sqlx migrate run --source crates/server/migrations
     # Same package set as checkArtifacts, so its dependency artifacts are reused.
     cargo sqlx prepare --workspace --check -- \
       --workspace --exclude horae-dioxus-lint --features server --all-targets

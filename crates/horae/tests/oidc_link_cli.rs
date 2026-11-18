@@ -107,7 +107,7 @@ fn assert_private(output: &Output) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn link_reports_each_outcome_with_its_exit_code_and_never_echoes_the_identity(pool: PgPool) {
     let (database, admin, member) = setup(&pool).await;
@@ -148,7 +148,7 @@ async fn link_reports_each_outcome_with_its_exit_code_and_never_echoes_the_ident
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn invalid_input_is_refused_before_touching_the_database(pool: PgPool) {
     let (database, admin, _) = setup(&pool).await;
@@ -189,7 +189,7 @@ async fn invalid_input_is_refused_before_touching_the_database(pool: PgPool) {
     assert_eq!(binding(&pool, admin).await, (None, None));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn a_configured_issuer_alone_guards_against_a_mismatch(pool: PgPool) {
     let (database, admin, _) = setup(&pool).await;
@@ -226,7 +226,7 @@ async fn a_configured_issuer_alone_guards_against_a_mismatch(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn a_configured_issuer_that_is_not_utf8_fails_closed(pool: PgPool) {
     use std::os::unix::ffi::OsStrExt;
@@ -260,7 +260,7 @@ async fn a_configured_issuer_that_is_not_utf8_fails_closed(pool: PgPool) {
     assert_eq!(binding(&pool, admin).await, (None, None));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn link_reports_issuer_recorded_inactive_and_already_linked(pool: PgPool) {
     let (database, admin, member) = setup(&pool).await;
@@ -313,7 +313,7 @@ async fn link_reports_issuer_recorded_inactive_and_already_linked(pool: PgPool) 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn user_list_shows_ids_but_no_identity(pool: PgPool) {
     let (database, admin, member) = setup(&pool).await;
@@ -333,7 +333,7 @@ async fn user_list_shows_ids_but_no_identity(pool: PgPool) {
     assert_private(&list);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn user_create_adds_any_built_in_profile_and_refuses_a_held_email(pool: PgPool) {
     let database = pool.connect_options().to_url_lossy().to_string();
