@@ -13,9 +13,9 @@ pub async fn load_timesheet_tracking(
 ) -> Result<Vec<crate::models::scoped_time::TimesheetTrackingOption>, ServerFnError> {
     let caller = session_caller_or("Timesheet is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::tracking(&mut read.tx, &read.actor, &context).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Apply one person-bound operation; client expectations never grant authority.
@@ -28,9 +28,12 @@ pub async fn apply_timesheet_command(
 ) -> Result<Option<String>, ServerFnError> {
     let caller = session_caller_or("Timesheet is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::apply(&mut write.tx, &write.actor, &context, command).await;
-    let change = write.commit(result, &*state.plugins).await?;
+    let change = write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)?;
     for project in change.projects {
         tokio::spawn(check_project_budget(state, project));
     }
@@ -44,9 +47,9 @@ pub async fn load_timesheet_page(
 ) -> Result<crate::models::scoped_time::TimesheetPage, ServerFnError> {
     let caller = session_caller_or("Timesheet is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time_reads::sheet(&mut read.tx, &read.actor, &query).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Minimal authorized person labels; selection never grants entry access.
@@ -56,9 +59,9 @@ pub async fn list_timesheet_people(
 ) -> Result<crate::models::scoped_time::TimesheetPeoplePage, ServerFnError> {
     let caller = session_caller_or("Timesheet people are unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time_reads::people(&mut read.tx, &read.actor, &query).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Only the session user's active, assigned project/task combinations; no rates.
@@ -67,9 +70,9 @@ pub async fn list_time_entry_contexts()
 -> Result<Vec<crate::models::time_entry::TimeEntryContext>, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::contexts(&mut read.tx, &read.actor).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Start a timer for the given project and task; a second running timer is a
@@ -84,7 +87,7 @@ pub async fn start_timer(
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::start_timer(
         &mut write.tx,
         &write.actor,
@@ -93,7 +96,10 @@ pub async fn start_timer(
         notes.as_deref(),
     )
     .await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 /// Stop a running timer and record elapsed minutes, clamped to what is left of
@@ -103,9 +109,12 @@ pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>),
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::stop_timer(&mut write.tx, &write.actor, entry_id).await;
-    let (entry, notice) = write.commit(result, &*state.plugins).await?;
+    let (entry, notice) = write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)?;
     tokio::spawn(check_project_budget(state, entry.project_id));
     Ok((entry, notice))
 }
@@ -115,7 +124,7 @@ pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>),
 pub async fn get_current_timer() -> Result<Option<TimeEntry>, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::current_timer(&mut read.tx, &read.actor).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }

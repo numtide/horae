@@ -24,7 +24,9 @@ pub async fn list_people(
 ) -> Result<PeoplePage, ServerFnError> {
     let caller = session_caller_or("People directory is unavailable").await?;
     let state = crate::state::global_state().await;
-    Ok(people_page(&state.db, caller, activity, after.as_ref()).await?)
+    people_page(&state.db, caller, activity, after.as_ref())
+        .await
+        .map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -46,9 +48,9 @@ pub(crate) async fn people_page(
 pub async fn list_users(include_inactive: bool) -> Result<Vec<UserListItem>, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::people::list(&mut read.tx, &read.actor, include_inactive).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Add a person with a built-in profile, named as stored (`member`,
@@ -136,7 +138,7 @@ async fn add_people(
     activation: Activation,
     existing: Existing,
 ) -> Result<AddedPeople, ServerFnError> {
-    let mut write = ops::begin(db, caller).await?;
+    let mut write = ops::begin(db, caller).await.map_err(op_error)?;
     let result = ops::people::add(
         &mut write.tx,
         &write.actor,
@@ -146,7 +148,7 @@ async fn add_people(
         existing,
     )
     .await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -157,9 +159,9 @@ pub(crate) async fn change_user_active(
     user_id: uuid::Uuid,
     active: bool,
 ) -> Result<UserListItem, ServerFnError> {
-    let mut write = ops::begin(db, caller).await?;
+    let mut write = ops::begin(db, caller).await.map_err(op_error)?;
     let result = ops::people::set_active(&mut write.tx, &write.actor, user_id, active).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 #[cfg(all(test, feature = "server"))]

@@ -15,9 +15,12 @@ pub async fn create_client_profile(
 ) -> Result<ClientDetails, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::clients::create(&mut write.tx, &write.actor, &profile, &default_rate).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 #[server]
@@ -30,9 +33,12 @@ pub async fn update_client_profile(
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::clients::update(&mut write.tx, &write.actor, client_id, &edit).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 #[server]
@@ -52,9 +58,11 @@ async fn client_details_for_viewer(
     viewer_id: uuid::Uuid,
     client_id: uuid::Uuid,
 ) -> Result<ClientDetails, ServerFnError> {
-    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::clients::details(&mut read.tx, &read.actor, client_id).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -74,9 +82,11 @@ async fn client_invoices_for_viewer(
     viewer_id: uuid::Uuid,
     client_id: uuid::Uuid,
 ) -> Result<Vec<Invoice>, ServerFnError> {
-    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::clients::invoices(&mut read.tx, &read.actor, client_id).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// The canonical Clients page.
@@ -116,9 +126,11 @@ async fn client_overview_for(
     viewer_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ClientOverview, ServerFnError> {
-    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::clients::overview(&mut read.tx, &read.actor, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -129,10 +141,12 @@ async fn client_detail_view_for(
     client_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ClientDetailView, ServerFnError> {
-    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result =
         ops::clients::detail_view(&mut read.tx, &read.actor, client_id, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Explicit client creation from the project form, including its default rate.
@@ -172,9 +186,9 @@ pub(super) async fn create_project_client_record(
         address: None,
         tax_id: None,
     };
-    let mut write = ops::begin(db, caller).await?;
+    let mut write = ops::begin(db, caller).await.map_err(op_error)?;
     let result = ops::clients::create(&mut write.tx, &write.actor, &profile, default_rate).await;
-    let details = write.commit(result, events).await?;
+    let details = write.commit(result, events).await.map_err(op_error)?;
     Ok(crate::models::project_creation::CreationClient {
         id: details.client.id,
         name: details.client.name,
@@ -193,9 +207,9 @@ pub(super) async fn create_project_client_record(
 pub async fn list_clients(include_inactive: bool) -> Result<Vec<Client>, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::clients::list(&mut read.tx, &read.actor, include_inactive).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Archive or restore a client (FR-036).
@@ -204,9 +218,12 @@ pub async fn set_client_active(client_id: String, active: bool) -> Result<Client
     let caller = session_caller().await?;
     let client_id = parse_uuid(&client_id, "client_id")?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::clients::set_active(&mut write.tx, &write.actor, client_id, active).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 #[cfg(all(test, feature = "server"))]

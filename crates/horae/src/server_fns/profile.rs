@@ -46,10 +46,13 @@ pub async fn update_own_profile(
     use crate::ops;
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result =
         ops::profile::update(&mut write.tx, &write.actor, &name, timezone.as_deref()).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 /// Change the organization's time zone, which every person without their own
@@ -59,9 +62,12 @@ pub async fn set_workspace_timezone(timezone: String) -> Result<(), ServerFnErro
     use crate::ops;
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::set_timezone(&mut write.tx, &write.actor, &timezone).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 /// The host of an issuer URL, which is how people recognise their provider.

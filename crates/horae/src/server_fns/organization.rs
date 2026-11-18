@@ -58,9 +58,9 @@ pub async fn get_org_name() -> Result<String, ServerFnError> {
 pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::branding(&mut read.tx, &read.actor).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -70,8 +70,11 @@ pub async fn update_org_branding(
 ) -> Result<OrgBranding, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await?;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result =
         ops::organization::update_branding(&mut write.tx, &write.actor, &expected, &branding).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }

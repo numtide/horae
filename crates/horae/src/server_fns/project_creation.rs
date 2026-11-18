@@ -49,7 +49,9 @@ pub async fn project_people(
 ) -> Result<ProjectPeopleResult, ServerFnError> {
     let caller = session_caller_or("Project people are unavailable").await?;
     let state = crate::state::global_state().await;
-    Ok(project_people_page(&state.db, caller, context, &query).await?)
+    project_people_page(&state.db, caller, context, &query)
+        .await
+        .map_err(op_error)
 }
 
 /// Read catalogs for the canonical editor under its current operation authority.
@@ -60,10 +62,9 @@ pub async fn project_editor_catalog(
 ) -> Result<ProjectEditorCatalog, ServerFnError> {
     let caller = session_caller_or("Project catalogs are unavailable").await?;
     let state = crate::state::global_state().await;
-    Ok(
-        project_editor_catalog_page(&state.db, caller, context, &search, state.mail.is_some())
-            .await?,
-    )
+    project_editor_catalog_page(&state.db, caller, context, &search, state.mail.is_some())
+        .await
+        .map_err(op_error)
 }
 
 /// Load the existing project into the same form used for creation.
@@ -71,7 +72,9 @@ pub async fn project_editor_catalog(
 pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProject, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    Ok(project_editor_view(&state.db, caller, project_id).await?)
+    project_editor_view(&state.db, caller, project_id)
+        .await
+        .map_err(op_error)
 }
 
 #[server]
@@ -85,7 +88,8 @@ pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uu
         state.mail.is_some(),
         &*state.plugins,
     )
-    .await?;
+    .await
+    .map_err(op_error)?;
     Ok(saved.id)
 }
 
@@ -310,9 +314,14 @@ async fn load_selected_catalog(
     task_ids: &[uuid::Uuid],
     user_ids: &[uuid::Uuid],
 ) -> Result<CreationSelection, ServerFnError> {
-    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared)
+        .await
+        .map_err(op_error)?;
     let result = creation::selection(&mut write.tx, &write.actor, task_ids, user_ids).await;
-    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
+    write
+        .commit(result.map(Done::new), &NoEvents)
+        .await
+        .map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -322,9 +331,14 @@ async fn load_selected_client(
     org_id: uuid::Uuid,
     client_id: uuid::Uuid,
 ) -> Result<Option<CreationClient>, ServerFnError> {
-    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared)
+        .await
+        .map_err(op_error)?;
     let result = creation::client(&mut write.tx, &write.actor, client_id).await;
-    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
+    write
+        .commit(result.map(Done::new), &NoEvents)
+        .await
+        .map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -335,9 +349,14 @@ async fn load_creation_options(
     search: &CreationSearch,
     email_available: bool,
 ) -> Result<CreationOptions, ServerFnError> {
-    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared)
+        .await
+        .map_err(op_error)?;
     let result = creation::options(&mut write.tx, &write.actor, search, email_available).await;
-    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
+    write
+        .commit(result.map(Done::new), &NoEvents)
+        .await
+        .map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -350,7 +369,9 @@ async fn finalize_draft_record(
     form: &ProjectForm,
     email_available: bool,
 ) -> Result<uuid::Uuid, ServerFnError> {
-    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::AccessChange).await?;
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::AccessChange)
+        .await
+        .map_err(op_error)?;
     let result = creation::finalize(
         &mut write.tx,
         &write.actor,
@@ -361,7 +382,7 @@ async fn finalize_draft_record(
     )
     .await;
     // `project_created` is already in the outbox: nothing to dispatch here.
-    Ok(write.commit(result, &NoEvents).await?)
+    write.commit(result, &NoEvents).await.map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -370,9 +391,14 @@ async fn load_draft_record(
     actor_id: uuid::Uuid,
     org_id: uuid::Uuid,
 ) -> Result<Option<ProjectDraft>, ServerFnError> {
-    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared)
+        .await
+        .map_err(op_error)?;
     let result = creation::load_draft(&mut write.tx, &write.actor).await;
-    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
+    write
+        .commit(result.map(Done::new), &NoEvents)
+        .await
+        .map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -384,7 +410,9 @@ async fn save_draft_record(
     expected_revision: i64,
     form: &ProjectForm,
 ) -> Result<DraftSaved, ServerFnError> {
-    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared)
+        .await
+        .map_err(op_error)?;
     let result = creation::save_draft(
         &mut write.tx,
         &write.actor,
@@ -393,7 +421,7 @@ async fn save_draft_record(
         form,
     )
     .await;
-    Ok(write.commit(result, &NoEvents).await?)
+    write.commit(result, &NoEvents).await.map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -404,10 +432,12 @@ async fn discard_draft_record(
     draft_id: uuid::Uuid,
     expected_revision: i64,
 ) -> Result<(), ServerFnError> {
-    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared)
+        .await
+        .map_err(op_error)?;
     let result =
         creation::discard_draft(&mut write.tx, &write.actor, draft_id, expected_revision).await;
-    Ok(write.commit(result, &NoEvents).await?)
+    write.commit(result, &NoEvents).await.map_err(op_error)
 }
 
 #[cfg(all(test, feature = "server"))]

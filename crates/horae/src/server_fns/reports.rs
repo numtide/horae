@@ -14,9 +14,9 @@ pub async fn get_time_report_access(
 ) -> Result<crate::models::time_report::TimeReportAccess, ServerFnError> {
     let caller = session_caller_or("Report access is unavailable").await?;
     let state = crate::state::global_state().await;
-    let read = ops::begin_read(&state.db, caller).await?;
+    let read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time_reads::reports::access(&read.actor, expected_requester);
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Nonfinancial detailed time under current scoped authority, in bounded pages.
@@ -26,9 +26,9 @@ pub async fn list_visible_time_report_entries(
 ) -> Result<crate::models::time_report::TimeReportPage, ServerFnError> {
     let caller = session_caller_or("Time report is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time_reads::reports::entries(&mut read.tx, &read.actor, &query).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 // ── Reports (M8) ────────────────────────────────────────────────────────────
@@ -40,9 +40,9 @@ pub async fn list_visible_time_report_groups(
 ) -> Result<crate::models::time_report::TimeReportGroupPage, ServerFnError> {
     let caller = session_caller_or("Time report is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time_reads::reports::groups::read(&mut read.tx, &read.actor, &query).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Grouped time report. Groups by "project", "task", "client", or "person", with
@@ -91,9 +91,11 @@ pub(super) async fn fetch_report(
     group_by: &str,
     filters: crate::ops::reports::ReportFilters,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::reports::time(&mut read.tx, &read.actor, period, group_by, filters).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Detailed (per-entry) report for the range, with the same optional filters
@@ -137,9 +139,11 @@ pub(super) async fn fetch_detailed(
     period: (chrono::NaiveDate, chrono::NaiveDate),
     filters: crate::ops::reports::ReportFilters,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::reports::detailed(&mut read.tx, &read.actor, period, filters).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 // ── Plugins ────────────────────────────────────────────────────────────────

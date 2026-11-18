@@ -69,34 +69,34 @@ pub(crate) fn unauthorized(msg: impl std::fmt::Display) -> ServerFnError {
     err(UNAUTHORIZED, msg)
 }
 
-/// Server functions report an operation's domain error with its status code.
+/// Server functions report an operation's domain error with its status code:
+/// `.map_err(op_error)?`. A function rather than a `From` impl, because the
+/// operations will live in a crate that does not depend on Dioxus.
 #[cfg(feature = "server")]
-impl From<crate::ops::OpError> for ServerFnError {
-    fn from(error: crate::ops::OpError) -> Self {
-        use crate::ops::OpError;
-        let code = match error.kind() {
-            OpError::NotFound(_) => NOT_FOUND,
-            OpError::Forbidden(_) => FORBIDDEN,
-            OpError::Conflict(_) => CONFLICT,
-            OpError::Invalid { .. } => BAD_REQUEST,
-            OpError::Internal(_) | OpError::Detailed { .. } => INTERNAL_ERROR,
-        };
-        // Only an error with a detail carries `details`; the rest answer as before.
-        let details = error.detail().map(|detail| {
-            let mut details = serde_json::Map::new();
-            if let Some(field) = &detail.field {
-                details.insert("field".into(), field.clone());
-            }
-            if let Some(reason) = detail.reason {
-                details.insert("reason".into(), reason.into());
-            }
-            serde_json::Value::Object(details)
-        });
-        ServerFnError::ServerError {
-            message: error.to_string(),
-            code,
-            details,
+pub(crate) fn op_error(error: crate::ops::OpError) -> ServerFnError {
+    use crate::ops::OpError;
+    let code = match error.kind() {
+        OpError::NotFound(_) => NOT_FOUND,
+        OpError::Forbidden(_) => FORBIDDEN,
+        OpError::Conflict(_) => CONFLICT,
+        OpError::Invalid { .. } => BAD_REQUEST,
+        OpError::Internal(_) | OpError::Detailed { .. } => INTERNAL_ERROR,
+    };
+    // Only an error with a detail carries `details`; the rest answer as before.
+    let details = error.detail().map(|detail| {
+        let mut details = serde_json::Map::new();
+        if let Some(field) = &detail.field {
+            details.insert("field".into(), field.clone());
         }
+        if let Some(reason) = detail.reason {
+            details.insert("reason".into(), reason.into());
+        }
+        serde_json::Value::Object(details)
+    });
+    ServerFnError::ServerError {
+        message: error.to_string(),
+        code,
+        details,
     }
 }
 

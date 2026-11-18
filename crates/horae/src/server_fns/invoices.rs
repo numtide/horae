@@ -15,12 +15,13 @@ async fn begin_read(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
 ) -> Result<crate::ops::ReadTx, ServerFnError> {
-    Ok(crate::ops::begin_read_snapshot(
+    crate::ops::begin_read_snapshot(
         pool,
         crate::ops::Caller::session(org_id, actor_id),
         crate::ops::SnapshotLimits::LockWait,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 /// User revocation holds the organization before updating this writer's
@@ -32,13 +33,14 @@ async fn begin_write(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
 ) -> Result<crate::ops::WriteTx, ServerFnError> {
-    Ok(crate::ops::begin_gated(
+    crate::ops::begin_gated(
         pool,
         crate::ops::Caller::session(org_id, actor_id),
         crate::db::OrganizationLock::Shared,
         crate::ops::WriteIsolation::ReadCommitted,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 /// Parses an optional project selection; the operation bounds it.
@@ -62,7 +64,7 @@ pub async fn get_invoice_editor(invoice_id: String) -> Result<InvoiceEditor, Ser
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::editing::load(&mut read.tx, &read.actor, id).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -75,7 +77,7 @@ pub async fn review_invoice_edit(
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::editing::review(&mut read.tx, &read.actor, id, &edit).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -89,7 +91,10 @@ pub async fn save_invoice_draft(
     let mut write = begin_write(&state.db, caller.org_id, caller.user_id).await?;
     let result =
         crate::ops::invoices::editing::save(&mut write.tx, &write.actor, id, &request).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 #[server]
@@ -120,7 +125,7 @@ pub async fn prepare_invoice(
         fees.as_deref(),
     )
     .await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[cfg(all(test, feature = "server"))]
@@ -161,7 +166,7 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem
 
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::list_items(&mut read.tx, &read.actor, status_filter).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -172,7 +177,7 @@ pub async fn get_invoice(invoice_id: String) -> Result<InvoiceDetailView, Server
     let state = crate::state::global_state().await;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::detail(&mut read.tx, &read.actor, id).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -203,7 +208,10 @@ pub async fn generate_invoice(
         },
     )
     .await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }
 
 #[server]
@@ -218,5 +226,8 @@ pub async fn update_invoice_status(
 
     let mut write = begin_write(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::set_status(&mut write.tx, &write.actor, id, target).await;
-    Ok(write.commit(result, &*state.plugins).await?)
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
 }

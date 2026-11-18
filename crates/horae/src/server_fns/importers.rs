@@ -59,10 +59,12 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
 pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = crate::ops::begin_read(&state.db, caller).await?;
+    let mut read = crate::ops::begin_read(&state.db, caller)
+        .await
+        .map_err(op_error)?;
     let result =
         crate::ops::importers::connection_status(&mut read.tx, &read.actor, &state.harvest).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// The organization's Harvest OAuth client as administrators may see it:
@@ -71,10 +73,12 @@ pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnErr
 pub async fn harvest_client_settings() -> Result<ClientSettings, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = crate::ops::begin_read(&state.db, caller).await?;
+    let mut read = crate::ops::begin_read(&state.db, caller)
+        .await
+        .map_err(op_error)?;
     let result =
         crate::ops::importers::client_settings(&mut read.tx, &read.actor, &state.harvest).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Save or replace the stored client. A blank secret keeps the stored one for
@@ -365,8 +369,10 @@ async fn require_administrator() -> Result<crate::ops::Caller, ServerFnError> {
     let state = crate::state::global_state().await;
     let mut connection = state.db.acquire().await.map_err(server_err)?;
     crate::ops::Actor::load_unlocked(&mut connection, caller)
-        .await?
-        .require_administrator()?;
+        .await
+        .map_err(op_error)?
+        .require_administrator()
+        .map_err(op_error)?;
     Ok(caller)
 }
 
