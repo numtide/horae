@@ -803,8 +803,9 @@ fn TimesheetContent(
         }
     });
 
-    // Start a timer for an existing entry's project/task (the Day-view "Start"
-    // action, Harvest-style resume).
+    // The Day-view "Start" action, as in Harvest: an open entry of the person's
+    // today runs again, keeping its time; any other entry starts a new timer
+    // today on its project/task. Either stops the running timer first.
     let start_entry = use_callback(move |e: VisibleTimeEntry| {
         let Some(context) = context() else {
             return;
@@ -812,20 +813,25 @@ fn TimesheetContent(
         if pending_action() || !tracking::eligible(&tracking.read(), e.project_id, e.task_id) {
             return;
         }
+        let command = if e.state == horae_core::types::EntryState::Open
+            && subject_today() == Some(e.spent_date)
+        {
+            TimesheetCommand::RestartTimer { entry_id: e.id }
+        } else {
+            TimesheetCommand::StartTimer {
+                project_id: e.project_id,
+                task_id: e.task_id,
+                notes: e.notes,
+            }
+        };
         pending_action.set(true);
         let mut timer = running_timer;
         spawn(async move {
-            match server_fns::apply_timesheet_command(
-                context,
-                TimesheetCommand::StartTimer {
-                    project_id: e.project_id,
-                    task_id: e.task_id,
-                    notes: e.notes,
-                },
-            )
-            .await
-            {
-                Ok(_) => grid_error.set(None),
+            match server_fns::apply_timesheet_command(context, command).await {
+                Ok(notice) => {
+                    grid_error.set(None);
+                    stop_notice.set(notice);
+                }
                 Err(e) => grid_error.set(Some(format!("Could not start timer: {e}"))),
             }
             timer.refresh();

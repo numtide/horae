@@ -75,14 +75,15 @@ pub async fn list_time_entry_contexts()
     read.finish(result).await.map_err(op_error)
 }
 
-/// Start a timer for the given project and task; a second running timer is a
-/// conflict.
+/// Start a timer for the given project and task, stopping the running one
+/// first; the notice, when present, says how much the daily limit cut from
+/// the stopped timer.
 #[server]
 pub async fn start_timer(
     project_id: String,
     task_id: String,
     notes: Option<String>,
-) -> Result<TimeEntry, ServerFnError> {
+) -> Result<(TimeEntry, Option<String>), ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
@@ -96,10 +97,15 @@ pub async fn start_timer(
         notes.as_deref(),
     )
     .await;
-    write
+    let started = write
         .commit(result, &*state.plugins)
         .await
-        .map_err(op_error)
+        .map_err(op_error)?;
+    let notice = started.stopped.and_then(|(stopped, notice)| {
+        tokio::spawn(check_project_budget(state, stopped.project_id));
+        notice
+    });
+    Ok((started.entry, notice))
 }
 
 /// Stop a running timer and record elapsed minutes, clamped to what is left of

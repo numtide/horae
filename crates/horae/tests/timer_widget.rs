@@ -53,6 +53,8 @@ struct Server {
     project_reads: Rc<Cell<usize>>,
     task_reads: Rc<Cell<usize>>,
     starts: Rc<Cell<usize>>,
+    /// What the daily limit cut from a timer the start stopped.
+    stop_notice: Rc<RefCell<Option<String>>>,
     picker_saw_empty: Rc<Cell<bool>>,
     /// Catalog reads never answer.
     catalogs_hang: Rc<Cell<bool>>,
@@ -212,6 +214,28 @@ async fn starting_from_the_picker_refreshes_the_timer_and_its_followers() {
     assert_eq!(probe.server.catalog_reads(), (1, 1));
 }
 
+/// A start stops the timer still running elsewhere (e.g. another tab), and
+/// says what the daily limit cut from it.
+#[tokio::test]
+async fn a_start_that_stops_a_running_timer_shows_what_the_limit_cut() {
+    dioxus_html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
+    let probe = Probe::default();
+    let notice = "Daily hours cannot exceed 240. The timer was stopped at 0:50; 0:40 over the limit was not recorded.";
+    *probe.server.stop_notice.borrow_mut() = Some(notice.into());
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    let edits = dom.rebuild_to_vec().edits;
+    settle(&mut dom);
+    let picker = click(&mut dom, click_listeners(edits)[0]);
+    let [_overlay, _close, start, _cancel] = picker[..] else {
+        panic!("the picker has close, start and cancel controls: {picker:?}");
+    };
+    click(&mut dom, start);
+
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains(notice), "{html}");
+    assert!(html.contains("Project · Task"), "{html}");
+}
+
 #[tokio::test]
 async fn timer_names_reuse_lookups_and_follow_resource_changes() {
     let probe = Probe::running();
@@ -332,12 +356,12 @@ mod server_fns {
         project: String,
         task: String,
         _: Option<String>,
-    ) -> Result<(), ServerFnError> {
+    ) -> Result<((), Option<String>), ServerFnError> {
         assert_eq!((project, task), (PROJECT.to_string(), TASK.to_string()));
         let server = consume_context::<Server>();
         server.starts.set(server.starts.get() + 1);
         server.running.set(true);
-        Ok(())
+        Ok(((), server.stop_notice.borrow().clone()))
     }
 
     pub async fn stop_timer(_: String) -> Result<((), Option<String>), ServerFnError> {

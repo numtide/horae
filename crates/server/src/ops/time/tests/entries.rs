@@ -284,8 +284,11 @@ async fn new_time_uses_effective_billability_for_manual_entries_and_timers(pool:
     }
 }
 
+/// A start stops the running timer, so starts that overlap may both succeed,
+/// one after the other, or one may lose to the running-timer index; either
+/// way one timer is left running and no start is lost silently.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn concurrent_timer_starts_insert_exactly_one_entry(pool: PgPool) {
+async fn concurrent_timer_starts_leave_exactly_one_running(pool: PgPool) {
     let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
     let (first, second) = tokio::join!(
         insert_time_entry(
@@ -305,14 +308,16 @@ async fn concurrent_timer_starts_insert_exactly_one_entry(pool: PgPool) {
             }
         ),
     );
-    assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
-    assert_eq!(
-        sqlx::query_scalar!("SELECT count(*) FROM time_entries")
-            .fetch_one(&pool)
-            .await
-            .unwrap(),
-        Some(1)
-    );
+    let started = i64::from(first.is_ok()) + i64::from(second.is_ok());
+    let counts = sqlx::query!(
+        r#"SELECT count(*) AS "entries!", count(*) FILTER (WHERE is_running) AS "running!"
+           FROM time_entries"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(started >= 1, "{first:?} {second:?}");
+    assert_eq!((counts.entries, counts.running), (started, 1));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

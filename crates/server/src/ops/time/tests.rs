@@ -103,7 +103,8 @@ async fn start_timer_record(
 ) -> Result<TimeEntry, OpError> {
     let mut write = session_write(pool, user_id).await;
     let result = start_timer(&mut write.tx, &write.actor, project_id, task_id, notes).await;
-    write.commit(result, &Recorder::default()).await
+    let started = write.commit(result, &Recorder::default()).await?;
+    Ok(started.entry)
 }
 
 /// The timer widget's stop, by the person who owns the timer.
@@ -183,7 +184,7 @@ async fn trackable(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
     ids
 }
 
-async fn start(pool: &PgPool, ids: &SeedIds, events: &Recorder) -> Result<TimeEntry, OpError> {
+async fn start(pool: &PgPool, ids: &SeedIds, events: &Recorder) -> Result<Started, OpError> {
     let mut write = ops::begin(pool, Caller::session(ids.org_id, ids.user_id)).await?;
     let result = start_timer(
         &mut write.tx,
@@ -212,7 +213,7 @@ async fn starting_and_stopping_announce_the_entry_after_commit(pool: PgPool) {
     let ids = trackable(&pool, BuiltInProfile::Member).await;
     let events = Recorder::default();
 
-    let running = start(&pool, &ids, &events).await.unwrap();
+    let running = start(&pool, &ids, &events).await.unwrap().entry;
     let started = events.take();
     assert!(
         matches!(
@@ -235,16 +236,67 @@ async fn starting_and_stopping_announce_the_entry_after_commit(pool: PgPool) {
     );
 }
 
+/// A start while a timer runs stops it first, as its stop would (021 D-6),
+/// and announces the stop before the new timer.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_start_stops_the_running_timer_first(pool: PgPool) {
+    let ids = trackable(&pool, BuiltInProfile::Member).await;
+    let events = Recorder::default();
+    let first = start(&pool, &ids, &events).await.unwrap().entry;
+    sqlx::query!(
+        "UPDATE time_entries SET started_at = now() - interval '20 minutes' WHERE id = $1",
+        first.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    events.take();
+
+    let second = start(&pool, &ids, &events).await.unwrap();
+
+    let (stopped, notice) = second.stopped.expect("the running timer was stopped");
+    assert_eq!(
+        (stopped.id, stopped.minutes, stopped.is_running, notice),
+        (first.id, 20, false, None)
+    );
+    assert!(second.entry.is_running);
+    assert!(
+        matches!(
+            events.take().as_slice(),
+            [
+                AppEvent::TimeEntryStopped { time_entry: a, .. },
+                AppEvent::TimeEntryCreated { time_entry: b, .. },
+            ] if a.id == first.id && b.id == second.entry.id
+        ),
+        "the stop is announced before the start"
+    );
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_refused_start_announces_nothing(pool: PgPool) {
     let ids = trackable(&pool, BuiltInProfile::Member).await;
     let events = Recorder::default();
     start(&pool, &ids, &events).await.unwrap();
     events.take();
+    sqlx::query!(
+        "UPDATE project_tasks SET active = false WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let second = start(&pool, &ids, &events).await;
     assert!(matches!(second, Err(OpError::Conflict(_))), "{second:?}");
     assert!(events.take().is_empty());
+    let running = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM time_entries WHERE user_id = $1 AND is_running"#,
+        ids.user_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(running, 1, "a refused start leaves the running timer alone");
 }
 
 /// Starting a timer writes own time, so it needs the time-write grant like the
@@ -294,7 +346,7 @@ async fn a_start_without_time_write_is_refused(pool: PgPool) {
 async fn a_timer_stops_after_its_task_is_restricted(pool: PgPool) {
     let ids = trackable(&pool, BuiltInProfile::Member).await;
     let events = Recorder::default();
-    let running = start(&pool, &ids, &events).await.unwrap();
+    let running = start(&pool, &ids, &events).await.unwrap().entry;
     sqlx::query!(
         "INSERT INTO project_task_settings (id, org_id, project_id, task_id, restricted)
          VALUES ($1, $2, $3, $4, true)",
