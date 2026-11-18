@@ -10,7 +10,7 @@ const PROJECT_COST_RATE: i64 = 778_899;
 
 /// A draft invoice for one hour of time whose author has a distinctive cost
 /// rate, both on the person and as a project-specific override.
-async fn costed_draft(pool: &PgPool) -> (crate::server_fns::test_seed::SeedIds, uuid::Uuid) {
+async fn costed_draft(pool: &PgPool) -> (crate::testing::SeedIds, uuid::Uuid) {
     let ids = seed(pool, BuiltInProfile::Administrator).await;
     time_entry(pool, &ids, EntryState::Open).await;
     sqlx::query!(

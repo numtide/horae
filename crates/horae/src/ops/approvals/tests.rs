@@ -9,8 +9,8 @@ use super::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::ops::testing::Recorder;
 use crate::ops::{self, Caller};
-use crate::server_fns::test_seed::seed;
-use crate::server_fns::test_seed::{SeedIds, time_entry};
+use crate::testing::seed;
+use crate::testing::{SeedIds, time_entry};
 
 /// Adds an active person with `profile`'s stored state to `ids`' organization,
 /// sharing its project and task.

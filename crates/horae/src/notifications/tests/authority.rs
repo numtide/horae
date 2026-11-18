@@ -1,6 +1,6 @@
 use super::*;
 use crate::ops::testing::set_grants;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::wait_for_blocked;
 use horae_core::permissions::catalog::Permission;
 use serde::Deserialize;
 use std::io::Write as _;

@@ -32,7 +32,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         .connect_with((*pool.connect_options()).clone())
         .await
         .unwrap();
-    let owner = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
+    let owner = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     crate::state::init_state(
         pool.clone(),
         Arc::new(crate::plugin::PluginRegistry::empty()),

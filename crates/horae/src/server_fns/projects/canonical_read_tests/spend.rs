@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::time_entry;
+use crate::testing::time_entry;
 use horae_core::permissions::catalog::BuiltInProfile;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -91,7 +91,7 @@ async fn spend_rechecks_financial_only_revocation_after_organization_wait(pool: 
     let pending = tokio::spawn(async move {
         fetch_project_spend(&pending_pool, ids.org_id, ids.user_id, None).await
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, holder).await;
+    crate::testing::wait_for_blocked(&pool, holder).await;
     let grants: Vec<String> =
         serde_json::from_value(serde_json::json!(PermissionSelection::new(&[
             Permission::ProjectReadAll

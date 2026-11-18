@@ -624,7 +624,7 @@ fn write_invoice_amount(
 
 fn invoice_xlsx(
     invoice: &crate::models::Invoice,
-    lines: &[crate::models::InvoiceLine],
+    lines: &[crate::models::invoice::InvoiceLine],
 ) -> Result<Vec<u8>, StatusCode> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();

@@ -319,7 +319,7 @@ async fn a_submit_racing_an_update_keeps_the_submitted_entry(pool: PgPool) {
         )
         .await
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    crate::testing::wait_for_blocked(&pool, blocker).await;
     sqlx::query!(
         "UPDATE time_entries SET state = 'submitted', rounded_minutes = minutes WHERE org_id = $1",
         org

@@ -1,7 +1,7 @@
 use super::canonical_read_tests::project_details;
 use super::*;
 use crate::ops::testing::become_profile;
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use horae_core::permissions::catalog::BuiltInProfile;
 use serial_test::serial;
 use sqlx::PgPool;

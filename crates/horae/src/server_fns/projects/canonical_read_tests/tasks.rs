@@ -49,8 +49,7 @@ async fn task_workflow_identity_rejects_foreign_client_parents(pool: PgPool) {
     )
     .await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
-    crate::server_fns::test_seed::time_entry(&pool, &ids, horae_core::types::EntryState::Open)
-        .await;
+    crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open).await;
     sqlx::query!(
         "INSERT INTO project_tasks (project_id,task_id,billable) VALUES ($1,$2,true)",
         ids.project_id,
@@ -199,8 +198,7 @@ async fn tracking_history_is_not_task_catalog_authority(pool: PgPool) {
         PermissionSelection::new(&[]),
     )
     .await;
-    crate::server_fns::test_seed::time_entry(&pool, &ids, horae_core::types::EntryState::Open)
-        .await;
+    crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open).await;
     sqlx::query!("UPDATE tasks SET active = false WHERE id = $1", ids.task_id)
         .execute(&pool)
         .await
@@ -352,7 +350,7 @@ async fn task_catalog_uses_current_actor_and_never_foreign_tasks(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_catalog_refreshes_permissions_after_organization_wait(pool: PgPool) {
-    use crate::server_fns::test_seed::wait_for_blocked;
+    use crate::testing::wait_for_blocked;
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::Administrator,

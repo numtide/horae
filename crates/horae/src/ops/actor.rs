@@ -8,7 +8,7 @@ use sqlx::PgConnection;
 use super::permissions::{PermissionStorageError, load_person_permissions};
 use super::{Caller, OpError};
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::permissions::PersonPermissions;
+use crate::ops::permissions::PersonPermissions;
 
 /// The entry point a request came through. Tokens join later.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use crate::testing::{SeedIds, seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use sqlx::PgPool;
@@ -285,7 +285,7 @@ async fn bulk_reversed_overlapping_batches_finish_without_deadlock(pool: PgPool)
             set_projects_active_records(&db, ids.org_id, ids.user_id, &order, false).await
         });
     }
-    crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+    crate::testing::wait_for_blocked(&pool, pid).await;
     blocker.commit().await.unwrap();
     let results = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         let mut transitions = 0;
@@ -396,7 +396,7 @@ async fn status_write_waits_for_a_grants_change_and_then_fails_closed(pool: PgPo
             .await
             .map(|_| ())
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    crate::testing::wait_for_blocked(&pool, blocker).await;
     change.commit().await.unwrap();
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), write)
         .await

@@ -1,6 +1,6 @@
 use super::*;
 use crate::ops::testing::provision;
-use crate::server_fns::test_seed::{seed, time_entry};
+use crate::testing::{seed, time_entry};
 use axum::{Extension, body::Body, http::Request};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;

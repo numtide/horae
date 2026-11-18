@@ -301,7 +301,7 @@ async fn delegated_stop_requires_restored_tracking_but_owner_keeps_terminal_reco
         serde_json::to_value(PermissionSelection::new(&[Permission::TimeWriteOwn])).unwrap(),
     )
     .unwrap();
-    crate::server_fns::test_seed::clear_state(&pool, f.context.subject_id).await;
+    crate::testing::clear_state(&pool, f.context.subject_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')",Uuid::now_v7(),f.ids.org_id,f.context.subject_id,&stored).execute(&pool).await.unwrap();
     let own = TimesheetWriteContext {
         expected_requester: PermissionRequester {

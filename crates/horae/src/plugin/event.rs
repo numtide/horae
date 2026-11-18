@@ -471,7 +471,7 @@ pub(crate) async fn user_payload(
     email: &str,
     name: &str,
 ) -> Result<UserPayload, sqlx::Error> {
-    use crate::models::permissions::PermissionSource;
+    use crate::ops::permissions::PermissionSource;
     use crate::ops::permissions::{PermissionStorageError, load_person_permissions, profile_name};
     let state = match load_person_permissions(&mut *connection, org_id, id).await {
         Ok(state) => state,
@@ -702,7 +702,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn user_payload_carries_the_profile_ref_of_the_stored_source(pool: sqlx::PgPool) {
-        use crate::server_fns::test_seed::{clear_state, seed};
+        use crate::testing::{clear_state, seed};
 
         async fn payload(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> UserPayload {
             let mut connection = pool.acquire().await.unwrap();

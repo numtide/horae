@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::*;
 use crate::ops::testing::Recorder;
 use crate::ops::{Caller, begin};
-use crate::server_fns::test_seed::{built_in_profile, seed_tenant};
+use crate::testing::{built_in_profile, seed_tenant};
 
 fn person(email: &str) -> NewPerson {
     NewPerson {

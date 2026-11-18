@@ -5,7 +5,6 @@ use uuid::Uuid;
 use super::permission_editor::PermissionRequester;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Client {
     pub id: Uuid,
     pub org_id: Uuid,

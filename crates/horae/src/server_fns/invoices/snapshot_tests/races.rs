@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::wait_for_blocked;
 use std::{sync::Arc, time::Duration};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

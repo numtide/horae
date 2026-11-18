@@ -2,7 +2,8 @@ use axum::http::StatusCode;
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::models::{Invoice, InvoiceLine, OrgBranding};
+use crate::models::invoice::InvoiceLine;
+use crate::models::{Invoice, OrgBranding};
 
 use super::ProjectExportRow;
 
@@ -219,7 +220,7 @@ mod tests {
     use crate::models::DetailedReportRow;
     use crate::reports::ExportParams;
     use crate::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
-    use crate::server_fns::test_seed::{SeedIds, seed};
+    use crate::testing::{SeedIds, seed};
     use horae_core::permissions::catalog::BuiltInProfile;
 
     mod authorization;

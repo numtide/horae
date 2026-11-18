@@ -120,7 +120,7 @@ async fn task_api_rechecks_catalog_and_financial_grants_after_authority_wait(poo
                 .await
                 .unwrap();
             let pending = tokio::spawn(async move { request(&app, &uri).await });
-            crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+            crate::testing::wait_for_blocked(&pool, blocker).await;
             let remaining = if financial_only {
                 vec![Permission::TaskReadAll]
             } else {
@@ -182,7 +182,7 @@ async fn task_api_rechecks_deactivation_after_session_lookup(pool: PgPool) {
             .await
             .unwrap();
         let pending = tokio::spawn(async move { request(&app, &uri).await });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+        crate::testing::wait_for_blocked(&pool, blocker).await;
         hold.commit().await.unwrap();
         assert_eq!(pending.await.unwrap().0, StatusCode::FORBIDDEN);
     }

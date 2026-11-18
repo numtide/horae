@@ -7,11 +7,12 @@ use horae_core::types::EntryState;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::{ProjectBudgetProgress, ProjectSpend};
+use crate::models::ProjectSpend;
+use crate::models::project::ProjectBudgetProgress;
 use crate::notifications::budgets::{BudgetProgress, configured_progress};
 use crate::ops::testing::set_grants;
 use crate::ops::{Caller, OpError, begin_read};
-use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use crate::testing::{SeedIds, seed, time_entry};
 
 /// `list_project_budget_progress` on a pinned `date`, one row per scope.
 async fn visible_scopes(

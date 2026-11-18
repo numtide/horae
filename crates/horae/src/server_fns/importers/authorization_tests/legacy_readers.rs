@@ -1,7 +1,7 @@
 //! Session-owned legacy readers reauthorize after the initial session lookup.
 
 use super::*;
-use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
+use crate::testing::{seed, time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 

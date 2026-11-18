@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::ProjectDetails;
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::testing::{SeedIds, seed};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::PgPool;
@@ -26,7 +26,7 @@ pub(super) async fn fixture(
     grants: PermissionSelection,
 ) -> (SeedIds, User) {
     let ids = seed(pool, created_as).await;
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     let stored: Vec<String> =
         serde_json::from_value(serde_json::to_value(grants).unwrap()).unwrap();
     sqlx::query!(
@@ -421,7 +421,7 @@ async fn canonical_project_reads_reject_missing_and_invalid_grants(pool: PgPool)
             sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['unknown_permission'] WHERE org_id=$1",
                 ids.org_id).execute(&pool).await.unwrap();
         } else {
-            crate::server_fns::test_seed::clear_state(&pool, ids.user_id).await;
+            crate::testing::clear_state(&pool, ids.user_id).await;
         }
         assert!(matches!(
             project_team(&pool, &viewer, ids.project_id).await,
@@ -486,7 +486,7 @@ async fn canonical_shared_report_and_historical_tracking_are_distinct(pool: PgPo
         (projects[0].budget_minutes, projects[0].budget_amount_cents),
         (Some(600), None)
     );
-    crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "DELETE FROM assignments WHERE project_id=$1 AND user_id=$2",
         ids.project_id,

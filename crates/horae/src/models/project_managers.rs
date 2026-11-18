@@ -23,9 +23,9 @@ pub struct ProjectManagers {
     pub managers: Vec<ProjectManager>,
 }
 
-#[cfg_attr(
-    not(feature = "server"),
-    expect(dead_code, reason = "Project-manager UI integration is pending.")
+#[allow(
+    dead_code,
+    reason = "Only the server builds it until the project-manager UI calls its server function."
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,9 +44,9 @@ pub enum ProjectManagersCommandKind {
     ReplaceProjectManagers,
 }
 
-#[cfg_attr(
-    not(feature = "server"),
-    expect(dead_code, reason = "Project-manager UI integration is pending.")
+#[allow(
+    dead_code,
+    reason = "Only the server builds it until the project-manager UI calls its server function."
 )]
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

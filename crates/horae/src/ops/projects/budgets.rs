@@ -10,10 +10,11 @@ use uuid::Uuid;
 
 use super::super::{Actor, OpError, Tx};
 use super::REQUESTER_CHANGED;
+use crate::models::ProjectBudgetOverview;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::permissions::PersonPermissions;
+use crate::models::project::ProjectBudgetProgress;
 use crate::models::project::ProjectDetailBudget;
-use crate::models::{ProjectBudgetOverview, ProjectBudgetProgress};
+use crate::ops::permissions::PersonPermissions;
 
 /// [`progress_on`] the organization's today, read in the same transaction.
 /// Budget months are the workspace's, so every viewer sees the same period.

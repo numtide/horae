@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::ops::testing::Recorder;
-use crate::server_fns::test_seed::{built_in_profile, seed};
+use crate::testing::{built_in_profile, seed};
 use sqlx::PgPool;
 
 fn person(email: &str) -> NewPerson {
@@ -52,18 +52,21 @@ async fn emails(pool: &PgPool, org: uuid::Uuid) -> Vec<(String, bool)> {
 #[test]
 fn a_new_person_needs_an_email_and_falls_back_to_it_for_a_name() {
     assert_eq!(
-        NewPerson {
+        crate::ops::people::normalize(&NewPerson {
             email: " dana@x.com ".into(),
             name: "  ".into(),
-        }
-        .normalized(),
+        }),
         Some(NewPerson {
             email: "dana@x.com".into(),
             name: "dana@x.com".into(),
         })
     );
     for email in ["", "   ", "no-at-sign"] {
-        assert_eq!(person(email).normalized(), None, "{email:?}");
+        assert_eq!(
+            crate::ops::people::normalize(&person(email)),
+            None,
+            "{email:?}"
+        );
     }
 }
 

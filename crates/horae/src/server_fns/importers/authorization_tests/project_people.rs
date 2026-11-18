@@ -5,8 +5,8 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
     let request =
@@ -27,7 +27,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         Permission::ProjectCreateAll
     ])))
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!("UPDATE users SET oidc_subject=id::text, cost_rate_cents=6000, billable_rate_cents=10000 WHERE org_id=$1", ids.org_id).execute(pool).await.unwrap();

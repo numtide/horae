@@ -396,7 +396,7 @@ async fn submission_barrier_blocks_manual_entries_and_timer_starts(pool: PgPool)
             input.is_running = is_running;
             insert_time_entry(&run_pool, ids.user_id, input).await
         });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+        crate::testing::wait_for_blocked(&pool, blocker).await;
         submission.commit().await.unwrap();
         let entry = tokio::time::timeout(std::time::Duration::from_secs(5), run.join_next())
             .await

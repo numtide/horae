@@ -2,7 +2,7 @@ use super::canonical_fields::{canonical_actor, keep_protected};
 use super::*;
 use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
 use crate::server_fns::project_managers::calls as project_management;
-use crate::server_fns::test_seed::SeedIds;
+use crate::testing::SeedIds;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 async fn fixture(pool: &PgPool) -> (SeedIds, EditableProject) {

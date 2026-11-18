@@ -507,8 +507,6 @@ pub(crate) fn validate_project_form(
 mod tests {
     use super::*;
     use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
-    use crate::server_fns::BAD_REQUEST;
-    use dioxus::prelude::ServerFnError;
     use uuid::Uuid;
 
     #[test]
@@ -749,13 +747,24 @@ mod tests {
     }
 
     fn assert_rejection_field(form: &ProjectForm, email: bool, expected: serde_json::Value) {
-        let Err(ServerFnError::ServerError { code, details, .. }) =
-            validate_project_form(form, "EUR", email).map_err(ServerFnError::from)
-        else {
-            panic!("Expected a field rejection for {expected}");
+        assert_eq!(field_rejection(form, "EUR", email).1, expected);
+    }
+
+    /// The message and blamed field of an input error that carries only a
+    /// field, which is what the adapters answer as 400 with that field.
+    fn field_rejection(
+        form: &ProjectForm,
+        currency: &str,
+        email: bool,
+    ) -> (String, serde_json::Value) {
+        let Err(error) = validate_project_form(form, currency, email) else {
+            panic!("Expected a field rejection");
         };
-        assert_eq!(code, BAD_REQUEST);
-        assert_eq!(details, Some(serde_json::json!({ "field": expected })));
+        assert!(matches!(error.kind(), OpError::Invalid { .. }), "{error:?}");
+        let detail = error.detail().expect("the rejection names a field");
+        assert_eq!(detail.reason, None);
+        let field = detail.field.clone().expect("the rejection names a field");
+        (error.to_string(), field)
     }
 
     #[test]
@@ -808,16 +817,8 @@ mod tests {
                 "admin_notes" => form.admin_notes = value,
                 _ => unreachable!(),
             }
-            let Err(ServerFnError::ServerError {
-                code,
-                message,
-                details,
-            }) = validate_project_form(&form, &currency, false).map_err(ServerFnError::from)
-            else {
-                panic!("Expected a field rejection for {field}");
-            };
-            assert_eq!(code, BAD_REQUEST);
-            assert_eq!(details, Some(serde_json::json!({ "field": field })));
+            let (message, rejected) = field_rejection(&form, &currency, false);
+            assert_eq!(rejected, serde_json::json!(field));
             assert!(!message.contains("private"));
         }
     }
@@ -850,16 +851,8 @@ mod tests {
                 "second_tax" => defaults.second_tax.as_mut().unwrap().percentage = value,
                 _ => unreachable!(),
             }
-            let Err(ServerFnError::ServerError {
-                code,
-                message,
-                details,
-            }) = validate_project_form(&form, "EUR", false).map_err(ServerFnError::from)
-            else {
-                panic!("Expected a field rejection for {field}");
-            };
-            assert_eq!(code, BAD_REQUEST);
-            assert_eq!(details, Some(serde_json::json!({ "field": field })));
+            let (message, rejected) = field_rejection(&form, "EUR", false);
+            assert_eq!(rejected, serde_json::json!(field));
             assert!(!message.contains("private"));
         }
     }

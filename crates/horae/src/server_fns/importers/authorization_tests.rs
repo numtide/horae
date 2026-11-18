@@ -249,8 +249,8 @@ async fn demote(pool: &PgPool, user_id: Uuid) {
 #[serial_test::serial]
 async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     use crate::ops::testing::add_person;
-    let owner = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
-    let foreign = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
+    let owner = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     crate::state::init_state(
         pool.clone(),
         Arc::new(crate::plugin::PluginRegistry::empty()),

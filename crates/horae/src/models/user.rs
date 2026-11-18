@@ -1,5 +1,3 @@
-#[cfg(feature = "server")]
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -38,7 +36,6 @@ pub fn profile_name_is_valid(name: &str) -> bool {
 /// Identity fields used by the current user lists. These consumers need
 /// neither authentication metadata nor financial data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct UserListItem {
     pub id: Uuid,
     pub email: String,
@@ -51,23 +48,6 @@ pub struct UserListItem {
 pub struct NewPerson {
     pub email: String,
     pub name: String,
-}
-
-impl NewPerson {
-    /// Trimmed fields, the email standing in for a blank name. `None` when
-    /// there is no usable email.
-    #[cfg(feature = "server")]
-    pub fn normalized(self) -> Option<Self> {
-        let email = self.email.trim();
-        if email.is_empty() || !email.contains('@') {
-            return None;
-        }
-        let name = self.name.trim();
-        Some(Self {
-            email: email.to_owned(),
-            name: if name.is_empty() { email } else { name }.to_owned(),
-        })
-    }
 }
 
 /// The outcome of adding several people: the accounts created, the emails
@@ -103,20 +83,4 @@ pub struct PersonRates {
 pub struct PersonRate {
     pub cents: Option<i64>,
     pub editable: bool,
-}
-
-/// The whole account row, rates and sign-in binding included. Server-only:
-/// answers to the browser use `UserListItem` or `CurrentUser`.
-#[cfg(feature = "server")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
-pub struct User {
-    pub id: Uuid,
-    pub org_id: Uuid,
-    pub email: String,
-    pub name: String,
-    pub oidc_subject: Option<String>,
-    pub cost_rate_cents: Option<i64>,
-    pub billable_rate_cents: Option<i64>,
-    pub active: bool,
-    pub created_at: DateTime<Utc>,
 }

@@ -1,7 +1,19 @@
 use super::*;
-use crate::server_fns::project_managers::calls::read;
+use crate::models::project_managers::ProjectManagers;
 use serde_json::json;
 use uuid::Uuid;
+
+/// Reads the manager set in the read transaction its adapter opens.
+async fn read(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    project_id: Uuid,
+) -> Result<ProjectManagers, OpError> {
+    let mut read = ops::begin_read(pool, Caller::session(org, actor)).await?;
+    let result = ops::projects::managers::read(&mut read.tx, &read.actor, project_id, None).await;
+    read.finish(result).await
+}
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]

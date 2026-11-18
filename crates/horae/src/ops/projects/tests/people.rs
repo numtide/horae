@@ -1,4 +1,5 @@
-//! The project form's people through their adapter, as the person a test names.
+//! The project form's people in the read transaction their adapter opens, as
+//! the person a test names.
 
 use crate::models::people::PeopleCursor;
 use crate::models::project_people::{
@@ -6,7 +7,7 @@ use crate::models::project_people::{
 };
 use crate::ops::testing::save_state;
 use crate::ops::{Caller, OpError};
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
 use std::time::Duration;
@@ -52,7 +53,10 @@ async fn read(
     context: Context,
     query: &Query,
 ) -> Result<ProjectPeopleResult, OpError> {
-    crate::server_fns::project_people_page(pool, Caller::session(org, actor), context, query).await
+    let mut read = crate::ops::begin_read(pool, Caller::session(org, actor)).await?;
+    let result =
+        crate::ops::projects::people::read(&mut read.tx, &read.actor, context, query).await;
+    read.finish(result).await
 }
 
 async fn grants(pool: &PgPool, actor: Uuid, permissions: &[Permission]) {

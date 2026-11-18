@@ -219,13 +219,8 @@ async fn verbose_sender_output_is_discarded_without_blocking_delivery() {
     .unwrap();
 }
 
-async fn queued(
-    pool: &sqlx::PgPool,
-) -> (
-    crate::server_fns::test_seed::SeedIds,
-    crate::jobs::OutboxEvent,
-) {
-    let ids = crate::server_fns::test_seed::seed(
+async fn queued(pool: &sqlx::PgPool) -> (crate::testing::SeedIds, crate::jobs::OutboxEvent) {
+    let ids = crate::testing::seed(
         pool,
         horae_core::permissions::catalog::BuiltInProfile::ExecutiveManager,
     )
@@ -552,7 +547,7 @@ async fn alert_recipients_and_delivery_follow_project_and_billable_rate_reads(po
     let stub = Stub::new("cat > /dev/null");
     let date = "2026-09-21".parse().unwrap();
     for amount in [false, true] {
-        let ids = crate::server_fns::test_seed::seed(&pool, ExecutiveManager).await;
+        let ids = crate::testing::seed(&pool, ExecutiveManager).await;
         if amount {
             sqlx::query!(
                 "UPDATE projects SET budget_kind = 'amount', budget_minutes = NULL, budget_amount_cents = 10000 WHERE id = $1",
@@ -671,7 +666,7 @@ async fn alert_recipients_and_delivery_follow_project_and_billable_rate_reads(po
         .unwrap();
         assert_eq!(delivered, expected, "amount budget: {amount}");
     }
-    let foreign = crate::server_fns::test_seed::seed(&pool, Administrator).await;
+    let foreign = crate::testing::seed(&pool, Administrator).await;
     let project = sqlx::query_scalar!(
         "SELECT project_id FROM project_settings WHERE org_id <> $1 LIMIT 1",
         foreign.org_id

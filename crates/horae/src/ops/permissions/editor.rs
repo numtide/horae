@@ -3,6 +3,7 @@
 use uuid::Uuid;
 
 use super::profiles::{PERSON_NOT_FOUND, STALE, evaluate};
+use super::{PermissionSource, PersonPermissions};
 use super::{
     PermissionStorageError, access_revision, increment, load_permission_template,
     load_person_permissions, require_administrator, restore_grants, selection, stored,
@@ -12,7 +13,6 @@ use crate::models::permission_editor::{
     ProfilePreview, ProfileSource, RelationshipRemoval, TemplateAssignee, TemplateChoice,
     TemplateDeletionPreview,
 };
-use crate::models::permissions::{PermissionSource, PersonPermissions};
 use crate::ops::{Actor, OpError, Tx};
 
 impl From<PersonPermissions> for PermissionSnapshot {

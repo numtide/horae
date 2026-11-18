@@ -27,8 +27,8 @@ use uuid::Uuid;
 
 use crate::auth::session::set_session_user_id;
 use crate::config::{AutoProvision, OidcConfig};
-use crate::models::User;
 use crate::models::user::{Activation, NewPerson};
+use crate::ops::people::User;
 use crate::ops::{self, people::Existing};
 use horae_core::permissions::catalog::BuiltInProfile;
 
@@ -575,7 +575,7 @@ async fn resolve_and_login(
     Ok(true)
 }
 
-fn candidate(u: &crate::models::User) -> Candidate {
+fn candidate(u: &User) -> Candidate {
     Candidate {
         id: u.id,
         active: u.active,

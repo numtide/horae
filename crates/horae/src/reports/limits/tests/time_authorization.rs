@@ -3,7 +3,7 @@ use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportAccess;
 use crate::ops::{Caller, OpError};
 use crate::reports::bounded::ExportPermit;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::wait_for_blocked;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use std::time::Duration;
@@ -98,7 +98,7 @@ async fn refused_time_export_release_returns_its_locks(pool: PgPool) {
     .unwrap();
     assert_eq!(render(&pool, export).await, Err(StatusCode::FORBIDDEN));
     assert!(
-        crate::server_fns::test_seed::organization_lockable(&pool, ids.org_id),
+        crate::testing::organization_lockable(&pool, ids.org_id),
         "the refused release still holds the organization lock"
     );
 }
@@ -154,7 +154,7 @@ async fn scoped(pool: &PgPool, profile: BuiltInProfile, grants: &[Permission]) -
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,$4,false,'individual')",
@@ -779,7 +779,7 @@ async fn missing_or_invalid_permission_state_is_forbidden_for_every_profile(pool
                     .is_ok()
             );
             if change == "missing" {
-                crate::server_fns::test_seed::clear_state(&pool, ids.user_id).await;
+                crate::testing::clear_state(&pool, ids.user_id).await;
             } else {
                 sqlx::query!(
                     "UPDATE person_permission_states SET grants=ARRAY['unknown'] WHERE user_id=$1",

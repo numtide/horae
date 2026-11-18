@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use super::*;
 use crate::ops::Caller;
 use crate::ops::testing::{Recorder, provision};
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::testing::{SeedIds, seed};
 
 /// Which authority a fixture gives the seeded person.
 #[derive(Debug, Clone, Copy)]

@@ -36,6 +36,8 @@ mod scheduler;
 mod seed;
 #[cfg(feature = "server")]
 mod state;
+#[cfg(all(test, feature = "server"))]
+mod testing;
 #[cfg(feature = "server")]
 mod timezone;
 

@@ -1,6 +1,6 @@
 use super::tests::submit_user_week;
 use super::*;
-use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
+use crate::testing::{seed, time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;

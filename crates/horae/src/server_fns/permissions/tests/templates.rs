@@ -5,7 +5,7 @@ use super::calls::{
 };
 use super::*;
 use crate::ops::OpError;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -23,7 +23,7 @@ async fn administrator(pool: &PgPool) -> SeedIds {
         .unwrap(),
     )
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
          (id, org_id, user_id, catalog_version, grants, is_administrator, source)
@@ -71,9 +71,7 @@ async fn a_refused_template_command_releases_the_organization(pool: PgPool) {
         execute(&pool, ids.org_id, ids.user_id, &create("Refused", 0)).await,
         Err(e) if e == forbidden()
     ));
-    assert!(crate::server_fns::test_seed::organization_lockable(
-        &pool, ids.org_id
-    ));
+    assert!(crate::testing::organization_lockable(&pool, ids.org_id));
 }
 
 async fn revision_and_count(pool: &PgPool, org: Uuid) -> (i64, i64) {

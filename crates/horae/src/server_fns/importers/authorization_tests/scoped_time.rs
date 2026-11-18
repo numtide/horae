@@ -7,14 +7,14 @@ use horae_core::types::EntryState;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     check_people(pool, api).await;
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id).await;
-    let target_ids = crate::server_fns::test_seed::SeedIds {
+    let target_ids = crate::testing::SeedIds {
         user_id: target,
         ..ids
     };
-    let entry = crate::server_fns::test_seed::time_entry(pool, &target_ids, EntryState::Open).await;
+    let entry = crate::testing::time_entry(pool, &target_ids, EntryState::Open).await;
     let invoice = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
@@ -66,7 +66,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         Permission::TimeReadManaged
     ])))
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!("INSERT INTO person_management_assignments (id,org_id,manager_id,managed_user_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, target).execute(pool).await.unwrap();
@@ -176,8 +176,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 }
 
 async fn check_people(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
     let request = json!({"query":{"search":"","user_id":target,"after":null}});
@@ -198,7 +198,7 @@ async fn check_people(pool: &PgPool, api: &Api) {
         Permission::TimeReadManaged
     ])))
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!(
@@ -246,12 +246,12 @@ async fn check_people(pool: &PgPool, api: &Api) {
     // Discovery alone must not expose the same person's unrelated project time.
     let unrelated = Uuid::now_v7();
     sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Unmanaged','EUR')", unrelated, ids.org_id, ids.client_id).execute(pool).await.unwrap();
-    let target_ids = crate::server_fns::test_seed::SeedIds {
+    let target_ids = crate::testing::SeedIds {
         user_id: target,
         project_id: unrelated,
         ..ids
     };
-    crate::server_fns::test_seed::time_entry(pool, &target_ids, EntryState::Open).await;
+    crate::testing::time_entry(pool, &target_ids, EntryState::Open).await;
     let sheet = api.json("load_timesheet_page", json!({"query":{"subject_id":target,"date_from":"2026-09-01","date_to":"2026-09-30","after":null,"expected_requester":null}}), &cookie).await;
     assert_eq!(sheet["entries"], json!([]));
     sqlx::query!(

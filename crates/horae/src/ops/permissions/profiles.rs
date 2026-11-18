@@ -9,6 +9,7 @@ use serde::Serialize;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use super::{PermissionSource, PersonPermissions};
 use super::{
     REQUEST_CONFLICT, REQUESTER_CHANGED, access_revision, increment, load_permission_template,
     load_person_permissions, require_administrator, selection, stored, unavailable,
@@ -17,7 +18,6 @@ use crate::models::permission_audit::RemovedRelationship as RelationshipRemoval;
 use crate::models::permission_editor::{
     PermissionRequester, ProfileAction, ProfileCommand, ProfileDraft, ProfileOutcome,
 };
-use crate::models::permissions::{PermissionSource, PersonPermissions};
 use crate::ops::{Actor, Done, OpError, Tx};
 use crate::plugin::AppEvent;
 

@@ -224,7 +224,7 @@ async fn overview_observes_edit_revocation_after_waiting_for_organization(pool: 
     let pending = tokio::spawn(async move {
         fetch_project_overview(&pending_pool, &viewer, Some(before.requester)).await
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, holder).await;
+    crate::testing::wait_for_blocked(&pool, holder).await;
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(PermissionSelection::new(&[Permission::ProjectReadAll])).unwrap(),
     )

@@ -2,7 +2,7 @@ use super::*;
 use crate::models::client::ClientBillingSnapshot;
 use crate::ops::testing::set_grants;
 use crate::plugin::event::ActiveTransition;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile::{Administrator, Member, ProjectManager};
 use horae_core::permissions::catalog::Permission;
 use sqlx::PgPool;
@@ -892,7 +892,7 @@ async fn client_summaries_exclude_foreign_clients_and_unreadable_project_currenc
     .execute(&pool)
     .await
     .unwrap();
-    crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
 
     let summaries = client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
         .await

@@ -1,8 +1,10 @@
 use super::*;
 use crate::models::people::PeopleActivity;
-use crate::models::permission_editor::{ProfileAction, ProfileCommand};
-use crate::server_fns::permissions::calls::{last_administrator, profiles};
-use crate::server_fns::test_seed::built_in_profile;
+use crate::models::permission_editor::{PermissionRequester, ProfileAction, ProfileCommand};
+use crate::ops::OpError;
+use crate::ops::permissions::profiles;
+use crate::ops::testing::Recorder;
+use crate::testing::built_in_profile;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
@@ -51,9 +53,22 @@ async fn init_creates_an_administrator_who_administers(pool: PgPool) {
         remove_projects: vec![],
         remove_people: vec![],
     };
+    let mut write = crate::ops::begin_gated(
+        &pool,
+        crate::ops::Caller::session(org, admin),
+        crate::db::OrganizationLock::AccessChange,
+        crate::ops::WriteIsolation::ReadCommitted,
+    )
+    .await
+    .unwrap();
+    let requester = PermissionRequester {
+        org_id: org,
+        user_id: admin,
+    };
+    let result = profiles::save(&mut write.tx, &write.actor, &demote, requester).await;
     assert!(matches!(
-        profiles::execute(&pool, org, admin, &demote).await,
-        Err(e) if e == last_administrator()
+        write.commit(result, &Recorder::default()).await,
+        Err(e) if e == OpError::conflict(profiles::LAST_ADMINISTRATOR)
     ));
 }
 

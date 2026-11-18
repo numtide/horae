@@ -7,21 +7,48 @@
 //! [`templates`]) and the history ([`audit`]) serve current administrators only.
 
 use horae_core::permissions::catalog::{
-    PERMISSION_CATALOG_VERSION, Permission, PermissionSelection, StoredPermissionError,
-    profile_label,
+    BuiltInProfile, PERMISSION_CATALOG_VERSION, Permission, PermissionSelection,
+    StoredPermissionError, profile_label,
 };
-use serde::{Deserialize, de::IntoDeserializer};
+use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::{Actor, OpError};
-use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
 
 pub(crate) mod audit;
 pub(crate) mod editor;
 pub(crate) mod profiles;
 pub(crate) mod provisioning;
 pub(crate) mod templates;
+
+// Server-loaded facts, never a deserializable client authorization payload.
+
+/// Explicit application provenance, independent of computed profile labels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+pub(crate) enum PermissionSource {
+    BuiltIn(BuiltInProfile),
+    Template { id: Uuid, applied_revision: i64 },
+    Individual,
+}
+
+/// Canonical saved grants and independently recorded administrative identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct PersonPermissions {
+    pub grants: PermissionSelection,
+    pub is_administrator: bool,
+    pub source: PermissionSource,
+    pub revision: i64,
+}
+
+/// Reusable grants; the name and selection cannot confer administrative identity.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct PermissionTemplate {
+    pub name: String,
+    pub grants: PermissionSelection,
+    pub revision: i64,
+}
 
 /// The editor's and the history's refusal for anyone but a current administrator.
 pub(crate) const AUTHORITY_REQUIRED: &str = "Current administrator authority is required";

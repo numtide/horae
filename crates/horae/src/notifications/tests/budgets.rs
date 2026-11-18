@@ -2,7 +2,7 @@
 
 use crate::ops::testing::{Recorder, set_grants};
 use crate::plugin::AppEvent;
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 
@@ -10,7 +10,7 @@ use crate::notifications::budgets::{
     BudgetProgress, announce_plugin_bands, claim_budget_band, configured_progress, enqueue_alerts,
     sweep,
 };
-use crate::server_fns::test_seed::{SeedIds, time_entry};
+use crate::testing::{SeedIds, time_entry};
 use horae_core::types::EntryState;
 use uuid::Uuid;
 

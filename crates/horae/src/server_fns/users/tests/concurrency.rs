@@ -1,6 +1,6 @@
 use super::*;
 use crate::ops::testing::Recorder;
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use sqlx::PgPool;
 use tokio::{task::JoinSet, time::timeout};
 use uuid::Uuid;

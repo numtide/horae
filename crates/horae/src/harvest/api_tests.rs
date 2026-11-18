@@ -3,7 +3,7 @@
 
 use super::pagination_tests::{api_id, page, request, signed_in};
 use super::*;
-use crate::server_fns::test_seed::{seed, time_entry};
+use crate::testing::{seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use serde_json::{Value, json};

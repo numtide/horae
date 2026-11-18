@@ -66,7 +66,7 @@ async fn email_rows_create_one_deactivated_person_and_names_never_do(pool: PgPoo
     assert_eq!(commit.people.len(), 1);
     assert_eq!(commit.people[0].outcome, PersonOutcome::Created);
     assert_eq!(
-        crate::server_fns::test_seed::built_in_profile(&pool, org, commit.people[0].horae_id).await,
+        crate::testing::built_in_profile(&pool, org, commit.people[0].horae_id).await,
         Some((
             horae_core::permissions::catalog::BuiltInProfile::Member,
             false

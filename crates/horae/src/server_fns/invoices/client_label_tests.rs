@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::SeedIds;
+use crate::testing::SeedIds;
 use sqlx::PgPool;
 use uuid::Uuid;
 
