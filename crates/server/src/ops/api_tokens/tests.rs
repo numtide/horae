@@ -339,3 +339,50 @@ async fn another_organizations_token_is_not_found_even_for_an_administrator(pool
     assert!(matches!(revoked, Err(OpError::NotFound(_))), "{revoked:?}");
     assert!(list_org_as(&pool, &admin).await.unwrap().is_empty());
 }
+
+async fn identity_as(pool: &PgPool, caller: Caller) -> Result<TokenIdentity, OpError> {
+    let mut read = crate::ops::begin_read(pool, caller).await?;
+    let result = identity(&mut read.tx, &read.actor).await;
+    read.finish(result).await
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_caller_has_an_identity(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let (secret, row) = create_as(&pool, &ids, "calendar sync", None).await.unwrap();
+    let caller = authenticate(&pool, secret.expose()).await.unwrap().unwrap();
+    let found = identity_as(&pool, caller).await.unwrap();
+    assert_eq!(
+        found,
+        TokenIdentity {
+            person_email: format!("{}@test.com", ids.user_id),
+            organization_name: "Test Org".into(),
+            token: ApiTokenRow {
+                last_used_at: found.token.last_used_at,
+                ..row
+            },
+        }
+    );
+    assert_eq!(found.token.owner_name, "Test User");
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn only_an_active_token_caller_has_an_identity(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let session = identity_as(&pool, Caller::session(ids.org_id, ids.user_id)).await;
+    assert!(matches!(session, Err(OpError::NotFound(_))), "{session:?}");
+
+    let (_, row) = create_as(&pool, &ids, "script", None).await.unwrap();
+    let caller = Caller::token(ids.org_id, ids.user_id, row.id);
+    let other = add_person(&pool, &ids, BuiltInProfile::Member).await;
+    let theirs = Caller::token(ids.org_id, other.user_id, row.id);
+    let error = identity_as(&pool, theirs).await;
+    assert!(matches!(error, Err(OpError::NotFound(_))), "{error:?}");
+
+    set_active(&pool, ids.user_id, false).await;
+    let inactive = identity_as(&pool, caller).await;
+    assert!(
+        matches!(inactive, Err(OpError::Forbidden(_))),
+        "{inactive:?}"
+    );
+}

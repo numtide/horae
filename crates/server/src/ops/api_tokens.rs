@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{Actor, Caller, Done, OpError, Tx};
+use super::{Actor, Caller, Channel, Done, OpError, Tx};
 use crate::models::api_tokens::ApiTokenRow;
 
 /// What every token starts with, so people and secret scanners recognise it.
@@ -106,6 +106,58 @@ pub async fn list_org(tx: &mut Tx, actor: &Actor) -> Result<Vec<ApiTokenRow>, Op
     )
     .fetch_all(&mut **tx)
     .await?)
+}
+
+/// Who a token's request acts as: the person, their organization and the
+/// token itself.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenIdentity {
+    pub person_email: String,
+    pub organization_name: String,
+    /// `owner_name` is the person's name.
+    pub token: ApiTokenRow,
+}
+
+/// The identity of an actor that came through a token; any other channel has
+/// no token to describe.
+pub async fn identity(tx: &mut Tx, actor: &Actor) -> Result<TokenIdentity, OpError> {
+    require_active(actor)?;
+    let Channel::Token { token_id } = actor.channel() else {
+        return Err(OpError::not_found(NOT_FOUND));
+    };
+    let row = sqlx::query!(
+        r#"SELECT t.id, t.user_id, u.name AS owner_name, u.email, o.name AS organization_name,
+                t.name, t.display_prefix,
+                t.created_at AS "created_at: DateTime<Utc>",
+                t.expires_at AS "expires_at: DateTime<Utc>",
+                t.last_used_at AS "last_used_at: DateTime<Utc>",
+                t.revoked_at AS "revoked_at: DateTime<Utc>"
+         FROM api_tokens t
+         JOIN users u ON u.org_id = t.org_id AND u.id = t.user_id
+         JOIN organizations o ON o.id = t.org_id
+         WHERE t.id = $1 AND t.org_id = $2 AND t.user_id = $3"#,
+        token_id,
+        actor.org_id(),
+        actor.id(),
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| OpError::not_found(NOT_FOUND))?;
+    Ok(TokenIdentity {
+        person_email: row.email,
+        organization_name: row.organization_name,
+        token: ApiTokenRow {
+            id: row.id,
+            user_id: row.user_id,
+            owner_name: row.owner_name,
+            name: row.name,
+            display_prefix: row.display_prefix,
+            created_at: row.created_at,
+            expires_at: row.expires_at,
+            last_used_at: row.last_used_at,
+            revoked_at: row.revoked_at,
+        },
+    })
 }
 
 /// Creates a token for the actor. The [`Secret`] is the only copy there will be.

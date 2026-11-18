@@ -243,6 +243,13 @@ fn main() -> anyhow::Result<()> {
                 );
             }
             config::check_dev_login_bind(cfg.dev_login, &host)?;
+            if cfg.api.cursor_key.is_random() {
+                tracing::warn!(
+                    "No API cursor key is set: /api/v1 list cursors use a random key and stop \
+                     working when the server restarts. Production must set \
+                     HORAE_API_CURSOR_KEY_FILE (services.horae.api.cursorKeyFile on NixOS)."
+                );
+            }
 
             let addr = format!("{}:{}", host, port);
             tracing::info!("Starting Horae on {addr}");
@@ -303,6 +310,7 @@ fn main() -> anyhow::Result<()> {
                             favicon_svg: asset!("/assets/favicon.svg").to_string(),
                             apple_touch_icon: asset!("/assets/apple-touch-icon.png").to_string(),
                         },
+                        v1: horae_api::v1::V1State::new(pool.clone(), &cfg.api),
                     }))
                     .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside

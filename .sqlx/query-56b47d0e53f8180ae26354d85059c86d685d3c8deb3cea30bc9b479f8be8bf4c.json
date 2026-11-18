@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.user_id, u.name AS owner_name, u.email, o.name AS organization_name,\n                t.name, t.display_prefix,\n                t.created_at AS \"created_at: DateTime<Utc>\",\n                t.expires_at AS \"expires_at: DateTime<Utc>\",\n                t.last_used_at AS \"last_used_at: DateTime<Utc>\",\n                t.revoked_at AS \"revoked_at: DateTime<Utc>\"\n         FROM api_tokens t\n         JOIN users u ON u.org_id = t.org_id AND u.id = t.user_id\n         JOIN organizations o ON o.id = t.org_id\n         WHERE t.id = $1 AND t.org_id = $2 AND t.user_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "organization_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "display_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "expires_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_used_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "revoked_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "56b47d0e53f8180ae26354d85059c86d685d3c8deb3cea30bc9b479f8be8bf4c"
+}

@@ -25,6 +25,140 @@ pub struct AppConfig {
     pub job_policy: JobPolicy,
     /// Optional budget email transport; no process is started when absent.
     pub mail: Option<MailConfig>,
+    /// The `/api/v1` cursor key and the per-token request limit. Holds a
+    /// secret, so it is never serialized.
+    #[serde(skip)]
+    pub api: ApiConfig,
+}
+
+/// Settings of Horae's token-authenticated APIs (spec 022).
+#[derive(Debug, Clone, Default)]
+pub struct ApiConfig {
+    pub cursor_key: CursorKey,
+    pub rate_limit: RateLimit,
+}
+
+/// The HMAC key that signs list cursors (research R-5). Its `Debug` hides the
+/// bytes.
+#[derive(Clone)]
+pub struct CursorKey {
+    bytes: [u8; 32],
+    random: bool,
+}
+
+impl CursorKey {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self {
+            bytes,
+            random: false,
+        }
+    }
+
+    /// A key drawn at start, the development fallback: cursors signed with it
+    /// stop working when the process restarts.
+    pub fn random() -> Self {
+        use chacha20poly1305::aead::OsRng;
+        use chacha20poly1305::aead::rand_core::RngCore;
+        let mut bytes = [0; 32];
+        OsRng.fill_bytes(&mut bytes);
+        Self {
+            bytes,
+            random: true,
+        }
+    }
+
+    pub fn bytes(&self) -> &[u8; 32] {
+        &self.bytes
+    }
+
+    pub fn is_random(&self) -> bool {
+        self.random
+    }
+
+    /// 64 hex characters, surrounding whitespace ignored.
+    fn parse(hex: &str) -> Option<Self> {
+        let hex = hex.trim();
+        if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let mut bytes = [0; 32];
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).ok()?;
+        }
+        Some(Self::new(bytes))
+    }
+
+    /// `HORAE_API_CURSOR_KEY_FILE`, else `HORAE_API_CURSOR_KEY`, else a random
+    /// key. A key file that cannot be read or holds no key refuses to start.
+    fn from_env() -> anyhow::Result<Self> {
+        if let Some(path) = non_empty("HORAE_API_CURSOR_KEY_FILE") {
+            let text = std::fs::read_to_string(&path)
+                .with_context(|| format!("Cannot read HORAE_API_CURSOR_KEY_FILE ({path})"))?;
+            return Self::parse(&text).with_context(|| {
+                format!("HORAE_API_CURSOR_KEY_FILE ({path}) must hold 64 hex characters")
+            });
+        }
+        if let Some(value) = non_empty("HORAE_API_CURSOR_KEY") {
+            return Self::parse(&value).context("HORAE_API_CURSOR_KEY must be 64 hex characters");
+        }
+        Ok(Self::random())
+    }
+}
+
+/// Only for `#[serde(skip)]`: a configuration read from the environment
+/// always says where its key came from.
+impl Default for CursorKey {
+    fn default() -> Self {
+        Self::random()
+    }
+}
+
+impl std::fmt::Debug for CursorKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CursorKey")
+            .field("bytes", &REDACTED)
+            .field("random", &self.random)
+            .finish()
+    }
+}
+
+/// How many requests a token may make per window (research R-7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RateLimit {
+    pub requests: u32,
+    pub window: std::time::Duration,
+}
+
+impl Default for RateLimit {
+    fn default() -> Self {
+        Self {
+            requests: 100,
+            window: std::time::Duration::from_secs(15),
+        }
+    }
+}
+
+impl RateLimit {
+    /// `<requests>/<seconds>`, both at least 1.
+    pub fn parse(value: &str) -> Option<Self> {
+        let (requests, seconds) = value.split_once('/')?;
+        let requests: u32 = requests.parse().ok()?;
+        let seconds: u64 = seconds.parse().ok()?;
+        (requests > 0 && seconds > 0).then(|| Self {
+            requests,
+            window: std::time::Duration::from_secs(seconds),
+        })
+    }
+
+    fn from_env() -> anyhow::Result<Self> {
+        match std::env::var("HORAE_API_RATE_LIMIT") {
+            Ok(value) => Self::parse(&value).with_context(|| {
+                format!("HORAE_API_RATE_LIMIT must be <requests>/<seconds>, not {value:?}")
+            }),
+            Err(std::env::VarError::NotPresent) => Ok(Self::default()),
+            Err(error) => Err(error).context("invalid HORAE_API_RATE_LIMIT"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -273,6 +407,10 @@ impl AppConfig {
                 non_empty("HORAE_SENDMAIL_PATH").as_deref(),
                 non_empty("HORAE_MAIL_FROM").as_deref(),
             )?,
+            api: ApiConfig {
+                cursor_key: CursorKey::from_env()?,
+                rate_limit: RateLimit::from_env()?,
+            },
         })
     }
 }

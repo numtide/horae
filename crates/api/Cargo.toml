@@ -35,8 +35,15 @@ rust_xlsxwriter = "0.80"
 zip = { version = "2", default-features = false, features = [
   "deflate",
 ], optional = true }
+utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-axum = "0.2"
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
 
 [dev-dependencies]
+# Schema validation only; no remote `$ref` is ever fetched.
+jsonschema = { version = "0.61", default-features = false }
 horae-server = { path = "../server", features = ["test-support"] }
 serial_test = "3"
 tower = { version = "0.5", features = ["util"] }

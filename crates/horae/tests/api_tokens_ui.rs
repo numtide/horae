@@ -148,6 +148,10 @@ async fn an_empty_list_says_so_and_create_waits_for_a_name() {
     let dom = mount(&Probe::default());
     let html = html(&dom);
     assert!(html.contains("You have no tokens yet."), "{html}");
+    assert!(
+        html.contains(r#"href="/api/v1/openapi.json""#),
+        "the section links the API description: {html}"
+    );
     let create = &html[html.find("id=\"api-token-create\"").unwrap()..];
     assert!(
         create[..create.find('>').unwrap()].contains("disabled=true"),

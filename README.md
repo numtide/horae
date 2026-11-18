@@ -137,6 +137,14 @@ address for hot-reload proxying.
 | `HORAE_PLUGIN_DATABASE_URL` | unset | Separate unprivileged login for [plugin SQL](specs/001-time-tracking-invoicing/contracts/plugin-interface.md); unset or empty disables it |
 | `HORAE_SENDMAIL_PATH` | unset | Absolute path to the optional budget-alert mail executable; no command arguments |
 | `HORAE_MAIL_FROM` | unset | Sender mailbox for budget alerts; required together with `HORAE_SENDMAIL_PATH` |
+| `HORAE_API_CURSOR_KEY_FILE` | unset | Path to a secret file with the key that signs `/api/v1` list cursors (64 hex characters); see [API cursor key](#api-cursor-key) |
+| `HORAE_API_CURSOR_KEY` | unset | The same key as a value, for development and tests; ignored when `HORAE_API_CURSOR_KEY_FILE` is set |
+| `HORAE_API_RATE_LIMIT` | `100/15` | Requests per personal access token per window, as `<requests>/<seconds>` |
+
+An invalid API setting refuses to start, as does a cursor key file that is missing,
+unreadable or not 64 hex characters. With neither cursor variable set, the server draws
+a random key at start and logs a warning: cursors stop working after a restart. That
+fallback is for development only.
 
 Sessions are stored in PostgreSQL; the cookie contains an opaque session identifier,
 not signed user data. `SESSION_SECRET` is not used and can be removed from existing
@@ -230,6 +238,7 @@ Horae ships as a NixOS module:
     port = 3000;
     database.createLocally = true;   # provisions a local PostgreSQL and database
     # secretKeyFile = "/run/secrets/horae-env";
+    # api.cursorKeyFile = "/run/secrets/horae-api-cursor-key";
     # openFirewall = true;
   };
 }
@@ -253,6 +262,22 @@ HORAE_OIDC_REDIRECT_URL=https://time.example.com/auth/callback
 Use your provider's issuer and credentials, register the exact redirect URL, and
 configure the HTTPS reverse proxy separately. Do not put real secrets in Nix string
 literals or copy the development admin bypass into a production environment.
+
+### API cursor key
+
+`/api/v1` list cursors are signed, so a client cannot forge a position in a list. Give each
+deployment its own key:
+
+1. Generate a key once: `openssl rand -hex 32` (64 hex characters).
+1. Store it with the deployment's other secrets, so it lands at a runtime path such as
+   `/run/secrets/horae-api-cursor-key`.
+1. Set `services.horae.api.cursorKeyFile` to that path and deploy. The module passes it to the
+   service through systemd `LoadCredential`.
+1. Check the start log: it has no cursor-key warning.
+
+While `api.cursorKeyFile` is unset, the module adds an evaluation warning and the server signs
+with a random key drawn at every start. Rotating the key invalidates every cursor in flight;
+clients start their list again after a `400 invalid_cursor`.
 
 ### First run
 

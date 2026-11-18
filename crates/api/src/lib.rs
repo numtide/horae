@@ -6,14 +6,18 @@
 
 use axum::Router;
 use axum::http::StatusCode;
-use axum::routing::get;
+use axum::routing::{any, get};
 
 pub mod auth;
+pub mod cursor;
 pub mod exports;
 pub mod harvest_oauth;
 mod health;
 pub mod import_errors;
+pub mod problem;
+pub mod rate_limit;
 pub mod token;
+pub mod v1;
 
 pub use auth::{LoginAssets, login_redirect_guard, make_session_layer, session};
 pub use token::ApiCaller;
@@ -29,14 +33,20 @@ pub struct RouterOptions {
     /// `DEV_LOGIN=1`: the one-click admin sign-in instead of OIDC.
     pub dev_login: bool,
     pub login_assets: LoginAssets,
+    pub v1: v1::V1State,
 }
 
 /// Every route this crate serves: `/health`, the exports, the import error
-/// download, the Harvest OAuth callback and `/auth/*`. The caller adds the
-/// session layer and [`login_redirect_guard`].
+/// download, the Harvest OAuth callback, `/auth/*` and `/api/v1`. The caller
+/// adds the session layer and [`login_redirect_guard`].
+///
+/// Any other `/api/…` path answers 404 with an empty body, so it does not
+/// fall through to the web app's HTML.
 pub fn router(options: RouterOptions) -> Router {
     Router::new()
         .route("/health", get(health::health))
+        .route("/api/{*rest}", any(|| async { StatusCode::NOT_FOUND }))
+        .merge(v1::router(options.v1))
         .route("/api/reports/export/csv", get(exports::export_csv))
         .route("/api/reports/export/xlsx", get(exports::export_xlsx))
         .route(

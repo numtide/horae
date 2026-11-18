@@ -32,6 +32,8 @@ pkgs.testers.nixosTest {
     };
     services.horae.enable = true;
     services.horae.database.createLocally = true;
+    # A fixed test key; a deployment keeps its key out of the Nix store.
+    services.horae.api.cursorKeyFile = "${pkgs.writeText "api-cursor-key" "${lib.strings.replicate 64 "1"}\n"}";
     systemd.services.horae.environment.DEV_LOGIN = "1";
     # Restart explicitly so crash recovery cannot race the test's assertions.
     systemd.services.horae.serviceConfig.Restart = lib.mkForce "no";
@@ -80,6 +82,13 @@ pkgs.testers.nixosTest {
 
     # Health check
     server.succeed("curl -s http://localhost:3000/health | grep -q ok")
+
+    # The cursor key reaches the service through its credential, so the
+    # start log has no random-key warning; the API description is public.
+    server.fail("journalctl -u horae.service | grep -q 'No API cursor key is set'")
+    server.succeed(
+      "curl -sf http://localhost:3000/api/v1/openapi.json | grep -q '\"openapi\":\"3.1.0\"'"
+    )
 
     # Backups are on by default with database.createLocally, and the unit
     # actually produces a dump rather than just existing.
