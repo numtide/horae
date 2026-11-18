@@ -53,7 +53,7 @@ async fn project_csv_rejects_financial_revocation_after_capacity_wait(pool: PgPo
         for _ in 0..2 {
             output
                 .writer
-                .write_record([crate::reports::budget_cell(&rows[0])])
+                .write_record([crate::http::reports::budget_cell(&rows[0])])
                 .unwrap();
             output
                 .project_record(&sender, &mut tx, &authority, &rows[0])

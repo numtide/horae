@@ -1,8 +1,8 @@
 use super::*;
+use crate::http::reports::ProjectExportRow;
 use crate::ops::permissions::StoredPersonPermissions;
-use crate::reports::ProjectExportRow;
 
-pub(in crate::reports::streaming) async fn declare_projects(
+pub(in crate::http::reports::streaming) async fn declare_projects(
     connection: &mut PgConnection,
     org_id: Uuid,
     actor_id: Uuid,
@@ -53,7 +53,7 @@ pub(in crate::reports::streaming) async fn declare_projects(
     Ok(())
 }
 
-pub(in crate::reports::streaming) async fn projects(
+pub(in crate::http::reports::streaming) async fn projects(
     connection: &mut PgConnection,
     limit: i32,
 ) -> Result<Vec<ProjectExportRow>, StatusCode> {

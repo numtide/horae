@@ -288,11 +288,11 @@ async fn grouped_xlsx_all_dimensions_render_exact_hours_without_private_scope(po
         let body = export
             .scope
             .render(ExportPermit::acquire().unwrap(), &pool, move || {
-                crate::reports::groups::workbook(&export.rows, dimension)
+                crate::http::reports::groups::workbook(&export.rows, dimension)
             })
             .await
             .unwrap();
-        let bytes = axum::body::to_bytes(body, crate::reports::bounded::MAX_OUTPUT_BYTES)
+        let bytes = axum::body::to_bytes(body, crate::http::reports::bounded::MAX_OUTPUT_BYTES)
             .await
             .unwrap();
         assert_text_cell(&bytes, "A1", title);

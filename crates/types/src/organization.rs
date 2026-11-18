@@ -17,7 +17,7 @@ pub struct OrgBranding {
     pub invoice_payment_terms: Option<String>,
 }
 
-/// The longest branding value the invoice PDF export accepts (see `reports::limits`).
+/// The longest branding value the invoice PDF export accepts (see `http::reports::limits`).
 pub const MAX_BRANDING_VALUE_BYTES: usize = 32_767;
 
 /// Why a branding value cannot be saved, if it cannot: the PDF export refuses

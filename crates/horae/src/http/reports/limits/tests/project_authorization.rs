@@ -311,7 +311,7 @@ async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_release_every_captured_project_without_render_locks(pool: PgPool) {
-    use crate::reports::{bounded::ExportPermit, render_project_export};
+    use crate::http::reports::{bounded::ExportPermit, render_project_export};
     for change in ["remove", "deactivate", "narrow_retained"] {
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         assign(&mut pool.acquire().await.unwrap(), &ids).await;
@@ -581,7 +581,7 @@ async fn project_exports_share_one_size_and_payload_snapshot(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_release_cancelled_and_timed_out_checks(pool: PgPool) {
-    use crate::reports::{bounded::ExportPermit, render_project_export};
+    use crate::http::reports::{bounded::ExportPermit, render_project_export};
     let ids = seed(&pool, BuiltInProfile::Member).await;
     assign(&mut pool.acquire().await.unwrap(), &ids).await;
     let reader_pool = sqlx::postgres::PgPoolOptions::new()

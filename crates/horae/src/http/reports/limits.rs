@@ -217,9 +217,9 @@ async fn read_pdf(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::http::reports::ExportParams;
+    use crate::http::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
     use crate::models::DetailedReportRow;
-    use crate::reports::ExportParams;
-    use crate::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
     use crate::testing::{SeedIds, seed};
     use horae_core::permissions::catalog::BuiltInProfile;
 

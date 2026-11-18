@@ -44,7 +44,7 @@ async fn current_branding(tx: &mut Tx, actor: &Actor) -> Result<OrgBranding, OpE
 }
 
 /// The org's invoice branding block, shared with the invoice PDF
-/// (`reports::limits::pdf`) so the PDF carries the identity [`branding`] edits.
+/// (`http::reports::limits::pdf`) so the PDF carries the identity [`branding`] edits.
 pub(crate) async fn fetch_branding_from(
     executor: impl sqlx::PgExecutor<'_>,
     org_id: uuid::Uuid,

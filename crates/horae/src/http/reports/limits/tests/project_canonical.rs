@@ -89,8 +89,8 @@ async fn canonical_project_workbook_rejects_financial_revocation_during_render(p
     let (release, wait) = std::sync::mpsc::channel();
     let render_pool = pool.clone();
     let pending = tokio::spawn(async move {
-        crate::reports::render_project_export(
-            crate::reports::bounded::ExportPermit::acquire().unwrap(),
+        crate::http::reports::render_project_export(
+            crate::http::reports::bounded::ExportPermit::acquire().unwrap(),
             &render_pool,
             ids.org_id,
             ids.user_id,
@@ -100,7 +100,7 @@ async fn canonical_project_workbook_rejects_financial_revocation_during_render(p
                 started.send(()).unwrap();
                 wait.recv_timeout(std::time::Duration::from_secs(5))
                     .unwrap();
-                crate::reports::projects_xlsx(&rows)
+                crate::http::reports::projects_xlsx(&rows)
             },
         )
         .await

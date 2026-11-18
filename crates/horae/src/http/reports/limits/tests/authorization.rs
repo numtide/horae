@@ -523,7 +523,7 @@ async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgP
         );
     }
     let mut tx =
-        crate::reports::begin_invoice_export(&reader_pool, case.ids.org_id, case.ids.user_id)
+        crate::http::reports::begin_invoice_export(&reader_pool, case.ids.org_id, case.ids.user_id)
             .await
             .unwrap()
             .tx;
@@ -562,7 +562,7 @@ async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_recheck_after_render_without_retaining_authority(pool: PgPool) {
-    use crate::reports::{bounded::ExportPermit, render_invoice_export};
+    use crate::http::reports::{bounded::ExportPermit, render_invoice_export};
     for gated in [false, true] {
         for deactivate in [false, true] {
             let case = Case::new(&pool).await;
@@ -650,7 +650,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_release_rendered_body_when_final_check_is_interrupted(pool: PgPool) {
-    use crate::reports::{bounded::ExportPermit, render_invoice_export};
+    use crate::http::reports::{bounded::ExportPermit, render_invoice_export};
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     for cancel in [false, true] {
         let lock_timeout = if cancel { "0" } else { "250ms" };
@@ -720,7 +720,7 @@ async fn materialized_exports_release_rendered_body_when_final_check_is_interrup
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
         tokio::time::timeout(Duration::from_secs(5), async {
-            crate::reports::begin_invoice_export(&reader_pool, ids.org_id, ids.user_id)
+            crate::http::reports::begin_invoice_export(&reader_pool, ids.org_id, ids.user_id)
                 .await
                 .unwrap()
                 .finish(Ok(()))

@@ -11,6 +11,8 @@ use horae_core::money::format_cents_plain;
 use serde::Deserialize;
 use tower_sessions::Session;
 
+use super::op_status;
+
 mod bounded;
 mod groups;
 pub use groups::export_csv as export_time_groups_csv;
@@ -56,55 +58,6 @@ async fn require_invoice_reader(session: &Session) -> Result<(uuid::Uuid, uuid::
     let allowed = crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ);
     read.finish(allowed).await.map_err(op_status)?;
     Ok((user_id, org_id))
-}
-
-/// The status every Axum route (exports, reports, job downloads) answers an
-/// [`OpError`](crate::ops::OpError) with. A hidden record is refused as
-/// forbidden rather than not found, so a download never confirms it exists.
-pub(crate) fn op_status(error: crate::ops::OpError) -> StatusCode {
-    use crate::ops::OpError;
-    match error.kind() {
-        OpError::Forbidden(_) | OpError::NotFound(_) => StatusCode::FORBIDDEN,
-        OpError::Conflict(_) => StatusCode::CONFLICT,
-        OpError::Invalid { .. } => StatusCode::BAD_REQUEST,
-        OpError::Internal(_) | OpError::Detailed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-    }
-}
-
-#[cfg(test)]
-mod op_status_tests {
-    use super::op_status;
-    use crate::ops::OpError;
-    use axum::http::StatusCode;
-
-    #[test]
-    fn invalid_input_is_a_bad_request() {
-        assert_eq!(
-            op_status(OpError::invalid("from", "Invalid date")),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            op_status(OpError::bad_input("Invalid filters")),
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[test]
-    fn other_errors_keep_their_status() {
-        assert_eq!(
-            op_status(OpError::not_found("hidden")),
-            StatusCode::FORBIDDEN
-        );
-        assert_eq!(
-            op_status(OpError::forbidden("refused")),
-            StatusCode::FORBIDDEN
-        );
-        assert_eq!(op_status(OpError::conflict("raced")), StatusCode::CONFLICT);
-        assert_eq!(
-            op_status(OpError::Internal("failed".into())),
-            StatusCode::INTERNAL_SERVER_ERROR
-        );
-    }
 }
 
 /// A snapshot read holding the actor's whole-invoice read grant, bounded by

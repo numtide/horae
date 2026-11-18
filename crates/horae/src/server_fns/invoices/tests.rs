@@ -1667,7 +1667,7 @@ async fn assert_reporting_minutes(
             .sum::<i64>(),
         minutes
     );
-    let csv = crate::reports::entries_csv(&detail).unwrap();
+    let csv = crate::http::reports::entries_csv(&detail).unwrap();
     let records = csv::Reader::from_reader(csv.as_slice())
         .records()
         .collect::<Result<Vec<_>, _>>()

@@ -1,7 +1,7 @@
 use super::*;
+use crate::http::reports::limits::time;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{TimeReportBillability, TimeReportGrouping};
-use crate::reports::limits::time;
 
 async fn fixture(pool: &PgPool) -> SeedIds {
     let ids = scoped(pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;

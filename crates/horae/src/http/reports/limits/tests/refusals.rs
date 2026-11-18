@@ -19,7 +19,7 @@ fn assert_released(pool: &PgPool, ids: &SeedIds, path: &str) {
 async fn refused_invoice_exports_release_their_locks(pool: PgPool) {
     let member = seed(&pool, BuiltInProfile::Member).await;
     assert_eq!(
-        crate::reports::begin_invoice_export(&pool, member.org_id, member.user_id)
+        crate::http::reports::begin_invoice_export(&pool, member.org_id, member.user_id)
             .await
             .err(),
         Some(StatusCode::FORBIDDEN)

@@ -20,7 +20,7 @@ async fn authorize_project_actor(
     actor.grants().cloned().ok_or(StatusCode::FORBIDDEN)
 }
 
-pub(in crate::reports) async fn projects(
+pub(in crate::http::reports) async fn projects(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
@@ -103,7 +103,7 @@ async fn project_rows(
     Ok(rows)
 }
 
-pub(in crate::reports) async fn authorize_projects(
+pub(in crate::http::reports) async fn authorize_projects(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
@@ -116,7 +116,7 @@ pub(in crate::reports) async fn authorize_projects(
     finish(tx, result).await
 }
 
-pub(in crate::reports) async fn authorize_project_rows(
+pub(in crate::http::reports) async fn authorize_project_rows(
     connection: &mut PgConnection,
     org_id: Uuid,
     actor_id: Uuid,

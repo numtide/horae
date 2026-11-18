@@ -1,10 +1,10 @@
 use super::*;
+use crate::http::reports::limits::time::authorize_rows;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportGrouping;
-use crate::reports::limits::time::authorize_rows;
 use cursor::groups::{Fragment, GroupRow};
 
-pub(in crate::reports) async fn download(
+pub(in crate::http::reports) async fn download(
     pool: PgPool,
     org_id: Uuid,
     actor_id: Uuid,
@@ -79,7 +79,7 @@ pub(super) async fn deliver(
     };
     let mut writer = csv::Writer::from_writer(Vec::new());
     writer
-        .write_record(crate::reports::groups::headers(dimension))
+        .write_record(crate::http::reports::groups::headers(dimension))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if next.is_none() {
         let permit = sender
@@ -131,9 +131,9 @@ pub(super) async fn deliver(
                 writer
                     .write_record([
                         fragment.name,
-                        crate::reports::format_hours2(fragment.rounded_minutes),
-                        crate::reports::format_hours2(fragment.billable_minutes),
-                        crate::reports::format_hours2(nonbillable),
+                        crate::http::reports::format_hours2(fragment.rounded_minutes),
+                        crate::http::reports::format_hours2(fragment.billable_minutes),
+                        crate::http::reports::format_hours2(nonbillable),
                     ])
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
                 break;

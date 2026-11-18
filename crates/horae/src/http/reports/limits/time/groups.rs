@@ -3,12 +3,12 @@
 use super::*;
 use crate::models::time_report::{TimeReportGroup, TimeReportGrouping, TimeReportTotals};
 
-pub(in crate::reports) struct GroupExport {
+pub(in crate::http::reports) struct GroupExport {
     pub rows: Vec<TimeReportGroup>,
     pub scope: TimeExportScope,
 }
 
-pub(in crate::reports) async fn read(
+pub(in crate::http::reports) async fn read(
     pool: &PgPool,
     requester: PermissionRequester,
     query: &TimeReportQuery,
