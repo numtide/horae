@@ -37,7 +37,7 @@ async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), 
         .await
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;
-    let caller = crate::server_fns::active_caller(&state.db, user_id)
+    let caller = crate::ops::active_caller(&state.db, user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;

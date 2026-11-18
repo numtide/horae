@@ -166,7 +166,7 @@ pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError>
 pub(crate) async fn session_caller() -> Result<crate::ops::Caller, ServerFnError> {
     let user_id = session_user_id().await?;
     let state = crate::state::global_state().await;
-    active_caller(&state.db, user_id)
+    crate::ops::active_caller(&state.db, user_id)
         .await
         .map_err(server_err)?
         .ok_or_else(|| unauthorized("Account is not active"))
@@ -194,22 +194,6 @@ fn unavailable_unless_unauthorized(error: ServerFnError, unavailable: &str) -> S
             server_err(unavailable)
         }
     }
-}
-
-/// The person's session caller if their account is still active. Shared by
-/// the server functions and the Axum export routes.
-#[cfg(feature = "server")]
-pub(crate) async fn active_caller(
-    db: &sqlx::PgPool,
-    user_id: uuid::Uuid,
-) -> Result<Option<crate::ops::Caller>, sqlx::Error> {
-    let org_id = sqlx::query_scalar!(
-        "SELECT org_id FROM users WHERE id = $1 AND active = true",
-        user_id,
-    )
-    .fetch_optional(db)
-    .await?;
-    Ok(org_id.map(|org_id| crate::ops::Caller::session(org_id, user_id)))
 }
 
 /// Test fixtures hold a whole `User`; the read helpers take its caller.

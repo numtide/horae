@@ -163,6 +163,21 @@ impl Caller {
     }
 }
 
+/// The person's session caller if their account is still active. Shared by
+/// the server functions and the Axum export routes.
+pub(crate) async fn active_caller(
+    db: &PgPool,
+    user_id: Uuid,
+) -> Result<Option<Caller>, sqlx::Error> {
+    let org_id = sqlx::query_scalar!(
+        "SELECT org_id FROM users WHERE id = $1 AND active = true",
+        user_id,
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(org_id.map(|org_id| Caller::session(org_id, user_id)))
+}
+
 /// A write's result and the plugin events it caused, dispatched only once the
 /// transaction has committed.
 pub(crate) struct Done<T> {
