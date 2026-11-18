@@ -127,7 +127,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 )
                 .await;
             assert_eq!(timer.status(), StatusCode::OK);
-            let timer: Value = timer.json().await.unwrap();
+            // The started entry, and the notice of a timer the start stopped.
+            let (timer, _): (Value, Option<String>) = timer.json().await.unwrap();
             assert_eq!(
                 api.call("set_task_active", request.clone(), Some(&cookie), false)
                     .await
@@ -297,7 +298,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 )
                 .await;
             assert_eq!(timer.status(), StatusCode::OK);
-            let timer: Value = timer.json().await.unwrap();
+            let (timer, _): (Value, Option<String>) = timer.json().await.unwrap();
             assert_eq!(
                 api.call(
                     "stop_timer",

@@ -75,6 +75,10 @@ pub enum TimesheetCommand {
     StopTimer {
         entry_id: Uuid,
     },
+    /// Runs a stopped entry of today again; its minutes are kept.
+    RestartTimer {
+        entry_id: Uuid,
+    },
     Reschedule {
         entry_id: Uuid,
         spent_date: NaiveDate,

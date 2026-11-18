@@ -12,6 +12,7 @@ pub mod project_activity;
 mod proofs;
 pub mod rounding;
 pub mod state;
+pub mod time_entry_timer;
 pub mod time_of_day;
 pub mod types;
 pub mod version;

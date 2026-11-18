@@ -22,7 +22,8 @@ async fn extra_project(pool: &PgPool, ids: &SeedIds) -> Uuid {
 
 async fn snapshot(pool: &PgPool, org_id: Uuid) -> serde_json::Value {
     sqlx::query_scalar!(
-        "SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM projects p WHERE org_id = $1",
+        // A real change moves updated_at; the xmin checks cover no-op writes.
+        "SELECT jsonb_agg(to_jsonb(p) - 'updated_at' ORDER BY id) FROM projects p WHERE org_id = $1",
         org_id,
     )
     .fetch_one(pool)

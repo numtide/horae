@@ -272,4 +272,83 @@ mod tests {
         .unwrap();
         assert!(!sessions, "the session schema should be gone too");
     }
+
+    /// `catalogue_updated_at` backfills existing rows from their creation time,
+    /// without counting as a project edit, and every later update moves it.
+    #[sqlx::test(migrations = false)]
+    async fn catalogue_update_times_are_backfilled_and_follow_updates(pool: sqlx::PgPool) {
+        let (before, catalogue): (Vec<_>, Vec<_>) = super::MIGRATOR
+            .iter()
+            .partition(|migration| migration.description != "catalogue updated at");
+        for migration in before {
+            sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        }
+        let ids = crate::testing::seed_tenant(&pool).await;
+        let created = "2024-01-02T03:04:05Z";
+        sqlx::raw_sql(&format!(
+            "UPDATE projects SET created_at = '{created}';
+             UPDATE clients SET created_at = '{created}';
+             UPDATE users SET created_at = '{created}';"
+        ))
+        .execute(&pool)
+        .await
+        .unwrap();
+        let revision = || async {
+            sqlx::query_scalar!(
+                "SELECT edit_revision FROM projects WHERE id = $1",
+                ids.project_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        let revision_before = revision().await;
+
+        let [migration] = catalogue[..] else {
+            panic!("one catalogue_updated_at migration: {catalogue:?}");
+        };
+        sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+
+        let times = || async {
+            sqlx::query!(
+                r#"SELECT
+                     (SELECT updated_at FROM projects WHERE id = $1) AS "project!: chrono::DateTime<chrono::Utc>",
+                     (SELECT updated_at FROM clients WHERE id = $2) AS "client!: chrono::DateTime<chrono::Utc>",
+                     (SELECT updated_at FROM users WHERE id = $3) AS "user!: chrono::DateTime<chrono::Utc>",
+                     (SELECT created_at FROM tasks WHERE id = $4) AS "task_created!: chrono::DateTime<chrono::Utc>",
+                     (SELECT updated_at FROM tasks WHERE id = $4) AS "task!: chrono::DateTime<chrono::Utc>""#,
+                ids.project_id,
+                ids.client_id,
+                ids.user_id,
+                ids.task_id,
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        let backfilled = times().await;
+        let created: chrono::DateTime<chrono::Utc> = created.parse().unwrap();
+        assert_eq!(
+            (backfilled.project, backfilled.client, backfilled.user),
+            (created, created, created)
+        );
+        assert_eq!(backfilled.task, backfilled.task_created);
+        assert_eq!(revision().await, revision_before, "the backfill is no edit");
+
+        sqlx::raw_sql(
+            "UPDATE projects SET name = name || '!';
+             UPDATE clients SET name = name || '!';
+             UPDATE users SET name = name || '!';
+             UPDATE tasks SET name = name || '!';",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let updated = times().await;
+        assert!(updated.project > backfilled.project);
+        assert!(updated.client > backfilled.client);
+        assert!(updated.user > backfilled.user);
+        assert!(updated.task > backfilled.task);
+        assert_eq!(updated.task_created, backfilled.task_created);
+    }
 }

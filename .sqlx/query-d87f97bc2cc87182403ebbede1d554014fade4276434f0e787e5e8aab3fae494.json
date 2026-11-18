@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"entries!\", count(*) FILTER (WHERE is_running) AS \"running!\"\n           FROM time_entries",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entries!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "running!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "d87f97bc2cc87182403ebbede1d554014fade4276434f0e787e5e8aab3fae494"
+}
