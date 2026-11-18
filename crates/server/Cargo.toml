@@ -60,6 +60,9 @@ ureq = "2"
 chacha20poly1305 = { version = "=0.10.1", features = ["getrandom"] }
 # IANA time zones on chrono's own types, for each person's "today".
 chrono-tz = "0.10"
+# Personal access tokens: the stored SHA-256 digest and the base64url secret.
+sha2 = "0.10"
+base64 = "0.22"
 
 [dev-dependencies]
 horae-harvest = { path = "../harvest", features = ["test-support"] }

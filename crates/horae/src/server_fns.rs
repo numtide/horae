@@ -233,6 +233,7 @@ mod session_caller_tests {
 #[cfg(all(test, feature = "server"))]
 pub(crate) mod budget_tests;
 
+mod api_tokens;
 mod approvals;
 mod auth;
 mod clients;
@@ -258,6 +259,7 @@ mod reports;
 mod time_entries;
 mod users;
 
+pub use api_tokens::*;
 pub use approvals::*;
 pub use auth::*;
 pub use clients::*;

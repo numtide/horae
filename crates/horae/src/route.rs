@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
 use crate::pages::{
-    admin::{AdminUsers, WorkspaceSettings},
+    admin::{AdminApiTokens, AdminUsers, WorkspaceSettings},
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
@@ -112,6 +112,8 @@ pub enum Route {
     HarvestRun { id: Uuid },
     #[route("/admin/audit")]
     PermissionAudit {},
+    #[route("/admin/api-tokens")]
+    AdminApiTokens {},
     #[end_layout]
     #[route("/settings")]
     Settings {},

@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH token AS (\n             INSERT INTO api_tokens (id, org_id, user_id, name, token_sha256, display_prefix, expires_at)\n             VALUES ($1, $2, $3, $4, $5, $6, $7)\n             RETURNING *\n         )\n         SELECT t.id, t.user_id, u.name AS owner_name, t.name, t.display_prefix,\n                t.created_at AS \"created_at: DateTime<Utc>\",\n                t.expires_at AS \"expires_at: DateTime<Utc>\",\n                t.last_used_at AS \"last_used_at: DateTime<Utc>\",\n                t.revoked_at AS \"revoked_at: DateTime<Utc>\"\n         FROM token t JOIN users u ON u.id = t.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "display_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "expires_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_used_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "revoked_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bytea",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "ca813332038fcef788fa6827cb265a69e9feeeddbe8e2e65802144524e4ef813"
+}

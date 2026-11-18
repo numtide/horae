@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT row_to_json(t)::text AS \"row!\" FROM api_tokens t WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "row!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a9604c9ad9fbe8a41231d543db6baf401c0896790e72d8d09b482e05137d570e"
+}

@@ -201,3 +201,45 @@ fn a_page_bound_to_someone_else_is_refused_with_the_domain_text() {
         Err(OpError::forbidden("changed"))
     );
 }
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_loads_the_same_person_and_permissions_as_a_session(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    provision(&pool, &ids, &[Permission::ClientReadAll], true).await;
+    let token_id = Uuid::now_v7();
+    let mut tx: Tx = pool.begin().await.unwrap();
+    let token = Actor::load(&mut tx, Caller::token(ids.org_id, ids.user_id, token_id))
+        .await
+        .unwrap();
+    let session = Actor::load(&mut tx, Caller::session(ids.org_id, ids.user_id))
+        .await
+        .unwrap();
+    assert_eq!(token.channel(), Channel::Token { token_id });
+    assert!(token.is_active());
+    assert_eq!(
+        (token.id(), token.org_id(), token.is_active()),
+        (session.id(), session.org_id(), session.is_active())
+    );
+    assert_eq!(token.permissions(), session.permissions());
+    assert!(token.has(Permission::ClientReadAll));
+    assert!(token.administrator());
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_of_an_inactive_person_has_no_authority(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut tx: Tx = pool.begin().await.unwrap();
+    let actor = Actor::load(
+        &mut tx,
+        Caller::token(ids.org_id, ids.user_id, Uuid::now_v7()),
+    )
+    .await
+    .unwrap();
+    assert!(!actor.is_active());
+    assert!(actor.permissions().is_none());
+    assert!(!actor.administrator());
+}

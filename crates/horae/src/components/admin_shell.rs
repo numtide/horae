@@ -13,6 +13,7 @@ enum Section {
     Settings,
     Audit,
     Importers,
+    ApiTokens,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -22,6 +23,7 @@ struct WorkspaceAccess {
     settings: bool,
     audit: bool,
     importers: bool,
+    api_tokens: bool,
 }
 
 impl WorkspaceAccess {
@@ -31,6 +33,7 @@ impl WorkspaceAccess {
             Section::Settings => self.settings,
             Section::Audit => self.audit,
             Section::Importers => self.importers,
+            Section::ApiTokens => self.api_tokens,
         }
     }
 }
@@ -48,6 +51,7 @@ fn workspace_access(
             settings: own.grants.contains(&Permission::CompanyWrite),
             audit: own.is_administrator,
             importers: own.is_administrator,
+            api_tokens: own.is_administrator,
         }),
         _ => Err(()),
     })
@@ -65,6 +69,7 @@ pub(crate) fn first_admin_route(
         (access.settings, Route::WorkspaceSettings {}),
         (access.importers, Route::ImporterIndex {}),
         (access.audit, Route::PermissionAudit {}),
+        (access.api_tokens, Route::AdminApiTokens {}),
     ]
     .into_iter()
     .find_map(|(allowed, route)| allowed.then_some(route))
@@ -85,6 +90,7 @@ pub fn AdminShell() -> Element {
         Route::AdminUsers {} => Section::People,
         Route::WorkspaceSettings {} => Section::Settings,
         Route::PermissionAudit {} => Section::Audit,
+        Route::AdminApiTokens {} => Section::ApiTokens,
         _ => Section::Importers,
     };
     let session = use_session();
@@ -165,11 +171,12 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                         }
                     }
 
-                    if access.people || access.settings {
+                    if access.people || access.settings || access.api_tokens {
                         div { class: "adm-group-label", "Workspace" }
                         nav { class: "flex flex-col gap-1 mb-5",
                             if access.people { AdmLink { to: Route::AdminUsers {}, label: "Team" } }
                             if access.settings { AdmLink { to: Route::WorkspaceSettings {}, label: "Settings" } }
+                            if access.api_tokens { AdmLink { to: Route::AdminApiTokens {}, label: "API tokens" } }
                         }
                     }
 
@@ -227,6 +234,8 @@ mod tests {
             settings: false,
             audit,
             importers,
+            // Like importers, API tokens follow the administrator identity.
+            api_tokens: importers,
         }
     }
 
@@ -265,6 +274,7 @@ mod tests {
         let access = workspace_access(Some(&everything)).unwrap().unwrap();
         assert!(!access.allows(Section::Importers));
         assert!(!access.allows(Section::Audit));
+        assert!(!access.allows(Section::ApiTokens));
     }
 
     #[test]

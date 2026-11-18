@@ -30,6 +30,7 @@ use crate::db::{OrganizationLock, lock_organization};
 use crate::plugin::{AppEvent, PluginRegistry};
 
 mod actor;
+pub mod api_tokens;
 pub mod approvals;
 pub mod clients;
 mod error;
@@ -141,6 +142,15 @@ impl Caller {
             org_id,
             user_id,
             channel: Channel::Session,
+        }
+    }
+
+    /// A person through one of their personal access tokens.
+    pub fn token(org_id: Uuid, user_id: Uuid, token_id: Uuid) -> Self {
+        Self {
+            org_id,
+            user_id,
+            channel: Channel::Token { token_id },
         }
     }
 

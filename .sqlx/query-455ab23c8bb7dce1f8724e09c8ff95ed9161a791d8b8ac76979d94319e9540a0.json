@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE api_tokens SET last_used_at = now() - interval '30 seconds' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "455ab23c8bb7dce1f8724e09c8ff95ed9161a791d8b8ac76979d94319e9540a0"
+}

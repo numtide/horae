@@ -3348,6 +3348,7 @@ name = "horae-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "bytes",
  "chacha20poly1305",
  "chrono",
@@ -3362,6 +3363,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "sha2",
  "sqlx",
  "tempfile",
  "thiserror 2.0.18",

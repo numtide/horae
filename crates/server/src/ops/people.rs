@@ -41,6 +41,7 @@ const ADMINISTRATOR_PROFILE: &str =
 const PROFILE_NEEDS_ADMINISTRATOR: &str =
     "Only an administrator can add a person with a profile other than Member";
 const SYSTEM_ADDS_MEMBERS: &str = "Automatic sign-up adds members only";
+const TOKEN_ADDS_NO_ONE: &str = "People can't be added with an API token";
 const ADMINISTRATOR_TARGET: &str = "Only an administrator can archive or restore an administrator";
 const LAST_ADMINISTRATOR: &str = "The organization must keep at least one active administrator.";
 
@@ -127,7 +128,8 @@ pub async fn list(
 ///   here;
 /// - the server's operator (`horae user create`): any built-in profile,
 ///   Administrator included;
-/// - the system (an OIDC first sign-in): members only.
+/// - the system (an OIDC first sign-in): members only;
+/// - a personal access token: nobody, since the API adds no one.
 pub async fn add(
     tx: &mut Tx,
     actor: &Actor,
@@ -148,6 +150,7 @@ pub async fn add(
                 return Err(OpError::forbidden(PROFILE_NEEDS_ADMINISTRATOR));
             }
         }
+        Channel::Token { .. } => return Err(OpError::forbidden(TOKEN_ADDS_NO_ONE)),
         Channel::Operator => {}
         Channel::System => {
             if profile != BuiltInProfile::Member {

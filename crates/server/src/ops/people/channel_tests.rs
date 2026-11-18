@@ -124,6 +124,21 @@ async fn the_system_adds_a_member_and_reports_it(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_adds_no_one_even_for_an_administrator(pool: PgPool) {
+    let ids = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
+    let before = accounts(&pool, ids.org_id).await;
+    let caller = Caller::token(ids.org_id, ids.user_id, Uuid::now_v7());
+    let refused = add_as(&pool, caller, "ada@example.com", BuiltInProfile::Member).await;
+    assert_eq!(
+        refused,
+        Err(OpError::forbidden(
+            "People can't be added with an API token"
+        ))
+    );
+    assert_eq!(accounts(&pool, ids.org_id).await, before);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_system_never_adds_an_administrator_or_any_profile_above_member(pool: PgPool) {
     let ids = seed_tenant(&pool).await;
     let before = accounts(&pool, ids.org_id).await;
