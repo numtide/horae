@@ -40,6 +40,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         Default::default(),
         Default::default(),
         None,
+        crate::version::current(),
     )
     .await;
     let router = Router::new()
@@ -50,14 +51,14 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         .route(
             "/test/login/{id}",
             post(|session: Session, Path(id): Path<Uuid>| async move {
-                crate::auth::session::set_session_user_id(&session, id)
+                crate::auth::http::session::set_session_user_id(&session, id)
                     .await
                     .unwrap();
                 StatusCode::NO_CONTENT
             }),
         )
         .layer(
-            crate::auth::make_session_layer(pool.clone(), false)
+            crate::auth::http::make_session_layer(pool.clone(), false)
                 .await
                 .unwrap(),
         );

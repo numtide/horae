@@ -33,7 +33,7 @@ where
             .cloned()
             .ok_or_else(|| ApiError::unauthorized("No session"))?;
 
-        let user_id = crate::auth::session::get_session_user_id(&session)
+        let user_id = crate::auth::http::session::get_session_user_id(&session)
             .await
             .ok_or_else(|| ApiError::unauthorized("Not authenticated"))?;
 

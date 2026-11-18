@@ -52,6 +52,7 @@ use horae_types as models;
 #[cfg(feature = "server")]
 fn main() -> anyhow::Result<()> {
     use clap::Parser;
+    use dioxus::prelude::{asset, manganis};
 
     use cli::{Cli, Commands, MigrateAction};
     use config::AppConfig;
@@ -294,6 +295,7 @@ fn main() -> anyhow::Result<()> {
                     cfg.harvest.clone(),
                     cfg.job_policy,
                     cfg.mail.clone(),
+                    version::current(),
                 )
                 .await;
 
@@ -302,7 +304,7 @@ fn main() -> anyhow::Result<()> {
 
                 // Session middleware (Postgres-backed, idempotent migrate).
                 let session_layer =
-                    auth::make_session_layer(pool.clone(), cfg.secure_cookies).await?;
+                    auth::http::make_session_layer(pool.clone(), cfg.secure_cookies).await?;
 
                 // Build the Dioxus fullstack router (returns Router<()>), then
                 // layer our own routes on top of it.
@@ -352,7 +354,13 @@ fn main() -> anyhow::Result<()> {
                         "/api/invoices/{id}/export/pdf",
                         get(http::reports::export_invoice_pdf),
                     )
-                    .merge(auth::router(cfg.dev_login))
+                    .merge(auth::http::router(
+                        cfg.dev_login,
+                        auth::http::LoginAssets {
+                            favicon_svg: asset!("/assets/favicon.svg").to_string(),
+                            apple_touch_icon: asset!("/assets/apple-touch-icon.png").to_string(),
+                        },
+                    ))
                     .merge(http::harvest_oauth::callback_router())
                     .route(
                         "/api/import/harvest/jobs/{job_id}/errors",
@@ -361,7 +369,7 @@ fn main() -> anyhow::Result<()> {
                     .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated.
-                    .layer(axum::middleware::from_fn(auth::login_redirect_guard))
+                    .layer(axum::middleware::from_fn(auth::http::login_redirect_guard))
                     .layer(session_layer);
                 // Compression wraps everything, sessions included.
                 let router = with_compression(router);

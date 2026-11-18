@@ -10,49 +10,39 @@
 //! email/password and provider-list controls are intentionally absent — every
 //! control on this page maps to a real action.
 
-use dioxus::prelude::{asset, manganis};
-use serde::{Deserialize, Serialize};
+use crate::auth::oidc::provisioning::LoginNotice;
 
-/// Why the last OIDC sign-in was refused, shown once above the call to action.
-/// Each variant names only the person's own email from their validated token.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LoginNotice {
-    /// No account matches, and none may be created.
-    NoAccount { email: Option<String> },
-    /// The person's account is deactivated.
-    Deactivated,
-    /// Provisioning is on, but not for this email's domain.
-    DomainNotAllowed { email: String },
-    /// Provisioning is on for the domain, but the provider did not confirm the
-    /// email.
-    EmailUnconfirmed { email: String },
+/// The hashed URLs of the icons the page links, the same ones the app shell
+/// links (app.rs). The crate that owns the assets resolves them.
+#[derive(Clone, Debug)]
+pub struct LoginAssets {
+    pub favicon_svg: String,
+    pub apple_touch_icon: String,
 }
 
-impl LoginNotice {
-    fn message(&self) -> String {
-        match self {
-            Self::NoAccount { email: Some(email) } => format!(
-                "No Horae account exists for {}. Ask an administrator to add you.",
-                escape_html(email)
-            ),
-            Self::NoAccount { email: None } => {
-                "No Horae account matches this sign-in. Ask an administrator to add you.".into()
-            }
-            Self::Deactivated => {
-                "Your Horae account is deactivated. Ask an administrator to restore access.".into()
-            }
-            Self::DomainNotAllowed { email } => format!(
-                "No Horae account exists for {}, and addresses at {} can't create one. \
-                 Ask an administrator to add you.",
-                escape_html(email),
-                escape_html(email.rsplit_once('@').map_or("", |(_, domain)| domain)),
-            ),
-            Self::EmailUnconfirmed { email } => format!(
-                "No Horae account exists for {}, and your identity provider hasn't confirmed \
-                 this address, so Horae can't create one. Ask an administrator to add you.",
-                escape_html(email)
-            ),
+fn notice_message(notice: &LoginNotice) -> String {
+    match notice {
+        LoginNotice::NoAccount { email: Some(email) } => format!(
+            "No Horae account exists for {}. Ask an administrator to add you.",
+            escape_html(email)
+        ),
+        LoginNotice::NoAccount { email: None } => {
+            "No Horae account matches this sign-in. Ask an administrator to add you.".into()
         }
+        LoginNotice::Deactivated => {
+            "Your Horae account is deactivated. Ask an administrator to restore access.".into()
+        }
+        LoginNotice::DomainNotAllowed { email } => format!(
+            "No Horae account exists for {}, and addresses at {} can't create one. \
+             Ask an administrator to add you.",
+            escape_html(email),
+            escape_html(email.rsplit_once('@').map_or("", |(_, domain)| domain)),
+        ),
+        LoginNotice::EmailUnconfirmed { email } => format!(
+            "No Horae account exists for {}, and your identity provider hasn't confirmed \
+             this address, so Horae can't create one. Ask an administrator to add you.",
+            escape_html(email)
+        ),
     }
 }
 
@@ -67,9 +57,12 @@ pub enum LoginVariant {
 }
 
 /// Render the full login page for `variant`, with `notice` above the action.
-pub fn render(variant: LoginVariant, notice: Option<&LoginNotice>) -> String {
+pub fn render(variant: LoginVariant, notice: Option<&LoginNotice>, assets: &LoginAssets) -> String {
     let notice = notice.map_or_else(String::new, |notice| {
-        format!(r#"<p class="notice" role="alert">{}</p>"#, notice.message())
+        format!(
+            r#"<p class="notice" role="alert">{}</p>"#,
+            notice_message(notice)
+        )
     });
     let action = match variant {
         LoginVariant::Dev => r#"<form class="action" method="POST" action="/auth/dev-login">
@@ -84,13 +77,11 @@ pub fn render(variant: LoginVariant, notice: Option<&LoginNotice>) -> String {
             escape_html(&cta_label)
         ),
     };
-    // The same icons the app shell links (app.rs), through the same hashed asset URLs.
     let icons = format!(
         r#"<link rel="icon" href="/favicon.ico" sizes="32x32">
   <link rel="icon" type="image/svg+xml" href="{}">
   <link rel="apple-touch-icon" href="{}">"#,
-        asset!("/assets/favicon.svg"),
-        asset!("/assets/apple-touch-icon.png"),
+        assets.favicon_svg, assets.apple_touch_icon,
     );
     PAGE.replace("<!--ICONS-->", &icons)
         .replace("<!--ACTION-->", &format!("{notice}{action}"))
@@ -281,6 +272,20 @@ static PAGE: &str = r#"<!DOCTYPE html>
 mod tests {
     use super::*;
 
+    const FAVICON: &str = "/assets/favicon-dxh0123.svg";
+    const TOUCH_ICON: &str = "/assets/apple-touch-icon-dxh4567.png";
+
+    fn render(variant: LoginVariant, notice: Option<&LoginNotice>) -> String {
+        super::render(
+            variant,
+            notice,
+            &LoginAssets {
+                favicon_svg: FAVICON.into(),
+                apple_touch_icon: TOUCH_ICON.into(),
+            },
+        )
+    }
+
     fn oidc() -> LoginVariant {
         LoginVariant::Oidc {
             cta_label: "Continue with SSO".into(),
@@ -364,8 +369,12 @@ mod tests {
     fn page_links_the_favicons() {
         let html = render(LoginVariant::Dev, None);
         assert!(html.contains(r#"<link rel="icon" href="/favicon.ico" sizes="32x32">"#));
-        assert!(html.contains(r#"<link rel="icon" type="image/svg+xml" href="/"#));
-        assert!(html.contains(r#"<link rel="apple-touch-icon" href="/"#));
+        assert!(html.contains(&format!(
+            r#"<link rel="icon" type="image/svg+xml" href="{FAVICON}">"#
+        )));
+        assert!(html.contains(&format!(
+            r#"<link rel="apple-touch-icon" href="{TOUCH_ICON}">"#
+        )));
         assert!(!html.contains("<!--ICONS-->"));
     }
 

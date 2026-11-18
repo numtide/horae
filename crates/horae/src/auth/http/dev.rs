@@ -3,16 +3,17 @@
 /// GET  /auth/login      → HTML page with a one-click "Sign in as Admin" button.
 /// POST /auth/dev-login  → sets session to the seeded admin user, redirects to /.
 /// POST /auth/logout     → flushes the session, redirects to /auth/login.
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect};
 use tower_sessions::Session;
 
-use crate::auth::page::{LoginVariant, render};
-use crate::auth::session::{clear_session, set_session_user_id};
+use super::page::{LoginAssets, LoginVariant, render};
+use super::session::{clear_session, set_session_user_id};
 
 /// `GET /auth/login` in dev mode — the one-click "Sign in as Admin" page.
-pub async fn login_page() -> impl IntoResponse {
-    Html(render(LoginVariant::Dev, None))
+pub async fn login_page(State(assets): State<LoginAssets>) -> impl IntoResponse {
+    Html(render(LoginVariant::Dev, None, &assets))
 }
 
 /// `POST /auth/dev-login` — log in the first active Administrator.
@@ -81,7 +82,7 @@ pub async fn dev_login_post(
 /// `POST /auth/logout` — flush the session and redirect to login.
 pub async fn logout_post(session: Session) -> impl IntoResponse {
     // Capture the user before clearing the session so the logout can be announced.
-    if let Some(uid) = crate::auth::session::get_session_user_id(&session).await {
+    if let Some(uid) = super::session::get_session_user_id(&session).await {
         let state = crate::state::global_state().await;
         let payload = async {
             let mut connection = state.db.acquire().await?;

@@ -29,7 +29,7 @@ pub(super) async fn api_id(pool: &PgPool, kind: &str, horae_id: Uuid) -> i64 {
 
 pub(super) async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);
-    crate::auth::session::set_session_user_id(&session, user_id)
+    crate::auth::http::session::set_session_user_id(&session, user_id)
         .await
         .unwrap();
     router(pool.clone()).layer(Extension(session))

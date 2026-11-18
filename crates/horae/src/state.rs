@@ -16,6 +16,8 @@ pub struct AppState {
     pub harvest: crate::config::HarvestDeployment,
     pub job_policy: crate::config::JobPolicy,
     pub mail: Option<crate::config::MailConfig>,
+    /// The running server's version label, set by the binary at startup.
+    pub version: String,
 }
 
 impl AppState {
@@ -27,7 +29,13 @@ impl AppState {
             harvest: Default::default(),
             job_policy: crate::config::JobPolicy::default(),
             mail: None,
+            version: String::new(),
         }
+    }
+
+    pub fn with_version(mut self, version: String) -> Self {
+        self.version = version;
+        self
     }
 
     pub fn with_oidc(mut self, oidc: Option<crate::config::OidcConfig>) -> Self {
@@ -64,6 +72,7 @@ pub async fn init_state(
     harvest: crate::config::HarvestDeployment,
     job_policy: crate::config::JobPolicy,
     mail: Option<crate::config::MailConfig>,
+    version: String,
 ) {
     GLOBAL_STATE
         .get_or_init(|| async {
@@ -72,6 +81,7 @@ pub async fn init_state(
                 .with_harvest(harvest)
                 .with_job_policy(job_policy)
                 .with_mail(mail)
+                .with_version(version)
         })
         .await;
 }
@@ -108,6 +118,7 @@ pub async fn global_state() -> &'static AppState {
             AppState::new(pool, Arc::new(PluginRegistry::empty()))
                 .with_job_policy(cfg.job_policy)
                 .with_mail(cfg.mail)
+                .with_version(crate::version::current())
         })
         .await
 }

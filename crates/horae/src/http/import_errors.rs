@@ -16,7 +16,7 @@ pub(crate) async fn download(
     session: tower_sessions::Session,
     axum::extract::Path(job_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::response::Response, StatusCode> {
-    let user_id = crate::auth::session::get_session_user_id(&session)
+    let user_id = crate::auth::http::session::get_session_user_id(&session)
         .await
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;
