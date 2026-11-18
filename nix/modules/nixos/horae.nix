@@ -97,6 +97,30 @@ in
       '';
     };
 
+    api = {
+      rateLimit = lib.mkOption {
+        type = lib.types.strMatching "[1-9][0-9]*/[1-9][0-9]*";
+        default = "100/15";
+        description = ''
+          Requests each personal access token may make per window, as
+          `<requests>/<seconds>`. Passed as HORAE_API_RATE_LIMIT.
+        '';
+      };
+
+      cursorKeyFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        example = "/run/secrets/horae-api-cursor-key";
+        description = ''
+          Path to a file holding the key that signs /api/v1 list cursors: 64 hex
+          characters, such as the output of `openssl rand -hex 32`. Use a runtime
+          path outside the Nix store; the service reads it through systemd
+          LoadCredential. When null, the server draws a random key at every
+          start, so cursors stop working after a restart.
+        '';
+      };
+    };
+
     logLevel = lib.mkOption {
       # TODO: Should be an enum
       type = lib.types.str;
@@ -117,6 +141,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    warnings = lib.optional (cfg.api.cursorKeyFile == null) ''
+      services.horae.api.cursorKeyFile is not set: Horae signs /api/v1 list cursors
+      with a random key drawn at every start, so cursors stop working after a
+      restart. Set it to a secret file holding `openssl rand -hex 32`.
+    '';
+
     # Local PostgreSQL instance managed by this module.
     services.postgresql = lib.mkIf cfg.database.createLocally {
       enable = true;
@@ -152,6 +182,7 @@ in
 
       environment = {
         HORAE_LOG = cfg.logLevel;
+        HORAE_API_RATE_LIMIT = cfg.api.rateLimit;
         DATABASE_URL =
           if cfg.database.url != null then
             cfg.database.url
@@ -161,6 +192,9 @@ in
             "postgres://localhost/horae";
       } // lib.optionalAttrs cfg.harvestApi.enable {
         HORAE_HARVEST_API = "1";
+      } // lib.optionalAttrs (cfg.api.cursorKeyFile != null) {
+        # %d is the service's credentials directory.
+        HORAE_API_CURSOR_KEY_FILE = "%d/api-cursor-key";
       };
 
       serviceConfig =
@@ -183,6 +217,9 @@ in
         }
         // lib.optionalAttrs (cfg.secretKeyFile != null) {
           EnvironmentFile = cfg.secretKeyFile;
+        }
+        // lib.optionalAttrs (cfg.api.cursorKeyFile != null) {
+          LoadCredential = "api-cursor-key:${cfg.api.cursorKeyFile}";
         };
     };
 

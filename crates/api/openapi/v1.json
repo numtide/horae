@@ -1,0 +1,477 @@
+{
+  "components": {
+    "responses": {
+      "Problem": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "description": "An error",
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds to wait (429 only)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "EntryState": {
+        "description": "Where an entry is in its life: editable, submitted for approval, approved,\nor on an invoice.",
+        "enum": [
+          "open",
+          "submitted",
+          "approved",
+          "invoiced"
+        ],
+        "type": "string"
+      },
+      "Me": {
+        "description": "Who the token acts as, and in which organization.",
+        "properties": {
+          "administrator": {
+            "type": "boolean"
+          },
+          "organization": {
+            "properties": {
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "person": {
+            "properties": {
+              "email": {
+                "type": "string"
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email"
+            ],
+            "type": "object"
+          },
+          "profile": {
+            "description": "The person's profile or permission template; `null` for individually\nchosen permissions.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "token": {
+            "properties": {
+              "expires_at": {
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "person",
+          "organization",
+          "administrator",
+          "token"
+        ],
+        "type": "object"
+      },
+      "Page_Trackable": {
+        "description": "One page of a list, in `id` order. `next_cursor` is `null` on the last\npage.",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "A project and task the person may track time on.",
+              "properties": {
+                "billable": {
+                  "description": "Whether time on this pair is billable.",
+                  "type": "boolean"
+                },
+                "project_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "project_name": {
+                  "type": "string"
+                },
+                "task_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "task_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "project_id",
+                "project_name",
+                "task_id",
+                "task_name",
+                "billable"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "Problem": {
+        "description": "An error answer. Clients branch on `code` and treat an unknown one as its\n`status`.",
+        "properties": {
+          "code": {
+            "description": "A stable, snake-case code for the kind of refusal.",
+            "type": "string"
+          },
+          "detail": {
+            "description": "Why, in the words the web app uses. Absent for internal errors.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "field": {
+            "description": "The input to blame, when one is: a name, or a structured identity."
+          },
+          "status": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": {
+            "description": "The status's reason phrase.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Always `about:blank`: the status and `code` say what happened.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "type": "object"
+      },
+      "TimeEntry": {
+        "description": "Time a person spent on a project's task on one day.",
+        "properties": {
+          "billable": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_running": {
+            "type": "boolean"
+          },
+          "minutes": {
+            "description": "Tracked minutes; a running timer's minutes before it started.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "person_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "rounded_minutes": {
+            "description": "The rounded minutes, set when the entry is submitted.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "spent_date": {
+            "description": "The person's calendar day, as in the timesheet.",
+            "format": "date",
+            "type": "string"
+          },
+          "start_minute": {
+            "description": "Start time as minutes after the day's midnight; `null` for an entry\nwith only a duration.",
+            "format": "int32",
+            "maximum": 1439,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/EntryState"
+          },
+          "task_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "timer_started_at": {
+            "description": "When the running timer started; `null` when it is not running.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "person_id",
+          "project_id",
+          "task_id",
+          "spent_date",
+          "minutes",
+          "billable",
+          "state",
+          "is_running",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "Trackable": {
+        "description": "A project and task the person may track time on.",
+        "properties": {
+          "billable": {
+            "description": "Whether time on this pair is billable.",
+            "type": "boolean"
+          },
+          "project_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "task_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "task_id",
+          "task_name",
+          "billable"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "token": {
+        "description": "A personal access token (horae_pat_…) created in personal settings.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Horae's public API. Within v1 only backward-compatible changes are made: clients must ignore unknown response fields and treat an unknown error `code` as its status.",
+    "license": {
+      "identifier": "MIT",
+      "name": "MIT"
+    },
+    "title": "Horae API",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "The token's owner"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "The token's owner, their organization and the token.",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/me/timer": {
+      "get": {
+        "operationId": "getRunningTimer",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntry"
+                }
+              }
+            },
+            "description": "The running timer"
+          },
+          "204": {
+            "description": "No timer is running"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "The owner's running timer.",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/me/trackable": {
+      "get": {
+        "operationId": "listTrackable",
+        "parameters": [
+          {
+            "description": "Another person the owner may write time for; the owner when absent.",
+            "in": "query",
+            "name": "person_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Trackable"
+                }
+              }
+            },
+            "description": "Pairs the person may track, all on one page"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "The project and task pairs a person may track time on today: the owner,\nor a person the owner may write time for.",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenApi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "This document"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "The OpenAPI document `utoipa` builds from the routes below.",
+        "tags": [
+          "description"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "token": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "This document",
+      "name": "description"
+    },
+    {
+      "description": "Who a token acts as",
+      "name": "identity"
+    }
+  ]
+}

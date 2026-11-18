@@ -129,12 +129,106 @@ fn mail_environment_requires_a_complete_valid_configuration() {
     );
 }
 
+const KEY_11: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+const KEY_22: &str = "2222222222222222222222222222222222222222222222222222222222222222";
+
+fn key_file(contents: &str) -> tempfile::NamedTempFile {
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), contents).unwrap();
+    file
+}
+
+#[test]
+fn the_cursor_key_file_wins_over_the_key_value() {
+    // `openssl rand -hex 32 > file` leaves a trailing newline.
+    let file = key_file(&format!("{KEY_11}\n"));
+    probe(
+        "api-key-11",
+        &[
+            ("HORAE_API_CURSOR_KEY_FILE", file.path().to_str().unwrap()),
+            ("HORAE_API_CURSOR_KEY", KEY_22),
+        ],
+    );
+}
+
+#[test]
+fn the_cursor_key_value_is_used_without_a_file() {
+    probe("api-key-22", &[("HORAE_API_CURSOR_KEY", KEY_22)]);
+}
+
+#[test]
+fn a_bad_cursor_key_file_refuses_to_start() {
+    let malformed = key_file("not a key");
+    let short = key_file(&KEY_11[..62]);
+    let directory = tempfile::tempdir().unwrap();
+    for path in [
+        "/no/such/horae-api-cursor-key",
+        directory.path().to_str().unwrap(),
+        malformed.path().to_str().unwrap(),
+        short.path().to_str().unwrap(),
+    ] {
+        probe(
+            "invalid-api",
+            &[
+                ("HORAE_API_CURSOR_KEY_FILE", path),
+                ("HORAE_API_CURSOR_KEY", KEY_22),
+                ("HORAE_CONFIG_TEST_VARIABLE", "HORAE_API_CURSOR_KEY_FILE"),
+            ],
+        );
+    }
+}
+
+#[test]
+fn a_bad_cursor_key_value_refuses_to_start() {
+    for value in [
+        "xyz",
+        &KEY_11[..63],
+        &format!("{KEY_11}00"),
+        &"é".repeat(32),
+    ] {
+        probe(
+            "invalid-api",
+            &[
+                ("HORAE_API_CURSOR_KEY", value),
+                ("HORAE_CONFIG_TEST_VARIABLE", "HORAE_API_CURSOR_KEY"),
+            ],
+        );
+    }
+}
+
+#[test]
+fn the_rate_limit_uses_the_documented_variable() {
+    probe("api-rate-5-60", &[("HORAE_API_RATE_LIMIT", "5/60")]);
+}
+
+#[test]
+fn a_bad_rate_limit_refuses_to_start() {
+    for value in [
+        "", "100", "0/15", "100/0", "a/15", "100/b", "-1/15", "100/15/2",
+    ] {
+        probe(
+            "invalid-api",
+            &[
+                ("HORAE_API_RATE_LIMIT", value),
+                ("HORAE_CONFIG_TEST_VARIABLE", "HORAE_API_RATE_LIMIT"),
+            ],
+        );
+    }
+}
+
 #[test]
 fn environment_probe() {
     let Ok(mode) = std::env::var("HORAE_CONFIG_TEST") else {
         return;
     };
     let result = AppConfig::from_env();
+    if mode == "invalid-api" {
+        let variable = std::env::var("HORAE_CONFIG_TEST_VARIABLE").unwrap();
+        let error = format!("{:#}", result.unwrap_err());
+        assert!(error.contains(&variable), "{error}");
+        assert!(!error.contains(KEY_22), "the error repeats a key: {error}");
+        return;
+    }
     if mode == "invalid-mail" {
         assert!(result.unwrap_err().to_string().contains("HORAE_"));
         return;
@@ -164,6 +258,21 @@ fn environment_probe() {
             assert!(config.harvest.encryption_key_hex.is_none());
             assert!(config.plugin_database_url.is_none());
             assert!(config.mail.is_none());
+            assert!(config.api.cursor_key.is_random());
+            assert_eq!(config.api.rate_limit, Default::default());
+            assert_eq!(config.api.rate_limit.requests, 100);
+            assert_eq!(config.api.rate_limit.window.as_secs(), 15);
+        }
+        "api-key-11" | "api-key-22" => {
+            let byte = if mode == "api-key-11" { 0x11 } else { 0x22 };
+            assert_eq!(config.api.cursor_key.bytes(), &[byte; 32]);
+            assert!(!config.api.cursor_key.is_random());
+            let debug = format!("{:?}", config.api);
+            assert!(!debug.contains(&format!("{byte}, {byte}")), "{debug}");
+        }
+        "api-rate-5-60" => {
+            assert_eq!(config.api.rate_limit.requests, 5);
+            assert_eq!(config.api.rate_limit.window.as_secs(), 60);
         }
         "example" => {
             assert!(config.dev_login);

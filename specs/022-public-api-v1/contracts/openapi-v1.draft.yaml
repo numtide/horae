@@ -1,6 +1,6 @@
-# Draft of the /api/v1 OpenAPI document (research R-1). Written by hand before the code exists to
-# fix names and shapes; PR F replaces it with the document utoipa generates
-# (crates/api/openapi/v1.json). The readable contract is api-v1.md.
+# SUPERSEDED by crates/api/openapi/v1.json, the document utoipa generates (PR F). Kept as the
+# hand-written draft that fixed names and shapes before the code existed; where the two differ,
+# the generated document wins (api-v1.md lists the differences).
 openapi: 3.1.0
 info:
   title: Horae API

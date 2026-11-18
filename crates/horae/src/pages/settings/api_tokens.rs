@@ -75,7 +75,10 @@ pub(super) fn ApiTokensSection() -> Element {
         section { class: "card mt-4", aria_labelledby: "api-tokens-title",
             h2 { id: "api-tokens-title", class: "card-title", "API tokens" }
             p { class: "text-secondary text-sm mb-4",
-                "A token lets a script or another app use Horae as you, with your permissions. Treat it like a password."
+                "A token lets a script or another app use Horae as you, with your permissions. Treat it like a password. "
+                "The API is described in "
+                a { id: "api-openapi-link", href: "/api/v1/openapi.json", "its OpenAPI document" }
+                "."
             }
             if let Some(token) = created() {
                 div { class: "alert alert-success mb-4", role: "status", id: "api-token-created",

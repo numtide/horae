@@ -1,9 +1,17 @@
 # Contract: Horae API v1
 
 The readable contract of `/api/v1`. The authoritative description is the OpenAPI document the
-server generates (`GET /api/v1/openapi.json`, snapshot `crates/api/openapi/v1.json`); the draft in
-[openapi-v1.draft.yaml](openapi-v1.draft.yaml) fixes the shapes before code exists. Where the two
-disagree after PR F, the generated document wins and this file is corrected.
+server generates (`GET /api/v1/openapi.json`, snapshot `crates/api/openapi/v1.json`, release
+baseline `crates/api/openapi/v1.baseline.json`). The hand-written
+[openapi-v1.draft.yaml](openapi-v1.draft.yaml) is superseded by it.
+
+Where the generated document of PR F differs from the draft:
+
+- A page's schema is named after its item: `Page_Trackable`, not `TrackablePage`.
+- `Me.profile` may be `null`, for a person with individually chosen permissions.
+- `Problem.detail` is absent on 500; `Problem.field` is any JSON value (a name or a structured
+  identity), `null` when no input is to blame.
+- Each operation has a tag (`description`, `identity`).
 
 ## Conventions
 
@@ -47,7 +55,7 @@ disagree after PR F, the generated document wins and this file is corrected.
 
 | Status | `code` | When |
 | --- | --- | --- |
-| 400 | `bad_request`, `invalid_cursor` | malformed JSON, parameter of the wrong type, bad cursor |
+| 400 | `bad_request`, `invalid_cursor` | malformed JSON, a body that is not `application/json` or misses a required field, parameter of the wrong type, bad cursor |
 | 401 | `unauthenticated` | no token, unknown, revoked or expired token, owner inactive (one answer for all; FR-004) |
 | 403 | `forbidden` | the owner may not do this in the web app |
 | 404 | `not_found` | missing, or hidden by the owner's scope (a record outside scope is not found, as in the web app) |
@@ -91,7 +99,10 @@ disagree after PR F, the generated document wins and this file is corrected.
 }
 ```
 
-`Trackable`: `{ "project_id", "project_name", "task_id", "task_name", "billable" }`.
+`profile` is `null` for a person with individually chosen permissions.
+
+`Trackable`: `{ "project_id", "project_name", "task_id", "task_name", "billable" }`. Every pair
+comes on one page: `next_cursor` is always `null`.
 
 ### Time entries
 
