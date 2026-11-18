@@ -1,5 +1,30 @@
 <!--
 Sync Impact Report
+- Version change: 6.0.0 → 7.0.0
+- Bump rationale: MAJOR. Principle IV is renamed, and its API clause is redefined from one named
+  surface to the class of Horae's token-authenticated HTTP APIs. Approved by the maintainer on
+  2026-11-18 (specs/022-public-api-v1/constitution-amendment.md, applied verbatim).
+- Modified principles:
+  - IV. Mutations Through Server Functions → IV. Mutations Through Shared Operations. The opening
+    rule and the two exceptions are unchanged. The "Harvest-compatible API" clause becomes
+    "Token-authenticated APIs" and names `/harvest/v2` and `/api/v1`; its bounds are unchanged.
+    The rationale's last two sentences are generalised.
+- Added sections: none
+- Removed sections: none
+- Templates checked:
+  - .specify/templates/plan-template.md: Constitution Check takes its gates from this file ✅ (no change)
+  - .specify/templates/spec-template.md, tasks-template.md: no principle-driven change ✅
+  - AGENTS.md: the Architecture paragraph lists the API surfaces and calls the Harvest API
+    read-only; it is updated with the 022 PRs that change those surfaces (B, D, H), not with
+    this amendment ⚠ pending
+  - README.md: describes the Harvest API as read-only with session authentication; updated with
+    the 022 PRs that change it (D, I), not with this amendment ⚠ pending
+- Follow-up:
+  - Earlier plans cite Principle IV by its old title; they are historical records and are left
+    as written.
+-->
+<!--
+Sync Impact Report (6.0.0)
 - Version change: 5.0.0 → 6.0.0
 - Bump rationale: MAJOR. The authorization model in Technology & Data Constraints is redefined:
   the three organization roles (administrator / manager / member) are replaced by stored, scoped
@@ -213,7 +238,7 @@ support is a later flip rather than a migration rewrite.
 **Rationale**: One well-understood datastore avoids dialect-portability tax; v7 keys give ordered,
 index-friendly identifiers; retaining `org_id` preserves an obvious future path.
 
-### IV. Mutations Through Server Functions
+### IV. Mutations Through Shared Operations
 
 All data mutations MUST go through Horae's shared mutation operations: the authorized,
 validated domain operations that Dioxus `#[server]` functions call. Each operation takes the
@@ -221,12 +246,13 @@ acting person and organization, checks their stored permissions, and applies eve
 that change. The two narrow exceptions below are the only writes outside them. The UI MUST NOT
 issue ad-hoc client-side fetches for data reads or writes; it calls server functions.
 
-**Harvest-compatible API (a second transport, not a second path)**: the Harvest-compatible API
-MAY invoke the same mutation operations a server function invokes for the equivalent action,
-with the actor resolved from a personal access token or an OAuth2 access token that Horae
-issued, stored only as a hash, and bound to one person in one organization.
+**Token-authenticated APIs (another transport, not another path)**: Horae's HTTP APIs for
+programs, today the Harvest-compatible API and the public `/api/v1`, MAY invoke the same
+mutation operations a server function invokes for the equivalent action, with the actor
+resolved from a personal access token or an OAuth2 access token that Horae issued, stored only
+as a hash, and bound to one person in one organization.
 
-- It MUST NOT write to the datastore except through those operations, and MUST NOT hold its own
+- Such an API MUST NOT write to the datastore except through those operations, and MUST NOT hold its own
   copy of any validation, permission or state rule.
 - A token MUST NOT grant more than its owner could do in the web app at the moment of the
   request.
@@ -274,9 +300,9 @@ when the provider never asserts a verified email, so this one binding step is al
 nowhere else. The sign-in callback likewise runs before any session exists, so no server function
 can bind or create the account that the session will belong to; its authority is the validated
 token together with the operator's own configuration, and it is limited to the least-privileged
-account Horae has. The Harvest-compatible API serves clients that cannot call server functions.
-Letting it call the same operations, rather than its own SQL, keeps authorization and validation
-in one place, which is what this principle protects.
+account Horae has. The token-authenticated APIs serve clients that cannot call server functions.
+Letting them call the same operations, rather than their own SQL, keeps authorization and
+validation in one place, which is what this principle protects.
 
 ### V. Reproducible Builds & Formatting Gate
 
@@ -318,4 +344,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 6.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-13
+**Version**: 7.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-18
