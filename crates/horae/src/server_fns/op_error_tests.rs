@@ -6,7 +6,7 @@ use crate::ops::OpError;
 use serde_json::json;
 
 fn answer(error: OpError) -> (u16, String, Option<serde_json::Value>) {
-    match ServerFnError::from(error) {
+    match op_error(error) {
         ServerFnError::ServerError {
             code,
             message,

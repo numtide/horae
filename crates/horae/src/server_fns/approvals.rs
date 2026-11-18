@@ -30,10 +30,10 @@ async fn submit_as(
     context: &TimesheetWriteContext,
     events: &dyn ops::EventSink,
 ) -> Result<Approval, ServerFnError> {
-    let mut write = ops::begin(pool, caller).await?;
+    let mut write = ops::begin(pool, caller).await.map_err(op_error)?;
     let result =
         ops::approvals::submit_week(&mut write.tx, &write.actor, week_start, context).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 /// List one week's approvals, optionally filtered by state. Requires approval
@@ -59,9 +59,9 @@ async fn list_week(
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid week_start (use YYYY-MM-DD)"))?;
     let state: Option<EntryState> = status.map(|s| parse_enum(&s, "status")).transpose()?;
-    let mut read = ops::begin_read(pool, caller).await?;
+    let mut read = ops::begin_read(pool, caller).await.map_err(op_error)?;
     let result = ops::approvals::list(&mut read.tx, &read.actor, state, week_start).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -71,9 +71,9 @@ async fn approve_as(
     ids: &[uuid::Uuid],
     events: &dyn ops::EventSink,
 ) -> Result<Vec<Approval>, ServerFnError> {
-    let mut write = ops::begin(pool, caller).await?;
+    let mut write = ops::begin(pool, caller).await.map_err(op_error)?;
     let result = ops::approvals::approve(&mut write.tx, &write.actor, ids).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 /// Approve a single submitted week.
@@ -125,9 +125,9 @@ async fn reopen_as(
     approval_id: uuid::Uuid,
     events: &dyn ops::EventSink,
 ) -> Result<Approval, ServerFnError> {
-    let mut write = ops::begin(pool, caller).await?;
+    let mut write = ops::begin(pool, caller).await.map_err(op_error)?;
     let result = ops::approvals::reopen(&mut write.tx, &write.actor, approval_id).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 // DB-backed tests (`#[sqlx::test]`, throwaway database per test). They call

@@ -10,10 +10,12 @@ pub async fn get_project_detail_view(
     let caller = session_caller().await?;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read_snapshot(&state.db, caller, ops::SnapshotLimits::Short).await?;
+    let mut read = ops::begin_read_snapshot(&state.db, caller, ops::SnapshotLimits::Short)
+        .await
+        .map_err(op_error)?;
     let result =
         ops::projects::detail_view(&mut read.tx, &read.actor, project_id, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// The detail page through the same snapshot as the server function, on a
@@ -31,7 +33,8 @@ pub(super) async fn fetch(
         Caller::session(viewer.org_id, viewer.id),
         ops::SnapshotLimits::Short,
     )
-    .await?;
+    .await
+    .map_err(op_error)?;
     let result = ops::projects::detail_view_on(
         &mut read.tx,
         &read.actor,
@@ -40,5 +43,5 @@ pub(super) async fn fetch(
         today,
     )
     .await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }

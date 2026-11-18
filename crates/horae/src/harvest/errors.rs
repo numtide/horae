@@ -6,8 +6,9 @@
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use dioxus::prelude::ServerFnError;
 use serde_json::json;
+
+use crate::ops::OpError;
 
 #[derive(Debug)]
 pub struct ApiError {
@@ -48,20 +49,16 @@ impl ApiError {
 
 /// A refusal from a shared Horae operation keeps its reason (FR-024) and maps
 /// its status: validation becomes Harvest's 422, the rest keep their code.
-impl From<ServerFnError> for ApiError {
-    fn from(error: ServerFnError) -> Self {
-        match error {
-            ServerFnError::ServerError { message, code, .. }
-                if StatusCode::from_u16(code).is_ok_and(|status| status.is_client_error()) =>
-            {
-                let status = match StatusCode::from_u16(code) {
-                    Ok(StatusCode::BAD_REQUEST) | Err(_) => StatusCode::UNPROCESSABLE_ENTITY,
-                    Ok(status) => status,
-                };
-                Self::new(status, message)
-            }
-            error => Self::internal(error),
-        }
+impl From<OpError> for ApiError {
+    fn from(error: OpError) -> Self {
+        let status = match error.kind() {
+            OpError::Invalid { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            OpError::NotFound(_) => StatusCode::NOT_FOUND,
+            OpError::Forbidden(_) => StatusCode::FORBIDDEN,
+            OpError::Conflict(_) => StatusCode::CONFLICT,
+            OpError::Internal(_) | OpError::Detailed { .. } => return Self::internal(error),
+        };
+        Self::new(status, error.to_string())
     }
 }
 
@@ -122,18 +119,28 @@ mod tests {
 
     #[test]
     fn a_horae_refusal_keeps_its_reason_and_maps_bad_request_to_422() {
-        let refused = |code| ServerFnError::ServerError {
-            message: "Daily limit reached".into(),
-            code,
-            details: None,
-        };
-        let validation = ApiError::from(refused(400));
+        let validation = ApiError::from(OpError::bad_input("Daily limit reached"));
         assert_eq!(validation.status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(validation.message, "Daily limit reached");
-        assert_eq!(ApiError::from(refused(409)).status, StatusCode::CONFLICT);
+        let field = ApiError::from(OpError::bad_input("Bad").with_field("name"));
         assert_eq!(
-            ApiError::from(refused(500)).status,
-            StatusCode::INTERNAL_SERVER_ERROR
+            (field.status, field.message.as_str()),
+            (StatusCode::UNPROCESSABLE_ENTITY, "Bad")
+        );
+        let refusals = [
+            (OpError::not_found("Gone"), StatusCode::NOT_FOUND),
+            (OpError::forbidden("No"), StatusCode::FORBIDDEN),
+            (OpError::conflict("Changed"), StatusCode::CONFLICT),
+        ];
+        for (error, status) in refusals {
+            let message = error.to_string();
+            let answer = ApiError::from(error);
+            assert_eq!((answer.status, answer.message), (status, message));
+        }
+        let internal = ApiError::from(OpError::Internal("relation does not exist".into()));
+        assert_eq!(
+            (internal.status, internal.message.as_str()),
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal error")
         );
     }
 }

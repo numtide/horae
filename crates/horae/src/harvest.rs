@@ -102,7 +102,7 @@ async fn begin_read(
             OpError::Forbidden(_) => {
                 forbidden(&format!("{subject} permission state is unavailable"))
             }
-            error => ApiError::from(dioxus::prelude::ServerFnError::from(error)),
+            error => ApiError::from(error),
         })?;
     if !read.actor.is_active() {
         let refusal = forbidden(&format!("{subject} access is unavailable"));

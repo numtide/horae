@@ -23,7 +23,9 @@ pub async fn list_permission_subjects(
 ) -> Result<PermissionSubjectPage, ServerFnError> {
     let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    Ok(subject_page(&state.db, caller, after).await?)
+    subject_page(&state.db, caller, after)
+        .await
+        .map_err(op_error)
 }
 
 /// Load current person permissions and reusable choices without inferring a profile.
@@ -33,7 +35,9 @@ pub async fn load_permission_editor(
 ) -> Result<PermissionEditor, ServerFnError> {
     let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    Ok(editor_view(&state.db, caller, user_id).await?)
+    editor_view(&state.db, caller, user_id)
+        .await
+        .map_err(op_error)
 }
 
 /// Compute exact effects; this read-only proposal never authorizes its later save.
@@ -43,7 +47,9 @@ pub async fn preview_person_permissions(
 ) -> Result<ProfilePreview, ServerFnError> {
     let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    Ok(profile_preview(&state.db, caller, &draft).await?)
+    profile_preview(&state.db, caller, &draft)
+        .await
+        .map_err(op_error)
 }
 
 /// Revalidate and commit the explicit final proposal and confirmed relationship losses.
@@ -54,14 +60,15 @@ pub async fn save_person_permissions(
 ) -> Result<ProfileOutcome, ServerFnError> {
     let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    Ok(save_profile(
+    save_profile(
         &state.db,
         caller,
         &command,
         expected_requester,
         &*state.plugins,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 /// Show the current affected people; deletion preserves their grants and identity.
@@ -73,14 +80,15 @@ pub async fn preview_permission_template_deletion(
 ) -> Result<TemplateDeletionPreview, ServerFnError> {
     let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    Ok(template_deletion_preview(
+    template_deletion_preview(
         &state.db,
         caller,
         template_id,
         expected_access_revision,
         expected_template_revision,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 /// Create a reusable selection or detach and delete a previously reviewed template.
@@ -91,14 +99,15 @@ pub async fn save_permission_template(
 ) -> Result<TemplateOutcome, ServerFnError> {
     let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    Ok(save_template(
+    save_template(
         &state.db,
         caller,
         &command,
         expected_requester,
         &*state.plugins,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 #[cfg(feature = "server")]

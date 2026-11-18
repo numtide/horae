@@ -16,9 +16,14 @@ pub(super) async fn create_client_profile_record(
     profile: &ClientProfile,
     default_rate: &str,
 ) -> Result<ClientDetails, ServerFnError> {
-    let mut write = ops::begin(db, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(db, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::clients::create(&mut write.tx, &write.actor, profile, default_rate).await;
-    Ok(write.commit(result, &Recorder::default()).await?)
+    write
+        .commit(result, &Recorder::default())
+        .await
+        .map_err(op_error)
 }
 
 /// Also reports whether a `ClientUpdated` event was dispatched.
@@ -30,9 +35,11 @@ pub(super) async fn update_client_profile_record(
     edit: &ClientProfileEdit,
 ) -> Result<(ClientDetails, bool), ServerFnError> {
     let events = Recorder::default();
-    let mut write = ops::begin(db, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(db, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::clients::update(&mut write.tx, &write.actor, client_id, edit).await;
-    let detail = write.commit(result, &events).await?;
+    let detail = write.commit(result, &events).await.map_err(op_error)?;
     let events = events.take();
     assert!(
         events
@@ -52,9 +59,11 @@ pub(super) async fn set_client_active_record(
     active: bool,
 ) -> Result<(Client, Option<ActiveTransition>), ServerFnError> {
     let events = Recorder::default();
-    let mut write = ops::begin(db, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(db, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::clients::set_active(&mut write.tx, &write.actor, client_id, active).await;
-    let client = write.commit(result, &events).await?;
+    let client = write.commit(result, &events).await.map_err(op_error)?;
     let transitions: Vec<_> = events
         .take()
         .into_iter()
@@ -74,9 +83,11 @@ pub(super) async fn client_summaries_for_viewer(
     org_id: uuid::Uuid,
     user_id: uuid::Uuid,
 ) -> Result<Vec<ClientSummary>, ServerFnError> {
-    let mut read = ops::begin_read(db, Caller::session(org_id, user_id)).await?;
+    let mut read = ops::begin_read(db, Caller::session(org_id, user_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::clients::overview(&mut read.tx, &read.actor, None)
         .await
         .map(|page| page.clients);
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }

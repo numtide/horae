@@ -48,7 +48,9 @@ pub async fn list_permission_audit(
     use crate::ops::permissions::audit::HISTORY_UNAVAILABLE;
     let caller = session_caller_or(HISTORY_UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    Ok(audit_page(&state.db, caller, after.as_ref(), expected_requester).await?)
+    audit_page(&state.db, caller, after.as_ref(), expected_requester)
+        .await
+        .map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -73,9 +75,9 @@ pub async fn get_my_permissions()
     use crate::ops;
     let caller = session_caller_or("Permission state is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::profile::permissions(&mut read.tx, &read.actor).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// The running server's version label, for administrators only.
@@ -84,7 +86,7 @@ pub async fn get_server_version() -> Result<String, ServerFnError> {
     use crate::ops;
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let read = ops::begin_read(&state.db, caller).await?;
+    let read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::profile::server_version(&read.actor);
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }

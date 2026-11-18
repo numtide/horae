@@ -49,10 +49,10 @@ pub(crate) async fn read_person_rates(
     person_id: uuid::Uuid,
     expected_requester: PermissionRequester,
 ) -> Result<PersonRates, ServerFnError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = ops::begin_read(db, caller).await.map_err(op_error)?;
     let result =
         ops::people::rates::load(&mut read.tx, &read.actor, person_id, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -70,7 +70,7 @@ pub(crate) async fn write_person_rates(
     billable: RateEdit,
     cost: RateEdit,
 ) -> Result<PersonRates, ServerFnError> {
-    let mut write = ops::begin(db, caller).await?;
+    let mut write = ops::begin(db, caller).await.map_err(op_error)?;
     let result = ops::people::rates::update(
         &mut write.tx,
         &write.actor,
@@ -81,5 +81,5 @@ pub(crate) async fn write_person_rates(
         cost,
     )
     .await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }

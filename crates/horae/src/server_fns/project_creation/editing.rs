@@ -16,7 +16,9 @@ pub(in crate::server_fns) async fn load_editable_project(
     org_id: Uuid,
     project_id: Uuid,
 ) -> Result<EditableProject, ServerFnError> {
-    Ok(project_editor_view(pool, Caller::session(org_id, actor_id), project_id).await?)
+    project_editor_view(pool, Caller::session(org_id, actor_id), project_id)
+        .await
+        .map_err(op_error)
 }
 
 /// A saved edit and the events it dispatched once committed.
@@ -42,7 +44,8 @@ pub(in crate::server_fns) async fn save_project_edit(
         email_available,
         &events,
     )
-    .await?;
+    .await
+    .map_err(op_error)?;
     // The save announces a change of the project or its managers, and only then.
     let (updated, team_events): (Vec<_>, Vec<_>) = events
         .take()
@@ -80,7 +83,9 @@ pub(in crate::server_fns) mod catalog {
         email_available: bool,
     ) -> Result<ProjectEditorCatalog, ServerFnError> {
         let caller = Caller::session(org_id, actor_id);
-        Ok(project_editor_catalog_page(pool, caller, context, search, email_available).await?)
+        project_editor_catalog_page(pool, caller, context, search, email_available)
+            .await
+            .map_err(op_error)
     }
 }
 

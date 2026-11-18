@@ -76,9 +76,11 @@ async fn fetch_project_tags(
     viewer_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectTagLink>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::projects::tags(&mut read.tx, &read.actor, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Load overview rows and labels without requiring an unrelated client directory grant.
@@ -97,9 +99,11 @@ async fn fetch_project_overview(
     viewer: impl Into<Caller>,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectOverview, ServerFnError> {
-    let mut read = ops::begin_read(pool, viewer.into()).await?;
+    let mut read = ops::begin_read(pool, viewer.into())
+        .await
+        .map_err(op_error)?;
     let result = ops::projects::overview(&mut read.tx, &read.actor, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -137,7 +141,9 @@ async fn projects_for_viewer(
     include_inactive: bool,
     purpose: ProjectRead,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let mut read = ops::begin_read(pool, viewer.into()).await?;
+    let mut read = ops::begin_read(pool, viewer.into())
+        .await
+        .map_err(op_error)?;
     let result = ops::projects::list(
         &mut read.tx,
         &read.actor,
@@ -146,7 +152,7 @@ async fn projects_for_viewer(
         purpose,
     )
     .await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Per-project tracked totals for the overview's Spent column (see
@@ -169,10 +175,10 @@ pub async fn list_project_budget_progress(
 ) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await?;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result =
         ops::projects::budget_progress(&mut read.tx, &read.actor, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -182,9 +188,11 @@ pub(super) async fn fetch_project_spend(
     viewer_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectSpend>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
+    let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::projects::spend(&mut read.tx, &read.actor, expected_requester).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 /// Activate or deactivate a project. Deactivated projects are hidden from
@@ -259,11 +267,13 @@ async fn set_projects_status(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
     use crate::ops::{self, Caller};
-    let mut write = ops::begin(db, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(db, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result =
         ops::projects::set_active(&mut write.tx, &write.actor, ids, active, expected_requester)
             .await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 /// The status write as the tests drive it: each project with the transition
@@ -338,9 +348,11 @@ async fn tasks_for_viewer(
     project_id: Option<uuid::Uuid>,
     purpose: TaskRead,
 ) -> Result<Vec<Task>, ServerFnError> {
-    let mut read = ops::begin_read(pool, viewer.into()).await?;
+    let mut read = ops::begin_read(pool, viewer.into())
+        .await
+        .map_err(op_error)?;
     let result = ops::projects::tasks(&mut read.tx, &read.actor, project_id, purpose).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[server]
@@ -359,14 +371,15 @@ pub async fn create_task(
         is_default,
         rate,
     };
-    Ok(task_create(
+    task_create(
         &state.db,
         &*state.plugins,
         caller,
         expected_requester,
         &details,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 /// Begins a task write holding the organization `gate`.
@@ -410,7 +423,7 @@ pub async fn update_task(
         is_default,
         rate,
     };
-    Ok(task_update(
+    task_update(
         &state.db,
         &*state.plugins,
         caller,
@@ -418,7 +431,8 @@ pub async fn update_task(
         task_id,
         &details,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 #[cfg(feature = "server")]
@@ -446,7 +460,7 @@ pub async fn set_task_active(
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    Ok(task_set_active(
+    task_set_active(
         &state.db,
         &*state.plugins,
         caller,
@@ -454,7 +468,8 @@ pub async fn set_task_active(
         task_id,
         active,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 /// Holds the `AccessChange` gate: tracking writers hold the shared gate
@@ -517,7 +532,9 @@ mod task_records {
         let events = Recorder::default();
         let (caller, requester) = session(org_id, actor_id);
         let details = details(name, billable_default, is_default, rate);
-        let task = task_create(db, &events, caller, requester, &details).await?;
+        let task = task_create(db, &events, caller, requester, &details)
+            .await
+            .map_err(op_error)?;
         let payload = events.take().into_iter().find_map(|event| match event {
             AppEvent::TaskCreated { task, .. } => Some(task),
             _ => None,
@@ -542,7 +559,9 @@ mod task_records {
         let events = Recorder::default();
         let (caller, requester) = session(org_id, actor_id);
         let details = details(name, billable_default, is_default, rate);
-        let task = task_update(db, &events, caller, requester, task_id, &details).await?;
+        let task = task_update(db, &events, caller, requester, task_id, &details)
+            .await
+            .map_err(op_error)?;
         let payload = events.take().into_iter().find_map(|event| match event {
             AppEvent::TaskUpdated { task, .. } => Some(task),
             _ => None,
@@ -559,7 +578,9 @@ mod task_records {
     ) -> Result<(Task, Option<AppEvent>), ServerFnError> {
         let events = Recorder::default();
         let (caller, requester) = session(org_id, actor_id);
-        let task = task_set_active(db, &events, caller, requester, task_id, active).await?;
+        let task = task_set_active(db, &events, caller, requester, task_id, active)
+            .await
+            .map_err(op_error)?;
         Ok((task, events.take().pop()))
     }
 }

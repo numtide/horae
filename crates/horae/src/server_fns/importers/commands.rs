@@ -22,7 +22,9 @@ pub(super) async fn start_api(
     generation: i64,
     events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::importers::start_api(
         &mut write.tx,
         &write.actor,
@@ -32,7 +34,7 @@ pub(super) async fn start_api(
         generation,
     )
     .await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 #[expect(clippy::too_many_arguments, reason = "mirrors the request's fields")]
@@ -46,10 +48,12 @@ pub(super) async fn start_csv(
     policy: JobPolicy,
     events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result =
         ops::importers::start_csv(&mut write.tx, &write.actor, mode, body, key, policy).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 pub(super) async fn cancel(
@@ -59,9 +63,11 @@ pub(super) async fn cancel(
     id: Uuid,
     events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::importers::cancel(&mut write.tx, &write.actor, id).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 pub(super) async fn retry(
@@ -71,9 +77,11 @@ pub(super) async fn retry(
     id: Uuid,
     events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::importers::retry(&mut write.tx, &write.actor, id).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 pub(super) async fn commit_preview(
@@ -84,10 +92,12 @@ pub(super) async fn commit_preview(
     policy: JobPolicy,
     events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result =
         ops::importers::commit_preview(&mut write.tx, &write.actor, preview_id, policy).await;
-    Ok(write.commit(result, events).await?)
+    write.commit(result, events).await.map_err(op_error)
 }
 
 pub(super) async fn error_summary(
@@ -96,10 +106,17 @@ pub(super) async fn error_summary(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<crate::models::ErrorSummary, ServerFnError> {
-    let mut connection = pool.acquire().await.map_err(ops::OpError::from)?;
-    let actor =
-        ops::Actor::load_unlocked(&mut connection, Caller::session(org_id, actor_id)).await?;
-    Ok(ops::importers::error_summary(&mut connection, &actor, id).await?)
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(ops::OpError::from)
+        .map_err(op_error)?;
+    let actor = ops::Actor::load_unlocked(&mut connection, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
+    ops::importers::error_summary(&mut connection, &actor, id)
+        .await
+        .map_err(op_error)
 }
 
 pub(super) async fn status(
@@ -108,9 +125,11 @@ pub(super) async fn status(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<Option<JobStatus>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(org_id, actor_id)).await?;
+    let mut read = ops::begin_read(pool, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::importers::status(&mut read.tx, &read.actor, id).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 pub(super) async fn history(
@@ -120,9 +139,11 @@ pub(super) async fn history(
     limit: i64,
     before: Option<Uuid>,
 ) -> Result<Vec<JobStatus>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(org_id, actor_id)).await?;
+    let mut read = ops::begin_read(pool, Caller::session(org_id, actor_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::importers::history(&mut read.tx, &read.actor, limit, before).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[cfg(test)]

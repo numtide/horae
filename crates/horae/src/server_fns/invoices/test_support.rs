@@ -17,7 +17,7 @@ pub(super) mod editing {
     ) -> Result<InvoiceEditor, ServerFnError> {
         let mut read = begin_read(pool, org_id, actor_id).await?;
         let result = crate::ops::invoices::editing::load(&mut read.tx, &read.actor, id).await;
-        Ok(read.finish(result).await?)
+        read.finish(result).await.map_err(op_error)
     }
 
     pub(in crate::server_fns::invoices) async fn review(
@@ -30,7 +30,7 @@ pub(super) mod editing {
         let mut read = begin_read(pool, org_id, actor_id).await?;
         let result =
             crate::ops::invoices::editing::review(&mut read.tx, &read.actor, id, edit).await;
-        Ok(read.finish(result).await?)
+        read.finish(result).await.map_err(op_error)
     }
 
     pub(in crate::server_fns::invoices) async fn save(
@@ -43,7 +43,10 @@ pub(super) mod editing {
         let mut write = begin_write(pool, org_id, actor_id).await?;
         let result =
             crate::ops::invoices::editing::save(&mut write.tx, &write.actor, id, request).await;
-        Ok(write.commit(result, &Recorder::default()).await?)
+        write
+            .commit(result, &Recorder::default())
+            .await
+            .map_err(op_error)
     }
 }
 
@@ -81,7 +84,7 @@ pub(super) mod preview {
             edits,
         )
         .await;
-        Ok(read.finish(result).await?)
+        read.finish(result).await.map_err(op_error)
     }
 }
 
@@ -93,7 +96,7 @@ pub(in crate::server_fns) async fn fetch_list(
 ) -> Result<Vec<InvoiceListItem>, ServerFnError> {
     let mut read = begin_read(pool, org_id, actor_id).await?;
     let result = crate::ops::invoices::list_items(&mut read.tx, &read.actor, status).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 pub(in crate::server_fns) async fn fetch_detail(
@@ -104,7 +107,7 @@ pub(in crate::server_fns) async fn fetch_detail(
 ) -> Result<InvoiceDetailView, ServerFnError> {
     let mut read = begin_read(pool, org_id, actor_id).await?;
     let result = crate::ops::invoices::detail(&mut read.tx, &read.actor, invoice_id).await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 pub(super) async fn transition_invoice(
@@ -116,7 +119,10 @@ pub(super) async fn transition_invoice(
 ) -> Result<Invoice, ServerFnError> {
     let mut write = begin_write(pool, org_id, actor_id).await?;
     let result = crate::ops::invoices::set_status(&mut write.tx, &write.actor, id, target).await;
-    Ok(write.commit(result, &Recorder::default()).await?)
+    write
+        .commit(result, &Recorder::default())
+        .await
+        .map_err(op_error)
 }
 
 /// The seeded person, created before anyone a test adds: the actor of the
@@ -191,7 +197,7 @@ pub(super) async fn generate_invoice_with_request(
     )
     .await;
     let events = Recorder::default();
-    let invoice = write.commit(result, &events).await?;
+    let invoice = write.commit(result, &events).await.map_err(op_error)?;
     Ok((invoice, !events.take().is_empty()))
 }
 

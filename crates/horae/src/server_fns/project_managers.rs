@@ -18,7 +18,9 @@ pub async fn load_project_managers(
 ) -> Result<ProjectManagers, ServerFnError> {
     let caller = session_caller_or("Project managers are unavailable").await?;
     let state = crate::state::global_state().await;
-    Ok(project_managers_view(&state.db, caller, project_id, expected_requester).await?)
+    project_managers_view(&state.db, caller, project_id, expected_requester)
+        .await
+        .map_err(op_error)
 }
 
 /// Replace the complete manager set without changing grants or tracking membership.
@@ -29,14 +31,15 @@ pub async fn save_project_managers(
 ) -> Result<ProjectManagersOutcome, ServerFnError> {
     let caller = session_caller_or("Project managers are unavailable").await?;
     let state = crate::state::global_state().await;
-    Ok(project_managers_save(
+    project_managers_save(
         &state.db,
         caller,
         &command,
         expected_requester,
         &*state.plugins,
     )
-    .await?)
+    .await
+    .map_err(op_error)
 }
 
 #[cfg(feature = "server")]

@@ -31,7 +31,9 @@ pub(super) async fn fetch_task_catalog(
     after: Option<&TaskCursor>,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<TaskCatalogPage, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(viewer.org_id, viewer.user_id)).await?;
+    let mut read = ops::begin_read(pool, Caller::session(viewer.org_id, viewer.user_id))
+        .await
+        .map_err(op_error)?;
     let result = ops::projects::task_catalog(
         &mut read.tx,
         &read.actor,
@@ -40,7 +42,7 @@ pub(super) async fn fetch_task_catalog(
         expected_requester,
     )
     .await;
-    Ok(read.finish(result).await?)
+    read.finish(result).await.map_err(op_error)
 }
 
 #[cfg(all(test, feature = "server"))]
