@@ -17,6 +17,7 @@ perSystem.self.default.overrideAttrs (old: {
     # The browser bundle compiles horae-types too.
     cargo clippy -p horae-types --target wasm32-unknown-unknown -- -D warnings
     cargo clippy -p horae-harvest --all-targets -- -D warnings -W clippy::perf
+    cargo clippy -p horae-server --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae --features server --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-dioxus-lint --all-targets -- -D warnings -W clippy::perf
     runHook postBuild

@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/horae",
+  "crates/server",
   "crates/core",
   "crates/types",
   "crates/harvest",

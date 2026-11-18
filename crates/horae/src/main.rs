@@ -7,37 +7,18 @@ mod auth;
 #[cfg(feature = "server")]
 mod cli;
 #[cfg(feature = "server")]
-mod config;
-#[cfg(feature = "server")]
-mod db;
-#[cfg(feature = "server")]
 mod harvest;
 #[cfg(feature = "server")]
 mod http;
-#[cfg(feature = "server")]
-mod importers;
-#[cfg(feature = "server")]
-mod init;
-#[cfg(feature = "server")]
-mod jobs;
-#[cfg(feature = "server")]
-mod notifications;
-#[cfg(feature = "server")]
-mod ops;
-#[cfg(feature = "server")]
-mod plugin;
-#[cfg(feature = "server")]
-mod render;
-#[cfg(feature = "server")]
-mod scheduler;
-#[cfg(feature = "server")]
-mod seed;
-#[cfg(feature = "server")]
-mod state;
+
+// The backend lives in `horae-server`; keep the `crate::ops` (…) paths.
 #[cfg(all(test, feature = "server"))]
-mod testing;
+pub(crate) use horae_server::testing;
 #[cfg(feature = "server")]
-mod timezone;
+pub(crate) use horae_server::{
+    config, db, importers, init, jobs, notifications, ops, plugin, render, scheduler, seed, state,
+    timezone,
+};
 
 mod app;
 mod components;

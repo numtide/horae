@@ -1,7 +1,7 @@
 //! Approval labels come from the authorized records, never a people directory.
 
 use super::*;
-use crate::ops::approvals::tests::add_person;
+use crate::testing::add_person;
 use chrono::NaiveDate;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;

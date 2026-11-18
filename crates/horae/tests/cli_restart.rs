@@ -61,7 +61,7 @@ async fn cli(session: &Path, args: &[&str]) -> Value {
     result
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../server/migrations")]
 #[serial_test::serial]
 async fn detached_csv_recovers_after_the_server_process_is_killed(pool: PgPool) {
     let database = pool.connect_options().to_url_lossy().to_string();

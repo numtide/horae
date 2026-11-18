@@ -27,7 +27,6 @@ use super::*;
 mod approval_labels;
 mod cli;
 mod client_page;
-#[path = "../../ops/time/tests/timesheet/http.rs"]
 mod delegated_time;
 mod exports;
 mod financial_snapshots;

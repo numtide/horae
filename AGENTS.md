@@ -79,8 +79,10 @@ http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, wh
 cargo test -p horae-core                        # pure domain unit tests (no DB, no features)
 cargo test -p horae-types                       # serde contracts of the UI↔server types (no DB)
 cargo kani -p horae-core                        # bounded proofs behind cfg(kani); setup in crates/core/src/permissions/proofs.rs
-DATABASE_URL=… cargo test -p horae --features server     # integration tests (need Postgres with CREATEDB)
+DATABASE_URL=… cargo test -p horae-server               # backend tests: ops, jobs, importers, … (need Postgres with CREATEDB)
+DATABASE_URL=… cargo test -p horae --features server     # server functions, HTTP routes, CLI, UI and integration tests
 DATABASE_URL=… cargo test -p horae --features server <name>   # a single test
+cargo clippy -p horae-server --all-targets
 cargo clippy -p horae --features server
 nix fmt                                         # treefmt: rustfmt, taplo, nixpkgs-fmt, mdformat
 cargo run -p horae-dioxus-lint                  # Dioxus rules ratchet (or: nix build .#checks.x86_64-linux.dioxus-lint)
@@ -96,8 +98,8 @@ Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — 
 
 - Keep Cargo's incremental compilation on (the default). With `CARGO_INCREMENTAL=0`, rebuilding the server after a one-file change takes about 60 s instead of 18 s, and `cargo test --no-run` about 210 s instead of 60 s. When disk runs low, delete the worktree's `target/` instead.
 - `[profile.dev]` in the root `Cargo.toml` builds proc macros optimised (most of a rebuild of the `horae` crate is macro expansion: sqlx, `rsx!`, serde) and keeps line tables only, so backtraces still show file:line. The `test` profile inherits it.
-- In-crate tests take `#[sqlx::test(migrator = "crate::db::MIGRATOR")]`. A bare `#[sqlx::test]` or `migrations = "./migrations"` pastes every migration's SQL into the test, which across the suite doubled macro expansion of the unit-test binary.
-- The bottleneck is the `horae` crate and its unit-test binary (`--bin horae`), not linking: rustc already links with its bundled `rust-lld`, and mold saves about 1 s. Filter tests with `--bin horae` or `--test <file>` to build only what you run.
+- In-crate tests take `#[sqlx::test(migrator = "crate::db::MIGRATOR")]` (in `horae` that path is the re-exported `horae_server::db`). A bare `#[sqlx::test]` or `migrations = "../server/migrations"` pastes every migration's SQL into the test, which across the suite doubled macro expansion of the unit-test binary.
+- The bottleneck is rustc's per-crate frontend, not linking: rustc already links with its bundled `rust-lld`, and mold saves about 1 s. The backend is its own crate (`horae-server`) so a UI change does not recompile it and its tests build in their own binary; run `cargo test -p horae-server` for backend work. In `horae`, filter tests with `--bin horae` or `--test <file>` to build only what you run.
 - `cargo build` and `cargo test` resolve different features (the dev-dependencies enable some), so running both compiles dioxus, sqlx and typst twice in one `target/`.
 - Don't use `dx serve --hot-patch`. The server runs its own `axum::serve` rather than `dioxus::serve`, so dx answers server changes with `Missing server jump table` and never rebuilds; after a failed first build it ignores every later change. Wired through `dioxus::serve`, a warm patch took as long as the normal rebuild and relaunch (about 25 s).
 - No shared compiler cache is configured: sccache can't cache the incremental `horae` crate, which dominates a cold build, so a fresh worktree saved nothing measurable.
@@ -111,7 +113,7 @@ At compile time, macros need either `DATABASE_URL` pointing to a live DB with mi
 After changing any `query!`/`query_as!`/`query_scalar!` macro or migration, regenerate the cache:
 
 ```sh
-touch crates/horae/src/main.rs crates/horae/tests/*.rs
+touch crates/server/src/lib.rs crates/horae/src/main.rs crates/horae/tests/*.rs
 cargo sqlx prepare --workspace -- --features server --all-targets   # requires live DB with migrations applied
 git add .sqlx/                                        # commit the updated cache
 ```
@@ -122,7 +124,7 @@ SQLx dependency. Otherwise cached test targets can be skipped while their query
 descriptors are removed. `touch` changes no source contents. Verify the resulting
 cache with the offline full test build, not the prepare exit code alone.
 
-**Important:** the `--features server` flag is required because all sqlx query macros live behind `#[cfg(feature = "server")]`. Without it, `cargo sqlx prepare` finds zero queries and **deletes** the entire cache.
+**Important:** the `--features server` flag is required because the `horae` crate's sqlx query macros live behind `#[cfg(feature = "server")]`. Without it, `cargo sqlx prepare` finds only `horae-server`'s queries and **deletes** the rest of the cache. `horae-server` has no `server` feature (all of it is server code); `--workspace --features server` accepts that. Both crates share the one `.sqlx/` at the workspace root.
 
 For custom PostgreSQL enum types, use type overrides in the SQL:
 
@@ -132,7 +134,9 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 ## Architecture
 
-**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `http`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
+**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `harvest`, `http`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
+
+**The backend is the `server` crate (`horae-server`, `crates/server/`)**: `ops`, `db`, `state`, `config`, `plugin`, `jobs`, `importers`, `notifications`, `timezone`, `render`, `init`, `seed`, `scheduler`, the OIDC backend (`auth::oidc`) and the migrations (`crates/server/migrations/`). It is a lib with no Dioxus or Axum dependency. `crates/horae/src/main.rs` re-exports its modules (`pub(crate) use horae_server::{ops, db, …}`), so the app keeps naming them `crate::ops::…`; what the app uses is `pub` there. Its test fixtures (`testing`) are behind `cfg(any(test, feature = "test-support"))`, and `horae` enables `test-support` as a dev-dependency.
 
 **The `core` crate (`horae-core`) is pure domain logic** — duration parsing, rounding, money, totals, the entry state machine — with no I/O dependencies (only serde/uuid/chrono/thiserror). Correctness-critical code belongs here and is unit-tested in isolation; the Horae Constitution forbids sqlx/axum/dioxus deps in `core`.
 
@@ -143,7 +147,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 - Dioxus `#[server]` functions in `server_fns.rs` — session-authenticated; the SPA uses these for all mutations.
 - Plain Axum routes — health, exports, auth, and the read-only Harvest v2 API.
 
-**Server operations (`ops/`)**: new or changed server behaviour goes in `crates/horae/src/ops/`, one function per action with the shape `fn(tx: &mut Tx, actor: &Actor, input) -> Result<Output, OpError>`. The operation authorizes, validates, runs its SQL and returns its plugin events in `Done<T>`; it never commits and never builds a `ServerFnError`. Adapters (server functions now, Axum and Harvest handlers later) only translate: they open `ops::begin` (or `ops::begin_read`), which loads the `Actor` inside the transaction, call the operation, and finish with `WriteTx::commit` (events are dispatched after the commit) or `ReadTx::finish`; `OpError` maps to named status codes. Authorize only through `Actor` (`has(permission)`, `administrator()`), which answers from the person's stored permission state. `clients` is the reference domain.
+**Server operations (`ops/`)**: new or changed server behaviour goes in `crates/server/src/ops/`, one function per action with the shape `fn(tx: &mut Tx, actor: &Actor, input) -> Result<Output, OpError>`. The operation authorizes, validates, runs its SQL and returns its plugin events in `Done<T>`; it never commits and never builds a `ServerFnError`. Adapters (server functions now, Axum and Harvest handlers later) only translate: they open `ops::begin` (or `ops::begin_read`), which loads the `Actor` inside the transaction, call the operation, and finish with `WriteTx::commit` (events are dispatched after the commit) or `ReadTx::finish`; `OpError` maps to named status codes. Authorize only through `Actor` (`has(permission)`, `administrator()`), which answers from the person's stored permission state. `clients` is the reference domain.
 
 **Shared state**: `state.rs` holds a global `AppState` in a `OnceCell`, initialized once at startup with the `PgPool`; server fns and auth read from it. The pool is created and migrations applied eagerly on `serve`.
 
@@ -153,7 +157,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 - Durations are stored as **integer minutes**; money as **integer minor units (cents) + ISO currency code** — never floats. The one exception: an XLSX (Excel) export may convert final integer minutes to a numeric hours cell at write time (Constitution I).
 - Primary keys are **UUID v7** (time-ordered).
-- **PostgreSQL only** (no SQLite). Migrations live in `crates/horae/migrations/` and apply via `sqlx` / `migrate run`.
+- **PostgreSQL only** (no SQLite). Migrations live in `crates/server/migrations/` and apply via `sqlx` / `migrate run`.
 - Single organization for now, but every table keeps an `org_id` FK so multi-org is a later flip.
 
 Feature requirements and implementation plans live under `specs/<NNN-feature>/`; `.specify/memory/constitution.md` is authoritative for cross-cutting invariants. `DESIGN.md` is the design system (Invoicer aesthetic; tokens in `crates/horae/assets/css/horae.css`; components are one-per-file `#[component]` functions using `use_signal`/`use_resource`, with no global mutable UI state).
