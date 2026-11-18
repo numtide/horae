@@ -43,7 +43,7 @@ digest=$(printf '%s' "$HORAE_ACCESS_TOKEN" | sha256sum | cut -d ' ' -f 1)
 random=$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')
 millis=$(printf '%012x' "$(date +%s%3N)")
 token_id="${millis:0:8}-${millis:8:4}-7${random:0:3}-8${random:3:3}-${random:6:12}"
-HORAE_ACCOUNT_ID=$(psql -h "$test_dir" -U postgres -d horae -v ON_ERROR_STOP=1 -tA -c "
+HORAE_ACCOUNT_ID=$(psql -h "$test_dir" -U postgres -d horae -v ON_ERROR_STOP=1 -qtA -c "
   INSERT INTO api_tokens (id, org_id, user_id, name, token_sha256, display_prefix)
   SELECT '$token_id', u.org_id, u.id, 'harvest-compat', decode('$digest', 'hex'),
          substr('$HORAE_ACCESS_TOKEN', 11, 8)
