@@ -4,6 +4,7 @@ use crate::components::form::{FormGroup, Select};
 use crate::components::theme::Theme;
 use crate::server_fns;
 
+pub(crate) mod api_tokens;
 mod own_permissions;
 mod profile;
 
@@ -53,6 +54,7 @@ pub fn Settings() -> Element {
                 }
             }
             own_permissions::OwnPermissionSection {}
+            api_tokens::ApiTokensSection {}
             div { class: "card mt-4",
                 h2 { class: "card-title", "Plugins" }
                 {crate::pages::loaded(&plugins.read(), |items| rsx! {

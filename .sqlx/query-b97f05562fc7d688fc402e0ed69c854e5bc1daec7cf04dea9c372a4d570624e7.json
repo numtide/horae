@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.org_id, t.user_id\n         FROM api_tokens t JOIN users u ON u.id = t.user_id AND u.org_id = t.org_id\n         WHERE t.token_sha256 = $1\n           AND t.revoked_at IS NULL\n           AND (t.expires_at IS NULL OR t.expires_at > now())\n           AND u.active",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b97f05562fc7d688fc402e0ed69c854e5bc1daec7cf04dea9c372a4d570624e7"
+}

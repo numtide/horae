@@ -3,11 +3,13 @@ use dioxus::prelude::*;
 use crate::components::session::use_session;
 
 mod add_person;
+mod api_tokens;
 mod people;
 mod permission_editor;
 mod rates;
 mod workspace;
 
+pub use api_tokens::AdminApiTokens;
 pub use workspace::WorkspaceSettings;
 
 #[component]

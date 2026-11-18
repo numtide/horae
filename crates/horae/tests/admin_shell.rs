@@ -54,6 +54,7 @@ struct Probe {
     panel_mounts: Rc<Cell<usize>>,
     audit: bool,
     importers: bool,
+    api_tokens: bool,
     own_error: bool,
     future_catalog: bool,
     canonical_requests: Rc<Cell<usize>>,
@@ -77,6 +78,8 @@ fn app(probe: Probe) -> Element {
         "/admin/importers"
     } else if probe.audit {
         "/admin/audit"
+    } else if probe.api_tokens {
+        "/admin/api-tokens"
     } else {
         "/admin/users"
     };
@@ -388,6 +391,8 @@ mod route {
         ImporterIndex {},
         #[route("/admin/audit")]
         PermissionAudit {},
+        #[route("/admin/api-tokens")]
+        AdminApiTokens {},
     }
 
     pub fn route_is_active(to: &Route) -> bool {
@@ -434,6 +439,11 @@ mod route {
     fn PermissionAudit() -> Element {
         rsx! { "Permission audit panel" }
     }
+
+    #[component]
+    fn AdminApiTokens() -> Element {
+        rsx! { "API tokens panel" }
+    }
 }
 
 #[tokio::test]
@@ -455,6 +465,27 @@ async fn audit_route_follows_the_administrator_identity() {
             dioxus::ssr::render(&dom).contains("Permission audit panel"),
             allowed
         );
+    }
+}
+
+#[tokio::test]
+async fn api_tokens_route_and_link_follow_the_administrator_identity() {
+    for allowed in [true, false] {
+        let probe = Probe {
+            api_tokens: true,
+            ..Probe::default()
+        };
+        let response = probe.request();
+        let mut dom = start(&probe);
+        assert_panel_hidden(&dom, &probe);
+        // Every grant, so only the administrator identity decides.
+        response
+            .send(Ok(Access::new(allowed, Permission::ALL)))
+            .unwrap_or_else(|_| panic!("API tokens request dropped"));
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert_eq!(html.contains("API tokens panel"), allowed, "{html}");
+        assert_eq!(html.contains("/admin/api-tokens"), allowed, "{html}");
     }
 }
 

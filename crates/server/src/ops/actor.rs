@@ -10,11 +10,14 @@ use super::{Caller, OpError};
 use crate::models::permission_editor::PermissionRequester;
 use crate::ops::permissions::PersonPermissions;
 
-/// The entry point a request came through. Tokens join later.
+/// The entry point a request came through.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
     /// A signed-in person.
     Session,
+    /// A person's personal access token: the person and their permissions,
+    /// exactly as for a session.
+    Token { token_id: uuid::Uuid },
     /// The server's operator at its terminal: no person, and no grants. Each
     /// operation that accepts it says what it may do.
     Operator,
@@ -95,7 +98,8 @@ impl Actor {
             }
         };
         // Only the organization is locked for a channel with no person.
-        if organization.is_none() || caller.channel != Channel::Session {
+        let person_channel = matches!(caller.channel, Channel::Session | Channel::Token { .. });
+        if organization.is_none() || !person_channel {
             return Ok(actor);
         }
         let person = match lock {
