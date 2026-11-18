@@ -89,7 +89,7 @@ the owner; revoke it and the route answers 401; the database holds only a digest
 
 ### Implementation
 
-- [ ] T021 [US1] Migration `crates/server/migrations/0003_api_tokens.sql` (number set at merge time) for `api_tokens` per `specs/022-public-api-v1/data-model.md`
+- [ ] T021 [US1] Migration `crates/server/migrations/000N_api_tokens.sql` (the next free number when it merges) for `api_tokens` per `specs/022-public-api-v1/data-model.md`
 - [ ] T022 [US1] Add `Channel::Token { token_id }` and `Caller::token(org_id, user_id, token_id)` in `crates/server/src/ops.rs`; make `Actor::load_with` in `crates/server/src/ops/actor.rs` load the person for it; make `ops::people::add` in `crates/server/src/ops/people.rs` refuse it
 - [ ] T023 [US1] Implement `ops::api_tokens::{list_own, create, revoke, list_org, authenticate}` and the `Secret` type in `crates/server/src/ops/api_tokens.rs` (research R-6); add `sha2` and `subtle` as direct dependencies of `horae-server`
 - [ ] T024 [P] [US1] Add the token DTOs (`ApiTokenRow`, `CreatedApiToken`) in `crates/types/src/api_tokens.rs`
@@ -115,7 +115,7 @@ ______________________________________________________________________
 - [ ] T033 [US4] Move `crates/horae/src/harvest.rs` and `crates/horae/src/harvest/` to `crates/harvest-api/src/lib.rs` and its modules; `AuthUser` uses `horae_api::auth::session` for the session lookup
 - [ ] T034 [US4] Add `harvest_api: bool` from `HORAE_HARVEST_API` (parsed like `DEV_LOGIN`) to `Config` in `crates/server/src/config.rs`, with a config test
 - [ ] T035 [US4] Add `horae_harvest_api::mount(enabled, pool) -> axum::Router` in `crates/harvest-api/src/lib.rs`: the Harvest router when enabled, otherwise routes that answer 404 with an empty body for `/harvest/v2/*` and `/v2/*`; merge it in `crates/horae/src/main.rs` with `cfg.harvest_api`
-- [ ] T036 [P] [US4] Router test of both settings of `mount` (404 empty body when off; served when on) in `crates/harvest-api/src/switch_tests.rs`
+- [ ] T036 [P] [US4] Router test of both settings of `mount` (404 empty body when off; served when on), plus an assertion that the Harvest OAuth callback of the importer (`horae-api`) answers in both settings (FR-063), in `crates/harvest-api/src/switch_tests.rs`
 - [ ] T037 [P] [US4] NixOS option `services.horae.harvestApi.enable` (default `false`) setting `HORAE_HARVEST_API=1` in `nix/modules/nixos/horae.nix`
 - [ ] T038 [P] [US4] Turn the switch on in `nix/checks/e2e.nix` and `nix/checks/harvest-compat/run.sh`, and add an e2e assertion that the default deployment answers 404
 - [ ] T039 [P] Add `-p horae-harvest-api` to `nix/checks/tests.nix` and `nix/checks/clippy.nix`; add `"../harvest-api/src"` to `watch_path` in `crates/horae/Dioxus.toml`; add the crate to the sqlx `touch` line in `AGENTS.md`
@@ -142,8 +142,8 @@ while one runs stops the first; editing a project changes its `updated_at`.
 - [ ] T045 [US3] Create `crates/core/src/time_entry_timer.rs` (restart eligibility) and export it from `crates/core/src/lib.rs`
 - [ ] T046 [US3] Add `TimesheetCommand::RestartTimer { entry_id }` in `crates/types/src/scoped_time.rs`
 - [ ] T047 [US3] In `ops::time::apply` (`crates/server/src/ops/time.rs`): handle `RestartTimer`; make `StartTimer` and `RestartTimer` stop the subject's running timer first with `StopTimer`'s clamp, in the same transaction; keep `one_running_timer_per_user` as the guard
-- [ ] T048 [US3] Web restart action on stopped entries of today in `crates/horae/src/pages/timesheet/data.rs` and the entry row component, through `apply_timesheet_command`; update `crates/horae/tests/timer_widget.rs` for "start stops the running timer"
-- [ ] T049 [US6] Migration `crates/server/migrations/0002_catalogue_updated_at.sql` per `data-model.md`; exclude the new columns from the whole-row migration snapshot tests that cover `projects`, `clients`, `users` and `tasks`
+- [ ] T048 [US3] Web restart action on stopped entries of today in `crates/horae/src/pages/timesheet.rs` (where the stop action builds `TimesheetCommand::StopTimer`), through `apply_timesheet_command` in `crates/horae/src/server_fns/time_entries.rs`; update `crates/horae/tests/timer_widget.rs` for "start stops the running timer"
+- [ ] T049 [US6] Migration `crates/server/migrations/000N_catalogue_updated_at.sql` (the next free number when it merges) per `data-model.md`; exclude the new columns from the whole-row migration snapshot tests that cover `projects`, `clients`, `users` and `tasks`
 - [ ] T050 Regenerate `.sqlx/`; checkpoint: `nix flake check` passes; PR E opened
 
 ______________________________________________________________________
@@ -171,7 +171,7 @@ matches the snapshot; removing a field fails the snapshot test and the `api-comp
 - [ ] T059 [US6] HMAC cursors (research R-5) in `crates/api/src/cursor.rs`; `cursor_key` from `HORAE_API_CURSOR_KEY` or a random key logged once, in `crates/server/src/config.rs`
 - [ ] T060 [US1] Per-token fixed-window limiter as Axum middleware keyed by `Channel::Token`'s id in `crates/api/src/rate_limit.rs`; `rate_limit` from `HORAE_API_RATE_LIMIT` in `crates/server/src/config.rs`
 - [ ] T061 [P] [US1] NixOS option `services.horae.api.rateLimit` in `nix/modules/nixos/horae.nix`; name `HORAE_API_CURSOR_KEY` in the `secretKeyFile` description
-- [ ] T062 [US2] `v1` router with `OpenApiRouter`, security scheme, `GET /api/v1/openapi.json` (no auth) and the `Page<T>` and `Money` types in `crates/api/src/v1.rs` and `crates/api/src/v1/types.rs`; mount it from `horae_api::router`; add `/api/v1` handling to `login_redirect_guard` (already public under `/api/`)
+- [ ] T062 [US2] `v1` router with `OpenApiRouter`, security scheme, `GET /api/v1/openapi.json` (no auth) and the `Page<T>` and `Money` types in `crates/api/src/v1.rs` and `crates/api/src/v1/types.rs`; mount it from `horae_api::router`
 - [ ] T063 [US1] `GET /me`, `/me/trackable` (`ops::time::tracking`) and `/me/timer` (`ops::time::current_timer`) in `crates/api/src/v1/me.rs`, using `ApiCaller`, `ops::begin_read` and `ReadTx::finish`
 - [ ] T064 [US2] Generate and commit `crates/api/openapi/v1.json`; copy it to `crates/api/openapi/v1.baseline.json`; delete `specs/022-public-api-v1/contracts/openapi-v1.draft.yaml` or mark it superseded, and correct `contracts/api-v1.md` where the generated document differs
 - [ ] T065 [P] [US2] Package `oasdiff` from a pinned release with `buildGoModule` in `nix/packages/oasdiff.nix`
@@ -217,7 +217,7 @@ refused through the API with the same reason.
 
 ### Tests
 
-- [ ] T078 [P] [US6] `#[sqlx::test]` tests for `ops::time_reads::{list, get}` across scopes and every filter, and a 100,000-entry walk returning each row once, in `crates/server/src/ops/time_reads/tests/api_list.rs`
+- [ ] T078 [P] [US6] `#[sqlx::test]` tests for `ops::time_reads::{list, get}` across scopes and every filter, and a 100,000-entry walk returning each row once with each 1,000-row page under 1 s (plan *Performance Goals*; `ANALYZE` the fixture first), in `crates/server/src/ops/time_reads/tests/api_list.rs`
 - [ ] T079 [P] [US3] `#[sqlx::test]` tests for `ops::time::patch`: partial changes, null clears, refusal on locked, approved and invoiced entries with the timesheet's reasons, in `crates/server/src/ops/time/tests/timesheet/patch.rs`
 - [ ] T080 [P] [US3] Router tests for the eight time-entry operations with `assert_conforms`: success, 403, 404 outside scope, 409 conflicts, 422 validation and `unknown_field`, writes for another person allowed and refused by scope, plugin events dispatched after commit, in `crates/api/src/v1/time_entries/tests.rs`
 - [ ] T081 [P] [US3] Parity test: for each refusal case of the timesheet's server-function tests, the API returns the same `detail` (SC-004), in `crates/api/src/v1/time_entries/parity_tests.rs`
@@ -260,7 +260,7 @@ works unmodified (SC-002).
 - [ ] T096 [US2] Confirm that `openapi-generator-cli` (nixpkgs 7.22.0) generates a Python client from `crates/api/openapi/v1.json` and that it runs offline in the sandbox; if not, record why and use `curl` plus `jq` scenarios
 - [ ] T097 [US2] Check `nix/checks/api-v1.nix`: PostgreSQL and the server as in `nix/checks/tests.nix`, a seeded organization, a token from the test seed, and the generated client running quickstart US1, US3 and US6
 - [ ] T098 [P] [US1] User guide `docs/api.md` (new directory): create a token, authenticate, list with cursors, incremental sync, errors, limits, compatibility promise; add a `/api/v1` subsection to the *API* section of `README.md` linking it, and link it from the token settings section
-- [ ] T099 [P] Update the *Architecture* section of `AGENTS.md`: the API surfaces (`/api/v1`, `/harvest/v2` optional, exports, `/auth`), the crates and the Principle IV title
+- [ ] T099 [P] Update the *Architecture* section of `AGENTS.md`: the API surfaces (`/api/v1`, `/harvest/v2` optional, exports, `/auth`), the crates, the Principle IV title, and the `cargo test`/`cargo clippy` commands for `horae-api` and `horae-harvest-api` under *Test & lint*
 - [ ] T100 [P] Mark 021's step 2 (tokens) as delivered by 022 in `specs/021-harvest-api-compat/spec.md` *Delivery order*
 - [ ] T101 Run every scenario in `specs/022-public-api-v1/quickstart.md` against `process-compose up` and record the result in the PR
 - [ ] T102 Checkpoint: `nix flake check` passes; PR I opened

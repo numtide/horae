@@ -276,7 +276,7 @@ nixpkgs has no attribute of that name).
 
 ### R-12 Catalogue update times (PR E)
 
-- **Decision**: one migration `0002_catalogue_updated_at.sql` adds `updated_at timestamptz NOT NULL DEFAULT now()` to `projects`, `clients` and `users`, and `created_at` plus `updated_at` to
+- **Decision**: one migration `000N_catalogue_updated_at.sql` (the next free number) adds `updated_at timestamptz NOT NULL DEFAULT now()` to `projects`, `clients` and `users`, and `created_at` plus `updated_at` to
   `tasks`, with the existing `set_updated_at()` trigger. Backfill `updated_at` from `created_at`
   (tasks from the migration time). It is 021's step-4 change, done once for both APIs. The project
   edit-revision trigger is left as is.

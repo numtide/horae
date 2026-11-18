@@ -147,8 +147,8 @@ crates/server/src/ops/time.rs                 # RestartTimer, D-6 (PR E); patch 
 crates/server/src/ops/time_reads.rs           # list, get (PR H)
 crates/server/src/ops/{projects/reads,clients,projects/task_catalog,people}.rs  # page, get (PR G)
 crates/server/src/config.rs                   # HORAE_HARVEST_API (D), cursor key, rate limit (F)
-crates/server/migrations/0002_catalogue_updated_at.sql   # PR E
-crates/server/migrations/0003_api_tokens.sql             # PR C (number set at merge time)
+crates/server/migrations/000N_catalogue_updated_at.sql   # PR E (next free number when it merges)
+crates/server/migrations/000N_api_tokens.sql             # PR C (next free number when it merges)
 crates/core/src/time_entry_timer.rs           # restart eligibility (PR E)
 crates/types/src/scoped_time.rs               # TimesheetCommand::RestartTimer (PR E)
 crates/horae/src/main.rs                      # mounts horae_api and horae_harvest_api
@@ -187,7 +187,7 @@ docs/api.md                                   # how to use the API (PR I)
 | --- | --- | --- | --- |
 | **A** | Constitution amendment (Principle IV, P-3); remove the `/api/v2` alias and its tests; update 021's contract *Base paths* | — | FR-022, FR-052 |
 | **B** | Create `horae-api` by moving `http/`, `auth/http` and `/health`; `main.rs` merges `horae_api::router`; Nix, sqlx prepare and `Dioxus.toml` follow. No behaviour change | — | FR-070, C-4 |
-| **C** | Tokens: migration, `ops::api_tokens`, `Channel::Token`, server functions, settings and admin pages, bearer extractor in `horae-api` | B | FR-001–FR-011 |
+| **C** | Tokens: migration, `ops::api_tokens`, `Channel::Token`, server functions, settings and admin pages, bearer extractor in `horae-api` | B | FR-001–FR-010; FR-011's choice between several memberships waits for 020 (single membership until then, research R-6) |
 | **D** | Create `horae-harvest-api` by moving `harvest/`; `HORAE_HARVEST_API` and `services.horae.harvestApi.enable`, off by default; empty 404 when off; e2e and harvest-compat checks turn it on | B (merge after A, which edits the router D moves) | FR-060, FR-061, FR-063, C-5 |
 | **D2** | `/harvest/v2` authenticates with shared tokens (bearer and `access_token`, keeping cookie reads) and takes the shared limiter; Harvest account id shown on the token page when on | C, D, F | FR-008, FR-062 |
 | **E** | Shared operations: `RestartTimer`, D-6 in start and restart, web restart action; catalogue `updated_at` migration | — | FR-030, FR-046, P-2 |

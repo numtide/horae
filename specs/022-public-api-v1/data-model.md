@@ -52,7 +52,7 @@ owner makes unexpired, unrevoked tokens work again (FR-004).
 | `projects`, `clients`, `users` | `updated_at timestamptz NOT NULL DEFAULT now()`, backfilled from `created_at`, trigger `set_updated_at()` |
 | `tasks` | `created_at` and `updated_at timestamptz NOT NULL DEFAULT now()`, trigger `set_updated_at()` |
 
-One migration, `0002_catalogue_updated_at.sql` (research R-12). The migration snapshot tests
+One migration, `000N_catalogue_updated_at.sql` with the next free number (research R-12). The migration snapshot tests
 exclude the new columns. `time_entries.updated_at` already exists.
 
 ## Domain changes without schema (PR E)
