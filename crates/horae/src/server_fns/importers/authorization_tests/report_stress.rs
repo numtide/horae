@@ -46,19 +46,19 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
     let router = Router::new()
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",
-            get(crate::http::import_errors::download),
+            get(horae_api::import_errors::download),
         )
         .route(
             "/test/login/{id}",
             post(|session: Session, Path(id): Path<Uuid>| async move {
-                crate::auth::http::session::set_session_user_id(&session, id)
+                horae_api::session::set_session_user_id(&session, id)
                     .await
                     .unwrap();
                 StatusCode::NO_CONTENT
             }),
         )
         .layer(
-            crate::auth::http::make_session_layer(pool.clone(), false)
+            horae_api::make_session_layer(pool.clone(), false)
                 .await
                 .unwrap(),
         );

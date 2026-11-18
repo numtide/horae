@@ -40,7 +40,7 @@ pub(crate) async fn session_user_id() -> Result<uuid::Uuid, ServerFnError> {
     // axum via::Parts marker type.
     let session: Session = dioxus_fullstack::FullstackContext::extract::<Session, _>().await?;
 
-    crate::auth::http::session::get_session_user_id(&session)
+    horae_api::session::get_session_user_id(&session)
         .await
         .ok_or_else(|| unauthorized("Not authenticated — please sign in."))
 }

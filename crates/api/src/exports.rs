@@ -1,0 +1,664 @@
+// Server-only Axum handlers for CSV and XLSX export.
+//
+// These are plain Axum routes (not `#[server]` functions) because they
+// return binary file data with custom Content-Type headers.
+
+use axum::extract::{Path, Query};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use horae_core::duration::format_hours2;
+use horae_core::money::format_cents_plain;
+use serde::Deserialize;
+use tower_sessions::Session;
+
+use super::op_status;
+
+mod bounded;
+mod groups;
+pub use groups::export_csv as export_time_groups_csv;
+pub use groups::export_xlsx as export_time_groups_xlsx;
+mod limits;
+mod streaming;
+
+#[cfg(test)]
+mod privacy_tests;
+
+#[cfg(test)]
+mod export_params_tests;
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod xlsx_cells;
+
+/// `login_redirect_guard` lets `/api/` through, because everything else there is
+/// a server function that checks its own session. These handlers must too. The
+/// `active` check is what revokes a deactivated user's still-live session
+/// (FR-002). Returns the caller's `(user_id, org_id)`: the org comes free from
+/// the same row and is what the export queries scope on.
+async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
+    let user_id = crate::auth::session::get_session_user_id(session)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let state = crate::state::global_state().await;
+    let caller = crate::ops::active_caller(&state.db, user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    Ok((caller.user_id, caller.org_id))
+}
+
+/// Refuses a session whose stored state does not grant reading every invoice,
+/// before the export takes a rendering slot. The export's own transaction
+/// checks again; this only refuses early. Returns `(user_id, org_id)`.
+async fn require_invoice_reader(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
+    let (user_id, org_id) = require_session(session).await?;
+    let state = crate::state::global_state().await;
+    let read = crate::ops::begin_read(&state.db, crate::ops::Caller::session(org_id, user_id))
+        .await
+        .map_err(op_status)?;
+    let allowed = crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ);
+    read.finish(allowed).await.map_err(op_status)?;
+    Ok((user_id, org_id))
+}
+
+/// A snapshot read holding the actor's whole-invoice read grant, bounded by
+/// the export deadlines.
+async fn begin_invoice_export(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<crate::ops::ReadTx, StatusCode> {
+    let mut read = crate::ops::begin_read_snapshot(
+        pool,
+        crate::ops::Caller::session(org_id, actor_id),
+        crate::ops::SnapshotLimits::LockWait,
+    )
+    .await
+    .map_err(op_status)?;
+    if let Err(error) =
+        crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ)
+    {
+        return Err(op_status(read.refuse(error).await));
+    }
+    if let Err(status) = limits::configure_deadlines(&mut read.tx).await {
+        return Err(read.refuse(status).await);
+    }
+    Ok(read)
+}
+
+async fn render_invoice_export(
+    permit: bounded::ExportPermit,
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
+) -> Result<axum::body::Body, StatusCode> {
+    let body = permit.render(render).await?;
+    // Rendering holds no authority locks. Recheck before releasing its result.
+    begin_invoice_export(pool, org_id, actor_id)
+        .await?
+        .finish(Ok(()))
+        .await
+        .map_err(op_status)?;
+    Ok(body)
+}
+
+/// Download filters support both legacy scalar links and complete ID selections.
+#[derive(Default, Deserialize)]
+pub struct ExportParams {
+    pub from: String,
+    pub to: String,
+    #[serde(default, deserialize_with = "query_bool")]
+    pub active_projects_only: bool,
+    #[serde(default)]
+    pub billability: crate::models::time_report::TimeReportBillability,
+    pub client_id: Option<uuid::Uuid>,
+    pub project_id: Option<uuid::Uuid>,
+    pub user_id: Option<uuid::Uuid>,
+    pub tag_id: Option<uuid::Uuid>,
+    pub client_ids: Option<String>,
+    pub project_ids: Option<String>,
+    pub user_ids: Option<String>,
+    pub task_ids: Option<String>,
+    pub tag_ids: Option<String>,
+    pub expected_org_id: Option<uuid::Uuid>,
+    pub expected_user_id: Option<uuid::Uuid>,
+    pub after: Option<String>,
+}
+
+fn query_bool<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    // Flattened URL parameters retain strings instead of Serde's bool coercion.
+    String::deserialize(deserializer)?
+        .parse()
+        .map_err(serde::de::Error::custom)
+}
+
+impl ExportParams {
+    fn time_query(&self) -> Result<crate::models::time_report::TimeReportQuery, StatusCode> {
+        let date_from = self.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+        let date_to = self.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+        if date_from > date_to || self.after.is_some() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let expected_requester = match (self.expected_org_id, self.expected_user_id) {
+            (None, None) => None,
+            (Some(org_id), Some(user_id)) => {
+                Some(crate::models::permission_editor::PermissionRequester { org_id, user_id })
+            }
+            _ => return Err(StatusCode::BAD_REQUEST),
+        };
+        Ok(crate::models::time_report::TimeReportQuery {
+            date_from,
+            date_to,
+            active_projects_only: self.active_projects_only,
+            billability: self.billability,
+            client_ids: Self::ids(self.client_id, self.client_ids.as_deref())?,
+            project_ids: Self::ids(self.project_id, self.project_ids.as_deref())?,
+            user_ids: Self::ids(self.user_id, self.user_ids.as_deref())?,
+            task_ids: Self::ids(None, self.task_ids.as_deref())?,
+            tag_ids: Self::ids(self.tag_id, self.tag_ids.as_deref())?,
+            after: None,
+            expected_requester,
+        })
+    }
+
+    fn ids(
+        single: Option<uuid::Uuid>,
+        multiple: Option<&str>,
+    ) -> Result<Vec<uuid::Uuid>, StatusCode> {
+        match (single, multiple) {
+            (Some(_), Some(_)) => Err(StatusCode::BAD_REQUEST),
+            (_, None) => Ok(single.into_iter().collect()),
+            (None, Some("")) => Ok(Vec::new()),
+            (None, Some(values)) => {
+                // Dropping an invalid element could turn a selected filter into "all".
+                let mut ids = values
+                    .split(',')
+                    .map(|value| value.parse().map_err(|_| StatusCode::BAD_REQUEST))
+                    .collect::<Result<Vec<_>, _>>()?;
+                ids.sort_unstable();
+                ids.dedup();
+                Ok(ids)
+            }
+        }
+    }
+}
+
+pub async fn export_csv(
+    session: Session,
+    Query(params): Query<ExportParams>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (actor_id, org_id) = require_session(&session).await?;
+
+    let state = crate::state::global_state().await;
+    streaming::entries(state.db.clone(), org_id, actor_id, params).await
+}
+
+const ENTRY_EXPORT_HEADERS: [&str; 8] = [
+    "Date",
+    "Project",
+    "Task",
+    "User",
+    "Hours",
+    "Rounded Hours",
+    "Billable",
+    "Notes",
+];
+
+fn write_entry_csv(
+    writer: &mut csv::Writer<Vec<u8>>,
+    entry: &crate::models::DetailedReportRow,
+) -> Result<(), csv::Error> {
+    writer.write_record([
+        entry.spent_date.to_string().as_str(),
+        entry.project_name.as_str(),
+        entry.task_name.as_str(),
+        entry.user_name.as_str(),
+        &format_hours2(entry.minutes.into()),
+        &format_hours2(entry.rounded_minutes.unwrap_or(entry.minutes).into()),
+        if entry.billable { "Yes" } else { "No" },
+        entry.notes.as_deref().unwrap_or(""),
+    ])
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub fn entries_csv(entries: &[crate::models::DetailedReportRow]) -> Result<Vec<u8>, StatusCode> {
+    let mut wtr = csv::Writer::from_writer(vec![]);
+    wtr.write_record(ENTRY_EXPORT_HEADERS)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    for e in entries {
+        write_entry_csv(&mut wtr, e).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    wtr.into_inner()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+pub async fn export_xlsx(
+    session: Session,
+    Query(params): Query<ExportParams>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (actor_id, org_id) = require_session(&session).await?;
+    let permit = bounded::ExportPermit::acquire()?;
+
+    let state = crate::state::global_state().await;
+    let export = limits::time::entries(&state.db, org_id, actor_id, &params.time_query()?).await?;
+    let data = export
+        .scope
+        .render(permit, &state.db, move || entries_xlsx(&export.rows))
+        .await?;
+
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"timesheet.xlsx\"",
+            ),
+        ],
+        data,
+    ))
+}
+
+fn entries_xlsx(entries: &[crate::models::DetailedReportRow]) -> Result<Vec<u8>, StatusCode> {
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    let headers = [
+        "Date",
+        "Project",
+        "Task",
+        "User",
+        "Hours",
+        "Rounded Hours",
+        "Billable",
+        "Notes",
+    ];
+    for (col, h) in headers.iter().enumerate() {
+        worksheet
+            .write_string(0, col as u16, *h)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    for (row, e) in entries.iter().enumerate() {
+        let r = (row + 1) as u32;
+        worksheet
+            .write_string(r, 0, e.spent_date.to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worksheet
+            .write_string(r, 1, &e.project_name)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worksheet
+            .write_string(r, 2, &e.task_name)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worksheet
+            .write_string(r, 3, &e.user_name)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worksheet
+            .write_number(r, 4, e.minutes as f64 / 60.0)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worksheet
+            .write_number(r, 5, e.rounded_minutes.unwrap_or(e.minutes) as f64 / 60.0)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worksheet
+            .write_string(r, 6, if e.billable { "Yes" } else { "No" })
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worksheet
+            .write_string(r, 7, e.notes.as_deref().unwrap_or(""))
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    bounded::workbook_bytes(&mut workbook)
+}
+
+// ── Projects export ───────────────────────────────────────────────────────────
+
+#[derive(Default, Deserialize)]
+pub struct ProjectsExportParams {
+    /// "active" (default) | "budgeted" | "archived".
+    pub scope: Option<String>,
+    pub expected_org_id: Option<uuid::Uuid>,
+    pub expected_user_id: Option<uuid::Uuid>,
+}
+
+impl ProjectsExportParams {
+    fn authorize_requester(
+        &self,
+        org_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+    ) -> Result<(), StatusCode> {
+        match (self.expected_org_id, self.expected_user_id) {
+            (None, None) => Ok(()),
+            (Some(expected_org), Some(expected_user))
+                if expected_org == org_id && expected_user == user_id =>
+            {
+                Ok(())
+            }
+            (Some(_), Some(_)) => Err(StatusCode::FORBIDDEN),
+            _ => Err(StatusCode::BAD_REQUEST),
+        }
+    }
+}
+
+struct ProjectExportRow {
+    id: uuid::Uuid,
+    client_name: String,
+    code: Option<String>,
+    name: String,
+    project_type: horae_core::types::ProjectType,
+    currency: String,
+    budget_kind: horae_core::types::BudgetKind,
+    budget_amount_cents: Option<i64>,
+    budget_minutes: Option<i64>,
+    active: bool,
+}
+
+impl ProjectExportRow {
+    fn has_monetary_budget(&self) -> bool {
+        self.budget_kind == horae_core::types::BudgetKind::Amount
+            && self.budget_amount_cents.is_some()
+    }
+}
+
+fn budget_cell(r: &ProjectExportRow) -> String {
+    horae_core::money::format_budget(
+        r.budget_kind,
+        r.budget_amount_cents,
+        r.budget_minutes,
+        &r.currency,
+    )
+}
+
+const PROJECT_EXPORT_HEADERS: [&str; 7] = [
+    "Client", "Code", "Project", "Type", "Currency", "Budget", "Status",
+];
+
+pub async fn export_projects_csv(
+    session: Session,
+    Query(params): Query<ProjectsExportParams>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (viewer_id, org_id) = require_session(&session).await?;
+
+    let state = crate::state::global_state().await;
+    streaming::projects(state.db.clone(), org_id, viewer_id, params).await
+}
+
+pub async fn export_projects_xlsx(
+    session: Session,
+    Query(params): Query<ProjectsExportParams>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (viewer_id, org_id) = require_session(&session).await?;
+    params.authorize_requester(org_id, viewer_id)?;
+    let permit = bounded::ExportPermit::acquire()?;
+
+    let scope = params.scope.as_deref().unwrap_or("active");
+    let state = crate::state::global_state().await;
+    let rows = limits::projects(&state.db, org_id, viewer_id, scope).await?;
+
+    let project_ids = rows.iter().map(|row| row.id).collect();
+    let monetary_project_ids = rows
+        .iter()
+        .filter(|row| row.has_monetary_budget())
+        .map(|row| row.id)
+        .collect();
+    let data = render_project_export(
+        permit,
+        &state.db,
+        org_id,
+        viewer_id,
+        project_ids,
+        monetary_project_ids,
+        move || projects_xlsx(&rows),
+    )
+    .await?;
+
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"projects.xlsx\"",
+            ),
+        ],
+        data,
+    ))
+}
+
+async fn render_project_export(
+    permit: bounded::ExportPermit,
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    mut project_ids: Vec<uuid::Uuid>,
+    mut monetary_project_ids: Vec<uuid::Uuid>,
+    render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
+) -> Result<axum::body::Body, StatusCode> {
+    project_ids.sort_unstable();
+    project_ids.dedup();
+    monetary_project_ids.sort_unstable();
+    monetary_project_ids.dedup();
+    let body = permit.render(render).await?;
+    limits::authorize_projects(pool, org_id, actor_id, &project_ids, &monetary_project_ids).await?;
+    Ok(body)
+}
+
+fn projects_xlsx(rows: &[ProjectExportRow]) -> Result<Vec<u8>, StatusCode> {
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let worksheet = workbook.add_worksheet();
+    for (col, h) in PROJECT_EXPORT_HEADERS.iter().enumerate() {
+        worksheet
+            .write_string(0, col as u16, *h)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+    for (row, r) in rows.iter().enumerate() {
+        let cells = [
+            r.client_name.clone(),
+            r.code.clone().unwrap_or_default(),
+            r.name.clone(),
+            r.project_type.label().to_string(),
+            r.currency.trim().to_string(),
+            budget_cell(r),
+            if r.active { "Active" } else { "Archived" }.to_string(),
+        ];
+        for (col, v) in cells.iter().enumerate() {
+            worksheet
+                .write_string((row + 1) as u32, col as u16, v)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+    }
+    bounded::workbook_bytes(&mut workbook)
+}
+
+// ── Invoice export ────────────────────────────────────────────────────────────
+
+pub async fn export_invoice_csv(
+    session: Session,
+    Path(invoice_id): Path<uuid::Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (actor_id, org_id) = require_invoice_reader(&session).await?;
+
+    let state = crate::state::global_state().await;
+    streaming::invoice(state.db.clone(), org_id, actor_id, invoice_id).await
+}
+
+pub async fn export_invoice_xlsx(
+    session: Session,
+    Path(invoice_id): Path<uuid::Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (actor_id, org_id) = require_invoice_reader(&session).await?;
+    let permit = bounded::ExportPermit::acquire()?;
+
+    let state = crate::state::global_state().await;
+    let (invoice, lines) = limits::invoice(&state.db, org_id, actor_id, invoice_id).await?;
+
+    let filename = format!("invoice-{}.xlsx", invoice.number);
+    let data = render_invoice_export(permit, &state.db, org_id, actor_id, move || {
+        invoice_xlsx(&invoice, &lines)
+    })
+    .await?;
+
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string(),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{filename}\""),
+            ),
+        ],
+        data,
+    ))
+}
+
+const INVOICE_HEADERS: [&str; 9] = [
+    "Description",
+    "Hours",
+    "Rate",
+    "Amount",
+    "Currency",
+    "Issued on",
+    "Due on",
+    "Payment terms (days)",
+    "Purchase order",
+];
+
+fn invoice_export_metadata(invoice: &crate::models::Invoice) -> [String; 5] {
+    invoice_metadata(
+        &invoice.currency,
+        invoice.issued_on,
+        invoice.due_on,
+        invoice.terms_days,
+        &invoice.po_number,
+    )
+}
+
+fn invoice_metadata(
+    currency: &str,
+    issued_on: chrono::NaiveDate,
+    due_on: chrono::NaiveDate,
+    terms_days: i32,
+    po_number: &str,
+) -> [String; 5] {
+    [
+        currency.trim().into(),
+        issued_on.to_string(),
+        due_on.to_string(),
+        terms_days.to_string(),
+        po_number.into(),
+    ]
+}
+
+fn write_invoice_amount(
+    sheet: &mut rust_xlsxwriter::Worksheet,
+    row: u32,
+    column: u16,
+    cents: i64,
+) -> Result<(), StatusCode> {
+    // Excel keeps 15 significant digits. Larger amounts must be text to retain cents.
+    let result = if cents.unsigned_abs() <= 999_999_999_999_999 {
+        sheet.write_number(row, column, cents as f64 / 100.0)
+    } else {
+        sheet.write_string(row, column, format_cents_plain(cents))
+    };
+    result
+        .map(|_| ())
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn invoice_xlsx(
+    invoice: &crate::models::Invoice,
+    lines: &[crate::models::invoice::InvoiceLine],
+) -> Result<Vec<u8>, StatusCode> {
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    for (col, h) in INVOICE_HEADERS.iter().enumerate() {
+        worksheet
+            .write_string(0, col as u16, *h)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    for (row, line) in lines.iter().enumerate() {
+        let r = (row + 1) as u32;
+        worksheet
+            .write_string(r, 0, &line.description)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if let Some(minutes) = line.minutes {
+            worksheet
+                .write_number(r, 1, minutes as f64 / 60.0)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+        if let Some(rate) = line.rate_cents {
+            write_invoice_amount(worksheet, r, 2, rate)?;
+        }
+        write_invoice_amount(worksheet, r, 3, line.amount_cents)?;
+    }
+
+    let breakdown = invoice.breakdown();
+    for (index, (label, cents)) in breakdown.iter().enumerate() {
+        let row = (lines.len() + index + 1) as u32;
+        worksheet
+            .write_string(row, 0, label)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        write_invoice_amount(worksheet, row, 3, *cents)?;
+    }
+    let metadata = invoice_export_metadata(invoice);
+    for row in 1..=(lines.len() + breakdown.len()) as u32 {
+        for (column, value) in metadata.iter().enumerate() {
+            worksheet
+                .write_string(row, column as u16 + 4, value)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+    }
+
+    bounded::workbook_bytes(&mut workbook)
+}
+
+pub async fn export_invoice_pdf(
+    session: Session,
+    Path(invoice_id): Path<uuid::Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (actor_id, org_id) = require_invoice_reader(&session).await?;
+    let permit = bounded::ExportPermit::acquire()?;
+
+    let state = crate::state::global_state().await;
+    let document = limits::pdf(&state.db, org_id, actor_id, invoice_id).await?;
+
+    let filename = format!("invoice-{}.pdf", document.invoice.number);
+    let pdf_bytes = render_invoice_export(permit, &state.db, org_id, actor_id, move || {
+        crate::render::render_invoice_pdf(
+            &document.invoice,
+            &document.lines,
+            &document.client_name,
+            document.client_address.as_deref(),
+            document.client_tax_id.as_deref(),
+            &document.branding,
+        )
+        .map_err(|e| {
+            tracing::error!("PDF rendering failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+    })
+    .await?;
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/pdf".to_string(),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{filename}\""),
+            ),
+        ],
+        pdf_bytes,
+    ))
+}
