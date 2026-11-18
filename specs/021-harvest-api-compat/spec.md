@@ -320,7 +320,8 @@ ______________________________________________________________________
   never written to logs.
 - **A token is used from two clients at once.** Both share the rate limit of that token.
 - **A token is used on another tenant's host** (multi-tenant). It is refused as unauthorized.
-- **Legacy paths.** `/api/v2/...` and a `.json` suffix answer like `/v2/...`.
+- **Legacy paths.** A `.json` suffix answers like the bare path. `/api/v2/...` answered like
+  `/v2/...` until spec 022 FR-052 removed it.
 - **Unknown query parameters** are ignored, as today.
 
 ## Requirements *(mandatory)*
@@ -399,7 +400,9 @@ ______________________________________________________________________
   MUST carry the same reason the web app shows.
 - **FR-025**: Request parameters for POST and PATCH MUST be accepted as a JSON body, a form body
   or query parameters.
-- **FR-026**: `/api/v2/...` and a `.json` suffix MUST be served the same as the canonical path.
+- **FR-026**: `/v2/...` and a `.json` suffix MUST be served the same as the canonical path.
+  (Amended by spec 022 FR-052: the `/api/v2/...` alias this requirement first listed is removed,
+  because `/api/` belongs to Horae's own API.)
 
 #### Writes
 
