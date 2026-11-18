@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                     (SELECT updated_at FROM projects WHERE id = $1) AS \"project!: chrono::DateTime<chrono::Utc>\",\n                     (SELECT edit_revision FROM projects WHERE id = $1) AS \"revision!\",\n                     (SELECT updated_at FROM clients WHERE id = $2) AS \"client!: chrono::DateTime<chrono::Utc>\",\n                     (SELECT updated_at FROM users WHERE id = $3) AS \"user!: chrono::DateTime<chrono::Utc>\",\n                     (SELECT updated_at FROM tasks WHERE id = $4) AS \"task!: chrono::DateTime<chrono::Utc>\",\n                     (SELECT updated_at FROM time_entries WHERE id = $5) AS \"entry!: chrono::DateTime<chrono::Utc>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "client!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "user!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "task!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "entry!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "5cf3aec5a3f7dea0db97dab1f34c0726b6a195675e99e925a23288daeff12cb4"
+}
