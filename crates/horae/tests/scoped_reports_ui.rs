@@ -13,15 +13,7 @@ use models::time_report::TimeReportAccess;
 use tokio::sync::oneshot;
 
 // These production modules also define types for unrelated routes.
-#[allow(dead_code)]
-#[path = "../src/models/permission_editor.rs"]
-pub mod permission_editor;
-#[allow(dead_code)]
-#[path = "../src/models/time_report.rs"]
-pub mod time_report;
-#[allow(dead_code)]
-#[path = "../src/models/user.rs"]
-pub mod user;
+pub use horae_types::{permission_editor, time_report, user};
 mod models {
     pub use super::{permission_editor, time_report, user};
     // Only the financial endpoints are stubbed; canonical wire types are production imports.

@@ -20,12 +20,9 @@ use tokio::sync::oneshot;
 
 #[path = "../src/components/admin_shell.rs"]
 mod admin_shell;
-#[path = "../src/models/own_permissions.rs"]
-pub mod own_permissions_model;
 #[path = "../src/components/session.rs"]
 pub mod session;
-#[path = "../src/models/user.rs"]
-pub mod user_model;
+pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod components {
     pub use super::session;
 }

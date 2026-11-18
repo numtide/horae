@@ -13,6 +13,9 @@ perSystem.self.default.overrideAttrs (old: {
     runHook preBuild
     export HOME=$(mktemp -d)
     cargo clippy -p horae-core --all-targets -- -D warnings -W clippy::perf
+    cargo clippy -p horae-types --all-targets -- -D warnings -W clippy::perf
+    # The browser bundle compiles horae-types too.
+    cargo clippy -p horae-types --target wasm32-unknown-unknown -- -D warnings
     cargo clippy -p horae-harvest --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae --features server --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-dioxus-lint --all-targets -- -D warnings -W clippy::perf

@@ -135,7 +135,7 @@ impl InvoicePreparation {
     }
 }
 
-pub(crate) fn adjustment_breakdown(
+pub fn adjustment_breakdown(
     amounts: &horae_core::invoice::InvoiceAmounts,
     discount_bps: i16,
     tax1_bps: i16,

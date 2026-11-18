@@ -77,6 +77,7 @@ http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, wh
 
 ```sh
 cargo test -p horae-core                        # pure domain unit tests (no DB, no features)
+cargo test -p horae-types                       # serde contracts of the UI↔server types (no DB)
 cargo kani -p horae-core                        # bounded proofs behind cfg(kani); setup in crates/core/src/permissions/proofs.rs
 DATABASE_URL=… cargo test -p horae --features server     # integration tests (need Postgres with CREATEDB)
 DATABASE_URL=… cargo test -p horae --features server <name>   # a single test
@@ -131,9 +132,11 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 ## Architecture
 
-**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `http`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`, `models`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
+**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `http`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
 
 **The `core` crate (`horae-core`) is pure domain logic** — duration parsing, rounding, money, totals, the entry state machine — with no I/O dependencies (only serde/uuid/chrono/thiserror). Correctness-critical code belongs here and is unit-tested in isolation; the Horae Constitution forbids sqlx/axum/dioxus deps in `core`.
+
+**The `types` crate (`horae-types`) holds the types that travel between the UI and the server**: server-function arguments and results, and the DTOs the pages render. It is a lib that builds for the server and for WASM, depends only on serde, serde_json, uuid, chrono and `horae-core`, and has no `server` feature or `cfg`. Rules belong in `core`; the wire shape of what they produce belongs in `types`. `crates/horae/src/main.rs` imports it as `models` (`use horae_types as models;`), so the app names these types `crate::models::…`. The UI tests in `crates/horae/tests/` reach them through `horae_types` instead of including the source with `#[path]`. Server-only types stay in `ops/`, and the server's logic over shared types goes in free functions there, because Rust forbids inherent `impl` blocks on another crate's types.
 
 **The server layers custom Axum routes on top of the Dioxus fullstack router** (`Commands::Serve` in `main.rs`): it calls `.serve_dioxus_application()`, then `.merge`s `/health`, CSV/XLSX export (`http/reports.rs`), the auth router (`auth::router()`), and the read-only Harvest-compatible API (`harvest::router()`, `/harvest/v2/*`), all under a Postgres-backed session layer. So there are **two API surfaces**:
 
@@ -187,7 +190,7 @@ Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come
 
 - **Named status codes, not integer literals.** When building `ServerFnError::ServerError { code, .. }` in `server_fns.rs`, use named constants (e.g. `NOT_FOUND`, `FORBIDDEN`) rather than bare `404`/`403`, so error paths read at a glance.
 - **Avoid `Option<bool>` parameters.** `Some(false)` is ambiguous at the call site. For a two-state flag on a server function, prefer a plainly named `bool` with an obvious default, or a small purpose-named enum.
-- **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `models`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `plugin/mod.rs` predates this rule; convert it opportunistically, not in an unrelated PR.
+- **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `plugin/mod.rs` predates this rule; convert it opportunistically, not in an unrelated PR.
 
 ### Harvest parity
 

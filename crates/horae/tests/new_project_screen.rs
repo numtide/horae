@@ -34,20 +34,11 @@ mod components {
         avatar, controls, date_picker, debounce, form, icons, modal, select_field, today,
     };
 }
-#[path = "../src/models/people.rs"]
-pub mod people;
-#[path = "../src/models/permission_editor.rs"]
-pub mod permission_editor;
-#[path = "../src/models/project_creation.rs"]
-pub mod project_creation;
-#[path = "../src/models/project_managers.rs"]
-pub mod project_managers;
-#[path = "../src/models/project_people.rs"]
-pub mod project_people;
+pub use horae_types::{
+    people, permission_editor, project_creation, project_managers, project_people,
+};
 mod models {
-    pub use super::{
-        people, permission_editor, project_creation, project_managers, project_people,
-    };
+    pub use super::{people, project_creation, project_managers, project_people};
 }
 #[path = "../src/pages/new_project.rs"]
 mod new_project;

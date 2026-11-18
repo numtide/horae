@@ -16,10 +16,7 @@ pub mod modal;
 mod components {
     pub use super::{controls, form, modal};
 }
-#[path = "../src/models/permission_editor.rs"]
-pub mod permission_editor;
-#[path = "../src/models/task.rs"]
-pub mod task;
+pub use horae_types::{permission_editor, task};
 mod models {
     pub use super::{permission_editor, task};
     pub use task::Task;

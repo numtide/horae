@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::models::permission_editor::PermissionRequester;
+use crate::permission_editor::PermissionRequester;
 
 /// Activity filters never grant archive/restore or assignment authority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

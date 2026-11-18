@@ -246,8 +246,8 @@ pub struct EditableProject {
 /// Display metadata only; writes must reauthorize using current server state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectEditorAccess {
-    pub requester: crate::models::permission_editor::PermissionRequester,
-    pub managers: crate::models::project_managers::ProjectManagers,
+    pub requester: crate::permission_editor::PermissionRequester,
+    pub managers: crate::project_managers::ProjectManagers,
     pub billable: ProjectFieldAccess,
     pub costs: ProjectFieldAccess,
     pub private_notes: ProjectFieldAccess,
@@ -270,7 +270,7 @@ pub struct ProjectEditRequest {
     pub expected_revision: i64,
     /// Identity captured when opening the editor, never a source of authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
+    pub expected_requester: Option<crate::permission_editor::PermissionRequester>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub managers: Option<ProjectManagerSelection>,
     pub form: ProjectForm,
@@ -298,8 +298,8 @@ pub struct ProjectManagerSelection {
     pub manager_ids: Vec<Uuid>,
 }
 
-impl From<&crate::models::project_managers::ProjectManagers> for ProjectManagerSelection {
-    fn from(snapshot: &crate::models::project_managers::ProjectManagers) -> Self {
+impl From<&crate::project_managers::ProjectManagers> for ProjectManagerSelection {
+    fn from(snapshot: &crate::project_managers::ProjectManagers) -> Self {
         Self {
             expected_access_revision: snapshot.access_revision,
             manager_ids: snapshot.managers.iter().map(|manager| manager.id).collect(),
@@ -411,7 +411,7 @@ pub struct CreationSearch {
 #[serde(deny_unknown_fields)]
 pub struct ProjectEditorContext {
     pub project_id: Uuid,
-    pub requester: crate::models::permission_editor::PermissionRequester,
+    pub requester: crate::permission_editor::PermissionRequester,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
