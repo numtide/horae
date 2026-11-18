@@ -211,7 +211,8 @@ pub fn TimerWidget() -> Element {
         stop_notice.set(None);
         spawn(async move {
             match server_fns::start_timer(proj, task, note).await {
-                Ok(_) => {
+                Ok((_, notice)) => {
+                    stop_notice.set(notice);
                     picking.set(false);
                     notes.set(String::new());
                     selected_project.set(String::new());

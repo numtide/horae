@@ -9,6 +9,7 @@ use sqlx::{Postgres, Transaction};
 
 mod daily_limit;
 mod guards;
+mod restart;
 mod revocation;
 mod timezone;
 

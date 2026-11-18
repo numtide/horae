@@ -64,29 +64,56 @@ async fn ensure_daily_limit(
     Ok(())
 }
 
-/// The minutes a stopping timer keeps: what is left of its day, so a stop never
-/// fails and the timer is never trapped running. The notice says what was cut.
-async fn clamp_stopped_minutes(
+/// What a stopping timer records.
+struct Stopped {
+    minutes: i32,
+    start_minute: Option<i32>,
+    notice: Option<String>,
+}
+
+/// Stops a timer that started at `started_at` on an entry holding `minutes`
+/// and `start_minute`. The elapsed time is added to the minutes, so a restarted
+/// entry keeps what it had, and clamped to what is left of the day, so a stop
+/// never fails and the timer is never trapped running; the notice says what
+/// was cut. A fresh timer starts at the clock time it started (D9, in UTC like
+/// `spent_date`); a restarted one keeps its start. An entry that would cross
+/// midnight stays untimed.
+async fn stop_running(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     user_id: Uuid,
     spent_date: NaiveDate,
-    current_minutes: i32,
-    elapsed: u32,
-) -> Result<(i32, Option<String>), OpError> {
-    use horae_core::duration::{clamp_to_daily_allowance, format_hhmm};
+    minutes: i32,
+    start_minute: Option<i32>,
+    started_at: chrono::DateTime<Utc>,
+) -> Result<Stopped, OpError> {
+    use horae_core::duration::{clamp_to_daily_allowance, format_hhmm, minutes_between};
+    use horae_core::time_of_day::{DAY_MINUTES, SNAP_STEP, snap};
+    // Floored to the minute, with no artificial minimum, so totals stay exact.
+    let elapsed = minutes_between(started_at, Utc::now());
     let [(_, total)] = day_totals(tx, user_id, &[spent_date]).await?[..] else {
         return Err(OpError::Internal("Day total unavailable".into()));
     };
-    let kept = clamp_to_daily_allowance(elapsed, total - i64::from(current_minutes));
+    let kept = clamp_to_daily_allowance(elapsed, total);
+    // The day, this entry included, stays within MAX_DAILY_MINUTES, so it fits.
+    let stopped = minutes + kept as i32;
     let notice = (kept < elapsed).then(|| {
         format!(
             "Daily hours cannot exceed 240. The timer was stopped at {}; {} over the limit was not recorded.",
-            format_hhmm(kept.into()),
+            format_hhmm(stopped.into()),
             format_hhmm((elapsed - kept).into()),
         )
     });
-    // At most MAX_DAILY_MINUTES, so it fits.
-    Ok((kept as i32, notice))
+    let start = if minutes == 0 {
+        let clock = started_at.hour() as i32 * 60 + started_at.minute() as i32;
+        Some(snap(clock, SNAP_STEP).min(i32::from(DAY_MINUTES) - 1))
+    } else {
+        start_minute
+    };
+    Ok(Stopped {
+        minutes: stopped,
+        start_minute: start.filter(|start| start + stopped <= i32::from(DAY_MINUTES)),
+        notice,
+    })
 }
 
 /// Preserve archived history while enforcing current task grants. Lock both
@@ -181,26 +208,52 @@ pub async fn contexts(tx: &mut Tx, actor: &Actor) -> Result<Vec<TimeEntryContext
     .await?)
 }
 
-/// Starts a timer on the actor's today, in their own zone. Only one timer may
-/// run at a time per person, enforced by the `one_running_timer_per_user`
-/// partial unique index; a second start is reported as a conflict.
+/// A started timer, and the one it stopped with its daily-limit notice.
+#[derive(Debug)]
+pub struct Started {
+    pub entry: TimeEntry,
+    pub stopped: Option<(TimeEntry, Option<String>)>,
+}
+
+/// Starts a timer on the actor's today, in their own zone, stopping the
+/// actor's running timer first as [`stop_timer`] does (021 D-6). Only one timer
+/// may run at a time per person, enforced by the `one_running_timer_per_user`
+/// partial unique index; a start that loses a race is reported as a conflict.
 ///
 /// Eligibility and effective billability are resolved in the insert's snapshot,
-/// not in a pre-check separated from the write. The uniqueness index arbitrates
-/// competing starts without a racy existence check.
+/// not in a pre-check separated from the write.
 pub async fn start_timer(
     tx: &mut Tx,
     actor: &Actor,
     project_id: Uuid,
     task_id: Uuid,
     notes: Option<&str>,
-) -> Result<Done<TimeEntry>, OpError> {
+) -> Result<Done<Started>, OpError> {
     begin_own_time_write(tx, actor).await?;
     // As on the Timesheet: own time needs the own or the everyone time-write grant.
     if !(actor.has(Permission::TimeWriteOwn) || actor.has(Permission::TimeWriteAll)) {
         return Err(OpError::forbidden(TIME_WRITE_REQUIRED));
     }
     let user_id = actor.id();
+    let running = sqlx::query_scalar!(
+        "SELECT id FROM time_entries WHERE user_id = $1 AND is_running",
+        user_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+    let mut events = Vec::new();
+    let stopped = match running {
+        Some(running) => match stop_timer(tx, actor, running).await {
+            Ok(done) => {
+                events = done.events;
+                Some(done.value)
+            }
+            // Another write stopped it first; the insert below still guards.
+            Err(OpError::NotFound(_)) => None,
+            Err(error) => return Err(error),
+        },
+        None => None,
+    };
     let spent_date = crate::timezone::today_for_person(&mut **tx, user_id).await?;
     lock_task_access(tx, user_id, project_id, task_id).await?;
     let day = day_totals(tx, user_id, &[spent_date]).await?;
@@ -225,8 +278,11 @@ pub async fn start_timer(
     ).fetch_optional(&mut **tx).await?
     .ok_or_else(|| OpError::conflict("Project/task is unavailable or not assigned, or a timer is already running."))?;
     ensure_daily_limit(tx, user_id, &day).await?;
-    let event = Change::Created.event(&entry);
-    Ok(Done::new(entry).with(event))
+    events.push(Change::Created.event(&entry));
+    Ok(Done {
+        value: Started { entry, stopped },
+        events,
+    })
 }
 
 /// Stops the actor's running timer and records the elapsed minutes, clamped to
@@ -242,15 +298,13 @@ pub async fn stop_timer(
     begin_own_time_write(tx, actor).await?;
     let user_id = actor.id();
 
-    // Read the running entry's start time, then compute the exact elapsed
-    // minutes in `horae-core` (floored to the minute, no artificial 1-minute
-    // minimum) so tracked totals stay exact (FR-003/FR-023). The row is locked
-    // before the day, as on every other write path, so racing stops queue
-    // instead of deadlocking and the clamp reads current minutes.
+    // The row is locked before the day, as on every other write path, so
+    // racing stops queue instead of deadlocking and the clamp reads current
+    // minutes.
     let row = sqlx::query!(
         r#"SELECT started_at as "started_at: chrono::DateTime<chrono::Utc>",
                   state as "state: EntryState",
-                  spent_date as "spent_date: chrono::NaiveDate", minutes
+                  spent_date as "spent_date: chrono::NaiveDate", minutes, start_minute
                FROM time_entries
                WHERE id = $1 AND user_id = $2 AND is_running = true FOR UPDATE"#,
         entry_id,
@@ -274,19 +328,19 @@ pub async fn stop_timer(
         .started_at
         .ok_or_else(|| OpError::not_found(NO_RUNNING_TIMER))?;
 
-    let elapsed = horae_core::duration::minutes_between(started_at, chrono::Utc::now());
-    let (minutes, notice) =
-        clamp_stopped_minutes(tx, user_id, row.spent_date, row.minutes, elapsed).await?;
-
-    // Record the clock time the timer started as the entry's start time (D9), so
-    // it lands on the calendar at the right hour. `started_at` is UTC, matching
-    // how `spent_date` is derived. A timer that ran across midnight would exceed
-    // the day, so it stays untimed in that case.
-    let raw_start = started_at.hour() as i32 * 60 + started_at.minute() as i32;
-    let snapped = horae_core::time_of_day::snap(raw_start, horae_core::time_of_day::SNAP_STEP)
-        .min(i32::from(horae_core::time_of_day::DAY_MINUTES) - 1);
-    let start_minute =
-        (snapped + minutes <= i32::from(horae_core::time_of_day::DAY_MINUTES)).then_some(snapped);
+    let Stopped {
+        minutes,
+        start_minute,
+        notice,
+    } = stop_running(
+        tx,
+        user_id,
+        row.spent_date,
+        row.minutes,
+        row.start_minute,
+        started_at,
+    )
+    .await?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
@@ -561,9 +615,10 @@ pub async fn apply(
     let authority = authorize(tx, actor, context).await?;
     let org = authority.org;
     crate::db::lock_time_entry_write(tx, authority.subject).await?;
-    let ids = match &command {
+    let mut ids = match &command {
         TimesheetCommand::Update { entry_id, .. }
         | TimesheetCommand::StopTimer { entry_id }
+        | TimesheetCommand::RestartTimer { entry_id }
         | TimesheetCommand::Reschedule { entry_id, .. } => vec![*entry_id],
         TimesheetCommand::Delete { entry_ids } | TimesheetCommand::Reorder { entry_ids, .. } => {
             entry_ids.clone()
@@ -572,6 +627,22 @@ pub async fn apply(
     };
     if ids.iter().collect::<BTreeSet<_>>().len() != ids.len() {
         return Err(OpError::invalid("entry_ids", "Duplicate entry identifiers"));
+    }
+    // Starting or restarting stops the subject's running timer first (021 D-6),
+    // so that entry is locked and checked with the others.
+    let starts = matches!(
+        command,
+        TimesheetCommand::StartTimer { .. } | TimesheetCommand::RestartTimer { .. }
+    );
+    if starts {
+        let running = sqlx::query_scalar!(
+            "SELECT id FROM time_entries WHERE org_id=$1 AND user_id=$2 AND is_running",
+            org,
+            authority.subject
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+        ids.extend(running.filter(|running| !ids.contains(running)));
     }
     // Approval writers acquire coverage before entries. Keep that order, and
     // recheck source dates after locking rows to detect a concurrent move.
@@ -626,11 +697,27 @@ pub async fn apply(
             "Approval or billing coverage requires the approval editing integration",
         ));
     }
+    if let TimesheetCommand::RestartTimer { entry_id } = &command {
+        let entry = before
+            .iter()
+            .find(|entry| entry.id == *entry_id)
+            .ok_or_else(|| OpError::conflict("Entry set changed"))?;
+        horae_core::time_entry_timer::check_restart(
+            entry.is_running,
+            entry.state,
+            entry.spent_date,
+            today,
+        )
+        .map_err(|refusal| OpError::conflict(refusal.to_string()))?;
+    }
     for entry in &before {
         if !authority.permits(entry.project_id) {
             return Err(OpError::forbidden(TIME_WRITE_REQUIRED));
         }
-        if !(matches!(command, TimesheetCommand::StopTimer { .. }) && authority.owner) {
+        // An owner may always stop their own timer, even after losing access.
+        let stopping =
+            matches!(command, TimesheetCommand::StopTimer { .. }) || (starts && entry.is_running);
+        if !(stopping && authority.owner) {
             eligible(tx, &authority, entry.project_id, entry.task_id).await?;
         }
     }
@@ -638,6 +725,14 @@ pub async fn apply(
     let mut projects = BTreeSet::new();
     let mut notice = None;
     let day = day_totals(tx, authority.subject, &dates).await?;
+    if starts {
+        for row in before.iter_mut().filter(|row| row.is_running) {
+            notice = stop(tx, authority.subject, row).await?;
+            save(tx, row).await?;
+            projects.insert(row.project_id);
+            events.push(Change::Stopped.event(row));
+        }
+    }
     match command {
         TimesheetCommand::Create { entry } => {
             let created = create(tx, &authority, entry, false).await?;
@@ -733,28 +828,16 @@ pub async fn apply(
                         if !row.is_running {
                             return Err(OpError::conflict("The timer is no longer running"));
                         }
-                        let started = row
-                            .started_at
-                            .ok_or_else(|| OpError::conflict("Timer start is unavailable"))?;
-                        let elapsed = horae_core::duration::minutes_between(started, Utc::now());
-                        (row.minutes, notice) = clamp_stopped_minutes(
-                            tx,
-                            authority.subject,
-                            row.spent_date,
-                            original.minutes,
-                            elapsed,
-                        )
-                        .await?;
-                        let start = horae_core::time_of_day::snap(
-                            started.hour() as i32 * 60 + started.minute() as i32,
-                            horae_core::time_of_day::SNAP_STEP,
-                        )
-                        .min(1439);
-                        row.start_minute =
-                            (i64::from(start) + i64::from(row.minutes) <= 1440).then_some(start);
-                        row.started_at = None;
-                        row.is_running = false;
+                        notice = stop(tx, authority.subject, row).await?;
                         change = Change::Stopped;
+                    }
+                    TimesheetCommand::RestartTimer { entry_id } => {
+                        // The running timer stopped above is not the target.
+                        if row.id != *entry_id {
+                            continue;
+                        }
+                        row.is_running = true;
+                        row.started_at = Some(Utc::now());
                     }
                     _ => unreachable!("creation and deletion handled above"),
                 }
@@ -798,6 +881,28 @@ async fn create(
         tracing::error!(%id, "Created Timesheet entry unavailable");
         OpError::Internal(TIMESHEET_UNAVAILABLE.into())
     })
+}
+
+/// Stops a locked, running row in memory; the caller saves it. Returns the
+/// daily-limit notice, if the limit cut the elapsed time.
+async fn stop(tx: &mut Tx, subject: Uuid, row: &mut TimeEntry) -> Result<Option<String>, OpError> {
+    let started = row
+        .started_at
+        .ok_or_else(|| OpError::conflict("Timer start is unavailable"))?;
+    let stopped = stop_running(
+        tx,
+        subject,
+        row.spent_date,
+        row.minutes,
+        row.start_minute,
+        started,
+    )
+    .await?;
+    row.minutes = stopped.minutes;
+    row.start_minute = stopped.start_minute;
+    row.started_at = None;
+    row.is_running = false;
+    Ok(stopped.notice)
 }
 
 async fn save(tx: &mut Tx, entry: &mut TimeEntry) -> Result<(), OpError> {

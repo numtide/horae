@@ -338,7 +338,8 @@ async fn delegated_stop_requires_restored_tracking_but_owner_keeps_terminal_reco
             .fetch_one(&pool)
             .await
             .unwrap(),
-        15
+        // The entry held 60 minutes; each of its two 15-minute runs adds to them.
+        90
     );
 }
 

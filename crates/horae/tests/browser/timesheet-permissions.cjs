@@ -307,14 +307,21 @@ function assignPerson() {
     await visit('day');
     console.log('PASS: revocation between click and commit rejects the write and preserves the draft/data');
 
+    // The person's earlier timer still runs: Start stops it before the entry runs again.
+    const earlierTimer = id(19);
+    sql(`INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,notes,billable,is_running,started_at)
+      VALUES ('${earlierTimer}','${org}','${person}','${project}','${task}','${day}',0,'Earlier timer',true,true,now() - interval '5 minutes')`);
     const shellTimer = page.waitForResponse(r => r.url().includes('/api/get_current_timer') && r.status() === 200);
-    await mutation('start_timer', () => row.getByRole('button', { name: 'Start', exact: true }).click());
+    // Start on an open entry of today runs that entry again, keeping its time.
+    await mutation('restart_timer', () => row.getByRole('button', { name: 'Start', exact: true }).click());
+    assert.equal(requests.at(-1).command.entry_id, entry);
     assert.equal((await (await shellTimer).json()).id, ownTimer);
     const timerId = sql(`SELECT id FROM time_entries WHERE user_id='${person}' AND is_running`);
-    assert.match(timerId, /^[0-9a-f-]{36}$/);
-    // Timer commands use the server's current date, not the sheet's selected date.
+    assert.equal(timerId, entry);
+    assert.equal(fixtureMinutes(), 120);
+    assert.equal(sql(`SELECT is_running || '/' || minutes FROM time_entries WHERE id='${earlierTimer}'`), 'false/5');
     const timerDay = sql(`SELECT spent_date FROM time_entries WHERE id='${timerId}'`);
-    assert.match(timerDay, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(timerDay, day);
     assert.equal(sql(`SELECT is_running FROM time_entries WHERE id='${ownTimer}'`), 't');
     await expect(page.locator('.sidebar-timer-wrap').getByRole('button', { name: 'Stop timer', exact: true })).toBeVisible();
     sql(`DELETE FROM assignments WHERE id='${id(13)}'`);
@@ -364,6 +371,8 @@ function assignPerson() {
     await owner.close();
     console.log('PASS: only the owner can use terminal recovery after losing project assignment');
 
+    // The entry ran twice above, so its minutes may have grown by the time it ran.
+    const minutesBeforeRevocation = fixtureMinutes();
     sql(`BEGIN; UPDATE organizations SET access_revision=access_revision+1 WHERE id='${org}';
       DELETE FROM project_management_assignments WHERE id='${managerEdge}'; COMMIT;`);
     await page.goto(`${base}/timesheet/day/${day}?span=week&user=${person}`);
@@ -371,7 +380,7 @@ function assignPerson() {
     await settled();
     await expect(page.locator('.ts-day-entry')).toHaveCount(0);
     await expect(page.locator('#app-main')).not.toContainText('Delegated seed');
-    assert.equal(fixtureMinutes(), 120);
+    assert.equal(fixtureMinutes(), minutesBeforeRevocation);
     assert.deepEqual(errors, []);
     console.log('PASS: relationship revocation removes the selected sheet without falling back to own data');
   } catch (error) {
