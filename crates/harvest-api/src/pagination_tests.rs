@@ -55,7 +55,7 @@ pub(super) async fn page(app: &Router, uri: &str) -> Value {
 }
 
 fn query_pairs(link: &str) -> Vec<(String, String)> {
-    openidconnect::url::form_urlencoded::parse(link.split_once('?').unwrap().1.as_bytes())
+    form_urlencoded::parse(link.split_once('?').unwrap().1.as_bytes())
         .into_owned()
         .filter(|(key, _)| key != "page" && key != "per_page")
         .collect()

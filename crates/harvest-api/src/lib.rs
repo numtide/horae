@@ -15,11 +15,14 @@ mod user_access;
 mod api_tests;
 #[cfg(test)]
 mod pagination_tests;
+#[cfg(test)]
+mod switch_tests;
 
 use axum::{
     Json, Router,
     extract::{OriginalUri, Path, Query, State},
-    routing::{MethodRouter, get},
+    http::StatusCode,
+    routing::{MethodRouter, any, get},
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use horae_core::permissions::catalog::Permission;
@@ -32,12 +35,27 @@ use errors::ApiError;
 use horae_harvest::v2::compat::*;
 use ids::Kind;
 
-use crate::ops::{self, Actor, Caller, OpError};
-
+// The backend lives in `horae-server`; keep the `crate::ops` (…) paths.
 #[cfg(test)]
-use axum::http::StatusCode;
+use horae_server::testing;
+use horae_server::{db, importers, ops};
 
-pub fn router(db: PgPool) -> Router {
+use crate::ops::{Actor, Caller, OpError};
+
+/// The Harvest-compatible API when `enabled` (`HORAE_HARVEST_API`), otherwise
+/// an empty 404 for its paths, so they do not fall through to the web app's
+/// HTML shell.
+pub fn mount(enabled: bool, db: PgPool) -> Router {
+    if enabled {
+        return router(db);
+    }
+    let off = any(|| async { StatusCode::NOT_FOUND });
+    Router::new()
+        .route("/harvest/v2/{*rest}", off.clone())
+        .route("/v2/{*rest}", off)
+}
+
+fn router(db: PgPool) -> Router {
     let routes: [(&str, MethodRouter<PgPool>); 10] = [
         ("/users/me", get(users_me)),
         ("/time_entries", get(list_time_entries)),
@@ -228,7 +246,7 @@ async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<Harvest
 // ── Time Entries ────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
-pub struct TimeEntryFilters {
+pub(crate) struct TimeEntryFilters {
     pub user_id: Option<String>,
     pub project_id: Option<String>,
     pub from: Option<NaiveDate>,
@@ -637,7 +655,7 @@ async fn scoped_time_entry(
 // ── Projects ────────────────────────────────────────────────────────────────
 
 #[derive(Default, Deserialize)]
-pub struct ProjectFilters {
+pub(crate) struct ProjectFilters {
     pub is_active: Option<bool>,
     pub client_id: Option<String>,
     pub page: Option<i64>,
@@ -740,7 +758,7 @@ async fn get_project(
 // ── Clients ─────────────────────────────────────────────────────────────────
 
 #[derive(Default, Deserialize)]
-pub struct ClientFilters {
+pub(crate) struct ClientFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
@@ -810,7 +828,7 @@ async fn get_client(
 // ── Tasks ───────────────────────────────────────────────────────────────────
 
 #[derive(Default, Deserialize)]
-pub struct TaskFilters {
+pub(crate) struct TaskFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
@@ -879,7 +897,7 @@ async fn get_task(
 // ── Users ───────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
-pub struct UserFilters {
+pub(crate) struct UserFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
