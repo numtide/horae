@@ -1,0 +1,378 @@
+# Draft of the /api/v1 OpenAPI document (research R-1). Written by hand before the code exists to
+# fix names and shapes; PR F replaces it with the document utoipa generates
+# (crates/api/openapi/v1.json). The readable contract is api-v1.md.
+openapi: 3.1.0
+info:
+  title: Horae API
+  version: "1"
+  description: >-
+    Horae's public API. Within v1 only backward-compatible changes are made: clients must ignore unknown response fields and unknown error codes.
+servers:
+  - url: /api/v1
+security:
+  - token: []
+paths:
+  /openapi.json:
+    get:
+      operationId: getOpenApi
+      security: []
+      responses:
+        "200": {description: This document, content: {application/json: {}}}
+  /me:
+    get:
+      operationId: getMe
+      responses:
+        "200": {description: The token's owner, content: {application/json: {schema: {$ref: "#/components/schemas/Me"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /me/trackable:
+    get:
+      operationId: listTrackable
+      parameters:
+        - {name: person_id, in: query, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: Pairs the person may track, content: {application/json: {schema: {$ref: "#/components/schemas/TrackablePage"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /me/timer:
+    get:
+      operationId: getRunningTimer
+      responses:
+        "200": {description: The running timer, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntry"}}}}
+        "204": {description: No timer is running}
+        default: {$ref: "#/components/responses/Problem"}
+  /time_entries:
+    get:
+      operationId: listTimeEntries
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/updated_since"
+        - {name: person_id, in: query, schema: {type: string, format: uuid}}
+        - {name: project_id, in: query, schema: {type: string, format: uuid}}
+        - {name: task_id, in: query, schema: {type: string, format: uuid}}
+        - {name: client_id, in: query, schema: {type: string, format: uuid}}
+        - {name: from, in: query, schema: {type: string, format: date}}
+        - {name: to, in: query, schema: {type: string, format: date}}
+        - {name: is_running, in: query, schema: {type: boolean}}
+      responses:
+        "200": {description: A page of time entries, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntryPage"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+    post:
+      operationId: createTimeEntry
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/NewTimeEntry"}}}
+      responses:
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntry"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /time_entries/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      operationId: getTimeEntry
+      responses:
+        "200": {description: The entry, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntry"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+    patch:
+      operationId: updateTimeEntry
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntryPatch"}}}
+      responses:
+        "200": {description: Updated, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntry"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+    delete:
+      operationId: deleteTimeEntry
+      responses:
+        "204": {description: Deleted}
+        default: {$ref: "#/components/responses/Problem"}
+  /time_entries/{id}/stop:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    post:
+      operationId: stopTimer
+      responses:
+        "200": {description: Stopped, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntry"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /time_entries/{id}/restart:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    post:
+      operationId: restartTimer
+      responses:
+        "200": {description: Running again, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntry"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /timers:
+    post:
+      operationId: startTimer
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/NewTimer"}}}
+      responses:
+        "201": {description: Started, content: {application/json: {schema: {$ref: "#/components/schemas/TimeEntry"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /projects:
+    get:
+      operationId: listProjects
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/updated_since"
+        - $ref: "#/components/parameters/active"
+        - {name: client_id, in: query, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: A page of projects, content: {application/json: {schema: {$ref: "#/components/schemas/ProjectPage"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /projects/{id}:
+    parameters: [{$ref: "#/components/parameters/id"}]
+    get:
+      operationId: getProject
+      responses:
+        "200": {description: The project, content: {application/json: {schema: {$ref: "#/components/schemas/Project"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /tasks:
+    get:
+      operationId: listTasks
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/updated_since"
+        - $ref: "#/components/parameters/active"
+        - {name: project_id, in: query, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: A page of tasks, content: {application/json: {schema: {$ref: "#/components/schemas/TaskPage"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /tasks/{id}:
+    parameters: [{$ref: "#/components/parameters/id"}]
+    get:
+      operationId: getTask
+      responses:
+        "200": {description: The task, content: {application/json: {schema: {$ref: "#/components/schemas/Task"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /clients:
+    get:
+      operationId: listClients
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/updated_since"
+        - $ref: "#/components/parameters/active"
+      responses:
+        "200": {description: A page of clients, content: {application/json: {schema: {$ref: "#/components/schemas/ClientPage"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /clients/{id}:
+    parameters: [{$ref: "#/components/parameters/id"}]
+    get:
+      operationId: getClient
+      responses:
+        "200": {description: The client, content: {application/json: {schema: {$ref: "#/components/schemas/Client"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /people:
+    get:
+      operationId: listPeople
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/updated_since"
+        - $ref: "#/components/parameters/active"
+      responses:
+        "200": {description: A page of people, content: {application/json: {schema: {$ref: "#/components/schemas/PersonPage"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+  /people/{id}:
+    parameters: [{$ref: "#/components/parameters/id"}]
+    get:
+      operationId: getPerson
+      responses:
+        "200": {description: The person, content: {application/json: {schema: {$ref: "#/components/schemas/Person"}}}}
+        default: {$ref: "#/components/responses/Problem"}
+components:
+  securitySchemes:
+    token:
+      type: http
+      scheme: bearer
+      description: A personal access token (horae_pat_…) created in personal settings.
+  parameters:
+    id: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 1000, default: 100}}
+    cursor: {name: cursor, in: query, schema: {type: string}}
+    updated_since: {name: updated_since, in: query, schema: {type: string, format: date-time}}
+    active: {name: active, in: query, schema: {type: boolean, default: true}}
+  responses:
+    Problem:
+      description: An error
+      headers:
+        Retry-After: {description: Seconds to wait (429 only), schema: {type: integer}}
+      content: {application/problem+json: {schema: {$ref: "#/components/schemas/Problem"}}}
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code: {type: string}
+        field: {}
+    Money:
+      type: object
+      required: [amount_minor, currency]
+      properties:
+        amount_minor: {type: integer, format: int64}
+        currency: {type: string, pattern: "^[A-Z]{3}$"}
+    Me:
+      type: object
+      required: [person, organization, administrator, profile, token]
+      properties:
+        person:
+          type: object
+          required: [id, name, email]
+          properties: {id: {type: string, format: uuid}, name: {type: string}, email: {type: string}}
+        organization:
+          type: object
+          required: [id, name]
+          properties: {id: {type: string, format: uuid}, name: {type: string}}
+        administrator: {type: boolean}
+        profile: {type: string}
+        token:
+          type: object
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+            expires_at: {type: [string, "null"], format: date-time}
+    Trackable:
+      type: object
+      required: [project_id, project_name, task_id, task_name, billable]
+      properties:
+        project_id: {type: string, format: uuid}
+        project_name: {type: string}
+        task_id: {type: string, format: uuid}
+        task_name: {type: string}
+        billable: {type: boolean}
+    TimeEntry:
+      type: object
+      required: [id, person_id, project_id, task_id, spent_date, minutes, billable, state, is_running, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        person_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        task_id: {type: string, format: uuid}
+        spent_date: {type: string, format: date}
+        minutes: {type: integer, minimum: 0}
+        rounded_minutes: {type: [integer, "null"]}
+        notes: {type: [string, "null"]}
+        billable: {type: boolean}
+        state: {type: string, enum: [open, submitted, approved, invoiced]}
+        is_running: {type: boolean}
+        timer_started_at: {type: [string, "null"], format: date-time}
+        start_minute: {type: [integer, "null"], minimum: 0, maximum: 1439}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    NewTimeEntry:
+      type: object
+      additionalProperties: false
+      required: [project_id, task_id, spent_date, minutes]
+      properties:
+        person_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        task_id: {type: string, format: uuid}
+        spent_date: {type: string, format: date}
+        minutes: {type: integer, minimum: 0}
+        notes: {type: [string, "null"]}
+        billable: {type: boolean, default: true}
+        start_minute: {type: [integer, "null"], minimum: 0, maximum: 1439}
+    TimeEntryPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id: {type: string, format: uuid}
+        task_id: {type: string, format: uuid}
+        spent_date: {type: string, format: date}
+        minutes: {type: integer, minimum: 0}
+        notes: {type: [string, "null"]}
+        billable: {type: boolean}
+        start_minute: {type: [integer, "null"], minimum: 0, maximum: 1439}
+    NewTimer:
+      type: object
+      additionalProperties: false
+      required: [project_id, task_id]
+      properties:
+        person_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        task_id: {type: string, format: uuid}
+        notes: {type: [string, "null"]}
+    Project:
+      type: object
+      required: [id, client_id, name, currency, project_type, budget_kind, active, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        client_id: {type: string, format: uuid}
+        name: {type: string}
+        code: {type: [string, "null"]}
+        currency: {type: string}
+        project_type: {type: string}
+        budget_kind: {type: string}
+        budget_minutes: {type: integer, description: Present only for readers of budgets}
+        budget_amount: {$ref: "#/components/schemas/Money"}
+        hourly_rate: {$ref: "#/components/schemas/Money"}
+        starts_on: {type: [string, "null"], format: date}
+        ends_on: {type: [string, "null"], format: date}
+        active: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Task:
+      type: object
+      required: [id, name, billable_default, active, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        billable_default: {type: boolean}
+        active: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Client:
+      type: object
+      required: [id, name, currency, active, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        currency: {type: string}
+        address: {type: [string, "null"], description: Present only for catalogue readers}
+        tax_id: {type: [string, "null"], description: Present only for catalogue readers}
+        active: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Person:
+      type: object
+      required: [id, name, email, active, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        email: {type: string}
+        active: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    TrackablePage:
+      type: object
+      required: [data, next_cursor]
+      properties: {data: {type: array, items: {$ref: "#/components/schemas/Trackable"}}, next_cursor: {type: [string, "null"]}}
+    TimeEntryPage:
+      type: object
+      required: [data, next_cursor]
+      properties: {data: {type: array, items: {$ref: "#/components/schemas/TimeEntry"}}, next_cursor: {type: [string, "null"]}}
+    ProjectPage:
+      type: object
+      required: [data, next_cursor]
+      properties: {data: {type: array, items: {$ref: "#/components/schemas/Project"}}, next_cursor: {type: [string, "null"]}}
+    TaskPage:
+      type: object
+      required: [data, next_cursor]
+      properties: {data: {type: array, items: {$ref: "#/components/schemas/Task"}}, next_cursor: {type: [string, "null"]}}
+    ClientPage:
+      type: object
+      required: [data, next_cursor]
+      properties: {data: {type: array, items: {$ref: "#/components/schemas/Client"}}, next_cursor: {type: [string, "null"]}}
+    PersonPage:
+      type: object
+      required: [data, next_cursor]
+      properties: {data: {type: array, items: {$ref: "#/components/schemas/Person"}}, next_cursor: {type: [string, "null"]}}

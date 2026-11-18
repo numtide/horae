@@ -3,20 +3,16 @@
 // Web entry (WASM): `dioxus::launch(App)`
 
 #[cfg(feature = "server")]
-mod auth;
-#[cfg(feature = "server")]
 mod cli;
 #[cfg(feature = "server")]
 mod harvest;
-#[cfg(feature = "server")]
-mod http;
 
 // The backend lives in `horae-server`; keep the `crate::ops` (…) paths.
 #[cfg(all(test, feature = "server"))]
 pub(crate) use horae_server::testing;
 #[cfg(feature = "server")]
 pub(crate) use horae_server::{
-    config, db, importers, init, jobs, notifications, ops, plugin, render, scheduler, seed, state,
+    auth, config, db, importers, init, jobs, notifications, ops, plugin, scheduler, seed, state,
     timezone,
 };
 
@@ -285,16 +281,12 @@ fn main() -> anyhow::Result<()> {
 
                 // Session middleware (Postgres-backed, idempotent migrate).
                 let session_layer =
-                    auth::http::make_session_layer(pool.clone(), cfg.secure_cookies).await?;
+                    horae_api::make_session_layer(pool.clone(), cfg.secure_cookies).await?;
 
                 // Build the Dioxus fullstack router (returns Router<()>), then
                 // layer our own routes on top of it.
                 let router = axum::Router::<dioxus::server::FullstackState>::new()
                     .serve_dioxus_application(ServeConfig::new(), app::App)
-                    .route(
-                        "/health",
-                        get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }),
-                    )
                     // Browsers and crawlers request this path directly, whatever the page links.
                     .route(
                         "/favicon.ico",
@@ -305,52 +297,17 @@ fn main() -> anyhow::Result<()> {
                             )
                         }),
                     )
-                    .route("/api/reports/export/csv", get(http::reports::export_csv))
-                    .route("/api/reports/export/xlsx", get(http::reports::export_xlsx))
-                    .route(
-                        "/api/reports/time/grouped/csv",
-                        get(http::reports::export_time_groups_csv),
-                    )
-                    .route(
-                        "/api/reports/time/grouped/xlsx",
-                        get(http::reports::export_time_groups_xlsx),
-                    )
-                    .route(
-                        "/api/projects/export/csv",
-                        get(http::reports::export_projects_csv),
-                    )
-                    .route(
-                        "/api/projects/export/xlsx",
-                        get(http::reports::export_projects_xlsx),
-                    )
-                    .route(
-                        "/api/invoices/{id}/export/csv",
-                        get(http::reports::export_invoice_csv),
-                    )
-                    .route(
-                        "/api/invoices/{id}/export/xlsx",
-                        get(http::reports::export_invoice_xlsx),
-                    )
-                    .route(
-                        "/api/invoices/{id}/export/pdf",
-                        get(http::reports::export_invoice_pdf),
-                    )
-                    .merge(auth::http::router(
-                        cfg.dev_login,
-                        auth::http::LoginAssets {
+                    .merge(horae_api::router(horae_api::RouterOptions {
+                        dev_login: cfg.dev_login,
+                        login_assets: horae_api::LoginAssets {
                             favicon_svg: asset!("/assets/favicon.svg").to_string(),
                             apple_touch_icon: asset!("/assets/apple-touch-icon.png").to_string(),
                         },
-                    ))
-                    .merge(http::harvest_oauth::callback_router())
-                    .route(
-                        "/api/import/harvest/jobs/{job_id}/errors",
-                        get(http::import_errors::download),
-                    )
+                    }))
                     .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated.
-                    .layer(axum::middleware::from_fn(auth::http::login_redirect_guard))
+                    .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))
                     .layer(session_layer);
                 // Compression wraps everything, sessions included.
                 let router = with_compression(router);

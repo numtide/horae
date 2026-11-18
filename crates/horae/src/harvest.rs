@@ -1,6 +1,7 @@
-// Read-only Harvest API v2 subset, mounted at /harvest/v2 with the aliases /v2
-// and /api/v2. Integer ids and exact decimals; session auth for now. The
-// contract is specs/021-harvest-api-compat/contracts/harvest-api-v2.md.
+// Read-only Harvest API v2 subset, mounted at /harvest/v2 with the alias /v2.
+// `/api/` belongs to Horae's own API (spec 022 FR-052), so Harvest has no alias
+// there. Integer ids and exact decimals; session auth for now. The contract is
+// specs/021-harvest-api-compat/contracts/harvest-api-v2.md.
 
 mod auth;
 mod client_reads;
@@ -60,8 +61,7 @@ pub fn router(db: PgPool) -> Router {
     }
     Router::new()
         .nest("/harvest/v2", api.clone())
-        .nest("/v2", api.clone())
-        .nest("/api/v2", api)
+        .nest("/v2", api)
         .with_state(db)
 }
 

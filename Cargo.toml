@@ -2,6 +2,7 @@
 members = [
   "crates/horae",
   "crates/server",
+  "crates/api",
   "crates/core",
   "crates/types",
   "crates/harvest",

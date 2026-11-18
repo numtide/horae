@@ -80,9 +80,11 @@ cargo test -p horae-core                        # pure domain unit tests (no DB,
 cargo test -p horae-types                       # serde contracts of the UI↔server types (no DB)
 cargo kani -p horae-core                        # bounded proofs behind cfg(kani); setup in crates/core/src/permissions/proofs.rs
 DATABASE_URL=… cargo test -p horae-server               # backend tests: ops, jobs, importers, … (need Postgres with CREATEDB)
-DATABASE_URL=… cargo test -p horae --features server     # server functions, HTTP routes, CLI, UI and integration tests
+DATABASE_URL=… cargo test -p horae-api                  # HTTP routes: exports, import error downloads, /auth/*
+DATABASE_URL=… cargo test -p horae --features server     # server functions, Harvest API, CLI, UI and integration tests
 DATABASE_URL=… cargo test -p horae --features server <name>   # a single test
 cargo clippy -p horae-server --all-targets
+cargo clippy -p horae-api --all-targets
 cargo clippy -p horae --features server
 nix fmt                                         # treefmt: rustfmt, taplo, nixpkgs-fmt, mdformat
 cargo run -p horae-dioxus-lint                  # Dioxus rules ratchet (or: nix build .#checks.x86_64-linux.dioxus-lint)
@@ -113,7 +115,7 @@ At compile time, macros need either `DATABASE_URL` pointing to a live DB with mi
 After changing any `query!`/`query_as!`/`query_scalar!` macro or migration, regenerate the cache:
 
 ```sh
-touch crates/server/src/lib.rs crates/horae/src/main.rs crates/horae/tests/*.rs
+touch crates/server/src/lib.rs crates/api/src/lib.rs crates/horae/src/main.rs crates/horae/tests/*.rs
 cargo sqlx prepare --workspace -- --features server --all-targets   # requires live DB with migrations applied
 git add .sqlx/                                        # commit the updated cache
 ```
@@ -134,15 +136,17 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 ## Architecture
 
-**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `harvest`, `http`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
+**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`cli`, `harvest`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
 
 **The backend is the `server` crate (`horae-server`, `crates/server/`)**: `ops`, `db`, `state`, `config`, `plugin`, `jobs`, `importers`, `notifications`, `timezone`, `render`, `init`, `seed`, `scheduler`, the OIDC backend (`auth::oidc`) and the migrations (`crates/server/migrations/`). It is a lib with no Dioxus or Axum dependency. `crates/horae/src/main.rs` re-exports its modules (`pub(crate) use horae_server::{ops, db, …}`), so the app keeps naming them `crate::ops::…`; what the app uses is `pub` there. Its test fixtures (`testing`) are behind `cfg(any(test, feature = "test-support"))`, and `horae` enables `test-support` as a dev-dependency.
+
+**The HTTP surfaces are the `api` crate (`horae-api`, `crates/api/`)**: `/health`, the CSV/XLSX/PDF exports (`exports`), the import error download (`import_errors`), the Harvest OAuth callback (`harvest_oauth`), the session and the `/auth/*` routes (`auth`). It is a lib with Axum and no Dioxus; it sits between `horae-server` and `horae`. `horae_api::router(RouterOptions)` returns all its routes, and it exports `make_session_layer`, `login_redirect_guard` and `session` for the binary and the server functions. `LoginAssets` is how `horae` passes the icon URLs its `asset!` macros resolve. Like `horae`, it re-exports the `horae-server` modules it uses, so its code names them `crate::ops::…`. Its `test-support` feature exposes the workbook readers and the CSV helper that `horae`'s tests use.
 
 **The `core` crate (`horae-core`) is pure domain logic** — duration parsing, rounding, money, totals, the entry state machine — with no I/O dependencies (only serde/uuid/chrono/thiserror). Correctness-critical code belongs here and is unit-tested in isolation; the Horae Constitution forbids sqlx/axum/dioxus deps in `core`.
 
 **The `types` crate (`horae-types`) holds the types that travel between the UI and the server**: server-function arguments and results, and the DTOs the pages render. It is a lib that builds for the server and for WASM, depends only on serde, serde_json, uuid, chrono and `horae-core`, and has no `server` feature or `cfg`. Rules belong in `core`; the wire shape of what they produce belongs in `types`. `crates/horae/src/main.rs` imports it as `models` (`use horae_types as models;`), so the app names these types `crate::models::…`. The UI tests in `crates/horae/tests/` reach them through `horae_types` instead of including the source with `#[path]`. Server-only types stay in `ops/`, and the server's logic over shared types goes in free functions there, because Rust forbids inherent `impl` blocks on another crate's types.
 
-**The server layers custom Axum routes on top of the Dioxus fullstack router** (`Commands::Serve` in `main.rs`): it calls `.serve_dioxus_application()`, then `.merge`s `/health`, CSV/XLSX export (`http/reports.rs`), the auth router (`auth::http::router()`), and the read-only Harvest-compatible API (`harvest::router()`, `/harvest/v2/*`), all under a Postgres-backed session layer. So there are **two API surfaces**:
+**The server layers custom Axum routes on top of the Dioxus fullstack router** (`Commands::Serve` in `main.rs`): it calls `.serve_dioxus_application()`, then `.merge`s `horae_api::router()` (`/health`, the exports, `/auth/*`) and the read-only Harvest-compatible API (`harvest::router()`, `/harvest/v2/*`), all under a Postgres-backed session layer. So there are **two API surfaces**:
 
 - Dioxus `#[server]` functions in `server_fns.rs` — session-authenticated; the SPA uses these for all mutations.
 - Plain Axum routes — health, exports, auth, and the read-only Harvest v2 API.
