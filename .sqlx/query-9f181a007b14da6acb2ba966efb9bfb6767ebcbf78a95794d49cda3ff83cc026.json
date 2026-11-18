@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.name, c.currency,\n                  CASE WHEN $3 THEN c.address END AS address,\n                  CASE WHEN $3 THEN c.tax_id END AS tax_id,\n                  c.active, c.created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                  c.updated_at as \"updated_at: chrono::DateTime<chrono::Utc>\"\n           FROM clients c\n           WHERE c.org_id = $1\n             AND ($3 OR EXISTS (\n               SELECT 1 FROM projects p\n               WHERE p.org_id = c.org_id AND p.client_id = c.id\n                 AND ($4 OR ($5 AND EXISTS (\n                   SELECT 1 FROM project_management_assignments m\n                   WHERE m.org_id = p.org_id AND m.project_id = p.id AND m.manager_id = $2\n                 )) OR EXISTS (\n                   SELECT 1 FROM assignments a WHERE a.project_id = p.id AND a.user_id = $2\n                 ))\n             ))\n             AND ($6::uuid IS NULL OR c.id = $6) AND ($7::bool IS NULL OR c.active = $7)\n             AND ($8::timestamptz IS NULL OR c.updated_at >= $8)\n             AND c.id > $9\n           ORDER BY c.id LIMIT $10",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "tax_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9f181a007b14da6acb2ba966efb9bfb6767ebcbf78a95794d49cda3ff83cc026"
+}

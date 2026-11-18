@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id, org_id, email, name)\n         SELECT id, $2, id || '@load.test', 'Person ' || n\n         FROM unnest($1::uuid[]) WITH ORDINALITY AS u(id, n)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a00a1ec91ae647fdf5138bc32e04d448d6f73f7b2df1a1556fd07b2c578cc67"
+}
