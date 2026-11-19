@@ -57,7 +57,12 @@ pub enum Commands {
         action: UserAction,
     },
     /// Initialize an empty database with demo data; leave an existing demo unchanged
-    Seed,
+    Seed {
+        /// Also issue an API token to the demo administrator and write it to this
+        /// file (mode 0600), for test harnesses
+        #[arg(long)]
+        api_token_file: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(clap::Args, Debug, Clone, Default)]
