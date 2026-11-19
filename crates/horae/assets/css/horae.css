@@ -1830,7 +1830,9 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-bar::-webkit-progress-value { background: var(--color-primary); border-radius: var(--radius-full); }
 .proj-bar::-moz-progress-bar { background: var(--color-primary); border-radius: var(--radius-full); }
 .proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
-.proj-namelink { max-width: 26rem; overflow-wrap: anywhere; text-decoration: none; }
+/* The name keeps its width and the type badge moves below it when both do
+   not fit, so a narrow name column never breaks the name word by word. */
+.proj-namelink { flex-shrink: 0; max-width: min(26rem, 100%); overflow-wrap: anywhere; text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
 .proj-confirm-name { overflow-wrap: anywhere; }
 .proj-head {

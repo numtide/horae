@@ -1006,7 +1006,7 @@ fn ProjectListContent(
                                                 }
                                             }
                                             div { class: "min-w-0",
-                                              div { class: "flex items-center gap-3 min-w-0",
+                                              div { class: "flex flex-wrap items-center gap-3 min-w-0",
                                                 Link {
                                                     to: Route::ProjectDetail { id: p.id },
                                                     class: "font-semibold text-strong min-w-0 proj-namelink",
