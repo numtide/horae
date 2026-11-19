@@ -111,7 +111,7 @@ and timer in the web app (SC-003); quickstart §3.
 - [x] T037 [US2] Make `commands::apply` `pub(crate)` and expose a small wrapper that takes `(org, actor)` from the token extractor and builds the `TimesheetWriteContext` the same way the server function does, in `crates/horae/src/server_fns/time_entries/commands.rs`
 - [x] T038 [US2] Add `crates/horae/src/harvest/time_entry_writes.rs`: `POST /time_entries`, `PATCH /time_entries/{id}`, `DELETE /time_entries/{id}`, `PATCH /time_entries/{id}/stop`, `PATCH /time_entries/{id}/restart`, each a call to the wrapper with body parsing from JSON, form or query, refusing cookie-only callers; no validation of its own *(in `crates/harvest-api/src/time_entry_writes.rs`)*
 - [x] T039 [US2] Show restart in the web app where a stopped entry today can be resumed, in `crates/horae/src/pages/timesheet/` (the entry row's actions), with the Dioxus lint
-- [ ] T040 [US2] Add the time workflows (log, start, stop, restart, edit, delete) to `nix/checks/harvest-compat.nix` and update the result table in `contracts/harvest-api-v2.md`
+- [x] T040 [US2] Add the time workflows (log, start, stop, restart, edit, delete) to `nix/checks/harvest-compat.nix` and update the result table in `contracts/harvest-api-v2.md` *(through go-harvest's write calls)*
 
 **Checkpoint**: with US4's T041–T042, delivery step 3 is complete; open its pull request.
 
@@ -124,8 +124,8 @@ reads (step 5). Reads only; not gated.
 
 **Independent Test**: the suite's picker and report workflows pass; quickstart §3 item 4.
 
-- [ ] T041 [P] [US4] Add `GET /company` in `crates/horae/src/harvest/company.rs`: Horae's own values for name, week start, currency, time format; `wants_timestamp_timers` false; feature flags for absent domains off (D-2); test in `crates/horae/tests/harvest_api/company.rs`
-- [ ] T042 [P] [US4] Add `GET /users/me/project_assignments` and `/users/{id}/project_assignments` with nested task assignments in `crates/horae/src/harvest/assignments.rs`, respecting the caller's grants; test in `crates/horae/tests/harvest_api/assignments.rs`
+- [x] T041 [P] [US4] Add `GET /company` in `crates/horae/src/harvest/company.rs`: Horae's own values for name, week start, currency, time format; `wants_timestamp_timers` false; feature flags for absent domains off (D-2); test in `crates/horae/tests/harvest_api/company.rs` *(in `crates/harvest-api/src/company.rs`; Harvest's company has no currency field, so the currency display fields are null)*
+- [ ] T042 [P] [US4] Add `GET /users/me/project_assignments` and `/users/{id}/project_assignments` with nested task assignments in `crates/horae/src/harvest/assignments.rs`, respecting the caller's grants; test in `crates/horae/tests/harvest_api/assignments.rs` *(`/users/me/project_assignments` done in step 3, `crates/harvest-api/src/project_assignments.rs`; `/users/{id}/…` waits for step 5)*
 - [ ] T043 [P] [US4] Add `GET /users/{id}` and `/users/{id}/teammates` in `crates/horae/src/harvest/users.rs`
 - [ ] T044 [P] [US4] Add user and task assignment lists (per project and account-wide) in `crates/horae/src/harvest/assignments.rs`
 - [ ] T045 [P] [US4] Add `GET /invoices` and `/invoices/{id}` with line items in `crates/horae/src/harvest/invoices.rs`, amounts through `horae_harvest::v2::compat::Amount`

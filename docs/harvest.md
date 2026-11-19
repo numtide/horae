@@ -31,7 +31,9 @@ Endpoints under `/harvest/v2` expose a subset of the
 [Harvest API v2](https://help.getharvest.com/api-v2/) response shape:
 
 ```
+GET    /harvest/v2/company
 GET    /harvest/v2/users/me
+GET    /harvest/v2/users/me/project_assignments
 GET    /harvest/v2/time_entries[?from=&to=&user_id=&project_id=&is_running=&page=&per_page=]
 GET    /harvest/v2/time_entries/{id}
 POST   /harvest/v2/time_entries
