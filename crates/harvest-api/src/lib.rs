@@ -1,7 +1,8 @@
-// Read-only Harvest API v2 subset, mounted at /harvest/v2 with the alias /v2.
+// A Harvest API v2 subset, mounted at /harvest/v2 with the alias /v2.
 // `/api/` belongs to Horae's own API (spec 022 FR-052), so Harvest has no alias
-// there. Integer ids and exact decimals; personal access tokens or the session
-// cookie (`auth`). The contract is
+// there. Integer ids and exact decimals; personal access tokens or, for reads
+// only, the session cookie (`auth`). Time entries are also written
+// (`time_entry_writes`). The contract is
 // specs/021-harvest-api-compat/contracts/harvest-api-v2.md.
 
 mod auth;
@@ -10,6 +11,7 @@ mod errors;
 pub(crate) mod ids;
 mod project_reads;
 mod task_reads;
+mod time_entry_writes;
 mod user_access;
 
 #[cfg(test)]
@@ -25,10 +27,11 @@ use axum::{
     Json, Router,
     extract::{FromRef, OriginalUri, Path, Query, State},
     http::StatusCode,
-    routing::{MethodRouter, any, get},
+    routing::{MethodRouter, any, get, patch},
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use horae_api::rate_limit::RateLimiter;
+use horae_api::v1::V1State;
 use horae_core::permissions::catalog::Permission;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -46,32 +49,30 @@ use horae_server::{db, importers, ops};
 
 use crate::ops::{Actor, OpError};
 
-/// What the handlers share. `limiter` is `/api/v1`'s, so a token's requests
-/// to both APIs count together (spec 022 R-7).
+/// What the handlers share: `/api/v1`'s state, so a token's requests to both
+/// APIs count against one limit (spec 022 R-7), and writes reach the same
+/// plugins and budget checks.
 #[derive(Clone)]
-struct HarvestState {
-    db: PgPool,
-    limiter: Arc<RateLimiter>,
-}
+struct HarvestState(V1State);
 
 impl FromRef<HarvestState> for PgPool {
     fn from_ref(state: &HarvestState) -> Self {
-        state.db.clone()
+        state.0.pool.clone()
     }
 }
 
 impl FromRef<HarvestState> for Arc<RateLimiter> {
     fn from_ref(state: &HarvestState) -> Self {
-        state.limiter.clone()
+        state.0.limiter.clone()
     }
 }
 
 /// The Harvest-compatible API when `enabled` (`HORAE_HARVEST_API`), otherwise
 /// an empty 404 for its paths, so they do not fall through to the web app's
-/// HTML shell. `limiter` is the one `/api/v1` uses.
-pub fn mount(enabled: bool, db: PgPool, limiter: Arc<RateLimiter>) -> Router {
+/// HTML shell. `v1` is the state `/api/v1` serves with.
+pub fn mount(enabled: bool, v1: V1State) -> Router {
     if enabled {
-        return router(db, limiter);
+        return serve(v1);
     }
     let off = any(|| async { StatusCode::NOT_FOUND });
     Router::new()
@@ -79,11 +80,36 @@ pub fn mount(enabled: bool, db: PgPool, limiter: Arc<RateLimiter>) -> Router {
         .route("/v2/{*rest}", off)
 }
 
+/// A state with no plugins and no budget checks behind its writes.
+#[cfg(test)]
+fn test_state(db: PgPool, limiter: Arc<RateLimiter>) -> V1State {
+    V1State {
+        pool: db,
+        limiter,
+        cursor_key: Default::default(),
+        events: Arc::new(ops::NoEvents),
+        budgets: None,
+    }
+}
+
+#[cfg(test)]
 fn router(db: PgPool, limiter: Arc<RateLimiter>) -> Router {
-    let routes: [(&str, MethodRouter<HarvestState>); 10] = [
+    serve(test_state(db, limiter))
+}
+
+fn serve(v1: V1State) -> Router {
+    use time_entry_writes as writes;
+    let routes: [(&str, MethodRouter<HarvestState>); 12] = [
         ("/users/me", get(users_me)),
-        ("/time_entries", get(list_time_entries)),
-        ("/time_entries/{id}", get(get_time_entry)),
+        ("/time_entries", get(list_time_entries).post(writes::create)),
+        (
+            "/time_entries/{id}",
+            get(get_time_entry)
+                .patch(writes::update)
+                .delete(writes::delete),
+        ),
+        ("/time_entries/{id}/stop", patch(writes::stop)),
+        ("/time_entries/{id}/restart", patch(writes::restart)),
         ("/projects", get(list_projects)),
         ("/projects/{id}", get(get_project)),
         ("/clients", get(list_clients)),
@@ -95,8 +121,9 @@ fn router(db: PgPool, limiter: Arc<RateLimiter>) -> Router {
     let mut api = Router::new();
     for (path, handler) in routes {
         // A `.json` suffix is served like the bare path (FR-026). Ids drop it
-        // themselves (`ids::resolve`), so only the fixed paths need a twin.
-        if !path.contains('{') {
+        // themselves (`ids::resolve`), so only paths ending in a fixed segment
+        // need a twin.
+        if !path.ends_with('}') {
             api = api.route(&format!("{path}.json"), handler.clone());
         }
         api = api.route(path, handler);
@@ -104,7 +131,7 @@ fn router(db: PgPool, limiter: Arc<RateLimiter>) -> Router {
     Router::new()
         .nest("/harvest/v2", api.clone())
         .nest("/v2", api)
-        .with_state(HarvestState { db, limiter })
+        .with_state(HarvestState(v1))
 }
 
 // ── Error helper ────────────────────────────────────────────────────────────

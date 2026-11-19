@@ -80,7 +80,7 @@ impl V1State {
 
     /// After a committed time change: the web app's budget checks, never
     /// blocking the answer.
-    pub(crate) fn time_changed(&self, projects: impl IntoIterator<Item = uuid::Uuid>) {
+    pub fn time_changed(&self, projects: impl IntoIterator<Item = uuid::Uuid>) {
         if let Some(app) = self.budgets {
             for project in projects {
                 tokio::spawn(check_project_budget(app, project));

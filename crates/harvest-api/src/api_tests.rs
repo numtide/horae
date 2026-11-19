@@ -1,6 +1,7 @@
 //! Harvest API v2 compatibility through the router: integer ids, exact
 //! decimals, error bodies and path aliases (specs/021-harvest-api-compat).
 
+mod time_entry_writes;
 mod tokens;
 
 use super::pagination_tests::{api_id, limiter, page, request, signed_in};

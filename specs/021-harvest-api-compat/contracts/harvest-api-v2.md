@@ -82,7 +82,7 @@ integers only.
 | --- | --- | --- |
 | 1 | existing reads with integer ids | `users/me`, `users`, `time_entries`, `projects`, `clients`, `tasks` list and get |
 | 2 | same, with token auth | |
-| 3 | `POST /time_entries` | duration mode (`hours`) or start/end mode (`started_time`, `ended_time`) per the company's `wants_timestamp_timers`; without `hours` or times, starts a timer (D-6) |
+| 3 | `POST /time_entries` | duration mode (`hours`) or start/end mode (`started_time`, `ended_time`) whatever the company setting (FR-031); without `hours` or times, starts a timer (D-6) |
 | 3 | `PATCH /time_entries/{id}` | |
 | 3 | `DELETE /time_entries/{id}` | |
 | 3 | `PATCH /time_entries/{id}/stop`, `/restart` | restart stops any other running timer (D-6) |
@@ -98,9 +98,25 @@ messages that send email) stays out of scope (spec *Out of scope*).
 
 ## Write semantics (step 3, FR-030–FR-032)
 
-- Each write runs the same shared operation as the web app (`commands::apply` for time entries)
-  with the token's person and organization. The API holds no validation of its own.
+- Each write runs the same shared operation as the web app (`ops::time::apply` and
+  `ops::time::patch`) with the token's person and organization. The API holds no validation of
+  its own.
+- A request authenticated only by the session cookie is refused with 401 `invalid_token` before
+  anything is read or written.
 - A write that the web app would refuse is refused with the mapped status: validation 422,
-  permission 403, not found 404, conflict (daily cap, locked entry) 409 until recording says
-  otherwise.
-- Parameters are read from a JSON body, a form body or the query string (FR-025).
+  permission 403, not found 404, conflict (daily cap, locked entry, a restart of another day's
+  entry, a stop of a stopped timer) 409 until recording says otherwise. An entry the token's owner
+  may not read is 404, as in the web app.
+- Parameters are read from a JSON body, a form body or the query string (FR-025); a body value
+  wins over a query value of the same name. Ids are integers (or UUIDs, D-1); a number no record
+  has is passed on and refused by the operation.
+- Times of day: `started_time` is stored as the entry's start minute and `ended_time` gives the
+  minutes from that start (decided 2026-11-19, no migration). `ended_time` before `started_time`
+  (which is also how a span past midnight reads) is the operation's 422 `Minutes cannot be negative`. With `ended_time`, `hours` is ignored; `started_time` with `hours` keeps both;
+  `started_time` alone is 422; on `PATCH`, `ended_time` alone keeps the entry's start. The
+  Timesheet snaps a start to its 15-minute grid, so a start off the grid comes back moved.
+- A timer is filed on the person's own today, whatever `spent_date` names; `spent_date` is still
+  required, as on Harvest.
+- `POST` answers 201 with the entry; `PATCH`, `stop` and `restart` 200 with the entry; `DELETE`
+  200 with an empty body. A stop the daily limit cut short adds `horae_notice`, which clients may
+  ignore.

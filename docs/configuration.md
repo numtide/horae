@@ -29,7 +29,7 @@ collation, so case-insensitive uniqueness does not change with the database loca
 | `HORAE_API_CURSOR_KEY_FILE` | unset | Path to a secret file with the key that signs `/api/v1` list cursors (64 hex characters); see [API cursor key](deployment.md#api-cursor-key) |
 | `HORAE_API_CURSOR_KEY` | unset | The same key as a value, for development and tests; ignored when `HORAE_API_CURSOR_KEY_FILE` is set |
 | `HORAE_API_RATE_LIMIT` | `100/15` | Requests per personal access token per window, as `<requests>/<seconds>`. The Harvest-compatible API shares the limit |
-| `HORAE_HARVEST_API` | `0` | `1` serves the read-only Harvest-compatible API; see [Harvest](harvest.md#harvest-compatible-api) |
+| `HORAE_HARVEST_API` | `0` | `1` serves the Harvest-compatible API; see [Harvest](harvest.md#harvest-compatible-api) |
 
 `DEV_LOGIN`, `HORAE_SECURE_COOKIES` and `HORAE_HARVEST_API` also accept `true`.
 

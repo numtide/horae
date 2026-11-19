@@ -99,18 +99,18 @@ and timer in the web app (SC-003); quickstart §3.
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] Unit tests in `crates/core/src/time_entry_timer.rs` for restart eligibility (own, stopped, open, dated today in the org's time zone) and the start-stops-running rule
-- [ ] T032 [P] [US2] Integration tests in `crates/horae/tests/harvest_api/time_entry_writes.rs`: create by hours, create as timer, PATCH, DELETE, stop, restart; cookie-only write is 401; a member writing for someone else is 403; daily cap and locked entry are refused with the mapped status; form body and query-string parameters work (FR-025)
-- [ ] T033 [P] [US2] Integration test in `crates/horae/tests/timer_widget.rs` (existing) that starting a timer in the web app stops the running one instead of refusing (D-6)
+- [x] T031 [P] [US2] Unit tests in `crates/core/src/time_entry_timer.rs` for restart eligibility (own, stopped, open, dated today in the org's time zone) and the start-stops-running rule *(delivered with spec 022's time-entry operations)*
+- [x] T032 [P] [US2] Integration tests in `crates/horae/tests/harvest_api/time_entry_writes.rs`: create by hours, create as timer, PATCH, DELETE, stop, restart; cookie-only write is 401; a member writing for someone else is 403; daily cap and locked entry are refused with the mapped status; form body and query-string parameters work (FR-025) *(router tests in `crates/harvest-api/src/api_tests/time_entry_writes.rs`)*
+- [x] T033 [P] [US2] Integration test in `crates/horae/tests/timer_widget.rs` (existing) that starting a timer in the web app stops the running one instead of refusing (D-6) *(delivered with spec 022)*
 
 ### Implementation for User Story 2
 
 - [x] T034 [US2] 🔒 Apply the approved amendment text to `.specify/memory/constitution.md` with its Sync Impact Report (done in step 1, 5.0.0)
-- [ ] T035 [US2] Implement `crates/core/src/time_entry_timer.rs` and export it from `crates/core/src/lib.rs`
-- [ ] T036 [US2] Add `TimesheetCommand::RestartTimer { entry_id }` in `crates/horae/src/models/scoped_time.rs`, and in `crates/horae/src/server_fns/time_entries/commands.rs` handle it and make `StartTimer`/`RestartTimer` stop the running timer in the same transaction; replace the "a timer is already running" refusal in `crates/horae/src/server_fns/time_entries.rs`
-- [ ] T037 [US2] Make `commands::apply` `pub(crate)` and expose a small wrapper that takes `(org, actor)` from the token extractor and builds the `TimesheetWriteContext` the same way the server function does, in `crates/horae/src/server_fns/time_entries/commands.rs`
-- [ ] T038 [US2] Add `crates/horae/src/harvest/time_entry_writes.rs`: `POST /time_entries`, `PATCH /time_entries/{id}`, `DELETE /time_entries/{id}`, `PATCH /time_entries/{id}/stop`, `PATCH /time_entries/{id}/restart`, each a call to the wrapper with body parsing from JSON, form or query, refusing cookie-only callers; no validation of its own
-- [ ] T039 [US2] Show restart in the web app where a stopped entry today can be resumed, in `crates/horae/src/pages/timesheet/` (the entry row's actions), with the Dioxus lint
+- [x] T035 [US2] Implement `crates/core/src/time_entry_timer.rs` and export it from `crates/core/src/lib.rs`
+- [x] T036 [US2] Add `TimesheetCommand::RestartTimer { entry_id }` in `crates/horae/src/models/scoped_time.rs`, and in `crates/horae/src/server_fns/time_entries/commands.rs` handle it and make `StartTimer`/`RestartTimer` stop the running timer in the same transaction; replace the "a timer is already running" refusal in `crates/horae/src/server_fns/time_entries.rs` *(T035–T037 delivered with spec 022: `ops::time` and `TimesheetCommand::RestartTimer`)*
+- [x] T037 [US2] Make `commands::apply` `pub(crate)` and expose a small wrapper that takes `(org, actor)` from the token extractor and builds the `TimesheetWriteContext` the same way the server function does, in `crates/horae/src/server_fns/time_entries/commands.rs`
+- [x] T038 [US2] Add `crates/horae/src/harvest/time_entry_writes.rs`: `POST /time_entries`, `PATCH /time_entries/{id}`, `DELETE /time_entries/{id}`, `PATCH /time_entries/{id}/stop`, `PATCH /time_entries/{id}/restart`, each a call to the wrapper with body parsing from JSON, form or query, refusing cookie-only callers; no validation of its own *(in `crates/harvest-api/src/time_entry_writes.rs`)*
+- [x] T039 [US2] Show restart in the web app where a stopped entry today can be resumed, in `crates/horae/src/pages/timesheet/` (the entry row's actions), with the Dioxus lint
 - [ ] T040 [US2] Add the time workflows (log, start, stop, restart, edit, delete) to `nix/checks/harvest-compat.nix` and update the result table in `contracts/harvest-api-v2.md`
 
 **Checkpoint**: with US4's T041–T042, delivery step 3 is complete; open its pull request.

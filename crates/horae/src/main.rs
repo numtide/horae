@@ -316,11 +316,7 @@ fn main() -> anyhow::Result<()> {
                         v1: v1.clone(),
                     }))
                     // One limiter for both APIs, so a token's requests count together.
-                    .merge(horae_harvest_api::mount(
-                        cfg.harvest_api,
-                        pool.clone(),
-                        v1.limiter.clone(),
-                    ))
+                    .merge(horae_harvest_api::mount(cfg.harvest_api, v1.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated.
                     .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))
