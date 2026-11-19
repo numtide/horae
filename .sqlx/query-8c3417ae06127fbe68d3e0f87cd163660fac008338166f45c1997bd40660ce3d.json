@@ -1,0 +1,140 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.client_id, p.code, p.name,\n                p.project_type as \"project_type: ProjectType\", p.currency,\n                CASE WHEN $6 OR ($7 AND management.id IS NOT NULL) THEN p.rate_cents END AS rate_cents,\n                p.starts_on as \"starts_on: NaiveDate\", p.ends_on as \"ends_on: NaiveDate\",\n                p.budget_kind as \"budget_kind: BudgetKind\",\n                CASE WHEN $6 OR ($7 AND management.id IS NOT NULL)\n                  THEN p.budget_amount_cents END AS budget_amount_cents,\n                CASE WHEN p.budget_kind = 'hours' THEN p.budget_minutes END AS budget_minutes,\n                p.active, p.created_at as \"created_at: DateTime<Utc>\",\n                p.updated_at as \"updated_at: DateTime<Utc>\"\n         FROM projects p\n         JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id\n         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id\n           AND management.project_id = p.id AND management.manager_id = $2\n         LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $2\n         LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id\n         WHERE p.org_id = $1\n           AND ($4 OR ($5 AND management.id IS NOT NULL)\n             OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members'))\n           AND ($3::uuid IS NULL OR p.id = $3) AND ($8::uuid IS NULL OR p.client_id = $8)\n           AND ($9::bool IS NULL OR p.active = $9)\n           AND ($10::timestamptz IS NULL OR p.updated_at >= $10)\n           AND p.id > $11\n         ORDER BY p.id LIMIT $12",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_type: ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "starts_on: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "ends_on: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "budget_kind: BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8c3417ae06127fbe68d3e0f87cd163660fac008338166f45c1997bd40660ce3d"
+}

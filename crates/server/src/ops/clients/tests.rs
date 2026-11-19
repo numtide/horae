@@ -10,6 +10,8 @@ use crate::ops::Caller;
 use crate::ops::testing::{Recorder, provision};
 use crate::testing::{SeedIds, seed};
 
+mod api_reads;
+
 /// Which authority a fixture gives the seeded person.
 #[derive(Debug, Clone, Copy)]
 enum Who {

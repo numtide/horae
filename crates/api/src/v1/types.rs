@@ -12,6 +12,10 @@ use crate::models::own_permissions::OwnPermissions;
 use crate::models::scoped_time::TimesheetTrackingOption;
 use crate::models::time_entry::TimeEntry as StoredEntry;
 use crate::ops::api_tokens::TokenIdentity;
+use crate::ops::clients::ClientRecord;
+use crate::ops::people::PersonRecord;
+use crate::ops::projects::reads::ProjectRecord;
+use crate::ops::projects::task_catalog::TaskRecord;
 
 /// One page of a list, in `id` order. `next_cursor` is `null` on the last
 /// page.
@@ -260,6 +264,190 @@ impl From<StoredEntry> for TimeEntry {
             start_minute: entry.start_minute,
             created_at: entry.created_at,
             updated_at: entry.updated_at,
+        }
+    }
+}
+
+/// How a project bills its time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectType {
+    TimeAndMaterials,
+    FixedFee,
+    NonBillable,
+    Retainer,
+}
+
+impl From<horae_core::types::ProjectType> for ProjectType {
+    fn from(kind: horae_core::types::ProjectType) -> Self {
+        use horae_core::types::ProjectType as Stored;
+        match kind {
+            Stored::TimeAndMaterials => Self::TimeAndMaterials,
+            Stored::FixedFee => Self::FixedFee,
+            Stored::NonBillable => Self::NonBillable,
+            Stored::Retainer => Self::Retainer,
+        }
+    }
+}
+
+/// What a project's budget counts: hours, money, or nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BudgetKind {
+    Hours,
+    Amount,
+    None,
+}
+
+impl From<horae_core::types::BudgetKind> for BudgetKind {
+    fn from(kind: horae_core::types::BudgetKind) -> Self {
+        use horae_core::types::BudgetKind as Stored;
+        match kind {
+            Stored::Hours => Self::Hours,
+            Stored::Amount => Self::Amount,
+            Stored::None => Self::None,
+        }
+    }
+}
+
+/// A project the token's owner may see on the Projects page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct Project {
+    pub id: Uuid,
+    pub client_id: Uuid,
+    pub name: String,
+    pub code: Option<String>,
+    #[schema(pattern = "^[A-Z]{3}$")]
+    pub currency: String,
+    pub project_type: ProjectType,
+    pub budget_kind: BudgetKind,
+    /// An hours budget in minutes; absent for other budgets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub budget_minutes: Option<i64>,
+    /// A money budget; absent when unset or when the owner may not read
+    /// this project's rates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub budget_amount: Option<Money>,
+    /// The project's hourly rate; absent when unset or when the owner may not
+    /// read this project's rates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub hourly_rate: Option<Money>,
+    pub starts_on: Option<NaiveDate>,
+    pub ends_on: Option<NaiveDate>,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<ProjectRecord> for Project {
+    fn from(project: ProjectRecord) -> Self {
+        let money = |amount_minor| Money {
+            amount_minor,
+            currency: project.currency.clone(),
+        };
+        Self {
+            id: project.id,
+            client_id: project.client_id,
+            budget_amount: project.budget_amount_cents.map(money),
+            hourly_rate: project.rate_cents.map(money),
+            name: project.name,
+            code: project.code,
+            project_type: project.project_type.into(),
+            budget_kind: project.budget_kind.into(),
+            budget_minutes: project.budget_minutes,
+            starts_on: project.starts_on,
+            ends_on: project.ends_on,
+            active: project.active,
+            created_at: project.created_at,
+            updated_at: project.updated_at,
+            currency: project.currency,
+        }
+    }
+}
+
+/// A task of the catalogue.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct Task {
+    pub id: Uuid,
+    pub name: String,
+    /// Whether time on the task is billable unless a project says otherwise.
+    pub billable_default: bool,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<TaskRecord> for Task {
+    fn from(task: TaskRecord) -> Self {
+        Self {
+            id: task.id,
+            name: task.name,
+            billable_default: task.billable_default,
+            active: task.active,
+            created_at: task.created_at,
+            updated_at: task.updated_at,
+        }
+    }
+}
+
+/// A client.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct Client {
+    pub id: Uuid,
+    pub name: String,
+    #[schema(pattern = "^[A-Z]{3}$")]
+    pub currency: String,
+    /// Absent when unset or when the owner may not read the client catalogue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub address: Option<String>,
+    /// Absent when unset or when the owner may not read the client catalogue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub tax_id: Option<String>,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<ClientRecord> for Client {
+    fn from(client: ClientRecord) -> Self {
+        Self {
+            id: client.id,
+            name: client.name,
+            currency: client.currency,
+            address: client.address,
+            tax_id: client.tax_id,
+            active: client.active,
+            created_at: client.created_at,
+            updated_at: client.updated_at,
+        }
+    }
+}
+
+/// A person of the organization.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct Person {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<PersonRecord> for Person {
+    fn from(person: PersonRecord) -> Self {
+        Self {
+            id: person.id,
+            name: person.name,
+            email: person.email,
+            active: person.active,
+            created_at: person.created_at,
+            updated_at: person.updated_at,
         }
     }
 }

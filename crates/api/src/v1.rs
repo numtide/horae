@@ -30,7 +30,12 @@ use crate::rate_limit::{self, RateLimiter};
 use crate::state::AppState;
 use crate::token::ApiCaller;
 
+mod catalogue;
+pub mod clients;
 pub mod me;
+pub mod people;
+pub mod projects;
+pub mod tasks;
 #[cfg(test)]
 pub(crate) mod testing;
 pub mod time_entries;
@@ -114,6 +119,7 @@ impl FromRef<V1State> for Arc<RateLimiter> {
         (name = "identity", description = "Who a token acts as"),
         (name = "time entries", description = "Time spent, read and written as on the Timesheet"),
         (name = "timers", description = "Starting, stopping and restarting timers"),
+        (name = "catalogue", description = "Projects, tasks, clients and people, read-only"),
     )
 )]
 struct ApiDoc;
@@ -194,6 +200,14 @@ fn token_routes() -> OpenApiRouter<V1State> {
         .routes(routes!(time_entries::stop))
         .routes(routes!(time_entries::restart))
         .routes(routes!(timers::start))
+        .routes(routes!(projects::list))
+        .routes(routes!(projects::get))
+        .routes(routes!(tasks::list))
+        .routes(routes!(tasks::get))
+        .routes(routes!(clients::list))
+        .routes(routes!(clients::get))
+        .routes(routes!(people::list))
+        .routes(routes!(people::get))
 }
 
 /// The published description of `/api/v1`, built once.

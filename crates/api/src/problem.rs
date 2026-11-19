@@ -3,7 +3,7 @@
 //! stable `code`; `detail` is the operation's message, the text the web app
 //! shows for the same refusal.
 
-use axum::extract::{FromRequest, FromRequestParts, Query, Request};
+use axum::extract::{FromRequest, FromRequestParts, Path, Query, Request};
 use axum::http::request::Parts;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -177,6 +177,20 @@ impl<S: Send + Sync, T: DeserializeOwned> FromRequestParts<S> for ApiQuery<T> {
         Query::from_request_parts(parts, state)
             .await
             .map(|Query(query)| Self(query))
+            .map_err(|rejection| Problem::bad_request(rejection.body_text()))
+    }
+}
+
+/// Path parameters; a value of the wrong type is 400 `bad_request`.
+pub struct ApiPath<T>(pub T);
+
+impl<S: Send + Sync, T: DeserializeOwned + Send> FromRequestParts<S> for ApiPath<T> {
+    type Rejection = Problem;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Problem> {
+        Path::from_request_parts(parts, state)
+            .await
+            .map(|Path(path)| Self(path))
             .map_err(|rejection| Problem::bad_request(rejection.body_text()))
     }
 }

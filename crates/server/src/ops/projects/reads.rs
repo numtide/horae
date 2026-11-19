@@ -1,6 +1,8 @@
 //! The Projects page and the pickers: project rows, tags, tracked totals and
-//! tasks, each limited to what the actor may read.
+//! tasks, each limited to what the actor may read. [`page`] and [`get`] read
+//! the same projects as the Projects page, by id, for `/api/v1`.
 
+use chrono::{DateTime, NaiveDate, Utc};
 use horae_core::permissions::catalog::Permission;
 use horae_core::permissions::projects::writes_any;
 use horae_core::types::{BudgetKind, ProjectType};
@@ -153,6 +155,117 @@ async fn project_rows(
             },
         })
         .collect())
+}
+
+/// A project the actor may read, with the Projects page's fields and money
+/// rule, and when it last changed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectRecord {
+    pub id: Uuid,
+    pub client_id: Uuid,
+    pub code: Option<String>,
+    pub name: String,
+    pub project_type: ProjectType,
+    pub currency: String,
+    /// `None` when unset or hidden from the actor.
+    pub rate_cents: Option<i64>,
+    pub starts_on: Option<NaiveDate>,
+    pub ends_on: Option<NaiveDate>,
+    pub budget_kind: BudgetKind,
+    /// `None` when unset or hidden from the actor.
+    pub budget_amount_cents: Option<i64>,
+    /// Set for an hours budget only.
+    pub budget_minutes: Option<i64>,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Which projects [`page`] lists, and where its page starts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ProjectQuery {
+    pub client_id: Option<Uuid>,
+    /// Active projects, or archived ones.
+    pub active: bool,
+    /// Only projects whose `updated_at` is at or after it.
+    pub updated_since: Option<DateTime<Utc>>,
+    /// The last id of the previous page.
+    pub after: Option<Uuid>,
+    pub limit: u32,
+}
+
+/// The projects of the Projects page in `id` order: up to `limit + 1` rows,
+/// the extra one saying that another page follows.
+pub async fn page(
+    tx: &mut Tx,
+    actor: &Actor,
+    query: &ProjectQuery,
+) -> Result<Vec<ProjectRecord>, OpError> {
+    records(tx, actor, None, Some(query)).await
+}
+
+/// One project of [`page`], whether active or archived. A project the actor
+/// may not read is not found.
+pub async fn get(tx: &mut Tx, actor: &Actor, project_id: Uuid) -> Result<ProjectRecord, OpError> {
+    records(tx, actor, Some(project_id), None)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| OpError::not_found(super::NOT_FOUND))
+}
+
+/// [`project_rows`]' rules for [`ProjectRead::Overview`], for one project or
+/// a page of them.
+async fn records(
+    tx: &mut Tx,
+    actor: &Actor,
+    project_id: Option<Uuid>,
+    query: Option<&ProjectQuery>,
+) -> Result<Vec<ProjectRecord>, OpError> {
+    if !actor.is_active() {
+        return Err(OpError::forbidden("Current project access is required"));
+    }
+    Ok(sqlx::query_as!(
+        ProjectRecord,
+        r#"SELECT p.id, p.client_id, p.code, p.name,
+                p.project_type as "project_type: ProjectType", p.currency,
+                CASE WHEN $6 OR ($7 AND management.id IS NOT NULL) THEN p.rate_cents END AS rate_cents,
+                p.starts_on as "starts_on: NaiveDate", p.ends_on as "ends_on: NaiveDate",
+                p.budget_kind as "budget_kind: BudgetKind",
+                CASE WHEN $6 OR ($7 AND management.id IS NOT NULL)
+                  THEN p.budget_amount_cents END AS budget_amount_cents,
+                CASE WHEN p.budget_kind = 'hours' THEN p.budget_minutes END AS budget_minutes,
+                p.active, p.created_at as "created_at: DateTime<Utc>",
+                p.updated_at as "updated_at: DateTime<Utc>"
+         FROM projects p
+         JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
+         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
+           AND management.project_id = p.id AND management.manager_id = $2
+         LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $2
+         LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
+         WHERE p.org_id = $1
+           AND ($4 OR ($5 AND management.id IS NOT NULL)
+             OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members'))
+           AND ($3::uuid IS NULL OR p.id = $3) AND ($8::uuid IS NULL OR p.client_id = $8)
+           AND ($9::bool IS NULL OR p.active = $9)
+           AND ($10::timestamptz IS NULL OR p.updated_at >= $10)
+           AND p.id > $11
+         ORDER BY p.id LIMIT $12"#,
+        actor.org_id(),
+        actor.id(),
+        project_id,
+        actor.has(Permission::ProjectReadAll),
+        actor.has(Permission::ProjectReadManaged),
+        actor.has(Permission::BillableRateReadAll),
+        actor.has(Permission::BillableRateReadManaged),
+        query.and_then(|query| query.client_id),
+        query.map(|query| query.active),
+        query.and_then(|query| query.updated_since) as Option<DateTime<Utc>>,
+        query.and_then(|query| query.after).unwrap_or(Uuid::nil()),
+        query.map_or(1, |query| i64::from(query.limit) + 1),
+    )
+    .fetch_all(&mut **tx)
+    .await?)
 }
 
 /// The tags of every project the actor may read. Empty for an actor with no
