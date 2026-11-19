@@ -280,6 +280,21 @@ While `api.cursorKeyFile` is unset, the module adds an evaluation warning and th
 with a random key drawn at every start. Rotating the key invalidates every cursor in flight;
 clients start their list again after a `400 invalid_cursor`.
 
+### Upgrading to the release with `/api/v1`
+
+Check these before deploying it:
+
+- **The Harvest-compatible API is off by default.** If anything uses `/harvest/v2` (or `/v2`),
+  set `services.horae.harvestApi.enable = true`, or `HORAE_HARVEST_API=1` outside NixOS. Its
+  clients now authenticate with a personal access token.
+- **`/api/v2` is gone.** A Harvest client configured with a base URL ending in `/api` switches to
+  the host root or to `/harvest`.
+- **Set the cursor key.** Put a key in `services.horae.api.cursorKeyFile`, as in
+  [API cursor key](#api-cursor-key). Without it, cursors stop working at every restart.
+- **Timers changed for everyone, in the web app too.** Start on an entry of today resumes it,
+  starting a timer stops the one already running, and stopping adds the elapsed time to the
+  minutes the entry already had.
+
 ### First run
 
 A fresh database has no organization, so create one — along with the first admin user —
@@ -504,6 +519,21 @@ horae user create --email admin@example.com --name "Admin" --profile administrat
 
 ## API
 
+### `/api/v1`
+
+Scripts and other applications read and log time through `/api/v1` with a personal access token
+(**Settings → API tokens**), with the token owner's permissions and the web app's rules:
+
+```sh
+curl -s -H "Authorization: Bearer horae_pat_…" https://time.example.com/api/v1/me
+```
+
+It covers time entries, timers and a read-only catalogue (projects, tasks, clients, people), with
+cursor pagination, `updated_since` for incremental sync, and `application/problem+json` errors.
+Each instance serves its OpenAPI document at `/api/v1/openapi.json`. The
+[API guide](docs/api.md) explains tokens, headers, cursors, sync, errors, limits and the
+compatibility promise.
+
 ### Harvest-style subset (read-only)
 
 Endpoints under `/harvest/v2` expose a subset of the
@@ -525,8 +555,9 @@ elsewhere; the setting is read at start. The Harvest importer works either way. 
 `/api/v2` alias: a Harvest client configured with a base URL ending in `/api` switches to the
 host root or `/harvest`.
 
-Authentication is session-cookie based. Bearer-token auth is planned but not yet implemented.
-IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and
+Clients authenticate with a personal access token, the same one `/api/v1` takes, sent as
+`Authorization: Bearer` or the `access_token` query parameter, with the account ID shown on the
+token page as `Harvest-Account-Id`. A signed-in browser session also works. IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and
 maximum `per_page` of 100; follow the returned links to retain filters. Nonpositive page
 numbers, page sizes outside 1–100, and overflowing offsets return `400 Bad Request`.
 
@@ -551,10 +582,12 @@ GET /api/invoices/{id}/export/{csv,xlsx,pdf}
   `state`, …) are gated; the shared UI modules compile for both targets.
 - **A pure domain crate (`horae-core`).** Duration parsing, rounding, money, totals, and the entry
   state machine live here with no I/O dependencies, and are unit-tested in isolation.
-- **Two API surfaces.** The server layers custom Axum routes — health, exports, auth, and the
-  read-only Harvest API — on top of the Dioxus fullstack router, all under a Postgres-backed
-  session layer. The SPA performs mutations through session-authenticated Dioxus `#[server]`
-  functions.
+- **The backend and the HTTP surfaces are their own crates.** `horae-server` holds the operations,
+  jobs and migrations; `horae-api` serves `/api/v1`, the exports, `/auth` and `/health`;
+  `horae-harvest-api` serves the optional Harvest-compatible API. The server layers them on top of
+  the Dioxus fullstack router, under a Postgres-backed session layer. The SPA performs mutations
+  through session-authenticated Dioxus `#[server]` functions, and `/api/v1` through the same
+  operations with a token.
 - **PostgreSQL only.** Migrations live in `crates/server/migrations/` and apply via `sqlx`.
 
 Domain invariants worth knowing: durations are stored as integer minutes, money as integer minor
