@@ -12,8 +12,6 @@ use crate::route::Route;
 use crate::server_fns;
 
 const FORBIDDEN: u16 = 403;
-/// Addresses and notes keep the line breaks they were typed with, as on the PDF.
-const PRE_LINE: &str = "white-space: pre-line;";
 
 /// Whether to offer the settings action: the grant `update_org_branding`
 /// requires, from a catalog this build understands.
@@ -334,8 +332,9 @@ fn InvoicePreview(draft: Signal<OrgBranding>) -> Element {
                     } else {
                         p { class: "text-muted m-0", "No company name" }
                     }
+                    // Addresses and notes keep the line breaks they were typed with, as on the PDF.
                     for line in issuer.into_iter().filter_map(|value| filled(&value)) {
-                        p { class: "text-secondary m-0", style: PRE_LINE, "{line}" }
+                        p { class: "text-secondary m-0 whitespace-pre-line", "{line}" }
                     }
                 }
                 if !payment.is_empty() {
@@ -358,7 +357,7 @@ fn PreviewBlock(title: &'static str, lines: Vec<String>) -> Element {
         div {
             p { class: "text-xs font-semibold uppercase tracking-wide text-muted m-0 mb-1", "{title}" }
             for line in lines {
-                p { class: "m-0", style: PRE_LINE, "{line}" }
+                p { class: "m-0 whitespace-pre-line", "{line}" }
             }
         }
     }
