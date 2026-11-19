@@ -9,6 +9,7 @@ use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::ops;
 use crate::ops::permissions::provisioning;
 
 #[cfg(test)]
@@ -298,6 +299,27 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
 fn days(n: i64) -> chrono::Duration {
     chrono::Duration::days(n)
+}
+
+/// Issues an API token to the demo administrator, through the same operation
+/// as the web app, and writes it to `path`, readable by its owner only. Test
+/// harnesses that call `/api/v1` or `/harvest/v2` take their token from here.
+pub async fn api_token(pool: &PgPool, path: &std::path::Path) -> anyhow::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut write = ops::begin(pool, ops::Caller::session(ORG_ID, ADMIN_ID)).await?;
+    let result = ops::api_tokens::create(&mut write.tx, &write.actor, "seed", None).await;
+    let (secret, _) = write.commit(result, &ops::NoEvents).await?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .and_then(|mut file| file.write_all(secret.expose().as_bytes()))
+        .with_context(|| format!("Could not write the API token to {}", path.display()))?;
+    Ok(())
 }
 
 /// Verify that the seed data looks reasonable (called after seeding).

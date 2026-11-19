@@ -213,13 +213,16 @@ fn main() -> anyhow::Result<()> {
             })?;
         }
 
-        Commands::Seed => {
+        Commands::Seed { api_token_file } => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(async {
                 init_tracing(&cfg.log_level);
                 let pool = db::create_pool(&cfg.database_url).await?;
                 seed::run(&pool).await?;
                 seed::verify(&pool).await?;
+                if let Some(path) = api_token_file {
+                    seed::api_token(&pool, &path).await?;
+                }
                 anyhow::Ok(())
             })?;
         }

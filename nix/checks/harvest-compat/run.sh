@@ -33,29 +33,11 @@ pg_ctl -D "$PGDATA" -l "$test_dir/postgres.log" \
   -o "--unix_socket_directories=$test_dir --listen_addresses= -c fsync=off" start >/dev/null
 createdb -h "$test_dir" -U postgres horae
 "$HORAE_TEST_SERVER" migrate run
-"$HORAE_TEST_SERVER" seed >/dev/null
-
-# A personal access token of the seeded administrator, stored as Horae stores
-# one (its SHA-256 only); issuing one otherwise takes the web app. The id is a
-# UUID v7: the time in milliseconds, then random bits.
-HORAE_ACCESS_TOKEN="horae_pat_$(head -c 32 /dev/urandom | basenc --base64url | tr -d '=\n')"
-digest=$(printf '%s' "$HORAE_ACCESS_TOKEN" | sha256sum | cut -d ' ' -f 1)
-random=$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')
-millis=$(printf '%012x' "$(date +%s%3N)")
-token_id="${millis:0:8}-${millis:8:4}-7${random:0:3}-8${random:3:3}-${random:6:12}"
-HORAE_ACCOUNT_ID=$(psql -h "$test_dir" -U postgres -d horae -v ON_ERROR_STOP=1 -qtA -c "
-  INSERT INTO api_tokens (id, org_id, user_id, name, token_sha256, display_prefix)
-  SELECT '$token_id', u.org_id, u.id, 'harvest-compat', decode('$digest', 'hex'),
-         substr('$HORAE_ACCESS_TOKEN', 11, 8)
-  FROM users u
-  JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
-  WHERE p.is_administrator AND u.active
-  ORDER BY u.id LIMIT 1
-  RETURNING (SELECT api_account_id FROM organizations o WHERE o.id = api_tokens.org_id)")
-if [[ -z $HORAE_ACCOUNT_ID ]]; then
-  echo 'The seed has no active administrator to issue a token to' >&2
-  exit 1
-fi
+# The seed issues the demo administrator a personal access token.
+"$HORAE_TEST_SERVER" seed --api-token-file "$test_dir/token" >/dev/null
+HORAE_ACCESS_TOKEN=$(<"$test_dir/token")
+HORAE_ACCOUNT_ID=$(psql -h "$test_dir" -U postgres -d horae -v ON_ERROR_STOP=1 -qtA \
+  -c "SELECT api_account_id FROM organizations")
 export HORAE_ACCESS_TOKEN HORAE_ACCOUNT_ID
 
 if curl -s --max-time 1 -o /dev/null "$url/health"; then

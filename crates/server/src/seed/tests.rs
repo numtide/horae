@@ -156,3 +156,23 @@ async fn concurrent_initializers_cannot_create_two_organizations(pool: PgPool) {
         .unwrap();
     assert_eq!(organizations, Some(1));
 }
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial]
+async fn seeded_api_token_authenticates_as_the_demo_administrator(pool: PgPool) {
+    use std::os::unix::fs::PermissionsExt;
+
+    run(&pool).await.unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("token");
+    api_token(&pool, &path).await.unwrap();
+
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o600);
+    let token = std::fs::read_to_string(&path).unwrap();
+    let caller = crate::ops::api_tokens::authenticate(&pool, &token)
+        .await
+        .unwrap()
+        .expect("the written token authenticates");
+    assert_eq!((caller.org_id, caller.user_id), (ORG_ID, ADMIN_ID));
+}

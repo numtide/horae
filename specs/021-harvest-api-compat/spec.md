@@ -583,7 +583,9 @@ many surveyed clients each step unlocks ([research.md §1.5](research.md#15-most
    library client using session reads. Unlocks typed clients for reads.
 1. **Personal access tokens** (FR-001–FR-008, FR-011, FR-024–FR-026, FR-050). Token management
    on the profile page, bearer and query authentication, Harvest error bodies, leniency aliases
-   and rate limits. With step 1, every token-based client can read.
+   and rate limits. With step 1, every token-based client can read. **Delivered by
+   [022](../022-public-api-v1/spec.md)** (#425, #427): one kind of token and one rate limit serve
+   `/api/v1` and `/harvest/v2`.
 1. **Time-entry writes and the timer reads around them** (FR-020, FR-030–FR-032, FR-044 item 1).
    Create (both modes), update, delete, stop and restart (with restart added to the domain);
    `company`; `users/me/project_assignments`; exact unit conversion replacing floating point.
