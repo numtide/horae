@@ -83,7 +83,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(page.locator('.page-header').getByRole('link', { name: 'Import', exact: true })).toHaveAttribute('href', '/admin/importers');
     await expect(page.locator('.proj-head')).not.toContainText('Scheduled');
     await expect(page.locator('.proj-head')).not.toContainText('Delta');
-    await expect(page.locator('.proj-head')).toHaveCSS('color', 'rgb(106, 99, 83)');
+    await expect(page.locator('.proj-head')).toHaveCSS('color', 'rgb(141, 135, 119)');
     const progress = page.getByRole('progressbar', { name: 'Budget used for Design budget project' });
     await expect(progress).toHaveAttribute('value', '50');
     await expect(progress).toHaveAttribute('max', '100');

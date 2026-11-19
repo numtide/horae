@@ -41,8 +41,9 @@ pub fn Settings() -> Element {
             profile::ProfileSection {}
             div { class: "card",
                 h2 { class: "card-title", "Appearance" }
-                FormGroup { label: "Theme", hint: "Choose how Horae looks on this device.",
+                FormGroup { label: "Theme", id: "theme", hint: "Choose how Horae looks on this device.",
                     Select {
+                        id: "theme",
                         options: theme_options,
                         selected: theme().as_str().to_string(),
                         onchange: move |e: FormEvent| {
