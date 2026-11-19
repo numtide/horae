@@ -149,6 +149,9 @@
   --width-form-select: 20rem;
   --width-client-editor: 35rem;
   --width-client-name: 16.25rem;
+  --width-name-column: 12rem;
+  --width-ts-day: 4.75rem;
+  --width-ts-remove: 2.75rem;
   --width-assignment-picker: 16.25rem;
   --width-milestone-amount: 8.75rem;
   --width-toast: 280px;
@@ -1589,8 +1592,10 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-grid-scroll { overflow-x: auto; }
 .ts-row {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) repeat(7, 92px) 92px 44px;
-  min-width: 900px;
+  /* Name, seven days, Total and remove fit beside the expanded rail at
+     1280px; on narrower screens the rows scroll inside .ts-grid-scroll. */
+  grid-template-columns: minmax(var(--width-name-column), 1fr) repeat(8, var(--width-ts-day)) var(--width-ts-remove);
+  min-width: min-content;
 }
 .ts-head { align-items: end; padding: var(--space-4) var(--space-5) var(--space-3); border-bottom: 1px solid var(--color-border); }
 .ts-body { align-items: center; padding: var(--space-5); border-bottom: 1px solid var(--color-border-light); }
@@ -1823,16 +1828,17 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-search:focus-within { border-color: var(--color-primary); box-shadow: var(--ring-soft); }
 
 /* Share content-sized numeric tracks across every row: currency codes and
-   large amounts widen the table inside its scroller, never overlap a neighbour. */
+   large amounts widen the table inside its scroller, never overlap a neighbour.
+   The name track shrinks to its minimum before the table starts to scroll. */
 .proj-grid {
-  width: max-content; min-width: 100%;
-  grid-template-columns: minmax(26rem, 1fr) repeat(4, max-content);
+  min-width: min-content;
+  grid-template-columns: minmax(var(--width-name-column), 1fr) repeat(4, max-content);
   column-gap: var(--space-6);
 }
 .proj-head, .proj-row, .proj-group { grid-column: 1 / -1; }
 .proj-grid-selectable {
   /* Subgrid's first track also contains the row's px-5 start padding. */
-  grid-template-columns: calc(var(--size-checkbox) + var(--space-5)) minmax(26rem, 1fr) repeat(4, max-content);
+  grid-template-columns: calc(var(--size-checkbox) + var(--space-5)) minmax(var(--width-name-column), 1fr) repeat(4, max-content);
   column-gap: var(--space-4);
 }
 .proj-head,
@@ -1849,7 +1855,9 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-bar::-moz-progress-bar { background: var(--color-primary); border-radius: var(--radius-full); }
 /* The card clips an outset ring, so the region draws an inset outline and drops the shared --ring. */
 .proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; box-shadow: none; }
-.proj-namelink { max-width: 26rem; overflow-wrap: anywhere; text-decoration: none; }
+/* The name keeps its width and the type badge moves below it when both do
+   not fit, so a narrow name column never breaks the name word by word. */
+.proj-namelink { flex-shrink: 0; max-width: min(26rem, 100%); overflow-wrap: anywhere; text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
 .proj-confirm-name { overflow-wrap: anywhere; }
 .proj-head {
@@ -2027,6 +2035,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 .imp-icon-muted { color: var(--color-text-muted); }
 /* Keep names readable inside scrolling tables; never widen the page itself. */
 .client-table :is(th, td):first-child { min-width: var(--width-client-name); }
+.name-table :is(th, td):first-child { min-width: var(--width-name-column); }
 .client-search::placeholder { color: var(--color-text-secondary); }
 /* Stack when the available content width or enlarged text needs more room. */
 .client-detail { container: client-detail / inline-size; }

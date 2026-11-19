@@ -285,7 +285,7 @@ pub fn Approvals(week: String) -> Element {
                                         }
 
                                         DataTable {
-                                            table {
+                                            table { class: "name-table",
                                                 thead {
                                                     tr {
                                                         th { "Teammate" }

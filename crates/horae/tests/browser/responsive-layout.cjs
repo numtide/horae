@@ -124,6 +124,64 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'Shared editor fits a 320px viewport');
       await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
     });
+    await check('every Timesheet week and Projects column is visible without scrolling from 1280px', async () => {
+      // Assumes the expanded rail, the default; narrower screens may scroll inside the grid.
+      for (const [path, resource, scroller, columns] of [
+        [`/timesheet/week/${week}`, 'load_timesheet_page', '.ts-grid-scroll', ['.ts-total-head', '.ts-body .ts-rowtotal', '.ts-body .ts-del', '.ts-foot .ts-grandtotal']],
+        ['/projects', 'get_project_overview', '.proj-scroll', ['.proj-head > :nth-last-child(2)', '.proj-row [id^="project-actions-"][id$="-trigger"]']],
+      ]) {
+        await visit(path, resource);
+        await expect(page.locator(columns[1]).first()).toBeVisible();
+        for (const width of [1280, 1440]) {
+          await page.setViewportSize({ width, height: 1000 });
+          const outside = await page.locator(scroller).evaluate((scroll, columns) => {
+            const box = scroll.getBoundingClientRect();
+            const problems = [];
+            if (scroll.scrollWidth > scroll.clientWidth + 1) problems.push(`scrolls: ${scroll.scrollWidth} > ${scroll.clientWidth}`);
+            for (const selector of columns) {
+              const el = scroll.querySelector(selector);
+              if (!el) { problems.push(`${selector}: missing`); continue; }
+              const r = el.getBoundingClientRect();
+              if (r.left < box.left - 1 || r.right > box.right + 1) problems.push(`${selector}: ${r.left}..${r.right} outside ${box.left}..${box.right}`);
+              if (el.scrollWidth > el.clientWidth + 1) problems.push(`${selector}: clipped text`);
+            }
+            return problems;
+          }, columns);
+          assert.deepEqual(outside, [], `${path} at ${width}px`);
+        }
+      }
+    });
+    await check('at 1024px name columns keep their minimum and names wrap inside them', async () => {
+      await page.setViewportSize({ width: 1024, height: 1000 });
+      await visit('/projects', 'get_project_overview');
+      await expect(page.locator('.proj-namelink').first()).toBeVisible();
+      // A name may wrap only once it fills its column; the type badge moves below it instead.
+      const squeezed = await page.locator('.proj-namelink').evaluateAll(links => links.flatMap(link => {
+        const column = link.parentElement.getBoundingClientRect();
+        const box = link.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(link);
+        const lines = new Set([...range.getClientRects()].map(r => Math.round(r.top))).size;
+        return lines > 1 && box.width < column.width - 1 ? [`${link.textContent}: ${box.width}px of ${column.width}px on ${lines} lines`] : [];
+      }));
+      assert.deepEqual(squeezed, []);
+      await visit(`/timesheet/week/${week}`, 'load_timesheet_page');
+      const row = page.locator('.ts-body').first();
+      await expect(row).toBeVisible();
+      // Stress only a rendered label, not stored data.
+      await row.locator('.ts-project-title strong').evaluate(el => { el.textContent = 'unbroken_project_reference_'.repeat(4); });
+      const geometry = await row.evaluate(row => {
+        const name = row.querySelector('.ts-project').getBoundingClientRect();
+        // The inline text, not its block, shows where an overflowing name ends.
+        const title = row.querySelector('.ts-project-title strong').getBoundingClientRect();
+        const monday = row.children[1].getBoundingClientRect();
+        const minimum = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--width-name-column')) *
+          parseFloat(getComputedStyle(document.documentElement).fontSize);
+        return { name: name.width, minimum, titleRight: title.right, monday: monday.left };
+      });
+      assert.ok(geometry.name >= geometry.minimum - 1, `Timesheet name column ${geometry.name}px is below ${geometry.minimum}px`);
+      assert.ok(geometry.titleRight <= geometry.monday + 1, `Timesheet name ends at ${geometry.titleRight}px, past Monday at ${geometry.monday}px`);
+    });
     await check('small-screen timesheet pager, date picker and view controls remain usable', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
       await visit(`/timesheet/week/${week}`, 'load_timesheet_page');
