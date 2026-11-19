@@ -120,7 +120,8 @@ Every shared component lives in `crates/horae/src/components/`, one module per f
 Status:
 
 - **in use**: screens call it, and any hand-written copies of its markup are fewer than the calls.
-- **underused**: it exists, but screens write the same markup by hand more often than they call it, or never call it. The figure is calls outside `components/` and the gallery (`pages/gallery.rs`) against hand-written copies, counted on 2026-11-19. In new code, call the component.
+- **underused**: screens call it, but write the same markup by hand more often. The figure is calls outside `components/` and the gallery (`pages/gallery.rs`) against hand-written copies, counted on 2026-11-19. In new code, call the component.
+- **kept, not yet used**: no screen calls it yet (only the gallery does), and it stays because screens are going to use it. When a screen needs what it draws, call it instead of writing the markup by hand. The figures count the same way.
 - **planned in PR-N**: the rule exists and the component does not. Build the state by hand, as the rule describes, until that PR lands, and do not invent its API.
 
 ### Summary
@@ -131,15 +132,15 @@ Status:
 | `Sidebar` | `sidebar.rs` | Shell and navigation | in use (inside `AppLayout`) |
 | `AdminShell` | `admin_shell.rs` | Shell and navigation | in use (route layout); its back link goes in PR-2 |
 | `PageHeader` | — | Shell and navigation | planned in PR-2 |
-| `NavItem` | `nav.rs` | Shell and navigation | underused (0 calls; the rail renders its own `nav-item` links) |
+| `NavItem` | `nav.rs` | Shell and navigation | kept, not yet used (0 calls; the rail renders its own `nav-item` links) |
 | `NavIcon` | `icons.rs` | Shell and navigation | in use (13) |
 | `HoraeMark` | `logo.rs` | Shell and navigation | in use (sidebar brand) |
 | `TimerWidget` | `timer_widget.rs` | Shell and navigation | in use (sidebar) |
 | `VersionInfo` | `version_info.rs` | Shell and navigation | in use (sidebar) |
 | `ThemeInit` | `theme.rs` | Shell and navigation | in use (`app.rs`) |
-| `Button` | `button.rs` | Actions | underused (0 calls, 263 hand-written `btn` classes) |
-| `IconButton` | `button.rs` | Actions | underused (0 calls) |
-| `SplitButton` | `button.rs` | Actions | underused (0 calls; the Timesheet builds `.ts-submit` by hand) |
+| `Button` | `button.rs` | Actions | kept, not yet used (0 calls, 263 hand-written `btn` classes) |
+| `IconButton` | `button.rs` | Actions | kept, not yet used (0 calls) |
+| `SplitButton` | `button.rs` | Actions | kept, not yet used (0 calls; the Timesheet builds `.ts-submit` by hand) |
 | `Menu`, `MenuItem`, `MenuDivider` | `menu.rs` | Menus and pickers | in use (10, 17 and 3) |
 | `SelectField` | `select_field.rs` | Menus and pickers | in use (11) |
 | `Combobox` | `combobox.rs` | Menus and pickers | in use (1) |
@@ -153,15 +154,15 @@ Status:
 | `Textarea` | `form.rs` | Forms | in use (3) |
 | `Select` | `form.rs` | Forms | retired: 7 calls and 8 bare `select {}` move to `SelectField` in PR-5 |
 | `Checkbox` | `controls.rs` | Forms | in use (20; 1 native checkbox) |
-| `Radio` | `controls.rs` | Forms | underused (0 calls, 6 native radios in New Project) |
-| `Toggle` | `controls.rs` | Forms | underused (0 calls, gallery only) |
+| `Radio` | `controls.rs` | Forms | kept, not yet used (0 calls, 6 native radios in New Project) |
+| `Toggle` | `controls.rs` | Forms | kept, not yet used (0 calls) |
 | `Segmented` | `controls.rs` | Forms | underused (2 calls, 5 hand-written groups) |
 | `DataTable` | `table.rs` | Data display | in use (9; 8 hand-written table wrappers) |
 | `Badge` | `badge.rs` | Data display | in use (15; 14 hand-written `badge` spans) |
-| `Card` | `card.rs` | Data display | underused (0 calls, 31 hand-written `card` classes) |
-| `MetricCard` | `card.rs` | Data display | underused (0 calls, gallery only) |
+| `Card` | `card.rs` | Data display | kept, not yet used (0 calls, 31 hand-written `card` classes) |
+| `MetricCard` | `card.rs` | Data display | kept, not yet used (0 calls) |
 | `Avatar` | `avatar.rs` | Data display | in use (3, plus the sidebar) |
-| `Chip` | `avatar.rs` | Data display | underused (0 calls; New Project's tag chips are hand-written) |
+| `Chip` | `avatar.rs` | Data display | kept, not yet used (0 calls; New Project's tag chips are hand-written) |
 | `Toast`, `ToastContainer` | `toast.rs` | Feedback | in use (3 pages, each with its own container); one container in `AppLayout` and the new look in PR-9 |
 | `NoTrackingHint` | `no_tracking.rs` | Feedback | in use (Timesheet, `TimerWidget`) |
 | `EmptyState`, `ErrorState`, `Loading`, `Skeleton` | — | Feedback | planned in PR-4 |
@@ -182,7 +183,7 @@ Status:
 - `Sidebar` (`sidebar.rs`) is the left rail: brand, `TimerWidget`, the navigation sections the person may open, `VersionInfo` for administrators and the account menu. Only `AppLayout` renders it. Props: `collapsed: Signal<bool>`, `on_navigate`. See [Sidebar](#sidebar-srccomponentssidebarrs).
 - `AdminShell` (`admin_shell.rs`) wraps the Workspace and Data sections (People, Settings, API tokens, Importers, Audit log) with their subnavigation and checks that the person may open the section. The router mounts it with `#[layout(AdminShell)]`. No props. PR-2 removes its "Back to Timesheet" link (see [Page header](#page-header-srccomponents)).
 - `PageHeader`: planned in PR-2. See [Page header](#page-header-srccomponents).
-- `NavItem` (`nav.rs`) is a rail row drawn as a `button` with an `onclick`, an optional text icon and the active dot. The rail itself renders `Link`s with the same `nav-item` classes, because navigation must be a link (see [Component Conventions](#component-conventions)), so `NavItem` only appears in the gallery. Do not use it for navigation. Props: `label`, `icon`, `active`, `onclick`.
+- `NavItem` (`nav.rs`) is a rail row with an optional text icon. Today it is a `button` with an `onclick` and draws a trailing dot on the active row, so the rail renders its own `Link`s with the same `nav-item` classes instead, and `NavItem` only appears in the gallery. When a screen starts using it, it must take a `Route` and navigate with `Link` (see [Component Conventions](#component-conventions)), and drop the dot, which [Sidebar](#sidebar-srccomponentssidebarrs) no longer has. Props today: `label`, `icon`, `active`, `onclick`.
 - `NavIcon` (`icons.rs`) draws one of the 16px stroked glyphs (`timesheet`, `clients`, `projects`, `arrow-left`, `chevron-down`, `pencil`, `info` and the rest) in `currentColor`. Use it for every icon these names cover rather than a text glyph. An unknown name renders nothing. Props: `name`, `class`.
 - `HoraeMark` (`logo.rs`) is the inline Horae logo, coloured by the `--icon-*` tokens so it follows the theme. It is used only by the sidebar brand. No props.
 - `TimerWidget` (`timer_widget.rs`) is the rail's timer: a "Start timer" button, the project and task picker, then the running time with a stop button. It is mounted once, by the sidebar. To start, stop or edit time from a page, call `use_running_timer().refresh()` after the change instead of rendering a second widget. No props. See [Timer Widget](#timer-widget-srccomponentstimer_widgetrs).
@@ -191,16 +192,20 @@ Status:
 
 #### Actions
 
-- `Button` (`button.rs`) is a `button` with the `btn btn-{variant}` classes, an optional `sm` size, `disabled` and `onclick`. It is the intended way to draw an action, but it takes no `type`, `id`, `aria-label` or test attributes, so screens write `button { class: "btn …" }` by hand instead. In new code, use the component when those props are enough; otherwise write the classes, using only the variants in [Buttons](#buttons-srccomponents). Props: `variant` (default `primary`), `size`, `disabled`, `onclick`, `children`.
+- `Button` (`button.rs`) is a `button` with the `btn btn-{variant}` classes, an optional `sm` size, `disabled` and `onclick`. It is the intended way to draw an action, but it takes no `type`, `id`, `aria-label` or test attributes, so screens write `button { class: "btn …" }` by hand instead. In new code, use the component when those props are enough; otherwise write the classes, using only the variants in [Buttons](#buttons-srccomponents). Props today: `variant` (default `primary`), `size`, `disabled`, `onclick`, `children`. *Pending code*, in a PR of its own that lands before PR-8:
+  - `Button`, `IconButton` and `SplitButton` accept the native button's attributes through `#[props(extends = button)]` (`type`, `id`, `data-testid`, `aria-*`, `disabled` and the rest), so screens can call them everywhere and the tests that find buttons by `data-testid` keep working unchanged.
+  - The text becomes a `label: String` prop, used by default. `children` stays only for a button with both an icon and text. `children` compares by pointer, so a text button built from children re-renders every time the page does.
+  - In table rows and loops, the handlers passed to it are made with `use_callback`.
+  - The PR checks with `horae-dioxus-lint`, and by measuring the Timesheet, that buttons do not re-render more than they need to.
 - `IconButton` (`button.rs`) is a square icon-only `btn-icon` button with a required `label` for its accessible name. Use it for an action shown only as an icon. Props: `variant` (default `ghost`), `label`, `disabled`, `onclick`, `children`.
 - `SplitButton` (`button.rs`) is the `.btn-split` pair: a main action and a caret button. The caret only fires `ontrigger`; opening a menu of variants is the caller's job. Props: `variant`, `label`, `trigger`, `onclick`, `ontrigger`. See Split button in [Buttons](#buttons-srccomponents).
 
 #### Menus and pickers
 
-- `Menu`, `MenuItem`, `MenuDivider` (`menu.rs`) are the dropdown: a trigger button with a caret that opens a native popover of items. Use `Menu` for a row's or a page's "Actions" and for list filters. It is not a form field: to choose a value in a form, use `SelectField`. `MenuItem` takes `selected` (for a filter's current value), `danger` (Delete, last, after a `MenuDivider`) and `disabled`. Props of `Menu`: `id` (stable and unique; it ties the trigger to the menu), `label`, `align_right`, `trigger_class`, `disabled`, `children`; see [Tokens & utilities](#tokens--utilities) for `trigger_class` and `disabled`. Rules in [Data Tables](#data-tables-srccomponentstablers), [Destructive actions](#destructive-actions) and [Accessibility](#accessibility).
+- `Menu`, `MenuItem`, `MenuDivider` (`menu.rs`) are the dropdown: a trigger button with a caret that opens a native popover of items. Use `Menu` for a row's or a page's "Actions" and for list filters. It is not a form field: to choose a value in a form, use `SelectField`. `MenuItem` takes `selected` (for a filter's current value), `danger` (Delete, last, after a `MenuDivider`) and `disabled`. Props of `Menu`: `id` (stable and unique; it ties the trigger to the menu), `label`, `align_right`, `trigger_class`, `disabled`, `children`; see [Tokens & utilities](#tokens--utilities) for `trigger_class` and `disabled`; those notes move into this entry once PR-1 lands. Rules in [Data Tables](#data-tables-srccomponentstablers), [Destructive actions](#destructive-actions) and [Accessibility](#accessibility).
 - `SelectField` (`select_field.rs`) is the form selector: a full-width trigger styled as an input, opening a listbox on the menu surface. Give it a `query` signal to add a search box for long lists, and `pending` while the options load. Use it for every single-value choice in a form, in place of `Select` and native `<select>`. Props: `id`, `label`, `options: Vec<(value, label)>`, `selected`, `onselect`, `error_id`, `disabled_values`, `query: Option<Signal<String>>`, `pending`, `children` (rendered under the list). See [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs).
-- `Combobox` (`combobox.rs`) is a compact searchable picker drawn as a `btn-sm` trigger, with an "All" row that clears the choice and options that can be grouped under headings (`ComboOption::grouped`). Its one call is the client filter in Projects. Use it to filter a list by one of many values; in a form, use `SelectField` with a `query`. Props: `options: Vec<ComboOption>`, `value`, `placeholder`, `all_label`, `trigger_class`, `onselect`.
-- `DatePicker` (`date_picker.rs`) is the month calendar panel. It highlights a day or, with `week`, the whole week, and emits the picked date. It draws only the panel: the caller supplies the trigger and the popover, as `pages/new_project/date_field.rs` and the Timesheet pager do. Props: `selected: NaiveDate`, `week`, `first_day`, `onpick`. See [Formats](#formats).
+- `Combobox` (`combobox.rs`) is a compact searchable picker drawn as a `btn-sm` trigger, with an "All" row that clears the choice and options that can be grouped under headings (`ComboOption::grouped`). Its one call is the client filter in Projects. Use it to filter a list by one of many values; in a form, use `SelectField` with a `query`. Props: `options: Vec<ComboOption>`, `value`, `placeholder`, `all_label`, `trigger_class`, `onselect`. Its `trigger_class` note sits in [Tokens & utilities](#tokens--utilities) and moves into this entry once PR-1 lands. Unlike `Menu` and `SelectField` it draws its own overlay; PR-5 decides whether it moves to the native popover.
+- `DatePicker` (`date_picker.rs`) is the month calendar panel. It highlights a day or, with `week`, the whole week, and emits the picked date. It draws only the panel: the caller supplies the trigger and the popover, as `pages/new_project/date_field.rs` and the Timesheet pager do. Props: `selected: NaiveDate`, `week`, `first_day`, `onpick`. See [Formats](#formats). When PR-6 replaces the 7 `Input { kind: "date" }` fields, it decides whether `DateField` (the trigger, popover and display format around this panel, private to `pages/new_project/`) moves to `components/`.
 - `ProjectTaskPicker` (`project_task_picker.rs`) is the pair of project and task fields for new time. It offers only the projects and tasks the server says the person can track, and clears a selection that falls out of that list. Use it wherever new time is entered; the timer uses it today. Props: `project` and `task` (`Signal<String>`), `projects` and `tasks` (resources), `disabled` (keeps an existing entry's names read-only). It still renders native `<select>`s, which PR-5 replaces.
 - `FilterBar` and `SearchField`: planned in PR-5. `PeriodNav`: planned in PR-6. See [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs).
 
@@ -211,10 +216,10 @@ Status:
 - `Input` (`form.rs`) is the text input (`kind` sets the HTML type). Use `label` when there is no visible `FormGroup` label, and `error_id` to point at the field's visible error. Props: `kind`, `id`, `label`, `class`, `value`, `placeholder`, `disabled`, `readonly`, `error_id`, `oninput`. Do not use `kind: "date"`: dates use `DatePicker` (see [Formats](#formats)).
 - `Textarea` (`form.rs`) is the multi-line input. Props: `id`, `value`, `placeholder`, `rows` (default 3), `disabled`, `error_id`, `oninput`.
 - `Select` (`form.rs`) renders a native `<select>` and is retired. Do not add calls; use `SelectField`. See [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs).
-- `Checkbox` (`controls.rs`) is the labelled two-state check drawn as a `button` with `role=checkbox`. `compact` keeps only the accessible name (table rows), `mixed` shows the indeterminate state of a select-all, and `error_id`/`hint_id` link it to its messages. Use it instead of a native checkbox. Props: `checked`, `label`, `id`, `compact`, `mixed`, `disabled`, `error_id`, `hint_id`, `onclick`. See [Tokens & utilities](#tokens--utilities).
-- `Radio` (`controls.rs`) is one labelled option drawn as a `button` with `role=radio`. Props: `selected`, `label`, `onclick`.
+- `Checkbox` (`controls.rs`) is the labelled two-state check drawn as a `button` with `role=checkbox`. `compact` keeps only the accessible name (table rows), `mixed` shows the indeterminate state of a select-all, and `error_id`/`hint_id` link it to its messages. Use it instead of a native checkbox. Props: `checked`, `label`, `id`, `compact`, `mixed`, `disabled`, `error_id`, `hint_id`, `onclick`. See [Tokens & utilities](#tokens--utilities) for `compact`, `mixed` and `disabled`; that note moves into this entry once PR-1 lands.
+- `Radio` (`controls.rs`) is one labelled option in a list where exactly one is chosen. Today it is a `button` with `role=radio`. Props today: `selected`, `label`, `onclick`. *Pending code:* it is to wrap a native `<input type=radio>`, keeping its look and the arrow-key movement of a native radio group, and to take an optional help text under the label. It then replaces the hand-written radios of New Project's three option lists: the rate mode, report visibility and task access. New Project's project-type cards are not radios in this sense: they stay their own pattern of choice cards.
 - `Toggle` (`controls.rs`) is an on/off switch (`role=switch`) with an optional label, for a setting that applies at once. Props: `on`, `label`, `onclick`.
-- `Segmented` (`controls.rs`) shows several labelled options with one active, and emits the chosen label. Use it to switch between views of the same content (Timesheet day, week and calendar; the Approvals status switch), not to filter a list (see `FilterBar` in [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs)). Props: `items: Vec<String>`, `active`, `onselect`.
+- `Segmented` (`controls.rs`) shows several labelled options with one active, and emits the chosen label. Use it to switch between views of the same content (Timesheet day, week and calendar; the Approvals status switch), not to filter a list (see `FilterBar` in [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs)). It is also the control for the fixed-fee mode in New Project (Single fee, Milestones, Monthly), a short choice between three modes. Props: `items: Vec<String>`, `active`, `onselect`. *Pending code:* the fixed-fee mode is still a hand-written radio group and moves to `Segmented`.
 
 #### Data display
 
@@ -222,7 +227,7 @@ Status:
 - `Badge` (`badge.rs`) is the status pill with a dot. Show every status with it, never as plain text. Props: `variant` (`success`, `warning`, `danger`, `info`, `neutral` or `pine`; the class is `badge-{variant}`), `children`. The small size (`badge-sm`) has no prop yet, which is why screens write some badges by hand. See [Status Badges](#status-badges-srccomponentsbadgers).
 - `Card` (`card.rs`) is a `.card` panel with an optional `h3` title. Its fixed `h3` and padding do not fit the screens' sections, which write `.card` by hand. Props: `title`, `children`.
 - `MetricCard` (`card.rs`) is one figure: an uppercase label, a mono value and an optional delta (`direction` is `up`, `down` or empty). Props: `label`, `value`, `delta`, `direction`.
-- `Avatar` (`avatar.rs`) is a person's round avatar with an image or initials; `empty` draws the dashed placeholder of an unassigned slot. Props: `initials`, `image_url`, `size` (`sm`, empty or `lg`), `empty`. `first_initial` in the same file gives the one-letter fallback.
+- `Avatar` (`avatar.rs`) is a person's round avatar with an image or initials; `empty` draws the dashed placeholder of an unassigned slot. Props: `initials`, `image_url`, `size` (`sm`, empty or `lg`), `empty`. Initials are always two letters, from one shared function. Today there are two functions: `first_initial` in this file gives one letter, and `initials` in `sidebar.rs` gives two; they are to be merged into the two-letter one.
 - `Chip` (`avatar.rs`) is a compact person chip (avatar and name), or with `plain` a tag chip without the avatar. It has no remove button, so it does not cover New Project's removable tags. Props: `label`, `initials`, `plain`, `variant`.
 
 #### Feedback
@@ -249,7 +254,7 @@ These modules render nothing (or almost nothing) but are shared the same way.
 
 ### Sidebar (`src/components/sidebar.rs`)
 
-Full-height left rail. The brand row leads with the Horae mark and wordmark plus the golden accent dot. Nav rows default to `--color-text-secondary`; hover darkens the background to `--color-bg-tertiary`; the active row raises to `--color-bg-tertiary` with a `--color-border` hairline, tints its glyph `--color-primary` and closes with a trailing pine dot. Section labels: all-caps, wide letter-spacing, muted warm gray. Navigation labels follow the [glossary](#glossary) ("People", not "Team").
+Full-height left rail. The brand row leads with the Horae mark and wordmark plus the golden accent dot. Nav rows default to `--color-text-secondary`; hover darkens the background to `--color-bg-tertiary`; the active row raises to `--color-bg-tertiary` with a `--color-border` hairline and tints its glyph `--color-primary`; that highlight is its only marker, with no trailing dot. Section labels: all-caps, wide letter-spacing, muted warm gray. Navigation labels follow the [glossary](#glossary) ("People", not "Team").
 
 ### Page header (`src/components/`)
 
@@ -260,7 +265,9 @@ One `PageHeader` component renders the top of every screen: an optional back lin
 
 ### Timer Widget (`src/components/timer_widget.rs`)
 
-`HH:MM:SS` in IBM Plex Mono (`--font-family-mono`), pine-300 when stopped, green (`--color-success`) when running.
+- **Idle**: no time is shown. The rail has a full-width "Start timer" button in the Primary fill (`--color-primary`, hover brightens with `--glow-primary`) with a small clock glyph; it opens the project and task picker.
+- **Running**: a panel on the pine wash (`--color-primary-bg` with a `--color-primary-border` hairline) holds a pine live dot, the elapsed time as `H:MM:SS` (hours not zero-padded) in IBM Plex Mono `lg`/600 and `--color-text-strong`, the "Project · Task" line in `xs` muted ink, and the stop button. Stop is a red (`--color-danger`) square inside a small neutral button, never a word, so the panel keeps its shape.
+- **Collapsed rail**: the running time shortens to `H:MM`.
 
 ### Data Tables (`src/components/table.rs`)
 
@@ -272,7 +279,7 @@ Inputs on `--color-bg` (void — darkest), 8px radius, 44px tall, warm border (`
 
 ### Selects, filters and search (`src/components/select_field.rs`, `menu.rs`)
 
-- **Never a native `<select>`.** Picking one value from a list always uses Horae's own dropdown. In forms that is `SelectField` (a full-width trigger on the shared menu surface, with optional search); `Combobox` is the searchable variant for long catalogs. The kit asks for custom dropdowns everywhere, and a native `<select>` draws a different arrow and list in each browser.
+- **Never a native `<select>`.** Picking one value from a list always uses Horae's own dropdown. In forms that is `SelectField` (a full-width trigger on the shared menu surface), given a `query` for long catalogs so it gets a search box. In filters it is `Combobox`, the compact searchable trigger with an "All" row. PR-5 decides whether `Combobox` moves to the native popover that `Menu` and `SelectField` use. The kit asks for custom dropdowns everywhere, and a native `<select>` draws a different arrow and list in each browser.
 - **`SelectField` and `form::Select`.** `form::Select` renders a native `<select>`, so it is retired: its callers move to `SelectField`, and the two are unified into one form selector. Until that lands, use `SelectField` in new code.
 - **`FilterBar`.** Every list that can be filtered puts its filters in one shared `FilterBar`: a row of `Menu` triggers (with a trailing caret when they open a menu and a pine count when active), plus the search field when the list has one. This replaces the four current shapes (menus in Projects and Clients, native selects labelled "Show" in Tasks and People, a card of labelled selects in Reports). The Approvals status switch stays a `Segmented` control because it switches views, not filters.
 - **`SearchField`.** One shared search field, always with the magnifier glyph inset on the left. It has the same border, height and focus ring as any other input.
@@ -335,6 +342,10 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 - **One formatter.** All duration formatting lives in `horae-core`: a single function that takes integer minutes and the chosen format. The UI, the server and the reports call it the same way, so the same project never shows `13h` in one place and `13:00` in another. Page-local formatters (such as the one in `pages/projects.rs`) are removed.
 - **Exports stay decimal.** CSV and XLSX exports always write decimal hours, whatever the display preference, because spreadsheets need a number they can sum.
 - **Dates** use the app's format (`16 Nov 2026`) everywhere and are picked with the shared `DatePicker`.
+- **Money: one formatter.** Every amount is shown through a single formatter in `horae-core`: the currency code, grouped thousands and the currency's own number of decimals, without losing exactness (`EUR 1,234.00`). The UI, the server, PDFs and emails call it the same way, and no page builds an amount by hand (such as `"{currency} "` followed by `format_cents_plain`). `format_cents_plain` stays only for the values of editable fields and for interchange formats.
+- **Exports keep plain numbers.** CSV and XLSX exports write amounts as unformatted numbers, for the same reason as hours.
+- **Separators are English for now** (`,` for thousands, `.` for decimals). When internationalization arrives, the money formatter takes the locale.
+- *Pending code (PR-6).* Today `format_cents` always writes two decimals, and invoices and New Project build their amounts by hand without grouping (`EUR 1234.00`). PR-6 brings both in line with the rule above.
 
 ## Glossary
 
@@ -365,11 +376,11 @@ Conventions:
 
 These rules come from the [`dioxus-best-practices`](.agents/skills/dioxus-best-practices/SKILL.md) skill, which gives the reasons and the source behind each one. `cargo run -p horae-dioxus-lint` checks several of them.
 
-- One component per file in `crates/horae/src/components/`, declared in `components.rs`. A component that needs several files uses `foo.rs` beside a `foo/` directory, not `foo/mod.rs`. Add its entry to the [catalog](#catalog).
+- One family per file in `crates/horae/src/components/`, declared in `components.rs`. Components that form one unit share a file (`button.rs`, `menu.rs`, `form.rs`, `toast.rs`, `card.rs`, `avatar.rs`); a control that stands on its own gets its own file. `controls.rs` is a catch-all rather than a family: `Radio`, `Segmented`, `Checkbox` and `Toggle` move to their own files when someone next changes them (`Radio` with its native-input fix, `Segmented` in PR-5), not in a PR made only to move them. A component that needs several files uses `foo.rs` beside a `foo/` directory, not `foo/mod.rs`. Add its entry to the [catalog](#catalog).
 - Components are `#[component]` functions returning `Element`. Props use `snake_case`, and optional ones take `#[props(default)]`.
 - Props must compare equal when nothing changed, or the component re-renders with its parent. Pass handlers made with `use_callback`, not inline closures; `EventHandler::new` and `Callback::new` are banned by `clippy.toml`. Pass `Signal`, `Memo` or `Resource` handles. Never put a `ReadSignal` inside a struct prop or an `Option<ReadSignal>` built with `.into()`. For large data, pass an id and a handle and read it inside the component.
 - A `children: Element` prop makes the component re-render whenever its parent does. Take children only when the caller really supplies markup (`Modal`, `Menu`, `FormGroup`), and keep components that take them out of large table rows.
-- State uses `use_signal` (local) or `use_resource` (server data), and mutations call `#[server]` functions. Shared state comes from a context that `AppLayout` provides (`use_session`, `use_running_timer`), never from a global.
+- State uses `use_signal` (local) or `use_resource` (server data), and mutations call `#[server]` functions. *Pending code:* today 19 button `onclick` handlers call the server from a `spawn` of their own, each with its own busy, error and notice handling. A PR of its own unifies them on one path (`run_action` in `pages.rs`, or its successor). Shared state comes from a context that `AppLayout` provides (`use_session`, `use_running_timer`), never from a global.
 - Internal navigation uses `Link`, never `a { href }`, which reloads the app.
 
 ## Tokens & utilities

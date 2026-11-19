@@ -169,7 +169,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 - **PostgreSQL only** (no SQLite). Migrations live in `crates/server/migrations/` and apply via `sqlx` / `migrate run`.
 - Single organization for now, but every table keeps an `org_id` FK so multi-org is a later flip.
 
-Feature requirements and implementation plans live under `specs/<NNN-feature>/`; `.specify/memory/constitution.md` is authoritative for cross-cutting invariants. `DESIGN.md` is the design system (Invoicer aesthetic; tokens in `crates/horae/assets/css/horae.css`; components are one-per-file `#[component]` functions using `use_signal`/`use_resource`, with no global mutable UI state).
+Feature requirements and implementation plans live under `specs/<NNN-feature>/`; `.specify/memory/constitution.md` is authoritative for cross-cutting invariants. `DESIGN.md` is the design system (Invoicer aesthetic; tokens in `crates/horae/assets/css/horae.css`; components are `#[component]` functions, one family per file, using `use_signal`/`use_resource`, with no global mutable UI state).
 
 ## Skills
 
