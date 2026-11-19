@@ -7,7 +7,7 @@ never sent upstream (D-8).
 
 | Client | Language | Pin | Workflows | Status |
 | --- | --- | --- | --- | --- |
-| [becoded/go-harvest](https://github.com/becoded/go-harvest) | Go | `v0.0.0-20260118095129-1ac13afbeb71` (`go.sum`, `vendorHash`) | who am I, projects, time entries list and get | runs; reads through the dev-login session until tokens land |
+| [becoded/go-harvest](https://github.com/becoded/go-harvest) | Go | `v0.0.0-20260118095129-1ac13afbeb71` (`go.sum`, `vendorHash`) | who am I, projects, time entries list and get | runs; reads with a personal access token and `Harvest-Account-Id` |
 
 Not yet added (research R-10; each is added with the step that first needs it, or dropped here
 with the reason):

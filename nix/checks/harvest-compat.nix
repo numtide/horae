@@ -12,7 +12,7 @@ let
 in
 pkgs.runCommand "horae-harvest-compat"
 {
-  nativeBuildInputs = with pkgs; [ bash coreutils curl gawk postgresql ];
+  nativeBuildInputs = with pkgs; [ bash coreutils curl postgresql ];
   HORAE_TEST_SERVER = "${perSystem.self.default}/bin/horae";
   meta.platforms = pkgs.lib.platforms.linux;
 }

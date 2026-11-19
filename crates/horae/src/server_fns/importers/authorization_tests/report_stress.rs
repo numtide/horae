@@ -34,13 +34,11 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         .unwrap();
     let owner = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     crate::state::init_state(
-        pool.clone(),
-        Arc::new(crate::plugin::PluginRegistry::empty()),
-        None,
-        Default::default(),
-        Default::default(),
-        None,
-        crate::version::current(),
+        crate::state::AppState::new(
+            pool.clone(),
+            Arc::new(crate::plugin::PluginRegistry::empty()),
+        )
+        .with_version(crate::version::current()),
     )
     .await;
     let router = Router::new()

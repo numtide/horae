@@ -386,3 +386,22 @@ async fn only_an_active_token_caller_has_an_identity(pool: PgPool) {
         "{inactive:?}"
     );
 }
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn every_active_person_reads_the_harvest_account_id(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let stored = fetch_harvest_account_id(&pool, ids.org_id).await.unwrap();
+    let mut read = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+        .await
+        .unwrap();
+    let result = harvest_account_id(&mut read.tx, &read.actor).await;
+    assert_eq!(read.finish(result).await.unwrap(), stored);
+
+    set_active(&pool, ids.user_id, false).await;
+    let mut read = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+        .await
+        .unwrap();
+    let result = harvest_account_id(&mut read.tx, &read.actor).await;
+    let refused = read.finish(result).await;
+    assert!(matches!(refused, Err(OpError::Forbidden(_))), "{refused:?}");
+}

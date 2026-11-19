@@ -16,6 +16,8 @@ pub struct AppState {
     pub harvest: crate::config::HarvestDeployment,
     pub job_policy: crate::config::JobPolicy,
     pub mail: Option<crate::config::MailConfig>,
+    /// `HORAE_HARVEST_API`: whether the Harvest-compatible API is served.
+    pub harvest_api: bool,
     /// The running server's version label, set by the binary at startup.
     pub version: String,
 }
@@ -29,8 +31,14 @@ impl AppState {
             harvest: Default::default(),
             job_policy: crate::config::JobPolicy::default(),
             mail: None,
+            harvest_api: false,
             version: String::new(),
         }
+    }
+
+    pub fn with_harvest_api(mut self, enabled: bool) -> Self {
+        self.harvest_api = enabled;
+        self
     }
 
     pub fn with_version(mut self, version: String) -> Self {
@@ -65,25 +73,8 @@ static GLOBAL_STATE: OnceCell<AppState> = OnceCell::const_new();
 /// Pre-initialise the global state with an already-created pool and plugin registry.
 /// Call this in `main` before starting the Axum server so that session and
 /// auth handlers share the same pool as server functions.
-pub async fn init_state(
-    pool: sqlx::PgPool,
-    plugins: Arc<PluginRegistry>,
-    oidc: Option<crate::config::OidcConfig>,
-    harvest: crate::config::HarvestDeployment,
-    job_policy: crate::config::JobPolicy,
-    mail: Option<crate::config::MailConfig>,
-    version: String,
-) {
-    GLOBAL_STATE
-        .get_or_init(|| async {
-            AppState::new(pool, plugins)
-                .with_oidc(oidc)
-                .with_harvest(harvest)
-                .with_job_policy(job_policy)
-                .with_mail(mail)
-                .with_version(version)
-        })
-        .await;
+pub async fn init_state(state: AppState) {
+    GLOBAL_STATE.get_or_init(|| async { state }).await;
 }
 
 /// Returns a reference to the global AppState.

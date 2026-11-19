@@ -271,15 +271,16 @@ fn main() -> anyhow::Result<()> {
                     plugin::PluginRegistry::load(plugins_dir, plugin_database).await?,
                 );
                 state::init_state(
-                    pool.clone(),
-                    registry,
-                    cfg.oidc.clone(),
-                    cfg.harvest.clone(),
-                    cfg.job_policy,
-                    cfg.mail.clone(),
-                    version::current(),
+                    state::AppState::new(pool.clone(), registry)
+                        .with_oidc(cfg.oidc.clone())
+                        .with_harvest(cfg.harvest.clone())
+                        .with_harvest_api(cfg.harvest_api)
+                        .with_job_policy(cfg.job_policy)
+                        .with_mail(cfg.mail.clone())
+                        .with_version(version::current()),
                 )
                 .await;
+                let v1 = horae_api::v1::V1State::new(pool.clone(), &cfg.api);
 
                 // Start the background poller for forgotten timers (US3).
                 scheduler::spawn(state::global_state().await);
@@ -308,9 +309,14 @@ fn main() -> anyhow::Result<()> {
                             favicon_svg: asset!("/assets/favicon.svg").to_string(),
                             apple_touch_icon: asset!("/assets/apple-touch-icon.png").to_string(),
                         },
-                        v1: horae_api::v1::V1State::new(pool.clone(), &cfg.api),
+                        v1: v1.clone(),
                     }))
-                    .merge(horae_harvest_api::mount(cfg.harvest_api, pool.clone()))
+                    // One limiter for both APIs, so a token's requests count together.
+                    .merge(horae_harvest_api::mount(
+                        cfg.harvest_api,
+                        pool.clone(),
+                        v1.limiter.clone(),
+                    ))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated.
                     .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))
