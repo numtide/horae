@@ -23,8 +23,11 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 use crate::config::{ApiConfig, CursorKey};
+use crate::notifications::budgets::check_project_budget;
+use crate::ops::{EventSink, NoEvents};
 use crate::problem::{self, Problem};
 use crate::rate_limit::{self, RateLimiter};
+use crate::state::AppState;
 use crate::token::ApiCaller;
 
 mod catalogue;
@@ -35,6 +38,8 @@ pub mod projects;
 pub mod tasks;
 #[cfg(test)]
 pub(crate) mod testing;
+pub mod time_entries;
+pub mod timers;
 pub mod types;
 
 /// What `/api/v1` handlers share.
@@ -44,14 +49,42 @@ pub struct V1State {
     pub limiter: Arc<RateLimiter>,
     /// Signs list cursors ([`crate::cursor`]).
     pub cursor_key: Arc<CursorKey>,
+    /// Hears the events a write commits.
+    pub events: Arc<dyn EventSink + Send + Sync>,
+    /// Checks the budgets of the projects a write touched, as the web app
+    /// does after its commit; `None` checks none.
+    pub budgets: Option<&'static AppState>,
 }
 
 impl V1State {
+    /// No events are dispatched and no budget is checked until
+    /// [`V1State::with_app`].
     pub fn new(pool: PgPool, config: &ApiConfig) -> Self {
         Self {
             pool,
             limiter: Arc::new(RateLimiter::new(config.rate_limit)),
             cursor_key: Arc::new(config.cursor_key.clone()),
+            events: Arc::new(NoEvents),
+            budgets: None,
+        }
+    }
+
+    /// The server's plugins hear writes, and its budgets are checked.
+    pub fn with_app(self, app: &'static AppState) -> Self {
+        Self {
+            events: app.plugins.clone(),
+            budgets: Some(app),
+            ..self
+        }
+    }
+
+    /// After a committed time change: the web app's budget checks, never
+    /// blocking the answer.
+    pub(crate) fn time_changed(&self, projects: impl IntoIterator<Item = uuid::Uuid>) {
+        if let Some(app) = self.budgets {
+            for project in projects {
+                tokio::spawn(check_project_budget(app, project));
+            }
         }
     }
 }
@@ -84,6 +117,8 @@ impl FromRef<V1State> for Arc<RateLimiter> {
     tags(
         (name = "description", description = "This document"),
         (name = "identity", description = "Who a token acts as"),
+        (name = "time entries", description = "Time spent, read and written as on the Timesheet"),
+        (name = "timers", description = "Starting, stopping and restarting timers"),
         (name = "catalogue", description = "Projects, tasks, clients and people, read-only"),
     )
 )]
@@ -156,6 +191,15 @@ fn token_routes() -> OpenApiRouter<V1State> {
         .routes(routes!(me::me))
         .routes(routes!(me::trackable))
         .routes(routes!(me::timer))
+        .routes(routes!(time_entries::list, time_entries::create))
+        .routes(routes!(
+            time_entries::get,
+            time_entries::update,
+            time_entries::delete
+        ))
+        .routes(routes!(time_entries::stop))
+        .routes(routes!(time_entries::restart))
+        .routes(routes!(timers::start))
         .routes(routes!(projects::list))
         .routes(routes!(projects::get))
         .routes(routes!(tasks::list))

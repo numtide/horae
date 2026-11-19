@@ -3,12 +3,13 @@
 //! writes. Run them on [`super::begin_read`]: the actor's locks keep the
 //! organization, its activity and grants stable until rows are materialized.
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use horae_core::types::EntryState;
 use uuid::Uuid;
 
 use super::{Actor, OpError, Tx};
+use crate::models::TimeEntry;
 use crate::models::people::PeopleCursor;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
@@ -43,6 +44,119 @@ const TIME_READS: [Permission; 3] = [
     Permission::TimeReadManaged,
     Permission::TimeReadAll,
 ];
+
+/// What [`list`] narrows the readable entries to; every filter is optional.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EntryFilter {
+    pub person_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,
+    pub client_id: Option<Uuid>,
+    /// Inclusive spent dates.
+    pub from: Option<NaiveDate>,
+    pub to: Option<NaiveDate>,
+    pub is_running: Option<bool>,
+    /// Entries whose `updated_at` is at or after this instant.
+    pub updated_since: Option<DateTime<Utc>>,
+}
+
+const ENTRY_NOT_FOUND: &str = "Time entry not found";
+const DATES_REVERSED: &str = "The start date is after the end date";
+
+/// The entries the actor may read, with the Timesheet's scope (own, managed
+/// or all), in `id` order after `after`, `limit` at most.
+pub async fn list(
+    tx: &mut Tx,
+    actor: &Actor,
+    filter: &EntryFilter,
+    after: Option<Uuid>,
+    limit: i64,
+) -> Result<Vec<TimeEntry>, OpError> {
+    let grants = require_time_reads(actor, TIME_READ_REQUIRED)?;
+    if let (Some(from), Some(to)) = (filter.from, filter.to)
+        && from > to
+    {
+        return Err(OpError::invalid("from", DATES_REVERSED));
+    }
+    readable(tx, actor, &grants, filter, None, after, limit).await
+}
+
+/// One entry the actor may read. One outside their scope is not found, as
+/// in the web app.
+pub async fn get(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<TimeEntry, OpError> {
+    let grants = time_reads(actor).ok_or_else(|| OpError::not_found(ENTRY_NOT_FOUND))?;
+    readable(
+        tx,
+        actor,
+        &grants,
+        &EntryFilter::default(),
+        Some(id),
+        None,
+        1,
+    )
+    .await?
+    .pop()
+    .ok_or_else(|| OpError::not_found(ENTRY_NOT_FOUND))
+}
+
+async fn readable(
+    tx: &mut Tx,
+    actor: &Actor,
+    grants: &PermissionSelection,
+    filter: &EntryFilter,
+    id: Option<Uuid>,
+    after: Option<Uuid>,
+    limit: i64,
+) -> Result<Vec<TimeEntry>, OpError> {
+    // The scope is `fetch_entries`'s: own, managed people and projects, or all.
+    Ok(sqlx::query_as!(
+        TimeEntry,
+        r#"SELECT e.id, e.org_id, e.user_id, e.project_id, e.task_id,
+                e.spent_date AS "spent_date: NaiveDate", e.minutes, e.start_minute, e.sort_order,
+                e.rounded_minutes, e.notes, e.billable, e.is_running,
+                e.started_at AS "started_at: DateTime<Utc>",
+                e.state AS "state: EntryState", e.invoice_id,
+                e.created_at AS "created_at: DateTime<Utc>",
+                e.updated_at AS "updated_at: DateTime<Utc>"
+         FROM time_entries e
+         JOIN projects p ON p.id=e.project_id AND p.org_id=e.org_id
+         WHERE e.org_id=$1 AND (
+             $5::bool OR ($3::bool AND e.user_id=$2) OR ($4::bool AND (
+                 EXISTS (SELECT 1 FROM person_management_assignments m
+                     WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.managed_user_id=e.user_id)
+                 OR EXISTS (SELECT 1 FROM project_management_assignments m
+                     WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.project_id=e.project_id))))
+           AND ($6::uuid IS NULL OR e.id=$6)
+           AND ($7::uuid IS NULL OR e.user_id=$7)
+           AND ($8::uuid IS NULL OR e.project_id=$8)
+           AND ($9::uuid IS NULL OR e.task_id=$9)
+           AND ($10::uuid IS NULL OR p.client_id=$10)
+           AND ($11::date IS NULL OR e.spent_date>=$11)
+           AND ($12::date IS NULL OR e.spent_date<=$12)
+           AND ($13::bool IS NULL OR e.is_running=$13)
+           AND ($14::timestamptz IS NULL OR e.updated_at>=$14)
+           AND ($15::uuid IS NULL OR e.id>$15)
+         ORDER BY e.id LIMIT $16"#,
+        actor.org_id(),
+        actor.id(),
+        grants.contains(Permission::TimeReadOwn),
+        grants.contains(Permission::TimeReadManaged),
+        grants.contains(Permission::TimeReadAll),
+        id,
+        filter.person_id,
+        filter.project_id,
+        filter.task_id,
+        filter.client_id,
+        filter.from as Option<NaiveDate>,
+        filter.to as Option<NaiveDate>,
+        filter.is_running,
+        filter.updated_since as Option<DateTime<Utc>>,
+        after,
+        limit,
+    )
+    .fetch_all(&mut **tx)
+    .await?)
+}
 
 const SHEET_FORBIDDEN: &str = "Timesheet access or identity has changed; refresh the page";
 const SHEET_INVALID: &str = "Invalid Timesheet date range or cursor";

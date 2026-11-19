@@ -13,6 +13,16 @@ Where the generated document of PR F differs from the draft:
   identity), `null` when no input is to blame.
 - Each operation has a tag (`description`, `identity`).
 
+And where PR H's differs:
+
+- The time-entry page is `Page_TimeEntry`; the operations are tagged `time entries` and `timers`.
+- `POST /time_entries` and `POST /timers` answer `201` with a `Location` header naming the entry.
+- In `TimeEntryPatch`, `null` clears `notes` and `start_minute`; for any other field it keeps the
+  value, like an absent field.
+- An entry outside the owner's read scope is `404` for writes too (`PATCH`, `DELETE`, stop,
+  restart), before any write check. One they may read but not write is `403`.
+- `from` after `to` is `422 invalid` with `field: "from"`.
+
 ## Conventions
 
 | Topic | Rule |

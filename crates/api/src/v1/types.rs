@@ -167,6 +167,85 @@ pub struct TimeEntry {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A time entry with a duration. Unknown fields are refused.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NewTimeEntry {
+    /// Whose time; the token's owner when absent. Another person needs the
+    /// owner's write scope over them.
+    pub person_id: Option<Uuid>,
+    pub project_id: Uuid,
+    pub task_id: Uuid,
+    pub spent_date: NaiveDate,
+    #[schema(minimum = 0)]
+    pub minutes: i32,
+    #[serde(default)]
+    pub notes: Option<String>,
+    /// Whether the time is billable; the task's eligibility still applies.
+    #[serde(default = "billable_by_default")]
+    #[schema(default = true)]
+    pub billable: bool,
+    #[serde(default)]
+    #[schema(minimum = 0, maximum = 1439)]
+    pub start_minute: Option<i32>,
+}
+
+fn billable_by_default() -> bool {
+    true
+}
+
+/// Changes to an entry: an absent field keeps its value, and `null` clears
+/// `notes` or `start_minute`. Unknown fields are refused.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TimeEntryPatch {
+    pub project_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,
+    pub spent_date: Option<NaiveDate>,
+    #[schema(minimum = 0)]
+    pub minutes: Option<i32>,
+    #[serde(default, deserialize_with = "present")]
+    #[schema(value_type = Option<String>)]
+    pub notes: Option<Option<String>>,
+    pub billable: Option<bool>,
+    #[serde(default, deserialize_with = "present")]
+    #[schema(value_type = Option<i32>, minimum = 0, maximum = 1439)]
+    pub start_minute: Option<Option<i32>>,
+}
+
+/// A field that is present, even as `null`; an absent one stays `None`.
+fn present<'de, T: Deserialize<'de>, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
+}
+
+impl From<TimeEntryPatch> for crate::ops::time::EntryPatch {
+    fn from(patch: TimeEntryPatch) -> Self {
+        Self {
+            project_id: patch.project_id,
+            task_id: patch.task_id,
+            spent_date: patch.spent_date,
+            minutes: patch.minutes,
+            notes: patch.notes,
+            billable: patch.billable,
+            start_minute: patch.start_minute,
+        }
+    }
+}
+
+/// A timer to start now, on the person's today. Unknown fields are refused.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NewTimer {
+    /// Whose timer; the token's owner when absent.
+    pub person_id: Option<Uuid>,
+    pub project_id: Uuid,
+    pub task_id: Uuid,
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
 impl From<StoredEntry> for TimeEntry {
     fn from(entry: StoredEntry) -> Self {
         Self {

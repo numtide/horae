@@ -183,6 +183,97 @@
         ],
         "type": "object"
       },
+      "NewTimeEntry": {
+        "additionalProperties": false,
+        "description": "A time entry with a duration. Unknown fields are refused.",
+        "properties": {
+          "billable": {
+            "default": true,
+            "description": "Whether the time is billable; the task's eligibility still applies.",
+            "type": "boolean"
+          },
+          "minutes": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "person_id": {
+            "description": "Whose time; the token's owner when absent. Another person needs the\nowner's write scope over them.",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "spent_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "start_minute": {
+            "format": "int32",
+            "maximum": 1439,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "task_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "task_id",
+          "spent_date",
+          "minutes"
+        ],
+        "type": "object"
+      },
+      "NewTimer": {
+        "additionalProperties": false,
+        "description": "A timer to start now, on the person's today. Unknown fields are refused.",
+        "properties": {
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "person_id": {
+            "description": "Whose timer; the token's owner when absent.",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "task_id"
+        ],
+        "type": "object"
+      },
       "Page_Client": {
         "description": "One page of a list, in `id` order. `next_cursor` is `null` on the last\npage.",
         "properties": {
@@ -433,6 +524,119 @@
                 "name",
                 "billable_default",
                 "active",
+                "created_at",
+                "updated_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "Page_TimeEntry": {
+        "description": "One page of a list, in `id` order. `next_cursor` is `null` on the last\npage.",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "Time a person spent on a project's task on one day.",
+              "properties": {
+                "billable": {
+                  "type": "boolean"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "is_running": {
+                  "type": "boolean"
+                },
+                "minutes": {
+                  "description": "Tracked minutes; a running timer's minutes before it started.",
+                  "format": "int32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "notes": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "person_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "project_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "rounded_minutes": {
+                  "description": "The rounded minutes, set when the entry is submitted.",
+                  "format": "int32",
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "spent_date": {
+                  "description": "The person's calendar day, as in the timesheet.",
+                  "format": "date",
+                  "type": "string"
+                },
+                "start_minute": {
+                  "description": "Start time as minutes after the day's midnight; `null` for an entry\nwith only a duration.",
+                  "format": "int32",
+                  "maximum": 1439,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "$ref": "#/components/schemas/EntryState"
+                },
+                "task_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "timer_started_at": {
+                  "description": "When the running timer started; `null` when it is not running.",
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "person_id",
+                "project_id",
+                "task_id",
+                "spent_date",
+                "minutes",
+                "billable",
+                "state",
+                "is_running",
                 "created_at",
                 "updated_at"
               ],
@@ -796,6 +1000,63 @@
           "created_at",
           "updated_at"
         ],
+        "type": "object"
+      },
+      "TimeEntryPatch": {
+        "additionalProperties": false,
+        "description": "Changes to an entry: an absent field keeps its value, and `null` clears\n`notes` or `start_minute`. Unknown fields are refused.",
+        "properties": {
+          "billable": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minutes": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spent_date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_minute": {
+            "format": "int32",
+            "maximum": 1439,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "task_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "Trackable": {
@@ -1391,6 +1652,389 @@
           "catalogue"
         ]
       }
+    },
+    "/time_entries": {
+      "get": {
+        "operationId": "listTimeEntries",
+        "parameters": [
+          {
+            "description": "Entries per page, 1 to 1000.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "format": "int32",
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "From the previous page's `next_cursor`.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "person_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "task_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "client_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "First spent date, inclusive.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last spent date, inclusive.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_running",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Entries changed at or after this instant.",
+            "in": "query",
+            "name": "updated_since",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_TimeEntry"
+                }
+              }
+            },
+            "description": "A page of time entries"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Every entry the owner may read, own, managed or all by their scope.",
+        "tags": [
+          "time entries"
+        ]
+      },
+      "post": {
+        "operationId": "createTimeEntry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTimeEntry"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntry"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The new entry",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Records time with a duration, as the Timesheet's create does.",
+        "tags": [
+          "time entries"
+        ]
+      }
+    },
+    "/time_entries/{id}": {
+      "delete": {
+        "operationId": "deleteTimeEntry",
+        "parameters": [
+          {
+            "description": "The entry",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Deletes an entry.",
+        "tags": [
+          "time entries"
+        ]
+      },
+      "get": {
+        "operationId": "getTimeEntry",
+        "parameters": [
+          {
+            "description": "The entry",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntry"
+                }
+              }
+            },
+            "description": "The entry"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "One entry the owner may read.",
+        "tags": [
+          "time entries"
+        ]
+      },
+      "patch": {
+        "operationId": "updateTimeEntry",
+        "parameters": [
+          {
+            "description": "The entry",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimeEntryPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntry"
+                }
+              }
+            },
+            "description": "Updated"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Changes the given fields of an entry; the rest keep their values.",
+        "tags": [
+          "time entries"
+        ]
+      }
+    },
+    "/time_entries/{id}/restart": {
+      "post": {
+        "operationId": "restartTimer",
+        "parameters": [
+          {
+            "description": "The entry",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntry"
+                }
+              }
+            },
+            "description": "Running again"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Runs a stopped entry of today again, keeping its minutes; a running timer\nis stopped first. Another day's entry cannot restart (409).",
+        "tags": [
+          "timers"
+        ]
+      }
+    },
+    "/time_entries/{id}/stop": {
+      "post": {
+        "operationId": "stopTimer",
+        "parameters": [
+          {
+            "description": "The entry",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntry"
+                }
+              }
+            },
+            "description": "Stopped"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Stops the entry's running timer.",
+        "tags": [
+          "timers"
+        ]
+      }
+    },
+    "/timers": {
+      "post": {
+        "operationId": "startTimer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTimer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntry"
+                }
+              }
+            },
+            "description": "Started",
+            "headers": {
+              "Location": {
+                "description": "The new entry",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Starts a timer on the person's today. A timer already running for them is\nstopped first, as in the web app.",
+        "tags": [
+          "timers"
+        ]
+      }
     }
   },
   "security": [
@@ -1411,6 +2055,14 @@
     {
       "description": "Who a token acts as",
       "name": "identity"
+    },
+    {
+      "description": "Time spent, read and written as on the Timesheet",
+      "name": "time entries"
+    },
+    {
+      "description": "Starting, stopping and restarting timers",
+      "name": "timers"
     },
     {
       "description": "Projects, tasks, clients and people, read-only",

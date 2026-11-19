@@ -280,7 +280,8 @@ fn main() -> anyhow::Result<()> {
                         .with_version(version::current()),
                 )
                 .await;
-                let v1 = horae_api::v1::V1State::new(pool.clone(), &cfg.api);
+                let v1 = horae_api::v1::V1State::new(pool.clone(), &cfg.api)
+                    .with_app(state::global_state().await);
 
                 // Start the background poller for forgotten timers (US3).
                 scheduler::spawn(state::global_state().await);
