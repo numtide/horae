@@ -3,6 +3,8 @@ use dioxus::prelude::*;
 use horae_core::importers::harvest::types::ImportMode;
 
 use super::IMPORT_SUB;
+use crate::components::back_link::BackLink;
+use crate::components::page_header::PageHeader;
 use crate::route::Route;
 use crate::server_fns;
 
@@ -41,14 +43,11 @@ pub fn HarvestCsv() -> Element {
 
     rsx! {
         div { class: "himp-page min-w-0",
-            div { class: "page-header",
-                h1 { class: "page-title", "Import from CSV" }
-            }
+            BackLink { to: Route::ImporterIndex {}, label: "Back to Importers" }
+            PageHeader { title: "Import from CSV" }
             p { class: "text-secondary text-sm mb-6", "{IMPORT_SUB}" }
-            div { class: "flex items-center gap-3 flex-wrap mb-6",
-                Link { to: Route::ImporterIndex {}, class: "imp-back text-primary text-sm", "data-testid": "all-importers", "← All importers" }
-                span { class: "text-faint text-sm", "·" }
-                Link { to: Route::HarvestOverview { outcome: Default::default() }, class: "imp-back text-secondary text-sm", "data-testid": "use-api", "Use the Harvest API instead" }
+            div { class: "mb-6",
+                Link { to: Route::HarvestOverview { outcome: Default::default() }, class: "text-sm", "data-testid": "use-api", "Use the Harvest API instead" }
             }
             match file.read().as_ref() {
                 None => rsx! {

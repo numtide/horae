@@ -6,6 +6,8 @@ use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
 use super::loaded;
+use crate::components::back_link::BackLink;
+use crate::components::page_header::PageHeader;
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
@@ -97,9 +99,8 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Invoices" }
-                div { class: "page-actions",
+            PageHeader { title: "Invoices",
+                actions: rsx! {
                     if configures {
                         Link { to: Route::InvoiceSettings {}, class: "btn btn-secondary", "Settings" }
                     }
@@ -113,7 +114,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                         if show_form() { "Cancel" } else { "New Invoice" }
                     }
                     }
-                }
+                },
             }
 
             if prepares && storage.ready() && show_form() {
@@ -257,9 +258,9 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                 let cname = &data.client_name;
 
                 rsx! {
-                    div { class: "page-header",
-                        h1 { class: "page-title", "Invoice {inv.number}" }
-                        div { class: "page-actions",
+                    BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
+                    PageHeader { title: format!("Invoice {}", inv.number),
+                        actions: rsx! {
                             match inv.status {
                                 InvoiceStatus::Draft => rsx! {
                                     {status_btn("sent", "Mark Sent", true)}
@@ -278,7 +279,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                 target: "_blank",
                                 "Download PDF"
                             }
-                        }
+                        },
                     }
 
                     if let Some(err) = &*error.read() {

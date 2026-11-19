@@ -3,13 +3,15 @@ use horae_core::importers::harvest::types::ConnectionStatus;
 
 use super::change_account::ChangeAccount;
 use super::{Conn, HarvestLogo};
+use crate::components::back_link::BackLink;
 use crate::components::menu::{Menu, MenuDivider};
 use crate::components::modal::Modal;
+use crate::components::page_header::PageHeader;
 use crate::route::Route;
 use crate::server_fns;
 
-/// The page heading: Harvest, one line of connection status, and the
-/// Connection menu (check, OAuth app, change account, disconnect).
+/// The page header (Harvest, its connection status and the Connection menu:
+/// check, OAuth app, change account, disconnect), then one line of status.
 #[component]
 pub(super) fn ConnectionCard(
     connection: Conn,
@@ -71,24 +73,15 @@ pub(super) fn ConnectionCard(
     });
 
     rsx! {
-        header { class: "flex items-center justify-between gap-4 flex-wrap mb-6",
-            div { class: "flex items-center gap-4 min-w-0",
-                HarvestLogo { class: "integration-logo" }
-                div { class: "min-w-0",
-                    h1 { class: "page-title", "Harvest" }
-                    p { class: "text-sm text-secondary flex items-center gap-2 flex-wrap mt-1",
-                        span { class: "badge {tone} badge-sm", "data-testid": "connection-status", "{label}" }
-                        if let Some(account) = &account { span { "Account " span { class: "text-mono", "{account}" } " ·" } }
-                        if refused {
-                            span { class: "text-danger", "reconnect to continue" }
-                        } else {
-                            span { "read-only, Horae never writes to Harvest" }
-                        }
-                    }
-                }
-            }
-            if loaded.as_ref().is_some_and(|s| s.configured) {
+        BackLink { to: Route::ImporterIndex {}, label: "Back to Importers" }
+        PageHeader { title: "Harvest",
+            leading: rsx! { HarvestLogo { class: "" } },
+            meta: rsx! {
+                span { class: "badge {tone} badge-sm", "data-testid": "connection-status", "{label}" }
+            },
+            actions: loaded.as_ref().is_some_and(|s| s.configured).then(|| rsx! {
                 Menu { id: "harvest-connection", label: "Connection", align_right: true,
+                    trigger_class: "text-sm py-3 px-5",
                     button { r#type: "button", role: "menuitem", tabindex: "-1", class: "menu-item",
                         "data-testid": "refresh-connection".to_owned(),
                         onclick: move |_| on_changed.call(()),
@@ -155,6 +148,14 @@ pub(super) fn ConnectionCard(
                         }
                     }
                 }
+            }),
+        }
+        p { class: "text-sm text-secondary flex items-center gap-2 flex-wrap mb-6",
+            if let Some(account) = &account { span { "Account " span { class: "text-mono", "{account}" } " ·" } }
+            if refused {
+                span { class: "text-danger", "reconnect to continue" }
+            } else {
+                span { "read-only, Horae never writes to Harvest" }
             }
         }
         if let Some(message) = error() {

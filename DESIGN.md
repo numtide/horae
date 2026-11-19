@@ -121,7 +121,15 @@ Full-height left rail. The brand row leads with the Horae mark and wordmark plus
 
 ### Page header (`src/components/`)
 
-One `PageHeader` component renders the top of every screen: an optional back link on its own row, then the title (see [Type scale](#type-scale)) and the screen's actions. Header actions use the normal button size, never `btn-sm`, and wrap the same way on every screen. One shared header keeps the title, the way back and the actions in the same place everywhere.
+One `PageHeader` component (`page_header.rs`, with `back_link.rs`) renders the top of every screen: the title (see [Type scale](#type-scale)) and the screen's actions, with an optional `BackLink` on its own row above it. Header actions use the normal button size, never `btn-sm` (header menus pass `trigger_class: "text-sm py-3 px-5"`). They sit at the right while they fit beside the title and wrap onto a left-aligned row of their own when they do not, the same way on every screen. One shared header keeps the title, the way back and the actions in the same place everywhere.
+
+`PageHeader` has three optional slots besides the actions. Each is for the one thing named here, so headers do not drift apart again:
+
+- **`context`**: one line above the title, only when it carries data about the record: the client of a project (a link when the viewer may open it), the date a client was added. Never a fixed label such as "Projects"; the back link already names the section.
+- **`meta`**: inline after the title, for status badges and short qualifiers: a currency or project-type pill, "Archived", the connection status of an integration, the source of an import run.
+- **`leading`**: before the title, only for an integration's own logo (Harvest), as a 36px mark (`--size-page-mark`) with the button radius. The logo is a local asset shown unaltered (see `AGENTS.md`, *Harvest parity*); no other icon or brand goes here.
+
+Anything longer, such as a status sentence or a description, goes below the header, not in it.
 
 - **Back link**: the kit's *Back link*. A 16px arrow and a 14px label on their own row above the title, muted ink that brightens to pine on hover. It points to the parent in the hierarchy ("Back to Projects" from a project, "Back to Importers" from Harvest), not to the screen the user came from, and only screens that sit under a section have one. Sections reached from the sidebar (Timesheet, Projects, People, Settings, API tokens, Importers, the audit log and the rest) have none, because the sidebar is always there; the `AdminShell`'s "Back to Timesheet" link is removed.
 - **No breadcrumbs.** The back link replaces a breadcrumb; never show both. The Harvest section's `BackLinks` breadcrumb (`Importers / Harvest / …`) is replaced by a back link to the parent. No other style of "back" is allowed: no `btn-ghost` or `btn-secondary` back buttons and no top-right back button.

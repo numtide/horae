@@ -4,15 +4,22 @@ use horae_core::importers::harvest::types::{
 };
 use uuid::Uuid;
 
-use super::back_links::BackLinks;
 use super::entity_table::EntityTable;
 use super::error_groups::ErrorGroups;
 use super::missing_people::MissingPeople;
 use super::run_panel::RunPanel;
 use super::{Conn, pause, presentation, use_connection};
+use crate::components::back_link::BackLink;
+use crate::components::page_header::PageHeader;
 use crate::models::JobStatus;
 use crate::route::Route;
 use crate::server_fns;
+
+/// Every state of a run goes back to the newest page of runs.
+const RUNS: Route = Route::HarvestRuns {
+    before: super::RunsCursor(None),
+};
+const BACK_TO_RUNS: &str = "Back to Harvest runs";
 
 /// A run's state, followed until it ends, then what it changes in Horae and
 /// what needs the administrator's attention.
@@ -88,7 +95,8 @@ pub(super) fn RunView(id: Uuid) -> Element {
         None => {
             return rsx! {
                 div { class: "himp-page min-w-0", "data-run": "{id}",
-                    BackLinks { here: "Run".to_owned() }
+                    BackLink { to: RUNS, label: BACK_TO_RUNS }
+                    PageHeader { title: "Run" }
                     p { role: "status", "Loading run…" }
                 }
             };
@@ -96,8 +104,9 @@ pub(super) fn RunView(id: Uuid) -> Element {
         Some(Err(error)) => {
             return rsx! {
                 div { class: "himp-page min-w-0", "data-run": "{id}",
-                    BackLinks { here: "Run".to_owned() }
-                    div { class: "alert alert-danger mt-4", role: "alert",
+                    BackLink { to: RUNS, label: BACK_TO_RUNS }
+                    PageHeader { title: "Run" }
+                    div { class: "alert alert-danger", role: "alert",
                         p { "Status unavailable. The import may still be running." }
                         details { summary { "Details" } p { "{error}" } }
                         button {
@@ -132,17 +141,11 @@ pub(super) fn RunView(id: Uuid) -> Element {
 
     rsx! {
         div { class: "himp-page min-w-0", "data-run": "{id}",
-            BackLinks { here: title.to_owned() }
-            div { class: "page-header",
-                h1 { class: "page-title flex items-center gap-3 flex-wrap",
-                    "{title} of "
-                    time { class: "text-mono", datetime: run.created_at.to_rfc3339(),
-                        {run.created_at.format("%d %b %Y, %H:%M UTC").to_string()}
-                    }
-                    if run.source != Some(SourceKind::HarvestApi) {
-                        span { class: "text-secondary", "· {presentation::source_label(&run.kind)}" }
-                    }
-                }
+            PageHeader {
+                title: format!("{title} of {}", run.created_at.format("%d %b %Y, %H:%M UTC")),
+                meta: (run.source != Some(SourceKind::HarvestApi)).then(|| rsx! {
+                    span { class: "text-secondary", "{presentation::source_label(&run.kind)}" }
+                }),
             }
             div { class: "card",
                 RunPanel {

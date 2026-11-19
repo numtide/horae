@@ -6,8 +6,6 @@ use horae_core::importers::harvest::types::{ConnectionStatus, EntityType};
 
 use crate::server_fns;
 
-#[path = "harvest/back_links.rs"]
-mod back_links;
 #[path = "harvest/change_account.rs"]
 mod change_account;
 #[path = "harvest/client_settings.rs"]

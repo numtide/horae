@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
 
-use super::back_links::BackLinks;
 use super::run_list::RunList;
 use super::runs_cursor::RunsCursor;
+use crate::components::back_link::BackLink;
+use crate::components::page_header::PageHeader;
 use crate::route::Route;
 
 /// Every retained run, a page at a time; `before` is the last run of the
@@ -12,10 +13,8 @@ pub fn HarvestRuns(before: RunsCursor) -> Element {
     let cursor = before.0;
     rsx! {
         div { class: "himp-page min-w-0",
-            BackLinks { here: "All runs".to_owned() }
-            div { class: "page-header",
-                h1 { class: "page-title", "Harvest runs" }
-            }
+            BackLink { to: Route::HarvestOverview { outcome: Default::default() }, label: "Back to Harvest" }
+            PageHeader { title: "Harvest runs" }
             if cursor.is_some() {
                 Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "newer-history", "Newest runs" }
             }

@@ -149,7 +149,8 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(heading).toHaveCSS('font-weight', '600');
     await expect(heading).toHaveCSS('letter-spacing', '-0.51px');
     assert.match(await heading.evaluate(node => getComputedStyle(node).fontFamily), /Newsreader/);
-    await expect(screen.locator('header .uppercase')).toHaveCSS('letter-spacing', '1.44px');
+    // The header has no eyebrow: the back link already names the section.
+    await expect(screen.locator('header .uppercase')).toHaveCount(0);
     for (const title of await screen.locator('section > div > h2').all()) {
       await expect(title).toHaveCSS('font-size', '20px');
       await expect(title).toHaveCSS('margin-top', '0px');
@@ -164,8 +165,9 @@ const sql = query => require('node:child_process').execFileSync('psql',
       await expect(label).toHaveCSS('font-weight', '600');
       assert.match(await label.evaluate(node => getComputedStyle(node).fontFamily), /Instrument Sans/);
     }
+    // The page header's divider is drawn by the wrapper around it.
     for (const divider of await screen.locator('.np-row, header, #np-invoice-heading').all()) {
-      const border = await divider.evaluate(node => getComputedStyle(node.matches('h2') ? node.parentElement : node).borderBottomColor);
+      const border = await divider.evaluate(node => getComputedStyle(node.matches('h2, header') ? node.parentElement : node).borderBottomColor);
       assert.equal(border, 'rgb(38, 34, 25)');
     }
     console.log('PASS: design typography, section spacing, quiet dividers and theme-aware task information');

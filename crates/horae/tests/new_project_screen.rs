@@ -13,6 +13,8 @@ use uuid::Uuid;
 
 #[path = "../src/components/avatar.rs"]
 pub mod avatar;
+#[path = "../src/components/back_link.rs"]
+pub mod back_link;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/date_picker.rs"]
@@ -25,13 +27,16 @@ pub mod form;
 pub mod icons;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 #[path = "../src/components/today.rs"]
 pub mod today;
 mod components {
     pub use super::{
-        avatar, controls, date_picker, debounce, form, icons, modal, select_field, today,
+        avatar, back_link, controls, date_picker, debounce, form, icons, modal, page_header,
+        select_field, today,
     };
 }
 pub use horae_types::{

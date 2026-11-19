@@ -1,5 +1,6 @@
 pub mod admin_shell;
 pub mod avatar;
+pub mod back_link;
 pub mod badge;
 pub mod button;
 pub mod card;
@@ -15,6 +16,7 @@ pub mod menu;
 pub mod modal;
 pub mod nav;
 pub mod no_tracking;
+pub mod page_header;
 pub mod permission_description;
 pub mod project_task_picker;
 pub mod select_field;

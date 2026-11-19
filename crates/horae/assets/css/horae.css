@@ -121,6 +121,7 @@
   --space-60: 15rem;
   --size-progress: 0.4375rem;
   --size-checkbox: 18px;
+  --size-page-mark: 36px;
   --size-project-avatar: 1.875rem;
   --size-empty-icon-tile: 3.25rem;
   --size-icon-lg: 1.375rem;
@@ -630,7 +631,6 @@ h1, h2, h3, h4, h5, h6 {
    Layout/spacing are utility classes in the markup; only the structural bits the
    utility layer can't express live here. The outer padding comes from
    `.app-content`, as with every other page. */
-.adm-back:hover { color: var(--color-primary); }
 .adm-nav { width: 250px; flex: 0 0 250px; }
 /* Header hairline + a roomy bottom gap so the Admin pill clears the divider.
    The utility layer has no directional `pb-`, so this lives here. */
@@ -1051,17 +1051,40 @@ tbody tr:hover { background: var(--color-row-hover); }
 .badge-info::before    { background: var(--color-primary); }
 .badge-neutral::before { background: var(--color-border-strong); }
 
-/* Page header */
-.page-header { margin-bottom: var(--space-6); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+/* Page header (components/page_header.rs). The back link is the kit's: its own
+   row, sized to its label, muted ink brightening to pine; also a button where
+   leaving needs a check first (the project editor). */
+.back-link {
+  display: flex; width: fit-content; align-items: center; gap: var(--space-2);
+  /* The prototypes' padding widens the target; the margin keeps the arrow aligned. */
+  padding: var(--space-1-5) var(--space-2-5); margin: 0 0 var(--space-5) calc(-1 * var(--space-2-5));
+  border: 0; border-radius: var(--radius-btn); background: none;
+  font: inherit; font-size: var(--font-size-sm); color: var(--color-text-secondary);
+  text-decoration: none; cursor: pointer;
+}
+.back-link:hover { color: var(--color-primary); }
+.back-link:disabled { opacity: 0.5; cursor: not-allowed; color: var(--color-text-secondary); }
+/* Spacing after the prototypes. Actions sit at the right while they fit beside
+   the title and start a left-aligned row of their own once they wrap. */
+.page-header {
+  margin-bottom: var(--space-5); display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: var(--space-3) var(--space-4);
+}
 .page-title {
   font-family: var(--font-family-display);
-  font-size: var(--font-size-2xl);
-  font-weight: 500;
+  font-size: var(--font-size-4xl);
+  font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0;
-  color: var(--color-text);
+  color: var(--color-text-strong);
   min-width: 0; overflow-wrap: anywhere;
 }
-.page-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; }
+/* `leading`: an integration's own mark before the title, never altered. */
+.page-leading > * {
+  width: var(--size-page-mark); height: var(--size-page-mark);
+  border-radius: var(--radius-btn); flex: none; display: block;
+}
+.page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); max-width: 100%; }
 
 /* Auth pages */
 .auth-container {
@@ -1483,10 +1506,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* ── Timesheet ─────────────────────────────────────────────────────────────
    The week grid: a project column + 7 day columns + total + a delete column.
    Day cells look like read-only inputs; today/weekend/empty are colour-coded. */
-.ts-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); }
-/* The title takes the free space, so the view tabs stay at the right edge
-   while the week total is briefly absent during a reload. */
-.ts-header > .page-title { flex: 1 0 auto; }
 .ts-saved { font-size: 13px; color: var(--color-text-muted); }
 
 .ts-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
@@ -1542,14 +1561,16 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* Where title, total and tabs cannot share a row, give the tabs one of their
    own; plain wrapping would let them climb beside the title whenever the
    total is absent. The header's width, not the viewport's, decides, because
-   the rail beside it is resizable. One row needs about 460px in the brand
-   fonts and noticeably more in fallback fonts, hence the margin. The header is
-   the container (it holds nothing fixed-position, which a container would
-   trap), so the rule works through its children: the title's basis leaves
-   room for the total (up to 124px) but never for the tabs. */
+   the rail beside it is resizable. One row needs about 560px in the brand
+   fonts and noticeably more in fallback fonts, hence the margin. The wrapper
+   around the shared header is the container (it holds nothing fixed-position,
+   which a container would trap). Below it the actions dissolve into the
+   header's own row, so the title's basis leaves room for the total (up to
+   124px) but never for the tabs. */
 .ts-header { container: ts-header / inline-size; }
-@container ts-header (max-width: 640px) {
-  .ts-header > .page-title { flex-basis: calc(100% - 140px); }
+@container ts-header (max-width: 680px) {
+  .ts-header .page-actions { display: contents; }
+  .ts-header .page-header > :first-child { flex-basis: calc(100% - 140px); }
 }
 @media (max-width: 480px) {
   .ts-pager-label { flex: 1; justify-content: center; min-width: 0; padding: 0 var(--space-2); }
@@ -1972,10 +1993,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 
 /* Importer landing: one selectable source per row. Clickable rows lift on hover;
    planned sources are dimmed and inert. */
-.imp-back {
-  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
-}
-.imp-back:hover { text-decoration: underline; }
 .imp-source {
   display: flex; align-items: center; gap: var(--space-4); width: 100%;
   padding: var(--space-4) var(--space-5); text-align: left; font: inherit;

@@ -61,12 +61,14 @@ pub mod debounce;
 pub mod form;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/today.rs"]
 pub mod today;
 mod components {
-    pub use super::{badge, controls, debounce, form, icons, table, today};
+    pub use super::{badge, controls, debounce, form, icons, page_header, table, today};
 }
 #[path = "../src/pages/reports.rs"]
 mod reports;

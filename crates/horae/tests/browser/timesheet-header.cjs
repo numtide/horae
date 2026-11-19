@@ -49,10 +49,10 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
         return { right: r.right, y: r.y };
       });
       const withoutTotal = await page.locator('.ts-header').evaluate(header => {
-        const saved = header.querySelector('.ts-saved'), next = saved.nextSibling;
+        const saved = header.querySelector('.ts-saved'), parent = saved.parentNode, next = saved.nextSibling;
         saved.remove();
         const r = header.querySelector('.segmented').getBoundingClientRect();
-        header.insertBefore(saved, next);
+        parent.insertBefore(saved, next);
         return { x: r.x, y: r.y, right: innerWidth - r.right };
       });
       assert.deepEqual(withoutTotal, withTotal, JSON.stringify({ size, width }));

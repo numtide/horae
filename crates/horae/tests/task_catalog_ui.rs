@@ -13,8 +13,10 @@ pub mod controls;
 pub mod form;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 mod components {
-    pub use super::{controls, form, modal};
+    pub use super::{controls, form, modal, page_header};
 }
 pub use horae_types::{permission_editor, task};
 mod models {

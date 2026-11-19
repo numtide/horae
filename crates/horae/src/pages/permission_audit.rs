@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{Permission, profile_label};
 
+use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
 use crate::models::permission_audit::*;
 use crate::models::permission_editor::PermissionRequester;
@@ -53,14 +54,15 @@ pub fn PermissionAudit() -> Element {
 
     rsx! {
         section { aria_labelledby: "audit-title", class: "min-w-0",
-            div { class: "flex flex-wrap items-center justify-between gap-3 mb-2",
-                h1 { id: "audit-title", class: "text-2xl font-semibold", "Audit log" }
-                button { id: REFRESH_ID, r#type: "button", class: "btn btn-secondary btn-sm", disabled: pending,
-                    onclick: move |_| {
-                        if history.state()() == UseResourceState::Ready { history.restart(); }
-                    },
-                    "Refresh history"
-                }
+            PageHeader { title: "Audit log", title_id: "audit-title",
+                actions: rsx! {
+                    button { id: REFRESH_ID, r#type: "button", class: "btn btn-secondary", disabled: pending,
+                        onclick: move |_| {
+                            if history.state()() == UseResourceState::Ready { history.restart(); }
+                        },
+                        "Refresh history"
+                    }
+                },
             }
             p { class: "text-sm text-secondary mb-5",
                 "Permission changes, newest first. Expand an event to see its recorded details. Times are shown in UTC."

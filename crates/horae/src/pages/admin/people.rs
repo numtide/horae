@@ -4,6 +4,7 @@ use super::add_person;
 use super::permission_editor::PermissionEditorDialog;
 use super::rates::{PersonRatesDialog, RatesTarget};
 use crate::components::badge::Badge;
+use crate::components::page_header::PageHeader;
 use crate::components::table::DataTable;
 use crate::models::people::{PeopleActivity, PeopleCursor};
 use crate::models::permission_editor::PermissionRequester;
@@ -71,13 +72,12 @@ pub(super) fn CanonicalPeople(
     };
 
     rsx! {
-        div { class: "page-header",
-            h1 { class: "page-title", "People" }
-            div { class: "page-actions",
+        PageHeader { title: "People",
+            actions: rsx! {
                 button { id: "people-refresh", r#type: "button", class: "btn btn-secondary", disabled: !ready,
                     onclick: move |_| page.restart(), "Refresh"
                 }
-            }
+            },
         }
         if can_manage_people {
             add_person::AddPerson { choose_profile: can_edit_permissions, on_added }

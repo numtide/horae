@@ -15,6 +15,8 @@ use horae_core::types::{InvoiceStatus, ProjectRole};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[path = "../src/components/back_link.rs"]
+pub mod back_link;
 #[path = "../src/components/badge.rs"]
 pub mod badge;
 #[path = "../src/components/combobox.rs"]
@@ -29,6 +31,8 @@ pub mod icons;
 pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 #[path = "../src/components/session.rs"]
 pub mod session;
 #[path = "../src/components/table.rs"]
@@ -36,7 +40,10 @@ pub mod table;
 #[path = "../src/components/toast.rs"]
 pub mod toast;
 mod components {
-    pub use super::{badge, combobox, controls, form, icons, menu, modal, session, table, toast};
+    pub use super::{
+        back_link, badge, combobox, controls, form, icons, menu, modal, page_header, session,
+        table, toast,
+    };
 }
 #[path = "../src/pages/clients.rs"]
 mod clients;

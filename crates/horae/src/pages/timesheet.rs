@@ -13,6 +13,7 @@ use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
+use crate::components::page_header::PageHeader;
 use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
@@ -1197,27 +1198,30 @@ fn TimesheetContent(
         div {
             "data-editor-kind": "timesheet",
             "data-editor-state": if busy() { "pending" } else if dirty { "dirty" } else { "clean" },
-            // Header: title + last-saved + view toggle
+            // Header: title + week total + view toggle
             div { class: "ts-header",
-                h1 { class: "page-title", "Timesheet" }
-                if held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_))) {
-                    span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
-                }
-                Segmented {
-                    items: vec!["Day".to_string(), "Week".to_string(), "Calendar".to_string()],
-                    active: match current_mode {
-                        ViewMode::Day => "Day",
-                        ViewMode::Week => "Week",
-                        ViewMode::Calendar => "Calendar",
-                    }
-                        .to_string(),
-                    onselect: move |v: String| {
-                        let v = match v.as_str() {
-                            "Day" => ViewMode::Day,
-                            "Calendar" => ViewMode::Calendar,
-                            _ => ViewMode::Week,
-                        };
-                        go.call((v, date.0, span));
+                PageHeader { title: "Timesheet",
+                    actions: rsx! {
+                        if held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_))) {
+                            span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
+                        }
+                        Segmented {
+                            items: vec!["Day".to_string(), "Week".to_string(), "Calendar".to_string()],
+                            active: match current_mode {
+                                ViewMode::Day => "Day",
+                                ViewMode::Week => "Week",
+                                ViewMode::Calendar => "Calendar",
+                            }
+                                .to_string(),
+                            onselect: move |v: String| {
+                                let v = match v.as_str() {
+                                    "Day" => ViewMode::Day,
+                                    "Calendar" => ViewMode::Calendar,
+                                    _ => ViewMode::Week,
+                                };
+                                go.call((v, date.0, span));
+                            },
+                        }
                     },
                 }
             }

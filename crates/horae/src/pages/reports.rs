@@ -10,6 +10,7 @@ use super::loaded;
 use crate::components::badge::Badge;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input};
+use crate::components::page_header::PageHeader;
 use crate::components::table::DataTable;
 use crate::server_fns;
 
@@ -105,7 +106,7 @@ pub fn Reports() -> Element {
                 .copied()
                 .unwrap_or("Report access is unavailable. Sign in again or retry.");
             rsx! {
-                div { class: "page-header", h1 { class: "page-title", "Reports" } }
+                PageHeader { title: "Reports" }
                 p { class: "alert alert-danger", role: "alert", "{message}" }
                 button { id: "reports-retry-access", r#type: "button", class: "btn btn-secondary",
                     onclick: move |_| access.restart(), "Retry access"
@@ -218,12 +219,11 @@ fn FinancialReports() -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Reports" }
-                div { class: "page-actions",
+            PageHeader { title: "Reports",
+                actions: rsx! {
                     a { class: "btn btn-secondary", href: "{export_csv_url}", "Export CSV" }
                     a { class: "btn btn-secondary", href: "{export_xlsx_url}", "Export XLSX" }
-                }
+                },
             }
 
             // Below 640px the panel drops its chrome so a full native date fits at
