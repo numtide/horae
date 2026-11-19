@@ -201,9 +201,11 @@
   --color-accent-bg: rgba(198, 128, 42, 0.14);
   --color-pine: #1F5C4D;
   --color-pine-fg: #bfe0d4;
-  /* Paper's brass is darker, so today's time, task and client need darker ink. */
-  --color-cal-today-fg: #362406;
-  --color-cal-today-meta: #362406;
+  /* Paper's brass is darker and leaves little room above 4.5:1, so today's time
+     and task take the project's ink (the project stands out by weight) and the
+     client the softest brown that still passes. */
+  --color-cal-today-fg: var(--color-on-accent);
+  --color-cal-today-meta: #372507;
 
   /* Paper surfaces */
   --color-bg: #EFEAE0;
@@ -1728,7 +1730,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-cal-dayhead.today .ts-cal-dayname, .ts-cal-dayhead.today .ts-cal-daytotal { color: var(--color-accent); font-weight: 600; }
 .ts-cal-dayhead.weekend .ts-cal-dayname, .ts-cal-dayhead.weekend .ts-cal-daytotal { color: var(--color-text-muted); }
 .ts-cal-weektot { padding: 0 var(--space-2); text-align: right; }
-.ts-cal-weektot-label { font-size: var(--font-size-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+/* One line: at 12px with 0.08em tracking "Week total" wrapped and pushed the hour grid down. */
+.ts-cal-weektot-label { font-size: var(--font-size-xs); letter-spacing: 0.04em; white-space: nowrap; text-transform: uppercase; color: var(--color-text-muted); }
 .ts-cal-weektot-value { font-family: var(--font-family-mono); font-size: var(--font-size-base); font-weight: 600; color: var(--color-text); margin-top: 2px; }
 
 .ts-cal-rail { position: relative; }
@@ -1844,7 +1847,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-bar::-webkit-progress-bar { background: var(--color-bg-tertiary); border-radius: var(--radius-full); }
 .proj-bar::-webkit-progress-value { background: var(--color-primary); border-radius: var(--radius-full); }
 .proj-bar::-moz-progress-bar { background: var(--color-primary); border-radius: var(--radius-full); }
-.proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+/* The card clips an outset ring, so the region draws an inset outline and drops the shared --ring. */
+.proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; box-shadow: none; }
 .proj-namelink { max-width: 26rem; overflow-wrap: anywhere; text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
 .proj-confirm-name { overflow-wrap: anywhere; }
@@ -1919,9 +1923,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 
 /* Alert — success tint (complements .alert-danger and .alert-warning) */
 .alert-success { background: var(--color-success-bg); color: var(--color-success-fg); border-color: var(--color-success-line); }
-
-/* Invoice detail: the client/status/dates summary fills as many columns as fit. */
-.inv-meta { grid-template-columns: repeat(auto-fill, minmax(var(--space-50), 1fr)); }
 
 /* Harvest / CSV importer screen. Layout is composed from
    utilities in the markup; only what utilities can't express lives here. */
@@ -2034,6 +2035,12 @@ tbody tr:hover { background: var(--color-row-hover); }
 @container client-detail (min-width: 56rem) {
   .client-detail-grid { grid-template-columns: minmax(0, 1fr) var(--width-form-select); }
 }
+
+/* ── Invoices ──────────────────────────────────────────────────────────────
+   Invoice pages compose their layout from utilities; only what they can't
+   express lives here. */
+/* Invoice detail: the client/status/dates summary fills as many columns as fit. */
+.inv-meta { grid-template-columns: repeat(auto-fill, minmax(var(--space-50), 1fr)); }
 
 /* The Tailwind-style utility layer + responsive variants live in the GENERATED
    horae-utils.css — regenerated automatically by crates/horae/build.rs on build.
