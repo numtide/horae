@@ -86,8 +86,9 @@ integers only.
 | 3 | `PATCH /time_entries/{id}` | |
 | 3 | `DELETE /time_entries/{id}` | |
 | 3 | `PATCH /time_entries/{id}/stop`, `/restart` | restart stops any other running timer (D-6) |
-| 3 | `GET /company` | `wants_timestamp_timers` false (Horae stores durations), feature flags for absent domains off |
-| 3 | `GET /users/me/project_assignments`, `/users/{id}/project_assignments` | with nested `task_assignments` |
+| 3 | `GET /company` | `wants_timestamp_timers` false (Horae stores durations), `time_format` `hours_minutes`, `clock` `24h`, `week_start_day` from the organization; settings Horae lacks (domain, date format, plan, currency display, capacity) are `null`; `invoice_feature`, `approval_feature` and `team_feature` true, `expense_feature` and `estimate_feature` false |
+| 3 | `GET /users/me/project_assignments` | the pairs the Timesheet lets the caller track, grouped by project, with nested `task_assignments`; rates, budgets and timestamps `null`. An assignment's `id` is its project's id and a task assignment's `id` its task's id (decided 2026-11-19): Horae numbers neither, and an administrator tracks without an assignment row. They are unique within the list but not across people, a known gap against FR-015 |
+| 5 | `GET /users/{id}/project_assignments` | |
 | 4 | all list fidelity above | |
 | 5 | `GET /users/{id}`, `/projects/{id}/user_assignments`, `/task_assignments`, `/user_assignments`, `/task_assignments` (account-wide), `/users/{id}/teammates`, `/invoices`, `/invoices/{id}`, `/reports/time/*`, `/reports/uninvoiced`, `/reports/project_budget` | |
 | 6 | `POST/PATCH/DELETE` for clients, projects, tasks, user and task assignments; `POST/PATCH /users`; invoice status changes Horae supports (draft, sent, closed) | administrators and managers, per their grants |
@@ -120,3 +121,12 @@ messages that send email) stays out of scope (spec *Out of scope*).
 - `POST` answers 201 with the entry; `PATCH`, `stop` and `restart` 200 with the entry; `DELETE`
   200 with an empty body. A stop the daily limit cut short adds `horae_notice`, which clients may
   ignore.
+
+## Compatibility results (FR-072)
+
+Measured by the `harvest-compat` check; clients and pins are in
+`nix/checks/harvest-compat/clients/README.md`.
+
+| Client | Identity and picker | Time workflow |
+| --- | --- | --- |
+| becoded/go-harvest (Go library) | passes: `users/me`, `projects`, `company`, `users/me/project_assignments` | passes: log, edit, start and end times, start (stopping the running timer), stop, restart, delete |

@@ -2,6 +2,7 @@
 //! decimals, error bodies and path aliases (specs/021-harvest-api-compat).
 
 mod time_entry_writes;
+mod timer_reads;
 mod tokens;
 
 use super::pagination_tests::{api_id, limiter, page, request, signed_in};

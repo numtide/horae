@@ -269,6 +269,73 @@ pub struct HarvestUser {
     pub updated_at: String,
 }
 
+// ── Project assignments ─────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct HarvestClientRef {
+    pub id: i64,
+    pub name: String,
+    pub currency: String,
+}
+
+/// A project the caller may track time on, with the tasks they may track.
+/// Rates and budgets are `null`: the picker needs neither.
+#[derive(Serialize)]
+pub struct HarvestProjectAssignment {
+    pub id: i64,
+    pub is_project_manager: bool,
+    pub is_active: bool,
+    pub use_default_rates: Option<bool>,
+    pub budget: Option<Amount>,
+    pub hourly_rate: Option<Amount>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub project: HarvestProjectRef,
+    pub client: HarvestClientRef,
+    pub task_assignments: Vec<HarvestTaskAssignment>,
+}
+
+#[derive(Serialize)]
+pub struct HarvestTaskAssignment {
+    pub id: i64,
+    pub billable: bool,
+    pub is_active: bool,
+    pub hourly_rate: Option<Amount>,
+    pub budget: Option<Amount>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub task: HarvestRef,
+}
+
+// ── Company ─────────────────────────────────────────────────────────────────
+
+/// The organization as `GET /company` shows it. Settings Horae does not have
+/// are `null`; feature flags are true only for features Horae has (FR-043).
+#[derive(Serialize)]
+pub struct HarvestCompany {
+    pub base_uri: Option<String>,
+    pub full_domain: Option<String>,
+    pub name: String,
+    pub is_active: bool,
+    pub week_start_day: String,
+    pub wants_timestamp_timers: bool,
+    pub time_format: String,
+    pub date_format: Option<String>,
+    pub plan_type: Option<String>,
+    pub clock: String,
+    pub currency_code_display: Option<String>,
+    pub currency_symbol_display: Option<String>,
+    pub decimal_symbol: Option<String>,
+    pub thousands_separator: Option<String>,
+    pub color_scheme: Option<String>,
+    pub weekly_capacity: Option<i64>,
+    pub expense_feature: bool,
+    pub invoice_feature: bool,
+    pub estimate_feature: bool,
+    pub approval_feature: bool,
+    pub team_feature: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

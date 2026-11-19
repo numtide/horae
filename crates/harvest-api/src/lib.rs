@@ -7,8 +7,10 @@
 
 mod auth;
 mod client_reads;
+mod company;
 mod errors;
 pub(crate) mod ids;
+mod project_assignments;
 mod project_reads;
 mod task_reads;
 mod time_entry_writes;
@@ -99,8 +101,13 @@ fn router(db: PgPool, limiter: Arc<RateLimiter>) -> Router {
 
 fn serve(v1: V1State) -> Router {
     use time_entry_writes as writes;
-    let routes: [(&str, MethodRouter<HarvestState>); 12] = [
+    let routes: [(&str, MethodRouter<HarvestState>); 14] = [
+        ("/company", get(company::company)),
         ("/users/me", get(users_me)),
+        (
+            "/users/me/project_assignments",
+            get(project_assignments::mine),
+        ),
         ("/time_entries", get(list_time_entries).post(writes::create)),
         (
             "/time_entries/{id}",
