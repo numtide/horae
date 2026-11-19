@@ -20,4 +20,7 @@ Working on Horae:
 - [Development](development.md): the dev stack, migrations, tests and the sqlx query cache.
 - [Architecture](architecture.md): the crates, the web app's routes and the other HTTP routes.
 - [Versions and releases](releases.md): what the version panel shows and how to cut a release.
+- [Design audit](design/AUDITORIA-DISENO.md) (in Spanish): the 2026-11-18 audit of the interface
+  that [DESIGN.md](../DESIGN.md) and the [implementation inventory](../design/IMPLEMENTATION-GAPS.md)
+  build on.
 - [CONTRIBUTING.md](../CONTRIBUTING.md) and [AGENTS.md](../AGENTS.md) at the repository root.

@@ -7,7 +7,7 @@ files are design references, not production application code.
 
 [DESIGN.md](../DESIGN.md) is the source of truth for Horae's design. The files
 under `project/` are a historical reference from the 2026-09-21 export: where
-they disagree with `DESIGN.md` (for example Solid on form submits, a round icon
+they disagree with `DESIGN.md` (for example the Solid button, which Horae retires, a round icon
 in empty states, a destructive tone for archiving, or the "Reactivate" and
 "Workspace settings" labels), `DESIGN.md` wins, and its sections name the
 decision that corrects them. The prototypes stay unedited so later exports remain

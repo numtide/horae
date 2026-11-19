@@ -1,7 +1,7 @@
 # Design implementation inventory
 
-Updated on 2026-11-19 from the design audit of 2026-11-18 (application baseline
-`3b08dd25`) and the decisions taken on it. [DESIGN.md](../DESIGN.md) holds those
+Updated on 2026-11-19 from the [design audit of 2026-11-18](../docs/design/AUDITORIA-DISENO.md)
+(in Spanish; application baseline `3b08dd25`) and the decisions taken on it. [DESIGN.md](../DESIGN.md) holds those
 decisions and is the source of truth for every rule below; this file only tracks
 what the application still has to change to follow it, and which PR does it.
 
@@ -10,21 +10,25 @@ themes, with `DESIGN.md`, the kit and the prototypes. Its findings are grouped b
 pattern, and each pattern is fixed across every screen in one PR, numbered PR-0
 to PR-10. This file is PR-0.
 
+The audit cites 156 screenshots by name (`audit/screenshots/<screen>-<width>-<theme>.png`,
+about 10 MB). Because of their size they are not in the repository; each PR takes
+its own before-and-after captures.
+
 ## Pending work by PR
 
 | PR | Work | `DESIGN.md` section | Status |
 | --- | --- | --- | --- |
-| PR-0 | Bring `DESIGN.md` and this inventory up to date: the decisions, the glossary, the Pages table, the stale nav-dot and `dark.dc.html` references. | all | This change |
+| PR-0 | Bring `DESIGN.md` and this inventory up to date: the decisions, the glossary, the Pages table, the stale nav-dot and `dark.dc.html` references; the audit itself in `docs/design/`. | all | This change |
 | PR-1 | Raise `--color-label` (dark) and `--color-text-muted` (light) to 4.5:1 and use `--color-text-muted` for placeholders; one `--ring` focus rule for links and `[tabindex]`; label the theme select in Settings; calendar event colours as tokens in both themes; move the 10.5, 11, 11.5, 12.5, 13 and 14.5px sizes and the 6, 9 and 11px radii onto the scale; drop the second `.alert-warning`, the static `style:` in `pages/invoices.rs` and `invoices/settings.rs`; decide whether the sign-in page loads `horae.css` or is documented as dark only. | Accessibility, Tokens & utilities | Not started |
-| PR-2 | `PageHeader` with the 34/600 title, one back link and the actions on all 26 screens; one `.page-title` definition; replace the Harvest `BackLinks` breadcrumb with a back link; header actions at normal size. | Type scale, Page header | Not started |
-| PR-3 | `ConfirmDialog` and fixed `Modal` slots; add the Danger solid button; move irreversible confirmations to it and archive confirmations to the neutral tone; delete `.ts-modal-*`; give the four unpadded dialogs (disconnect Harvest, change account, both over-invoicing dialogs) the shared anatomy. Footer order waits for its decision. | Dialogs, Destructive actions, Buttons | Not started; footer order pending |
-| PR-4 | `EmptyState`, `ErrorState` and `Loading` on about 20 screens; fold the Projects card into `.empty-state`; optional `Skeleton` for listings; "Try again" on every retry. | Empty, loading and error states, Screen States | Not started |
+| PR-2 | `PageHeader` with the 34/600 title, one back link and the actions on all 26 screens; one `.page-title` definition; replace the Harvest `BackLinks` breadcrumb with a back link; remove the `AdminShell` "Back to Timesheet" link; header actions at normal size. | Type scale, Page header | Not started |
+| PR-3 | `ConfirmDialog` and fixed `Modal` slots; add the Danger solid button; move irreversible confirmations to it; drop the dialog when archiving a single record (the toast's "Undo" replaces it) and keep a neutral-tone dialog only for archiving that carries other records or acts in bulk; delete `.ts-modal-*`; give the four unpadded dialogs (disconnect Harvest, change account, both over-invoicing dialogs) the shared anatomy. Footer order waits for its decision. | Dialogs, Destructive actions, Buttons | Not started; footer order pending |
+| PR-4 | `EmptyState`, `ErrorState` and `Loading` on about 20 screens; fold the Projects card into `.empty-state`; `ErrorState` with the same 52px icon tile; optional `Skeleton` for listings; "Try again" on every retry. | Empty, loading and error states, Screen States | Not started |
 | PR-5 | `FilterBar` and `SearchField` on every filterable list; move the native `<select>` uses (`reports.rs` ×3, `tasks.rs`, `tasks/editor.rs`, `admin/people.rs`, `admin/add_person.rs`, `admin/permission_editor.rs`, `components/project_task_picker.rs`, the Settings theme select) to `SelectField`; retire `form::Select`. | Selects, filters and search | Not started |
 | PR-6 | Organization default and personal override for the duration format; one formatter in `horae-core`, used by the UI, the server and the reports, and the `pages/projects.rs` formatter removed; exports stay decimal; replace `type=date` inputs (Reports, invoice preparation, New Project milestones) with `DatePicker`; extract `PeriodNav` from the Timesheet and use it in Approvals. | Formats, Selects, filters and search | Not started |
 | PR-7 | Timesheet week fits at 1280px with the sidebar (Total and delete visible); name columns get a minimum width; Projects' last column is not cut off. The mobile layout waits for its design. | Layout | Not started; mobile pending |
-| PR-8 | One "Actions" menu per table row; status always a `Badge`; Primary for main actions and form submits, at most one per screen; retire the timesheet's `ts-*` classes that copy `.btn`; settle Solid. | Buttons, Data Tables, Destructive actions | Not started |
-| PR-9 | One toast container in `AppLayout`, styled after `Toast.dc.html`; every success confirmed with a toast; inline "Saved." text and `.alert-success` confirmations removed. | Toast | Not started |
-| PR-10 | Apply the glossary: "People" in the sidebar and subnavigation, "Restore", "Settings", "Try again", and the conventions once they are agreed. | Glossary | Not started; conventions are proposals |
+| PR-8 | One "Actions" menu per table row, except Approvals' inline "Approve" and "Reopen", which become Secondary `btn-sm`; status always a `Badge`; Primary for main actions and form submits, at most one per screen or form; retire Solid: Approvals' "Approve all" and the Invoice settings submits become Primary, "Submit week" becomes a `.btn-split` with a Primary body and `.ts-submit` goes, then delete `.btn-solid` and `--glow-pine`; retire the timesheet's other `ts-*` classes that copy `.btn`. | Buttons, Data Tables, Destructive actions | Not started |
+| PR-9 | One toast container in `AppLayout`, styled after `Toast.dc.html`; every success confirmed with a toast; inline "Saved." text and `.alert-success` confirmations removed; long messages wrap instead of truncating. | Toast | Not started |
+| PR-10 | Apply the glossary: "People" in the sidebar and subnavigation, "Team" only for a project's team, "Person" for the Reports grouping, "Restore", "Settings" for the workspace page and "My settings" for `/settings`, "Try again", "Discard changes", "Cancel" and "Close", and the conventions (sentence case, ellipses, empty-state titles, toast wording). | Glossary | Not started |
 
 PR-0 and PR-1 depend on no open question. PR-4 follows PR-2, PR-7 follows PR-5,
 and PR-10 is best last so its copy changes do not conflict with the others.

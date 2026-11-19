@@ -9,7 +9,7 @@ This file is the single source of truth for Horae's design. When it disagrees wi
 - **`DESIGN.md`** (this file) holds the rules: tokens, components, screen states, layout and wording. A rule here overrides the kit and the prototypes, and the sections below say so wherever they differ.
 - **`crates/horae/assets/css/horae.css`** implements the tokens and component classes. Where the CSS and this file disagree, the CSS is out of date and the PR that touches it brings it in line.
 - **`design/project/`** is the claude.ai/design export of 2026-09-21: the kit (`foundations/Components.dc.html`), the shared prototype components (`app/*.dc.html`) and the screen prototypes (`app/01_*` to `13_*`). It is a historical visual reference. Use it for layout, proportions and copy ideas, never as a rule that overrides this file, and never edit it (see [design/README.md](design/README.md)).
-- **Decisions on open questions** were taken after the design audit of 2026-11-18. Each one is written into the section it governs, with a line on why. Two of them are still under review and are marked *Pending* where they apply: dialog footer order ([Dialogs](#dialogs-srccomponentsmodalrs)) and tables on mobile ([Layout](#layout)).
+- **Decisions on open questions** were taken after the [design audit of 2026-11-18](docs/design/AUDITORIA-DISENO.md) (in Spanish). Each one is written into the section it governs, with a line on why. Two of them are still under review and are marked *Pending* where they apply: dialog footer order ([Dialogs](#dialogs-srccomponentsmodalrs)) and tables on mobile ([Layout](#layout)).
 - [`design/IMPLEMENTATION-GAPS.md`](design/IMPLEMENTATION-GAPS.md) tracks what the application still has to change to match this file, and which PR does it.
 
 ## Color Palette
@@ -31,7 +31,7 @@ All colors are CSS custom properties in `assets/css/horae.css`.
 
 | Token | Value | Usage |
 |---|---|---|
-| `--color-text-strong` | `#F6F2E9` | Headings, wordmark, solid-button ink |
+| `--color-text-strong` | `#F6F2E9` | Headings, wordmark |
 | `--color-text` | `#EFEAE0` | Primary body text |
 | `--color-text-secondary` | `#A29C8D` | Labels, captions, sidebar links |
 | `--color-text-muted` | `#7C7565` | Placeholders, section headers |
@@ -123,7 +123,7 @@ Full-height left rail. The brand row leads with the Horae mark and wordmark plus
 
 One `PageHeader` component renders the top of every screen: an optional back link on its own row, then the title (see [Type scale](#type-scale)) and the screen's actions. Header actions use the normal button size, never `btn-sm`, and wrap the same way on every screen. One shared header keeps the title, the way back and the actions in the same place everywhere.
 
-- **Back link**: the kit's *Back link*. A 16px arrow and a 14px label on their own row above the title, muted ink that brightens to pine on hover. It points to the parent in the hierarchy ("Back to Projects" from a project, "Back to Importers" from Harvest), not to the screen the user came from, and only screens that sit under a section have one.
+- **Back link**: the kit's *Back link*. A 16px arrow and a 14px label on their own row above the title, muted ink that brightens to pine on hover. It points to the parent in the hierarchy ("Back to Projects" from a project, "Back to Importers" from Harvest), not to the screen the user came from, and only screens that sit under a section have one. Sections reached from the sidebar (Timesheet, Projects, People, Settings, API tokens, Importers, the audit log and the rest) have none, because the sidebar is always there; the `AdminShell`'s "Back to Timesheet" link is removed.
 - **No breadcrumbs.** The back link replaces a breadcrumb; never show both. The Harvest section's `BackLinks` breadcrumb (`Importers / Harvest / …`) is replaced by a back link to the parent. No other style of "back" is allowed: no `btn-ghost` or `btn-secondary` back buttons and no top-right back button.
 
 ### Timer Widget (`src/components/timer_widget.rs`)
@@ -132,7 +132,7 @@ One `PageHeader` component renders the top of every screen: an optional back lin
 
 ### Data Tables (`src/components/table.rs`)
 
-Wrapped in `.table-container` (border + 20px panel radius). Headers: uppercase, 0.1em letter-spacing, transparent surface, label-tone ink (`--color-label`). Row hover sinks to `--color-row-hover`. Last row has no bottom border. Status is always a `Badge`, never plain text. A record's actions (edit, archive, permissions, rates…) go in one compact "Actions" menu per row (`Menu`), the same way on every table, rather than as loose buttons that wrap at narrow widths. See [Layout](#layout) for column widths and mobile behaviour.
+Wrapped in `.table-container` (border + 20px panel radius). Headers: uppercase, 0.1em letter-spacing, transparent surface, label-tone ink (`--color-label`). Row hover sinks to `--color-row-hover`. Last row has no bottom border. Status is always a `Badge`, never plain text. A record's actions (edit, archive, permissions, rates…) go in one compact "Actions" menu per row (`Menu`), the same way on every table, rather than as loose buttons that wrap at narrow widths. One exception: Approvals keeps "Approve" and "Reopen" inline in each row, as Secondary `btn-sm` buttons, because approving row by row is the screen's job and a menu would add a click to every approval. See [Layout](#layout) for column widths and mobile behaviour.
 
 ### Forms (`src/components/form.rs`)
 
@@ -152,24 +152,23 @@ Pill shape (9999px radius, `4px 12px`). Every variant — including neutral — 
 
 ### Buttons (`src/components/`)
 
-Control-lg is 44px tall (`12px 20px`). Brand fills **brighten** on hover with a soft glow; neutral controls lift a shade and raise their border. Weights: primary/accent 700, solid 600, secondary/danger/ghost 500.
+Control-lg is 44px tall (`12px 20px`). Brand fills **brighten** on hover with a soft glow; neutral controls lift a shade and raise their border. Weights: primary/accent 700, secondary/danger/ghost 500.
 
-- **Primary**: pine-300 fill, dark green text `#0d211b`; hover → `--color-primary-hover` + `--glow-primary`. The main action of a screen or form, including form submits. Use at most one Primary per screen or form, so the next step is always obvious.
-- **Solid**: deep-pine fill, `--color-text-strong` ink; hover → `--color-pine-hover` + `--glow-pine`. It is no longer the form-submit variant: submits use Primary. Do not use Solid in new work; whether it stays for a narrow case is settled with the button pass (PR-8).
+- **Primary**: pine-300 fill, dark green text `#0d211b`; hover → `--color-primary-hover` + `--glow-primary`. The main action of a screen or form, including form submits. Use at most one Primary per screen or form, so the next step is always obvious. A screen made of several independent forms (Invoice settings saves each card on its own) has one Primary per form.
 - **Secondary**: tertiary surface, `--color-border-input` border; hover raises the border to `--color-border-strong`
 - **Accent**: brass fill `#D99A3C`, dark text — "Send invoice" and billing actions; hover → `--color-accent-hover` + `--glow-accent`
 - **Danger** (`btn-danger`): transparent with dark red border `#6e3634`; hover tints and lifts the border to `--color-border-danger-hover`. Only for the button that opens a destructive confirmation (see [Destructive actions](#destructive-actions)); never for the confirmation itself and never for archiving.
 - **Danger solid**: red fill with dark ink, the kit's `hb-danger-solid` from `ConfirmDialog.dc.html`. Only for the confirm button of an irreversible action. The class does not exist in the app yet (PR-3 adds it).
 - **Ghost**: transparent pine-ink link; hover → pine-tint background
-- **Split button** (`.btn-split`): a main action with real variants behind a caret, such as submitting a week with or without notifying. The kit draws its body in Solid; under the Primary rule above, a split button that carries the screen's main action uses Primary.
+- **Split button** (`.btn-split`): a main action with real variants behind a caret, such as submitting a week with or without notifying. Its body is Primary. The Timesheet's "Submit week" is a `.btn-split` with a Primary body; its own `.ts-submit` button is retired.
 
-The kit and several prototypes use Solid for submits ("Submit week", "Update info", "Save", "Approve"). This file overrides them: those that are the main action of their screen or form are Primary. What the others become (per-row "Approve", for instance) is settled with Solid in PR-8.
+**Solid is retired.** The deep-pine button (`.btn-solid`) is no longer a variant. The kit and several prototypes use it for submits ("Submit week", "Update info", "Save", "Approve"), and this file overrides them: Approvals' "Approve all" and Invoice settings' submits are Primary, the per-row "Approve" is Secondary `btn-sm`, and "Submit week" is the Primary split button above. Once those move, PR-8 deletes `.btn-solid` and `--glow-pine`. `--color-pine` and `--color-pine-hover` stay, because segmented controls, toggles, the calendar and `.badge-pine` use them. One Primary look for every main action means no screen's next step looks different from the others.
 
 ### Destructive actions
 
 - **Irreversible actions** (deleting, disconnecting Harvest, revoking a token, and anything else that cannot be undone) are confirmed in a `ConfirmDialog` whose confirm button is Danger solid. A red fill marks the one click that loses data.
 - **The button that opens that dialog** uses Danger (`btn-danger`, the red outline). The outline warns; the fill commits.
-- **Archiving is not destructive.** It can be undone, so it never uses either red button. Its confirm (when it asks for one) uses the dialog's neutral tone with a Primary button, as the prototypes' archive dialogs do, and its success toast offers "Undo". Restoring works the same way.
+- **Archiving is not destructive.** It can be undone, so it never uses either red button, and its success toast offers "Undo". Archiving one record (a project, a task, a person) happens at once, with no dialog: the "Undo" is enough. It asks for confirmation only when it carries other records with it (a client and its projects) or acts on several at once (bulk archive); that dialog uses the neutral tone with a Primary button, as the prototypes' archive dialogs do. Restoring works the same way.
 - **Record actions** such as Edit, Archive, Restore and Delete are offered through the row's or the page's "Actions" menu, the same way on every screen. Delete sits last, after a divider, as a danger item.
 
 ### Dialogs (`src/components/modal.rs`)
@@ -186,7 +185,7 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 
 - Bottom centre of the viewport, on a black (`#000`) panel with a hairline border, in both themes.
 - A leading icon by kind: success, info, warning or error.
-- The message, an optional inline action ("Undo" after archiving or restoring) and a close button.
+- The message, an optional inline action ("Undo" after archiving or restoring) and a close button. A long message wraps onto several lines instead of being truncated, so the toast never cuts off what it confirms; the prototype's single truncated line is overridden.
 - One container in `AppLayout` shows them, so pages raise toasts instead of rendering their own.
 
 `.alert-success` stays only for a state that must remain visible on the page (an import that finished, say), not to confirm an action. Inline "Saved." text, green `text-success` notes and `role=status` paragraphs used as confirmations are replaced by the toast. The kit's *Form dirty state* asks for the same: saving confirms with a toast, never silence.
@@ -194,7 +193,7 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 ### Empty, loading and error states (`src/components/`)
 
 - **`EmptyState`**: the Projects variant is the base of `.empty-state` for every screen: a `--color-bg-secondary` card with a border and `--radius-xl` (16px), the icon in a 52px tile (`--radius-icon`, 22px glyph), a Newsreader `xl` title, copy limited to `--width-empty-copy`, and an optional action (Primary, or Secondary when it only resets filters) plus an optional text link. The copy says what to do next. The kit and `EmptyState.dc.html` draw the icon in a round disc; Horae uses the tile. The `tone="success"` variant (an all-clear moment such as nothing to approve) keeps the green icon colours.
-- **`ErrorState`**: for a region or screen that failed to load. It keeps the empty state's silhouette so the eye lands in the same place, with the icon in the danger tint, a title and body that say what happened and what to do, an optional mono request line for support, and "Try again" as the action. A permission error points to who can grant access instead of offering a retry (see [Screen States](#screen-states)).
+- **`ErrorState`**: for a region or screen that failed to load. It keeps the empty state's silhouette so the eye lands in the same place, including the 52px icon tile (the prototype's round disc is overridden here too), with the icon in the danger tint, a title and body that say what happened and what to do, an optional mono request line for support, and "Try again" as the action. A permission error points to who can grant access instead of offering a retry (see [Screen States](#screen-states)).
 - **`Loading`**: one component for every inline loading message, always with `role=status` and `aria-busy`, so assistive technology hears the same thing everywhere. It replaces the ad hoc `p { "Loading…" }` variants.
 - **`Skeleton`** (optional): a placeholder that mirrors a listing's grid, for tables and lists where the layout is known before the data arrives. Only the data region is replaced; the header, filters and actions stay live.
 
@@ -207,25 +206,28 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 
 ## Glossary
 
-One word for one thing, across the sidebar, titles, buttons, menus and messages. Entries marked *Proposal* are not decided yet; follow them in new copy and raise them in review if they seem wrong.
+One word for one thing, across the sidebar, titles, buttons, menus and messages.
 
 | Use | Instead of | Notes |
 |---|---|---|
 | People | Team | The section that lists the workspace's people, including its sidebar and subnavigation entries. |
+| Team | — | Only the people assigned to one project: the project's Team tab and section. |
+| Person | Team | The Reports grouping by person, which groups people, not teams. |
 | Restore | Reactivate, Unarchive | The opposite of Archive, for projects, clients, people and tasks. Toasts read "Project restored". |
-| Settings | Workspace settings | The workspace settings page and its subnavigation entry. |
+| Settings | Workspace settings | The workspace settings page (`/admin/workspace`) and its entry in the Workspace subnavigation. |
+| My settings | Settings | The personal settings page (`/settings`), its title and the account-menu entry, so the two settings pages never share a name. |
 | Try again | Retry, Retry report, Retry tags… | Every retry action, on error states, banners and alerts. |
 | Back to *parent* | "Back to Timesheet" on a screen whose parent is another section, breadcrumbs | The back link names the parent screen (see [Page header](#page-header-srccomponents)). |
+| Discard changes | Cancel changes | The escape action of a form with unsaved changes, after the kit's *Form dirty state*. |
+| Cancel | Cancel over-invoicing, Cancel changes | Closes a dialog without acting, everywhere. |
+| Close | Dismiss | Dismisses something that has nothing to cancel, such as a toast or a read-only panel. |
 
 Conventions:
 
-- *Proposal.* **Sentence case** for titles, buttons, menu items and labels: "New invoice", "New project", "Archive client", not "New Invoice".
-- *Proposal.* **An ellipsis** ends the label of an action that opens a dialog asking for more input or a confirmation ("Archive task…", "Delete…"), and only those. Labels that act at once, or that navigate, have none.
-- *Proposal.* **Discard changes** is the escape action of a form with unsaved changes, after the kit's *Form dirty state* ("Discard changes", not "Cancel changes").
-- *Proposal.* **Cancel** closes a dialog without acting, everywhere ("Cancel", not "Cancel over-invoicing"); **Close** dismisses something that has nothing to cancel, such as a toast or a read-only panel ("Close", not "Dismiss").
-- *Proposal.* **Empty-state titles** have no closing period ("No projects yet"); body copy is full sentences that end in one.
-- *Proposal.* **Toast messages** name the object and what happened, in that order: "Project archived", "Client created", "Settings saved".
-- *Proposal.* **Team** stays only for the people assigned to one project (the project's Team tab and section).
+- **Sentence case** for titles, buttons, menu items and labels: "New invoice", "New project", "Archive client", not "New Invoice".
+- **An ellipsis** ends the label of an action that opens a dialog asking for more input or a confirmation ("Delete…", "Archive client…" when it carries its projects), and only those. Labels that act at once, or that navigate, have none, so archiving a single record is "Archive".
+- **Empty-state titles** have no closing period ("No projects yet"); body copy is full sentences that end in one.
+- **Toast messages** name the object and what happened, in that order: "Project archived", "Client created", "Settings saved".
 
 ## Component Conventions
 
@@ -313,7 +315,7 @@ Routes of the Dioxus router (`crates/horae/src/route.rs`). Sign-in lives outside
 | `/invoices/settings` | `InvoiceSettings` | Issuer, payment details and invoice defaults, one save per card (manager/admin) |
 | `/invoices/:id` | `InvoiceDetail` | Invoice line items |
 | `/admin/users` | `AdminUsers` | People, their rates and permissions |
-| `/admin/workspace` | `WorkspaceSettings` | Workspace settings |
+| `/admin/workspace` | `WorkspaceSettings` | Settings: the workspace's own settings |
 | `/admin/importers` | `ImporterIndex` | Available importers |
 | `/admin/importers/harvest` | `HarvestOverview` | Harvest connection, preview and import |
 | `/admin/importers/harvest/oauth` | `HarvestOAuth` | Harvest OAuth app credentials |
@@ -322,7 +324,7 @@ Routes of the Dioxus router (`crates/horae/src/route.rs`). Sign-in lives outside
 | `/admin/importers/harvest/runs/:id` | `HarvestRun` | One import run |
 | `/admin/audit` | `PermissionAudit` | Permission audit log |
 | `/admin/api-tokens` | `AdminApiTokens` | Every API token created in the workspace, with revocation |
-| `/settings` | `Settings` | Personal settings: profile, appearance, own permissions, API tokens and plugins |
+| `/settings` | `Settings` | My settings: profile, appearance, own permissions, API tokens and plugins |
 | `/components` | `Gallery` | Component gallery |
 | anything else | `NotFound` | Not found |
 
