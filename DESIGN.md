@@ -1,6 +1,16 @@
 # Horae Design Language
 
-Horae follows the Invoicer design system: editorial warm-dark surfaces, serif display type, humanist sans-serif for UI, and monospace numerals — an accountancy aesthetic that suits time-tracking and invoicing. Visual prototypes with pixel-accurate examples live in `design/project/dark.dc.html`.
+Horae follows the Invoicer design system: editorial warm-dark surfaces, serif display type, humanist sans-serif for UI, and monospace numerals — an accountancy aesthetic that suits time-tracking and invoicing.
+
+## Sources and precedence
+
+This file is the single source of truth for Horae's design. When it disagrees with anything else, this file wins.
+
+- **`DESIGN.md`** (this file) holds the rules: tokens, components, screen states, layout and wording. A rule here overrides the kit and the prototypes, and the sections below say so wherever they differ.
+- **`crates/horae/assets/css/horae.css`** implements the tokens and component classes. Where the CSS and this file disagree, the CSS is out of date and the PR that touches it brings it in line.
+- **`design/project/`** is the claude.ai/design export of 2026-09-21: the kit (`foundations/Components.dc.html`), the shared prototype components (`app/*.dc.html`) and the screen prototypes (`app/01_*` to `13_*`). It is a historical visual reference. Use it for layout, proportions and copy ideas, never as a rule that overrides this file, and never edit it (see [design/README.md](design/README.md)).
+- **Decisions on open questions** were taken after the design audit of 2026-11-18. Each one is written into the section it governs, with a line on why. Two of them are still under review and are marked *Pending* where they apply: dialog footer order ([Dialogs](#dialogs-srccomponentsmodalrs)) and tables on mobile ([Layout](#layout)).
+- [`design/IMPLEMENTATION-GAPS.md`](design/IMPLEMENTATION-GAPS.md) tracks what the application still has to change to match this file, and which PR does it.
 
 ## Color Palette
 
@@ -75,7 +85,9 @@ Three typefaces loaded from Google Fonts:
 
 ### Type scale
 
-Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `sm` 14 (body, numerals) · `base` 16 · `lg` 18 (H2) · `xl` 20 · `2xl` 24 · `3xl` 30 (H1) · `4xl` 34 (refreshed handoff page heading) · `display` 44 (hero totals, e.g. invoice "Total due"). Headings resolve to `--color-text-strong`. The refreshed heading uses `tracking-tight` (−0.015em); opt into it per surface without changing existing heading defaults.
+Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `sm` 14 (body, numerals) · `base` 16 · `lg` 18 (H2) · `xl` 20 (empty- and error-state titles) · `2xl` 24 · `3xl` 30 (H1) · `4xl` 34 (page titles) · `display` 44 (hero totals, e.g. invoice "Total due"). Headings resolve to `--color-text-strong`. The kit's text specimen (27, 15 and 11 px) sits off this scale; the scale here wins.
+
+**Page title.** Every screen's title is Newsreader 34/600 (`4xl`) with −0.015em tracking (`tracking-tight`), in `--color-text-strong`, rendered by `PageHeader` (see [Page header](#page-header-srccomponents)). This is the size every prototype uses, so one title reads the same on every screen. The 24/500 `.page-title`, the `text-2xl` titles and the 404's 32/700 heading are retired. The sign-in shell keeps its own layout but uses the same 34/600 heading.
 
 ## Border Radius
 
@@ -84,11 +96,13 @@ Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `s
 | `--radius-sm` | `4px` | Micro elements |
 | `--radius` | `6px` | Menu items, segmented inner, small controls |
 | `--radius-btn` | `8px` | Buttons, inputs |
-| `--radius-lg` | `11px` | Small cards, menus / popovers, toasts |
-| `--radius-icon` | `12px` | Opt-in empty-state icon tiles |
-| `--radius-xl` | `16px` | Refreshed grouped lists and empty-state cards |
+| `--radius-lg` | `11px` | Small cards, menus / popovers |
+| `--radius-icon` | `12px` | Empty- and error-state icon tiles, dialog icon tiles, toasts |
+| `--radius-xl` | `16px` | Grouped lists, empty- and error-state cards |
 | `--radius-panel` | `20px` | Tables, modals, large panels, auth card |
 | `--radius-full` | `9999px` | Badge pills, toggles |
+
+The kit draws modals and `ConfirmDialog` at 16px; Horae's dialogs use `--radius-panel`, as the kit's own token table says.
 
 ## Layout
 
@@ -96,12 +110,21 @@ Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `s
 - **Content area**: scrollable, generous padding, `--color-bg` (`#100F0C`) background.
 - **Mobile navigation** (up to 768px): a labelled toggle expands the same sidebar above the content. It stays in normal document flow, so short screens can scroll to every link. Selecting a link closes the panel and focuses the content; Escape closes it and returns focus to the toggle. Desktop width and collapse state are preserved independently.
 - **Narrow content**: page headers and actions wrap; the admin subnavigation moves above its panel when the two columns no longer fit. Dense project/time grids and the day-total strip scroll within their own containers. Project names and badges wrap inside an aligned name column instead of overlapping budget figures.
+- **Wide tables at desktop width**: at 1280px with the expanded sidebar, every column of a table or grid is visible without scrolling. The Timesheet week (name, seven days, Total and the delete column) must fit in that space; today Total and delete fall outside it, which is a bug. The name column has a minimum width, as `.client-table` already does with `--width-client-name`, so names wrap inside it instead of breaking one word per line.
+- **Tables on mobile: *Pending design*.** Neither this file nor the prototypes (which stop at 900px) cover phones. The direction under review is a mixed rule: list tables stack each row as a card, and wide data tables (the Timesheet week, reports) keep horizontal scrolling with a visible indicator that more columns exist. The stacked card and the Timesheet at 390px still need designing, so do not build either until this note is replaced by a rule.
 
 ## Component Inventory
 
 ### Sidebar (`src/components/sidebar.rs`)
 
-Full-height left rail. The brand row leads with the Horae mark and wordmark plus the golden accent dot. Nav rows default to `--color-text-secondary`; hover darkens the background to `--color-bg-tertiary`; the active row raises to `--color-bg-tertiary` with a `--color-border` hairline and swaps its glyph for a leading pine dot. Section labels: all-caps, wide letter-spacing, muted warm gray.
+Full-height left rail. The brand row leads with the Horae mark and wordmark plus the golden accent dot. Nav rows default to `--color-text-secondary`; hover darkens the background to `--color-bg-tertiary`; the active row raises to `--color-bg-tertiary` with a `--color-border` hairline, tints its glyph `--color-primary` and closes with a trailing pine dot. Section labels: all-caps, wide letter-spacing, muted warm gray. Navigation labels follow the [glossary](#glossary) ("People", not "Team").
+
+### Page header (`src/components/`)
+
+One `PageHeader` component renders the top of every screen: an optional back link on its own row, then the title (see [Type scale](#type-scale)) and the screen's actions. Header actions use the normal button size, never `btn-sm`, and wrap the same way on every screen. One shared header keeps the title, the way back and the actions in the same place everywhere.
+
+- **Back link**: the kit's *Back link*. A 16px arrow and a 14px label on their own row above the title, muted ink that brightens to pine on hover. It points to the parent in the hierarchy ("Back to Projects" from a project, "Back to Importers" from Harvest), not to the screen the user came from, and only screens that sit under a section have one.
+- **No breadcrumbs.** The back link replaces a breadcrumb; never show both. The Harvest section's `BackLinks` breadcrumb (`Importers / Harvest / …`) is replaced by a back link to the parent. No other style of "back" is allowed: no `btn-ghost` or `btn-secondary` back buttons and no top-right back button.
 
 ### Timer Widget (`src/components/timer_widget.rs`)
 
@@ -109,11 +132,19 @@ Full-height left rail. The brand row leads with the Horae mark and wordmark plus
 
 ### Data Tables (`src/components/table.rs`)
 
-Wrapped in `.table-container` (border + 20px panel radius). Headers: uppercase, 0.1em letter-spacing, transparent surface, label-tone ink (`--color-label`). Row hover sinks to `--color-row-hover`. Last row has no bottom border.
+Wrapped in `.table-container` (border + 20px panel radius). Headers: uppercase, 0.1em letter-spacing, transparent surface, label-tone ink (`--color-label`). Row hover sinks to `--color-row-hover`. Last row has no bottom border. Status is always a `Badge`, never plain text. A record's actions (edit, archive, permissions, rates…) go in one compact "Actions" menu per row (`Menu`), the same way on every table, rather than as loose buttons that wrap at narrow widths. See [Layout](#layout) for column widths and mobile behaviour.
 
 ### Forms (`src/components/form.rs`)
 
-Inputs on `--color-bg` (void — darkest), 8px radius, 44px tall, warm border `#3d382e`. Idle hover lifts the border to `--color-border-strong` and warms the fill; focus ring is `--color-primary` border + 18% pine glow. Instrument Sans for all form text.
+Inputs on `--color-bg` (void — darkest), 8px radius, 44px tall, warm border (`--color-border-input`). Idle hover lifts the border to `--color-border-strong` and warms the fill; focus ring is `--color-primary` border + 18% pine glow. Instrument Sans for all form text.
+
+### Selects, filters and search (`src/components/select_field.rs`, `menu.rs`)
+
+- **Never a native `<select>`.** Picking one value from a list always uses Horae's own dropdown. In forms that is `SelectField` (a full-width trigger on the shared menu surface, with optional search); `Combobox` is the searchable variant for long catalogs. The kit asks for custom dropdowns everywhere, and a native `<select>` draws a different arrow and list in each browser.
+- **`SelectField` and `form::Select`.** `form::Select` renders a native `<select>`, so it is retired: its callers move to `SelectField`, and the two are unified into one form selector. Until that lands, use `SelectField` in new code.
+- **`FilterBar`.** Every list that can be filtered puts its filters in one shared `FilterBar`: a row of `Menu` triggers (with a trailing caret when they open a menu and a pine count when active), plus the search field when the list has one. This replaces the four current shapes (menus in Projects and Clients, native selects labelled "Show" in Tasks and People, a card of labelled selects in Reports). The Approvals status switch stays a `Segmented` control because it switches views, not filters.
+- **`SearchField`.** One shared search field, always with the magnifier glyph inset on the left. It has the same border, height and focus ring as any other input.
+- **Dates** are chosen with the shared `DatePicker` (`src/components/date_picker.rs`), never a native `<input type=date>`, whose display format depends on the browser locale (`11/01/2026` in US English). See [Formats](#formats).
 
 ### Status Badges (`src/components/badge.rs`)
 
@@ -123,12 +154,78 @@ Pill shape (9999px radius, `4px 12px`). Every variant — including neutral — 
 
 Control-lg is 44px tall (`12px 20px`). Brand fills **brighten** on hover with a soft glow; neutral controls lift a shade and raise their border. Weights: primary/accent 700, solid 600, secondary/danger/ghost 500.
 
-- **Primary**: pine-300 fill, dark green text `#0d211b`; hover → `--color-primary-hover` + `--glow-primary`
-- **Solid**: deep-pine fill, `--color-text-strong` ink — form submits; hover → `--color-pine-hover` + `--glow-pine`
+- **Primary**: pine-300 fill, dark green text `#0d211b`; hover → `--color-primary-hover` + `--glow-primary`. The main action of a screen or form, including form submits. Use at most one Primary per screen or form, so the next step is always obvious.
+- **Solid**: deep-pine fill, `--color-text-strong` ink; hover → `--color-pine-hover` + `--glow-pine`. It is no longer the form-submit variant: submits use Primary. Do not use Solid in new work; whether it stays for a narrow case is settled with the button pass (PR-8).
 - **Secondary**: tertiary surface, `--color-border-input` border; hover raises the border to `--color-border-strong`
 - **Accent**: brass fill `#D99A3C`, dark text — "Send invoice" and billing actions; hover → `--color-accent-hover` + `--glow-accent`
-- **Danger**: transparent with dark red border `#6e3634`; hover tints and lifts the border to `--color-border-danger-hover`
+- **Danger** (`btn-danger`): transparent with dark red border `#6e3634`; hover tints and lifts the border to `--color-border-danger-hover`. Only for the button that opens a destructive confirmation (see [Destructive actions](#destructive-actions)); never for the confirmation itself and never for archiving.
+- **Danger solid**: red fill with dark ink, the kit's `hb-danger-solid` from `ConfirmDialog.dc.html`. Only for the confirm button of an irreversible action. The class does not exist in the app yet (PR-3 adds it).
 - **Ghost**: transparent pine-ink link; hover → pine-tint background
+- **Split button** (`.btn-split`): a main action with real variants behind a caret, such as submitting a week with or without notifying. The kit draws its body in Solid; under the Primary rule above, a split button that carries the screen's main action uses Primary.
+
+The kit and several prototypes use Solid for submits ("Submit week", "Update info", "Save", "Approve"). This file overrides them: those that are the main action of their screen or form are Primary. What the others become (per-row "Approve", for instance) is settled with Solid in PR-8.
+
+### Destructive actions
+
+- **Irreversible actions** (deleting, disconnecting Harvest, revoking a token, and anything else that cannot be undone) are confirmed in a `ConfirmDialog` whose confirm button is Danger solid. A red fill marks the one click that loses data.
+- **The button that opens that dialog** uses Danger (`btn-danger`, the red outline). The outline warns; the fill commits.
+- **Archiving is not destructive.** It can be undone, so it never uses either red button. Its confirm (when it asks for one) uses the dialog's neutral tone with a Primary button, as the prototypes' archive dialogs do, and its success toast offers "Undo". Restoring works the same way.
+- **Record actions** such as Edit, Archive, Restore and Delete are offered through the row's or the page's "Actions" menu, the same way on every screen. Delete sits last, after a divider, as a danger item.
+
+### Dialogs (`src/components/modal.rs`)
+
+Every dialog is built on the shared `Modal`, with fixed slots (header, body, footer) so none of them render unpadded or with a title of their own making. `.ts-modal-*` and hand-made `h2`/`p` dialogs are retired.
+
+**`ConfirmDialog`** is the one shape for confirming a destructive, irreversible or otherwise significant action, after `ConfirmDialog.dc.html`: an icon tile (red for danger, green for a neutral confirm such as archiving), a serif title, a short body that says what will happen, then the buttons. For the most serious actions (deleting a workspace, for instance) it can require typing a confirmation word before the confirm button enables. Its props follow the prototype: title, body, confirm label, tone (danger or neutral), busy, confirm and dismiss handlers, and the optional confirmation word.
+
+**Footer order and alignment: *Pending decision*.** The kit's *Modal* puts the primary action on the right with Cancel to its left. `ConfirmDialog.dc.html`, most prototype screens and the app today put the primary first, on the left (the app also stretches the buttons to full width). Until this is decided, keep each dialog's current order and do not reorder footers as part of other work.
+
+### Toast (`src/components/toast.rs`)
+
+Every successful action is confirmed with a toast, the one in `Toast.dc.html`, so the user always gets the same signal in the same place:
+
+- Bottom centre of the viewport, on a black (`#000`) panel with a hairline border, in both themes.
+- A leading icon by kind: success, info, warning or error.
+- The message, an optional inline action ("Undo" after archiving or restoring) and a close button.
+- One container in `AppLayout` shows them, so pages raise toasts instead of rendering their own.
+
+`.alert-success` stays only for a state that must remain visible on the page (an import that finished, say), not to confirm an action. Inline "Saved." text, green `text-success` notes and `role=status` paragraphs used as confirmations are replaced by the toast. The kit's *Form dirty state* asks for the same: saving confirms with a toast, never silence.
+
+### Empty, loading and error states (`src/components/`)
+
+- **`EmptyState`**: the Projects variant is the base of `.empty-state` for every screen: a `--color-bg-secondary` card with a border and `--radius-xl` (16px), the icon in a 52px tile (`--radius-icon`, 22px glyph), a Newsreader `xl` title, copy limited to `--width-empty-copy`, and an optional action (Primary, or Secondary when it only resets filters) plus an optional text link. The copy says what to do next. The kit and `EmptyState.dc.html` draw the icon in a round disc; Horae uses the tile. The `tone="success"` variant (an all-clear moment such as nothing to approve) keeps the green icon colours.
+- **`ErrorState`**: for a region or screen that failed to load. It keeps the empty state's silhouette so the eye lands in the same place, with the icon in the danger tint, a title and body that say what happened and what to do, an optional mono request line for support, and "Try again" as the action. A permission error points to who can grant access instead of offering a retry (see [Screen States](#screen-states)).
+- **`Loading`**: one component for every inline loading message, always with `role=status` and `aria-busy`, so assistive technology hears the same thing everywhere. It replaces the ad hoc `p { "Loading…" }` variants.
+- **`Skeleton`** (optional): a placeholder that mirrors a listing's grid, for tables and lists where the layout is known before the data arrives. Only the data region is replaced; the header, filters and actions stay live.
+
+## Formats
+
+- **Durations: configurable.** Each organization sets the default display format, `H:MM` (`13:00`) or decimal hours (`13.00`), and each person can override it for themselves. Teams and people read hours in one of the two, so neither fits everyone as a fixed rule.
+- **One formatter.** All duration formatting lives in `horae-core`: a single function that takes integer minutes and the chosen format. The UI, the server and the reports call it the same way, so the same project never shows `13h` in one place and `13:00` in another. Page-local formatters (such as the one in `pages/projects.rs`) are removed.
+- **Exports stay decimal.** CSV and XLSX exports always write decimal hours, whatever the display preference, because spreadsheets need a number they can sum.
+- **Dates** use the app's format (`16 Nov 2026`) everywhere and are picked with the shared `DatePicker`.
+
+## Glossary
+
+One word for one thing, across the sidebar, titles, buttons, menus and messages. Entries marked *Proposal* are not decided yet; follow them in new copy and raise them in review if they seem wrong.
+
+| Use | Instead of | Notes |
+|---|---|---|
+| People | Team | The section that lists the workspace's people, including its sidebar and subnavigation entries. |
+| Restore | Reactivate, Unarchive | The opposite of Archive, for projects, clients, people and tasks. Toasts read "Project restored". |
+| Settings | Workspace settings | The workspace settings page and its subnavigation entry. |
+| Try again | Retry, Retry report, Retry tags… | Every retry action, on error states, banners and alerts. |
+| Back to *parent* | "Back to Timesheet" on a screen whose parent is another section, breadcrumbs | The back link names the parent screen (see [Page header](#page-header-srccomponents)). |
+
+Conventions:
+
+- *Proposal.* **Sentence case** for titles, buttons, menu items and labels: "New invoice", "New project", "Archive client", not "New Invoice".
+- *Proposal.* **An ellipsis** ends the label of an action that opens a dialog asking for more input or a confirmation ("Archive task…", "Delete…"), and only those. Labels that act at once, or that navigate, have none.
+- *Proposal.* **Discard changes** is the escape action of a form with unsaved changes, after the kit's *Form dirty state* ("Discard changes", not "Cancel changes").
+- *Proposal.* **Cancel** closes a dialog without acting, everywhere ("Cancel", not "Cancel over-invoicing"); **Close** dismisses something that has nothing to cancel, such as a toast or a read-only panel ("Close", not "Dismiss").
+- *Proposal.* **Empty-state titles** have no closing period ("No projects yet"); body copy is full sentences that end in one.
+- *Proposal.* **Toast messages** name the object and what happened, in that order: "Project archived", "Client created", "Settings saved".
+- *Proposal.* **Team** stays only for the people assigned to one project (the project's Team tab and section).
 
 ## Component Conventions
 
@@ -140,10 +237,13 @@ Control-lg is 44px tall (`12px 20px`). Brand fills **brighten** on hover with a 
 
 ## Tokens & utilities
 
-Empty-state variants are opt-in: `.empty-state-icon-tile` uses the 52px tile,
-12px radius and 22px glyph tokens; `.empty-state-copy` limits copy to 380px with
-1.55 line height. Compose card spacing/radius and `text-subtle` in markup. The
-existing `.empty-state`, circular icon and typography defaults are unchanged.
+Empty states use one variant: `.empty-state` takes the Projects card (see
+[Empty, loading and error states](#empty-loading-and-error-states-srccomponents)).
+Until PR-4 folds them into the base class, that look is composed from
+`.empty-state-icon-tile` (the 52px tile, 12px radius and 22px glyph tokens),
+`.empty-state-copy` (copy limited to 380px with 1.55 line height) and card
+spacing/radius utilities in markup. The older sunken card with a round icon is
+retired.
 
 Everything is driven by CSS custom properties in `:root` (`assets/css/horae.css`) —
 never hardcode a colour, spacing, or radius in a rule; reference the token so the
@@ -191,22 +291,40 @@ read-only rows and other shared controls retain their existing layout.
 
 ## Pages
 
+Routes of the Dioxus router (`crates/horae/src/route.rs`). Sign-in lives outside it, in `horae-api`.
+
 | Route | Component | Description |
 |---|---|---|
-| `/auth/login` | `Login` | Email + password form |
-| `/auth/register` | `Register` | Registration (admin only after first user) |
-| `/` | `Dashboard` | Stats overview + active timer |
-| `/clients` | `ClientList` | Table of clients |
-| `/clients/:id` | `ClientDetail` | Projects under client |
-| `/projects` | `ProjectList` | All projects |
+| `/auth/login` | served by `horae-api` (`crates/api/src/auth/`) | Sign in through the configured OIDC provider, or the development login |
+| `/` | redirect | Lands on this week's Timesheet |
+| `/timesheet/:view/:date` | `Timesheet` | Day, week and calendar views, timer, entry editing and weekly submission |
+| `/clients` | `ClientList` | Clients with search and filters |
+| `/clients/:id` | `ClientDetail` | A client's projects, hours and invoices |
+| `/projects` | `ProjectList` | Projects grouped by client, with budgets and exports |
+| `/projects/client/:client` | `ProjectsForClient` | Projects filtered to one client |
 | `/projects/new` | `NewProject` | Project creation with a private draft (manager/admin) |
-| `/projects/:id` | `ProjectDetail` | Project tasks + time entries |
-| `/time` | `TimeList` | Time entry list with filters |
+| `/projects/:id` | `ProjectDetail` | Project dashboard, tasks and team |
+| `/projects/:id/edit` | `EditProject` | The New Project form for an existing project |
+| `/tasks` | `TaskCatalog` | The workspace's task catalog |
+| `/approvals` | `Approvals` | Submitted timesheets to approve or reopen |
+| `/reports` | `Reports` | Grouped and detailed time reports with exports |
 | `/invoices` | `InvoiceList` | Invoice table |
+| `/invoices/new/client/:client` | `NewInvoiceForClient` | Invoice preparation for one client |
 | `/invoices/settings` | `InvoiceSettings` | Issuer, payment details and invoice defaults, one save per card (manager/admin) |
 | `/invoices/:id` | `InvoiceDetail` | Invoice line items |
-| `/admin/users` | `AdminUsers` | User management |
-| `/settings` | `Settings` | App + plugin settings |
+| `/admin/users` | `AdminUsers` | People, their rates and permissions |
+| `/admin/workspace` | `WorkspaceSettings` | Workspace settings |
+| `/admin/importers` | `ImporterIndex` | Available importers |
+| `/admin/importers/harvest` | `HarvestOverview` | Harvest connection, preview and import |
+| `/admin/importers/harvest/oauth` | `HarvestOAuth` | Harvest OAuth app credentials |
+| `/admin/importers/harvest/csv` | `HarvestCsv` | Import from a Harvest CSV export |
+| `/admin/importers/harvest/runs` | `HarvestRuns` | Import run history |
+| `/admin/importers/harvest/runs/:id` | `HarvestRun` | One import run |
+| `/admin/audit` | `PermissionAudit` | Permission audit log |
+| `/admin/api-tokens` | `AdminApiTokens` | Every API token created in the workspace, with revocation |
+| `/settings` | `Settings` | Personal settings: profile, appearance, own permissions, API tokens and plugins |
+| `/components` | `Gallery` | Component gallery |
+| anything else | `NotFound` | Not found |
 
 ### New Project
 
@@ -236,7 +354,7 @@ acceptance work; this page is not evidence that every final gate has passed.
 
 - Keyboard navigation throughout
 - ARIA labels on icon-only buttons
-- Color contrast meets WCAG AA — `#EFEAE0` on `#1A1813` is ~9:1
+- Color contrast meets WCAG AA — `#EFEAE0` on `#1A1813` is ~9:1. Table headers, muted text and placeholders currently fall short of 4.5:1 in places; PR-1 raises those tokens.
 - Form inputs have associated `<label>` elements
 - Shared `Modal` dialogs stay mounted and use native `showModal()` / `close()` for background inertness and focus restoration. Escape, backdrop clicks and Cancel dismiss them unless a mutation is pending; the panel scrolls within the viewport on short screens.
 - Shared `Menu` uses a native popover in the top layer so tables cannot clip it. It opens above or below its trigger within the viewport, dismisses on outside click or anchor scrolling/resizing, and supports arrows, Home/End, initial-letter navigation, Escape and Tab. Each caller supplies a stable, unique ID for the trigger/menu association. The browser owns visibility; the shared script supplies positioning and [menu keyboard behavior](https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/).
@@ -244,14 +362,15 @@ acceptance work; this page is not evidence that every final gate has passed.
 
 ## Screen States
 
-Every new or changed screen and data-bearing component covers these states before it is done; record the check in the feature's `quickstart.md` validation, or its `visual-review.md` where one exists (as in `specs/012-clients-design/increments/mvp/`). Build each state from the existing classes and tokens; add a variant to them rather than a new one-off style.
+Every new or changed screen and data-bearing component covers these states before it is done; record the check in the feature's `quickstart.md` validation, or its `visual-review.md` where one exists (as in `specs/012-clients-design/increments/mvp/`). Build each state from the shared components and classes below; add a variant to them rather than a new one-off style.
 
-- **Empty**: `.empty-state` with copy that says what to do next, not a blank table.
-- **Loading**: inline, per region (see Interaction Principles); keep the layout stable so content doesn't jump when data arrives.
-- **Error**: `.alert.alert-danger` for page and form errors, inline `text-danger` for field errors, and `.banner-danger` for errors that need an action such as retry. Form fields keep the values the user entered after a failed submit.
+- **Empty**: `EmptyState` with copy that says what to do next and, where the user can act, the action itself; not a blank table or a loose line of text.
+- **Loading**: `Loading` inline, per region (see Interaction Principles), or a `Skeleton` for a listing; keep the layout stable so content doesn't jump when data arrives.
+- **Error**: `.alert.alert-danger` for form errors and for a failed action on a page that otherwise loaded, inline `text-danger` for field errors, `ErrorState` (with "Try again") for a region or screen that failed to load, and `.banner-danger` for an error that needs an action inside a page. Form fields keep the values the user entered after a failed submit.
+- **Success**: a toast (see [Toast](#toast-srccomponentstoastrs)); never a silent save.
 - **No permission**: non-disclosing (spec 015). Name the role that can grant access ("Ask an Administrator", as in `own_permissions.rs`) without revealing the resource, its owner or other people's permissions; out-of-scope direct links behave as not found. Hide actions the user can never take in this context; disable, with the reason, actions that are only temporarily unavailable.
 - **Long content**: 60-character names, large amounts and many rows wrap or truncate inside their column without overlapping (see Layout → Narrow content).
-- **Narrow**: usable at 390px and at the 768px mobile-navigation breakpoint.
+- **Narrow**: usable at 390px and at the 768px mobile-navigation breakpoint. How tables behave on phones is pending (see [Layout](#layout)).
 - **Keyboard**: the whole flow completes without a mouse, with a visible `--ring` focus and focus returned after dialogs and menus close (see Accessibility).
 
 ## Interaction Principles

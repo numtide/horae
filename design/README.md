@@ -3,6 +3,16 @@
 HTML/CSS/JS prototypes for Horae's screens and shared visual components. These
 files are design references, not production application code.
 
+## Precedence
+
+[DESIGN.md](../DESIGN.md) is the source of truth for Horae's design. The files
+under `project/` are a historical reference from the 2026-09-21 export: where
+they disagree with `DESIGN.md` (for example Solid on form submits, a round icon
+in empty states, a destructive tone for archiving, or the "Reactivate" and
+"Workspace settings" labels), `DESIGN.md` wins, and its sections name the
+decision that corrects them. The prototypes stay unedited so later exports remain
+comparable.
+
 ## Source
 
 - Archive: `Horae (3).zip`, exported and imported on 2026-09-21.
@@ -26,8 +36,9 @@ files are design references, not production application code.
 - [Components](project/foundations/Components.dc.html) and
   [Logo](project/foundations/Logo.dc.html): foundation references.
 - The three `support.js` files support the exported prototypes.
-- [Implementation gaps](IMPLEMENTATION-GAPS.md): historical source-based comparison
-  from 2026-09-16, not a current implementation audit or live PR status.
+- [Implementation gaps](IMPLEMENTATION-GAPS.md): what the application still has
+  to change to follow `DESIGN.md`, by PR, updated from the 2026-11-18 design audit.
+  PR status there is a snapshot, not a live indicator.
 
 ## Latest export changes
 
@@ -49,7 +60,8 @@ implementing that screen. Do not infer priority from an export's selected page.
 Do not render or screenshot prototypes unless explicitly requested.
 
 Implement approved flows using Horae's existing Dioxus components and tokens,
-following [DESIGN.md](../DESIGN.md). Do not copy demo records, simulated timers,
+following [DESIGN.md](../DESIGN.md), which overrides the prototype wherever the
+two differ. Do not copy demo records, simulated timers,
 no-op actions, floating-point monetary calculations or prototype-only controls
 into the application. Keep exported source unchanged so future updates remain
 comparable.
@@ -71,4 +83,4 @@ bundle byte-for-byte; this is not a browser or runtime validation of the export.
 The implementation inventory records conflicting or unsupported mockup behavior,
 including currency aggregation, account switching, authentication and roles.
 
-Last reviewed: 2026-09-21.
+Last reviewed: 2026-11-19.
