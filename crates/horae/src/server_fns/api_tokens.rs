@@ -46,6 +46,25 @@ pub async fn list_org_api_tokens() -> Result<Vec<ApiTokenRow>, ServerFnError> {
     list_org(&crate::state::global_state().await.db, caller).await
 }
 
+/// The organization's account id for Harvest clients' `Harvest-Account-Id`,
+/// or `None` while the Harvest-compatible API is off.
+#[server]
+pub async fn harvest_account_id() -> Result<Option<i64>, ServerFnError> {
+    let caller = session_caller().await?;
+    let state = crate::state::global_state().await;
+    if !state.harvest_api {
+        return Ok(None);
+    }
+    account_id(&state.db, caller).await.map(Some)
+}
+
+#[cfg(feature = "server")]
+async fn account_id(db: &sqlx::PgPool, caller: Caller) -> Result<i64, ServerFnError> {
+    let mut read = ops::begin_read(db, caller).await.map_err(op_error)?;
+    let result = ops::api_tokens::harvest_account_id(&mut read.tx, &read.actor).await;
+    read.finish(result).await.map_err(op_error)
+}
+
 #[cfg(feature = "server")]
 async fn list_own(db: &sqlx::PgPool, caller: Caller) -> Result<Vec<ApiTokenRow>, ServerFnError> {
     let mut read = ops::begin_read(db, caller).await.map_err(op_error)?;

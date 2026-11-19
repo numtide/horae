@@ -251,19 +251,20 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let owner = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     let foreign = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     crate::state::init_state(
-        pool.clone(),
-        Arc::new(crate::plugin::PluginRegistry::empty()),
-        None,
-        crate::config::HarvestConfig {
-            client_id: "test".into(),
-            client_secret: "test".into(),
-            redirect_url: "http://localhost/auth/harvest/callback".into(),
-            encryption_key_hex: "11".repeat(32),
-        }
-        .into(),
-        Default::default(),
-        None,
-        crate::version::current(),
+        crate::state::AppState::new(
+            pool.clone(),
+            Arc::new(crate::plugin::PluginRegistry::empty()),
+        )
+        .with_harvest(
+            crate::config::HarvestConfig {
+                client_id: "test".into(),
+                client_secret: "test".into(),
+                redirect_url: "http://localhost/auth/harvest/callback".into(),
+                encryption_key_hex: "11".repeat(32),
+            }
+            .into(),
+        )
+        .with_version(crate::version::current()),
     )
     .await;
     let upload_pool = pool.clone();

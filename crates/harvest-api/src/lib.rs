@@ -1,6 +1,7 @@
 // Read-only Harvest API v2 subset, mounted at /harvest/v2 with the alias /v2.
 // `/api/` belongs to Horae's own API (spec 022 FR-052), so Harvest has no alias
-// there. Integer ids and exact decimals; session auth for now. The contract is
+// there. Integer ids and exact decimals; personal access tokens or the session
+// cookie (`auth`). The contract is
 // specs/021-harvest-api-compat/contracts/harvest-api-v2.md.
 
 mod auth;
@@ -18,13 +19,16 @@ mod pagination_tests;
 #[cfg(test)]
 mod switch_tests;
 
+use std::sync::Arc;
+
 use axum::{
     Json, Router,
-    extract::{OriginalUri, Path, Query, State},
+    extract::{FromRef, OriginalUri, Path, Query, State},
     http::StatusCode,
     routing::{MethodRouter, any, get},
 };
 use chrono::{DateTime, NaiveDate, Utc};
+use horae_api::rate_limit::RateLimiter;
 use horae_core::permissions::catalog::Permission;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -40,14 +44,34 @@ use ids::Kind;
 use horae_server::testing;
 use horae_server::{db, importers, ops};
 
-use crate::ops::{Actor, Caller, OpError};
+use crate::ops::{Actor, OpError};
+
+/// What the handlers share. `limiter` is `/api/v1`'s, so a token's requests
+/// to both APIs count together (spec 022 R-7).
+#[derive(Clone)]
+struct HarvestState {
+    db: PgPool,
+    limiter: Arc<RateLimiter>,
+}
+
+impl FromRef<HarvestState> for PgPool {
+    fn from_ref(state: &HarvestState) -> Self {
+        state.db.clone()
+    }
+}
+
+impl FromRef<HarvestState> for Arc<RateLimiter> {
+    fn from_ref(state: &HarvestState) -> Self {
+        state.limiter.clone()
+    }
+}
 
 /// The Harvest-compatible API when `enabled` (`HORAE_HARVEST_API`), otherwise
 /// an empty 404 for its paths, so they do not fall through to the web app's
-/// HTML shell.
-pub fn mount(enabled: bool, db: PgPool) -> Router {
+/// HTML shell. `limiter` is the one `/api/v1` uses.
+pub fn mount(enabled: bool, db: PgPool, limiter: Arc<RateLimiter>) -> Router {
     if enabled {
-        return router(db);
+        return router(db, limiter);
     }
     let off = any(|| async { StatusCode::NOT_FOUND });
     Router::new()
@@ -55,8 +79,8 @@ pub fn mount(enabled: bool, db: PgPool) -> Router {
         .route("/v2/{*rest}", off)
 }
 
-fn router(db: PgPool) -> Router {
-    let routes: [(&str, MethodRouter<PgPool>); 10] = [
+fn router(db: PgPool, limiter: Arc<RateLimiter>) -> Router {
+    let routes: [(&str, MethodRouter<HarvestState>); 10] = [
         ("/users/me", get(users_me)),
         ("/time_entries", get(list_time_entries)),
         ("/time_entries/{id}", get(get_time_entry)),
@@ -80,7 +104,7 @@ fn router(db: PgPool) -> Router {
     Router::new()
         .nest("/harvest/v2", api.clone())
         .nest("/v2", api)
-        .with_state(db)
+        .with_state(HarvestState { db, limiter })
 }
 
 // ── Error helper ────────────────────────────────────────────────────────────
@@ -112,7 +136,7 @@ async fn begin_read(
     caller: &AuthUser,
     subject: &str,
 ) -> Result<ops::ReadTx, ApiError> {
-    let read = ops::begin_read(db, Caller::session(caller.org_id, caller.user_id))
+    let read = ops::begin_read(db, caller.caller())
         .await
         .map_err(|error| match error {
             // `Actor::load` refuses only a missing or invalid permission state.
@@ -1069,6 +1093,7 @@ mod tests {
         AuthUser {
             user_id: ids.user_id,
             org_id: ids.org_id,
+            channel: ops::Channel::Session,
         }
     }
 

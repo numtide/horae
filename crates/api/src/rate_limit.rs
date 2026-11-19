@@ -90,11 +90,16 @@ pub async fn limit(
     next.run(request).await
 }
 
-fn too_many_requests(wait: Duration) -> Response {
-    // Whole seconds, rounded up, and never 0, so a client that obeys does not
-    // come back inside the window.
+/// The `Retry-After` for a refusal that must wait `wait`: whole seconds,
+/// rounded up, and never 0, so a client that obeys does not come back inside
+/// the window.
+pub fn retry_after_seconds(wait: Duration) -> u64 {
     let seconds = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
-    let seconds = seconds.max(1);
+    seconds.max(1)
+}
+
+fn too_many_requests(wait: Duration) -> Response {
+    let seconds = retry_after_seconds(wait);
     let problem = Problem::new(
         StatusCode::TOO_MANY_REQUESTS,
         "rate_limited",

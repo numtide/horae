@@ -1,10 +1,10 @@
 //! Harvest-shaped error responses (specs/021-harvest-api-compat/contracts/harvest-api-v2.md,
 //! *Error bodies*). Failed authentication answers with `error` and
 //! `error_description`, like an OAuth2 resource server; other refusals with
-//! `message`.
+//! `message`. A refusal over the request limit adds `retry_after`.
 
 use axum::Json;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
@@ -14,6 +14,8 @@ use crate::ops::OpError;
 pub struct ApiError {
     pub status: StatusCode,
     pub message: String,
+    /// Seconds until the token may call again, on 429 only.
+    pub retry_after: Option<u64>,
 }
 
 impl ApiError {
@@ -21,6 +23,19 @@ impl ApiError {
         Self {
             status,
             message: message.into(),
+            retry_after: None,
+        }
+    }
+
+    /// The token is over the request limit both APIs share (spec 022 R-7)
+    /// for `seconds` more.
+    pub fn too_many_requests(seconds: u64) -> Self {
+        Self {
+            retry_after: Some(seconds),
+            ..Self::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                format!("Too many requests for this token; retry in {seconds} s"),
+            )
         }
     }
 
@@ -74,9 +89,18 @@ impl IntoResponse for ApiError {
             StatusCode::NOT_FOUND => {
                 json!({ "error": "not_found", "error_description": self.message })
             }
+            StatusCode::TOO_MANY_REQUESTS => {
+                json!({ "message": self.message, "retry_after": self.retry_after })
+            }
             _ => json!({ "message": self.message }),
         };
-        (self.status, Json(body)).into_response()
+        let mut response = (self.status, Json(body)).into_response();
+        if let Some(seconds) = self.retry_after {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        response
     }
 }
 
@@ -108,6 +132,18 @@ mod tests {
         let (status, body) = body(ApiError::unprocessable("bad per_page")).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(body, json!({ "message": "bad per_page" }));
+    }
+
+    #[tokio::test]
+    async fn over_the_limit_the_body_and_the_header_carry_the_wait() {
+        let response = ApiError::too_many_requests(7).into_response();
+        assert_eq!(response.headers()[header::RETRY_AFTER], "7");
+        let (status, body) = body(ApiError::too_many_requests(7)).await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            body,
+            json!({ "message": "Too many requests for this token; retry in 7 s", "retry_after": 7 })
+        );
     }
 
     #[tokio::test]

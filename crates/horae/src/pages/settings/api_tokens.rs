@@ -80,6 +80,7 @@ pub(super) fn ApiTokensSection() -> Element {
                 a { id: "api-openapi-link", href: "/api/v1/openapi.json", "its OpenAPI document" }
                 "."
             }
+            HarvestAccount {}
             if let Some(token) = created() {
                 div { class: "alert alert-success mb-4", role: "status", id: "api-token-created",
                     p { class: "font-semibold mb-2", "Token “{token.row.name}” created" }
@@ -130,6 +131,23 @@ pub(super) fn ApiTokensSection() -> Element {
                 },
                 Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, on_revoke } },
             }
+        }
+    }
+}
+
+/// The account id Harvest clients ask for, while the Harvest-compatible API
+/// is on; nothing otherwise.
+#[component]
+fn HarvestAccount() -> Element {
+    let account = use_resource(server_fns::harvest_account_id);
+    let Some(Ok(Some(id))) = *account.read() else {
+        return rsx! {};
+    };
+    rsx! {
+        p { id: "api-harvest-account", class: "text-secondary text-sm mb-4",
+            "Clients of the Harvest API v2 work with these tokens at /harvest/v2. When they ask for an account ID, use "
+            span { class: "text-mono", "{id}" }
+            "."
         }
     }
 }

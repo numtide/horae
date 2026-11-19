@@ -40,7 +40,7 @@ where
 }
 
 /// The credential of a `Bearer` authorization; the scheme ignores case (RFC 7235).
-fn bearer(value: &str) -> Option<&str> {
+pub fn bearer(value: &str) -> Option<&str> {
     let (scheme, token) = value.split_once(' ')?;
     let token = token.trim();
     (scheme.eq_ignore_ascii_case("bearer") && !token.is_empty()).then_some(token)

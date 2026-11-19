@@ -3,8 +3,8 @@
 // fetched by id. Typed decoding is the point: integer ids and numeric hours
 // must parse into the library's own structs.
 //
-// Until personal access tokens land, the session cookie from Horae's dev login
-// stands in for the bearer token.
+// The client authenticates as a Harvest personal access token does: the token
+// as a bearer credential and the account id in Harvest-Account-Id.
 package main
 
 import (
@@ -17,11 +17,12 @@ import (
 	"github.com/becoded/go-harvest/harvest"
 )
 
-type cookieTransport struct{ cookie string }
+type tokenTransport struct{ token, account string }
 
-func (t cookieTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = req.Clone(req.Context())
-	req.Header.Set("Cookie", t.cookie)
+	req.Header.Set("Authorization", "Bearer "+t.token)
+	req.Header.Set("Harvest-Account-Id", t.account)
 	return http.DefaultTransport.RoundTrip(req)
 }
 
@@ -36,7 +37,10 @@ func main() {
 	base, err := url.Parse(os.Getenv("HORAE_API_BASE"))
 	check(err, "base url")
 	client := harvest.NewAPIClient(&http.Client{
-		Transport: cookieTransport{cookie: os.Getenv("HORAE_SESSION_COOKIE")},
+		Transport: tokenTransport{
+			token:   os.Getenv("HORAE_ACCESS_TOKEN"),
+			account: os.Getenv("HORAE_ACCOUNT_ID"),
+		},
 	})
 	client.BaseURL = base
 	ctx := context.Background()
