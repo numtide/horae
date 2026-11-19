@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, email, active,\n                  created_at as \"created_at: DateTime<Utc>\",\n                  updated_at as \"updated_at: DateTime<Utc>\"\n           FROM users\n           WHERE org_id = $1 AND (active OR $2)\n             AND ($3::uuid IS NULL OR id = $3) AND ($4::bool IS NULL OR active = $4)\n             AND ($5::timestamptz IS NULL OR updated_at >= $5)\n             AND id > $6\n           ORDER BY id LIMIT $7",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7ea37733be5720f21bbddc9585ac1aa3aeb006c6d2843293b1bacadeb15e2ce6"
+}

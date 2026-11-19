@@ -430,6 +430,101 @@ pub async fn list(
     .await?)
 }
 
+/// A client as [`list`] shows it to the actor, and when it last changed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientRecord {
+    pub id: Uuid,
+    pub name: String,
+    pub currency: String,
+    /// For catalog readers only.
+    pub address: Option<String>,
+    /// For catalog readers only.
+    pub tax_id: Option<String>,
+    pub active: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Which clients [`page`] lists, and where its page starts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClientQuery {
+    /// Active clients, or archived ones.
+    pub active: bool,
+    /// Only clients whose `updated_at` is at or after it.
+    pub updated_since: Option<chrono::DateTime<chrono::Utc>>,
+    /// The last id of the previous page.
+    pub after: Option<Uuid>,
+    pub limit: u32,
+}
+
+/// The clients of [`list`] in `id` order: up to `limit + 1` rows, the extra
+/// one saying that another page follows.
+pub async fn page(
+    tx: &mut Tx,
+    actor: &Actor,
+    query: &ClientQuery,
+) -> Result<Vec<ClientRecord>, OpError> {
+    records(tx, actor, None, Some(query)).await
+}
+
+/// One client of [`page`], whether active or archived. A client the actor may
+/// not see is not found.
+pub async fn get(tx: &mut Tx, actor: &Actor, client_id: Uuid) -> Result<ClientRecord, OpError> {
+    records(tx, actor, Some(client_id), None)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| OpError::not_found(NOT_FOUND))
+}
+
+/// [`list`]'s rules, for one client or a page of them.
+async fn records(
+    tx: &mut Tx,
+    actor: &Actor,
+    client_id: Option<Uuid>,
+    query: Option<&ClientQuery>,
+) -> Result<Vec<ClientRecord>, OpError> {
+    if !actor.is_active() {
+        return Err(OpError::forbidden("Account is not active"));
+    }
+    Ok(sqlx::query_as!(
+        ClientRecord,
+        r#"SELECT c.id, c.name, c.currency,
+                  CASE WHEN $3 THEN c.address END AS address,
+                  CASE WHEN $3 THEN c.tax_id END AS tax_id,
+                  c.active, c.created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                  c.updated_at as "updated_at: chrono::DateTime<chrono::Utc>"
+           FROM clients c
+           WHERE c.org_id = $1
+             AND ($3 OR EXISTS (
+               SELECT 1 FROM projects p
+               WHERE p.org_id = c.org_id AND p.client_id = c.id
+                 AND ($4 OR ($5 AND EXISTS (
+                   SELECT 1 FROM project_management_assignments m
+                   WHERE m.org_id = p.org_id AND m.project_id = p.id AND m.manager_id = $2
+                 )) OR EXISTS (
+                   SELECT 1 FROM assignments a WHERE a.project_id = p.id AND a.user_id = $2
+                 ))
+             ))
+             AND ($6::uuid IS NULL OR c.id = $6) AND ($7::bool IS NULL OR c.active = $7)
+             AND ($8::timestamptz IS NULL OR c.updated_at >= $8)
+             AND c.id > $9
+           ORDER BY c.id LIMIT $10"#,
+        actor.org_id(),
+        actor.id(),
+        reads_catalog(actor),
+        actor.has(Permission::ProjectReadAll),
+        actor.has(Permission::ProjectReadManaged),
+        client_id,
+        query.map(|query| query.active),
+        query.and_then(|query| query.updated_since) as Option<chrono::DateTime<chrono::Utc>>,
+        query.and_then(|query| query.after).unwrap_or(Uuid::nil()),
+        query.map_or(1, |query| i64::from(query.limit) + 1),
+    )
+    .fetch_all(&mut **tx)
+    .await?)
+}
+
 /// What the Clients page may show: the catalog itself and which projects
 /// count toward each client's totals.
 #[derive(Clone, Copy)]

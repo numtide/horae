@@ -1,0 +1,63 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.name, t.billable_default, t.active,\n                  t.created_at as \"created_at: DateTime<Utc>\",\n                  t.updated_at as \"updated_at: DateTime<Utc>\"\n           FROM tasks t\n           WHERE t.org_id = $1 AND ($3 OR t.id = ANY($4))\n             AND ($5::uuid IS NULL OR NOT $3 OR EXISTS (\n               SELECT 1 FROM project_tasks pt\n               JOIN projects p ON p.id = pt.project_id AND p.org_id = t.org_id\n               LEFT JOIN project_management_assignments management ON management.org_id = p.org_id\n                 AND management.project_id = p.id AND management.manager_id = $2\n               LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $2\n               WHERE pt.task_id = t.id AND p.id = $5\n                 AND ($6 OR ($7 AND management.id IS NOT NULL) OR member.id IS NOT NULL)\n             ))\n             AND ($8::uuid IS NULL OR t.id = $8) AND ($9::bool IS NULL OR t.active = $9)\n             AND ($10::timestamptz IS NULL OR t.updated_at >= $10)\n             AND t.id > $11\n           ORDER BY t.id LIMIT $12",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "UuidArray",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5d90f7acb545ab77466b4b0ad9c4a8e63ce8e6c528a3e65c05d301d56cd9bb01"
+}

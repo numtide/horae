@@ -27,7 +27,12 @@ use crate::problem::{self, Problem};
 use crate::rate_limit::{self, RateLimiter};
 use crate::token::ApiCaller;
 
+mod catalogue;
+pub mod clients;
 pub mod me;
+pub mod people;
+pub mod projects;
+pub mod tasks;
 #[cfg(test)]
 pub(crate) mod testing;
 pub mod types;
@@ -79,6 +84,7 @@ impl FromRef<V1State> for Arc<RateLimiter> {
     tags(
         (name = "description", description = "This document"),
         (name = "identity", description = "Who a token acts as"),
+        (name = "catalogue", description = "Projects, tasks, clients and people, read-only"),
     )
 )]
 struct ApiDoc;
@@ -150,6 +156,14 @@ fn token_routes() -> OpenApiRouter<V1State> {
         .routes(routes!(me::me))
         .routes(routes!(me::trackable))
         .routes(routes!(me::timer))
+        .routes(routes!(projects::list))
+        .routes(routes!(projects::get))
+        .routes(routes!(tasks::list))
+        .routes(routes!(tasks::get))
+        .routes(routes!(clients::list))
+        .routes(routes!(clients::get))
+        .routes(routes!(people::list))
+        .routes(routes!(people::get))
 }
 
 /// The published description of `/api/v1`, built once.

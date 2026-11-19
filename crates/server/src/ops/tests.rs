@@ -12,6 +12,7 @@ use crate::plugin::event::ClientPayload;
 use crate::testing::repeatable_read_pool;
 use crate::testing::{clear_state, organization_lockable, seed};
 
+mod catalogue_pages;
 mod snapshot;
 
 fn created(client_id: Uuid, org_id: Uuid) -> AppEvent {
