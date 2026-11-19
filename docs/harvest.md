@@ -27,18 +27,29 @@ set in the environment take precedence and show there as locked.
 
 ## Harvest-compatible API
 
-Endpoints under `/harvest/v2` expose a read-only subset of the
+Endpoints under `/harvest/v2` expose a subset of the
 [Harvest API v2](https://help.getharvest.com/api-v2/) response shape:
 
 ```
-GET /harvest/v2/users/me
-GET /harvest/v2/time_entries[?from=&to=&user_id=&project_id=&is_running=&page=&per_page=]
-GET /harvest/v2/time_entries/{id}
-GET /harvest/v2/projects[/{id}]
-GET /harvest/v2/clients[/{id}]
-GET /harvest/v2/tasks[/{id}]
-GET /harvest/v2/users
+GET    /harvest/v2/users/me
+GET    /harvest/v2/time_entries[?from=&to=&user_id=&project_id=&is_running=&page=&per_page=]
+GET    /harvest/v2/time_entries/{id}
+POST   /harvest/v2/time_entries
+PATCH  /harvest/v2/time_entries/{id}
+DELETE /harvest/v2/time_entries/{id}
+PATCH  /harvest/v2/time_entries/{id}/stop
+PATCH  /harvest/v2/time_entries/{id}/restart
+GET    /harvest/v2/projects[/{id}]
+GET    /harvest/v2/clients[/{id}]
+GET    /harvest/v2/tasks[/{id}]
+GET    /harvest/v2/users
 ```
+
+Time-entry writes take their parameters as JSON, as a form or in the query string, and run the
+same operation as the Timesheet, with its rules and refusals. `POST` with `hours` records that
+duration; with `started_time` and `ended_time` it records the time between them; with neither it
+starts a timer on the person's today and stops any timer they have running. Hours are rounded
+half up to whole minutes.
 
 The same endpoints answer under `/v2`.
 
@@ -49,7 +60,8 @@ with a base URL ending in `/api` switches to the host root or `/harvest`.
 
 Clients authenticate with a personal access token, the same one `/api/v1` takes, sent as
 `Authorization: Bearer` or the `access_token` query parameter, with the account ID shown on the
-token page as `Harvest-Account-Id`. A signed-in browser session also works. Requests count against
+token page as `Harvest-Account-Id`. A signed-in browser session also works for reads; a write with
+only the session cookie answers `401`. Requests count against
 the same per-token rate limit as `/api/v1` ([Limits](api.md#limits)).
 
 IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and

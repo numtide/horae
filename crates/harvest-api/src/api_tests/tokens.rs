@@ -10,7 +10,7 @@ use super::*;
 use crate::testing::SeedIds;
 
 /// A new token of the seeded person: its whole secret and its id.
-async fn token(pool: &PgPool, ids: &SeedIds) -> (String, Uuid) {
+pub(super) async fn token(pool: &PgPool, ids: &SeedIds) -> (String, Uuid) {
     let mut write = ops::begin(pool, ops::Caller::session(ids.org_id, ids.user_id))
         .await
         .unwrap();
@@ -181,7 +181,7 @@ async fn both_apis_count_a_tokens_requests_against_one_limit(pool: PgPool) {
             },
         },
     );
-    let app = mount(true, pool.clone(), v1.limiter.clone()).merge(horae_api::v1::router(v1));
+    let app = mount(true, v1.clone()).merge(horae_api::v1::router(v1));
     let auth = bearer(&secret);
     let harvest = || get("/harvest/v2/users/me", &[("authorization", &auth)]);
     let horae = || get("/api/v1/me", &[("authorization", &auth)]);

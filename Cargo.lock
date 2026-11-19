@@ -3431,6 +3431,7 @@ dependencies = [
  "horae-core",
  "horae-harvest",
  "horae-server",
+ "horae-types",
  "serde",
  "serde_json",
  "serial_test",
