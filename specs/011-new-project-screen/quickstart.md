@@ -224,7 +224,7 @@ Design differences are deliberate and recorded in [the component mapping](contra
 
 ## Optional budget mail validation
 
-Deployment instructions are in [README — Budget alert email](../../README.md#budget-alert-email-optional).
+Deployment instructions are in [Configuration — Budget alert email](../../docs/configuration.md#budget-alert-email).
 
 Production configuration uses `HORAE_SENDMAIL_PATH` (absolute executable path, no arguments) and `HORAE_MAIL_FROM` (plain ASCII mailbox). Both are unset by default; a partial or invalid configuration rejects startup. The existing mail service must support `-i -f FROM -- TO`. No SMTP credentials or shell command are accepted by Horae. See `.env.example` for the supported address subset and limits.
 
