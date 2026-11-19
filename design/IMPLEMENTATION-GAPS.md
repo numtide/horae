@@ -1,7 +1,7 @@
 # Design implementation inventory
 
-Updated on 2026-11-19 from the [design audit of 2026-11-18](../docs/design/AUDITORIA-DISENO.md)
-(in Spanish; application baseline `3b08dd25`) and the decisions taken on it. [DESIGN.md](../DESIGN.md) holds those
+Updated on 2026-11-19 from the [design audit of 2026-11-18](../docs/design/design-audit.md)
+(application baseline `3b08dd25`) and the decisions taken on it. [DESIGN.md](../DESIGN.md) holds those
 decisions and is the source of truth for every rule below; this file only tracks
 what the application still has to change to follow it, and which PR does it.
 
