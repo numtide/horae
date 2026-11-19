@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT minutes, notes, start_minute, spent_date AS \"spent_date: NaiveDate\"\n           FROM time_entries WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "start_minute",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "spent_date: NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "568403da714d4b69d425d9af2a364a747683352b291c950ffa7e1986d78a8166"
+}

@@ -23,7 +23,7 @@ pub use auth::{LoginAssets, login_redirect_guard, make_session_layer, session};
 pub use token::ApiCaller;
 
 // The backend lives in `horae-server`; keep the `crate::ops` (…) paths.
-use horae_server::{config, importers, ops, plugin, render, state};
+use horae_server::{config, importers, notifications, ops, plugin, render, state};
 #[cfg(test)]
 use horae_server::{db, jobs, testing};
 use horae_types as models;

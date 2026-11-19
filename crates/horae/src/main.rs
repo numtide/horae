@@ -308,7 +308,8 @@ fn main() -> anyhow::Result<()> {
                             favicon_svg: asset!("/assets/favicon.svg").to_string(),
                             apple_touch_icon: asset!("/assets/apple-touch-icon.png").to_string(),
                         },
-                        v1: horae_api::v1::V1State::new(pool.clone(), &cfg.api),
+                        v1: horae_api::v1::V1State::new(pool.clone(), &cfg.api)
+                            .with_app(state::global_state().await),
                     }))
                     .merge(horae_harvest_api::mount(cfg.harvest_api, pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside

@@ -11,6 +11,7 @@ use super::*;
 use crate::ops::testing::save_state;
 use crate::testing::{SeedIds, seed, wait_for_blocked};
 
+mod api_list;
 mod time_entries;
 mod time_report_groups;
 mod time_reports;

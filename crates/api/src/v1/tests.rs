@@ -69,7 +69,7 @@ fn every_operation_is_named_and_answers_errors_as_problems() {
             );
         }
     }
-    assert_eq!(operations, 4);
+    assert_eq!(operations, 12);
 }
 
 #[test]

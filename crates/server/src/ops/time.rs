@@ -404,6 +404,44 @@ const TIMESHEET_UNAVAILABLE: &str = "Timesheet is unavailable";
 pub struct TimesheetChange {
     pub projects: BTreeSet<Uuid>,
     pub notice: Option<String>,
+    /// The entry the command created or changed, as saved; `None` for a
+    /// deletion or a reorder.
+    pub entry: Option<TimeEntry>,
+}
+
+/// Changes to one entry: a `None` field keeps its value, and `Some(None)`
+/// clears an optional one.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EntryPatch {
+    pub project_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,
+    pub spent_date: Option<NaiveDate>,
+    pub minutes: Option<i32>,
+    pub notes: Option<Option<String>>,
+    pub billable: Option<bool>,
+    pub start_minute: Option<Option<i32>>,
+}
+
+impl EntryPatch {
+    /// The entry's values with these changes, as an Update would send them.
+    fn merge(self, entry: &TimeEntry) -> TimesheetEntryInput {
+        TimesheetEntryInput {
+            project_id: self.project_id.unwrap_or(entry.project_id),
+            task_id: self.task_id.unwrap_or(entry.task_id),
+            spent_date: self.spent_date.unwrap_or(entry.spent_date),
+            minutes: self.minutes.unwrap_or(entry.minutes),
+            notes: self.notes.unwrap_or_else(|| entry.notes.clone()),
+            billable: self.billable.unwrap_or(entry.billable),
+            start_minute: self.start_minute.unwrap_or(entry.start_minute),
+        }
+    }
+}
+
+/// What [`write`] applies: a Timesheet command, or a patch merged into the
+/// entry once it is locked.
+enum Write {
+    Command(TimesheetCommand),
+    Patch { entry_id: Uuid, patch: EntryPatch },
 }
 
 /// What the actor may write of the selected person's time.
@@ -612,18 +650,44 @@ pub async fn apply(
     context: &TimesheetWriteContext,
     command: TimesheetCommand,
 ) -> Result<Done<TimesheetChange>, OpError> {
+    write(tx, actor, context, Write::Command(command)).await
+}
+
+/// Changes the named fields of one of the context's person's entries. The
+/// changes are merged into the entry as it is once locked, then checked and
+/// saved as the Timesheet's Update, so a concurrent edit of another field is
+/// kept.
+pub async fn patch(
+    tx: &mut Tx,
+    actor: &Actor,
+    context: &TimesheetWriteContext,
+    entry_id: Uuid,
+    patch: EntryPatch,
+) -> Result<Done<TimesheetChange>, OpError> {
+    write(tx, actor, context, Write::Patch { entry_id, patch }).await
+}
+
+async fn write(
+    tx: &mut Tx,
+    actor: &Actor,
+    context: &TimesheetWriteContext,
+    write: Write,
+) -> Result<Done<TimesheetChange>, OpError> {
     let authority = authorize(tx, actor, context).await?;
     let org = authority.org;
     crate::db::lock_time_entry_write(tx, authority.subject).await?;
-    let mut ids = match &command {
-        TimesheetCommand::Update { entry_id, .. }
-        | TimesheetCommand::StopTimer { entry_id }
-        | TimesheetCommand::RestartTimer { entry_id }
-        | TimesheetCommand::Reschedule { entry_id, .. } => vec![*entry_id],
-        TimesheetCommand::Delete { entry_ids } | TimesheetCommand::Reorder { entry_ids, .. } => {
-            entry_ids.clone()
-        }
-        _ => Vec::new(),
+    let mut ids = match &write {
+        Write::Patch { entry_id, .. }
+        | Write::Command(
+            TimesheetCommand::Update { entry_id, .. }
+            | TimesheetCommand::StopTimer { entry_id }
+            | TimesheetCommand::RestartTimer { entry_id }
+            | TimesheetCommand::Reschedule { entry_id, .. },
+        ) => vec![*entry_id],
+        Write::Command(
+            TimesheetCommand::Delete { entry_ids } | TimesheetCommand::Reorder { entry_ids, .. },
+        ) => entry_ids.clone(),
+        Write::Command(_) => Vec::new(),
     };
     if ids.iter().collect::<BTreeSet<_>>().len() != ids.len() {
         return Err(OpError::invalid("entry_ids", "Duplicate entry identifiers"));
@@ -631,8 +695,8 @@ pub async fn apply(
     // Starting or restarting stops the subject's running timer first (021 D-6),
     // so that entry is locked and checked with the others.
     let starts = matches!(
-        command,
-        TimesheetCommand::StartTimer { .. } | TimesheetCommand::RestartTimer { .. }
+        write,
+        Write::Command(TimesheetCommand::StartTimer { .. } | TimesheetCommand::RestartTimer { .. })
     );
     if starts {
         let running = sqlx::query_scalar!(
@@ -657,14 +721,17 @@ pub async fn apply(
     .await?;
     // A timer is filed on the subject's own today, not the actor's.
     let today = crate::timezone::today_for_person(&mut **tx, authority.subject).await?;
-    match &command {
-        TimesheetCommand::Create { entry } | TimesheetCommand::Update { entry, .. } => {
-            dates.push(entry.spent_date)
-        }
-        TimesheetCommand::StartTimer { .. } => dates.push(today),
-        TimesheetCommand::Reschedule { spent_date, .. }
-        | TimesheetCommand::Reorder { spent_date, .. } => dates.push(*spent_date),
-        _ => {}
+    match &write {
+        Write::Command(
+            TimesheetCommand::Create { entry } | TimesheetCommand::Update { entry, .. },
+        ) => dates.push(entry.spent_date),
+        Write::Command(TimesheetCommand::StartTimer { .. }) => dates.push(today),
+        Write::Command(
+            TimesheetCommand::Reschedule { spent_date, .. }
+            | TimesheetCommand::Reorder { spent_date, .. },
+        ) => dates.push(*spent_date),
+        Write::Patch { patch, .. } => dates.extend(patch.spent_date),
+        Write::Command(_) => {}
     }
     let coverage = sqlx::query_scalar!(
         "SELECT id FROM approvals WHERE org_id=$1 AND user_id=$2
@@ -697,6 +764,19 @@ pub async fn apply(
             "Approval or billing coverage requires the approval editing integration",
         ));
     }
+    let command = match write {
+        Write::Command(command) => command,
+        // The one entry is locked: merge into what it holds now.
+        Write::Patch { entry_id, patch } => {
+            let entry = before
+                .first()
+                .ok_or_else(|| OpError::conflict("Entry set changed"))?;
+            TimesheetCommand::Update {
+                entry_id,
+                entry: patch.merge(entry),
+            }
+        }
+    };
     if let TimesheetCommand::RestartTimer { entry_id } = &command {
         let entry = before
             .iter()
@@ -724,6 +804,14 @@ pub async fn apply(
     let mut events = Vec::new();
     let mut projects = BTreeSet::new();
     let mut notice = None;
+    let mut changed = None;
+    let target = match &command {
+        TimesheetCommand::Update { entry_id, .. }
+        | TimesheetCommand::StopTimer { entry_id }
+        | TimesheetCommand::RestartTimer { entry_id }
+        | TimesheetCommand::Reschedule { entry_id, .. } => Some(*entry_id),
+        _ => None,
+    };
     let day = day_totals(tx, authority.subject, &dates).await?;
     if starts {
         for row in before.iter_mut().filter(|row| row.is_running) {
@@ -738,6 +826,7 @@ pub async fn apply(
             let created = create(tx, &authority, entry, false).await?;
             projects.insert(created.project_id);
             events.push(Change::Created.event(&created));
+            changed = Some(created);
         }
         TimesheetCommand::StartTimer {
             project_id,
@@ -760,6 +849,7 @@ pub async fn apply(
             )
             .await?;
             events.push(Change::Created.event(&created));
+            changed = Some(created);
         }
         TimesheetCommand::Delete { .. } => {
             sqlx::query!(
@@ -848,11 +938,16 @@ pub async fn apply(
                     events.push(change.event(row));
                 }
             }
+            changed = target.and_then(|id| before.into_iter().find(|row| row.id == id));
         }
     }
     ensure_daily_limit(tx, authority.subject, &day).await?;
     Ok(Done {
-        value: TimesheetChange { projects, notice },
+        value: TimesheetChange {
+            projects,
+            notice,
+            entry: changed,
+        },
         events,
     })
 }

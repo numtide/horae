@@ -16,7 +16,19 @@ use crate::testing::SeedIds;
 
 /// The v1 router with a fixed cursor key and `requests` per minute.
 pub fn router(pool: &PgPool, requests: u32) -> Router {
-    super::router(V1State::new(
+    super::router(state(pool, requests))
+}
+
+/// [`router`] whose writes dispatch their events to `events`.
+pub fn router_hearing(pool: &PgPool, events: std::sync::Arc<ops::testing::Recorder>) -> Router {
+    super::router(V1State {
+        events,
+        ..state(pool, 1000)
+    })
+}
+
+fn state(pool: &PgPool, requests: u32) -> V1State {
+    V1State::new(
         pool.clone(),
         &ApiConfig {
             cursor_key: CursorKey::new([1; 32]),
@@ -25,7 +37,28 @@ pub fn router(pool: &PgPool, requests: u32) -> Router {
                 window: std::time::Duration::from_secs(60),
             },
         },
-    ))
+    )
+}
+
+/// A request with a JSON body.
+pub fn json(method: &str, uri: &str, token: &str, body: &Value) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+/// A request without a body.
+pub fn call(method: &str, uri: &str, token: &str) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap()
 }
 
 /// A new token of the seeded person, by its whole secret.
