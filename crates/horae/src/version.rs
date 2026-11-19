@@ -2,7 +2,7 @@
 //! from the same source and environment, so a cached older bundle shows a
 //! different label from the server it talks to.
 
-/// Set only for a release build; see "Versions and releases" in README.md.
+/// Set only for a release build; see docs/releases.md.
 const RELEASE_TAG: Option<&str> = option_env!("HORAE_RELEASE_TAG");
 
 const _: () = assert!(

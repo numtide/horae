@@ -18,7 +18,7 @@ For the API flow, set all four non-empty environment variables:
 - `HORAE_HARVEST_REDIRECT_URL`: the exact public callback URL registered with Harvest, ending in `/auth/harvest/callback`.
 - `HORAE_HARVEST_ENC_KEY`: a random 32-byte encryption key encoded as 64 hexadecimal digits (for example, generate one with `openssl rand -hex 32`). Keep it outside the repository and Nix store; rotating it requires reconnecting Harvest to replace credentials encrypted with the old key.
 
-These are separate from Horae's `HORAE_OIDC_*` login settings. There is no `SESSION_SECRET` to configure: sessions are stored in PostgreSQL. See the [deployment configuration](../../README.md#configuration) for HTTPS and cookie settings.
+These are separate from Horae's `HORAE_OIDC_*` login settings. There is no `SESSION_SECRET` to configure: sessions are stored in PostgreSQL. See the [deployment configuration](../../docs/configuration.md#sessions-and-cookies) for HTTPS and cookie settings.
 
 Start the local stack from that configured shell:
 

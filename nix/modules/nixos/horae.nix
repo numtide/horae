@@ -92,7 +92,7 @@ in
         HORAE_OIDC_ISSUER, HORAE_OIDC_CLIENT_ID, and HORAE_OIDC_REDIRECT_URL;
         these can be in the same file or systemd.services.horae.environment.
         The optional HORAE_OIDC_AUTO_PROVISION_DOMAINS and
-        HORAE_OIDC_TRUST_UNVERIFIED_EMAIL (see the README) are not secrets and
+        HORAE_OIDC_TRUST_UNVERIFIED_EMAIL (see docs/authentication.md) are not secrets and
         belong in systemd.services.horae.environment.
       '';
     };

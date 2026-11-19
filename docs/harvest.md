@@ -1,0 +1,61 @@
+# Harvest
+
+Horae works with Harvest in two directions. The importer copies an organization's Harvest data
+into Horae, and the Harvest-compatible API lets tools written for Harvest read from Horae. They
+are configured separately: the importer works whether the API is on or off.
+
+## Importer
+
+Administrators import from **Administration → Importers** (`/admin/importers`), over Harvest's
+OAuth API or from a Harvest CSV export. The terminal has the same imports through the remote
+administrator commands ([CLI](cli.md#remote-administrator-commands)).
+
+The OAuth import has its own optional credentials:
+
+| Variable | Description |
+|---|---|
+| `HORAE_HARVEST_CLIENT_ID` | Harvest OAuth app client ID |
+| `HORAE_HARVEST_CLIENT_SECRET` | Harvest OAuth app client secret |
+| `HORAE_HARVEST_REDIRECT_URL` | Callback URL registered with Harvest, ending in `/auth/harvest/callback`. Without it, the importer uses the address you open it from |
+| `HORAE_HARVEST_ENC_KEY` | 32-byte key as 64 hex digits that encrypts the stored Harvest tokens; required |
+
+See the [importer setup](../specs/004-harvest-importer/quickstart.md) for its callback and
+token-encryption requirements; OIDC settings do not configure Harvest access. With only
+`HORAE_HARVEST_ENC_KEY` set, an administrator can save the OAuth client from
+Import → Harvest → OAuth app instead; its secret is sealed with that key. A client ID and secret
+set in the environment take precedence and show there as locked.
+
+## Harvest-compatible API
+
+Endpoints under `/harvest/v2` expose a read-only subset of the
+[Harvest API v2](https://help.getharvest.com/api-v2/) response shape:
+
+```
+GET /harvest/v2/users/me
+GET /harvest/v2/time_entries[?from=&to=&user_id=&project_id=&is_running=&page=&per_page=]
+GET /harvest/v2/time_entries/{id}
+GET /harvest/v2/projects[/{id}]
+GET /harvest/v2/clients[/{id}]
+GET /harvest/v2/tasks[/{id}]
+GET /harvest/v2/users
+```
+
+The same endpoints answer under `/v2`.
+
+The subset is off by default: `/harvest/v2/*` and `/v2/*` answer `404` with an empty body. Turn it
+on with `services.horae.harvestApi.enable = true` in the NixOS module, or `HORAE_HARVEST_API=1`
+elsewhere; the setting is read at start. There is no `/api/v2` alias: a Harvest client configured
+with a base URL ending in `/api` switches to the host root or `/harvest`.
+
+Clients authenticate with a personal access token, the same one `/api/v1` takes, sent as
+`Authorization: Bearer` or the `access_token` query parameter, with the account ID shown on the
+token page as `Harvest-Account-Id`. A signed-in browser session also works. Requests count against
+the same per-token rate limit as `/api/v1` ([Limits](api.md#limits)).
+
+IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and
+maximum `per_page` of 100; follow the returned links to retain filters. Nonpositive page numbers,
+page sizes outside 1–100, and overflowing offsets return `400 Bad Request`.
+
+This is not a drop-in replacement for arbitrary Harvest clients. Check the
+[API contract and compatibility matrix](../specs/001-time-tracking-invoicing/contracts/harvest-api.md)
+before connecting a tool; several filters, timestamp semantics, and response fields differ.

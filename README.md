@@ -1,233 +1,57 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Horae — self-hostable time tracking" width="820">
+  <img src="assets/banner.png" alt="Horae, self-hostable time tracking" width="820">
 </p>
 
-Self-hostable time tracking — a Harvest / Kimai alternative that stays fully yours.
+Horae is a time tracker you run on your own infrastructure, an alternative to Harvest and
+Kimai. Log hours against clients and projects, submit and approve timesheets, and export
+billable reports, with the data in your own PostgreSQL database.
 
-## About
+It is a Rust + [Dioxus](https://dioxuslabs.com/) fullstack application (server-rendered, with a
+WebAssembly SPA) on Axum and PostgreSQL.
 
-Horae is a time tracker you run on your own infrastructure. Log hours against clients and
-projects, submit and approve timesheets, and export billable reports — without handing your
-data to a SaaS vendor. It exposes a read-only subset of the Harvest API shape for integrations
-adapted to Horae's authentication, identifiers, and supported filters.
+## What it does
 
-It is built as a single Rust + [Dioxus](https://dioxuslabs.com/) fullstack application
-(server-rendered plus a WebAssembly SPA) backed by PostgreSQL and Axum. Correctness-critical
-domain logic — duration parsing, rounding, money, timesheet totals — lives in a dependency-free
-core crate and is unit-tested in isolation.
+- Timesheets in Day, Week and Calendar views, with weekly totals and a running timer.
+- Clients, projects, per-project assignments, tasks and budgets, with optional budget alert email.
+- Approvals: people with approval permission submit, approve and reject time. Only an
+  Administrator may approve or reject their own.
+- Permissions from built-in profiles, templates or individual grants, scoped to own, managed or
+  all, plus an explicit Administrator identity.
+- Grouped time reports with CSV and XLSX export.
+- Draft invoices with CSV, XLSX and PDF export.
+- An importer for Harvest data, over OAuth or from a CSV export.
+- A public API, `/api/v1`, with personal access tokens, and an optional read-only subset of the
+  Harvest API v2 at `/harvest/v2`, off unless the operator turns it on.
+- OIDC single sign-on in production, and a one-click login for local development.
 
-> Horae is in active Phase-1 development. Expect the schema and API to keep moving.
+## Try it
 
-## Features
-
-- **Timesheets** — Day, Week, and Calendar views with weekly totals and a running timer.
-- **Clients & projects** — manage clients, projects, per-project assignments, tasks, and budgets.
-- **Approvals** — submit, approve, and reject time entries (people with approval permissions; only an Administrator may approve or reject their own).
-- **Permissions** — built-in profiles, templates, or individual grants scoped to own, managed, or all, plus an explicit Administrator identity.
-- **Reports** — grouped time reports with CSV and XLSX export.
-- **Invoices** — draft invoices with CSV, XLSX, and PDF export.
-- **Harvest-style API** — an optional, read-only `/harvest/v2/*` subset with session
-  authentication, off unless the operator turns it on.
-- **Auth** — OIDC single sign-on in production; a one-click dev login for local work.
-
-The authenticated SPA is organized by route:
-
-| Route | Description |
-|---|---|
-| `/timesheet/:view` | Day / Week / Calendar timesheet with weekly totals (`/` redirects here) |
-| `/clients`, `/clients/:id` | Client list and detail |
-| `/projects`, `/projects/:id` | Project list and detail with assignments |
-| `/projects/new` | Create a project with a private resumable draft (with project creation permission) |
-| `/approvals` | Submit / approve / reject time (with approval permission) |
-| `/reports` | Grouped time reports with CSV / XLSX export |
-| `/invoices`, `/invoices/:id` | Invoice list and detail with CSV / XLSX / PDF export |
-| `/admin/users` | People and their permissions (with people permissions) |
-| `/settings` | Organization and application settings |
-
-## Quick start
-
-Everything runs inside the Nix dev shell, which provides the Rust toolchain, `dx`
-(the Dioxus CLI), `sqlx-cli`, and PostgreSQL. A running PostgreSQL is required
-for anything that touches the database.
-
-### Try the demo
-
-The fastest way to see Horae is the bundled demo VM — it boots PostgreSQL, applies migrations,
-seeds sample data, and enables the one-click admin login:
+The demo boots a NixOS VM with PostgreSQL, applies the migrations, seeds sample data and turns on
+the one-click admin login:
 
 ```sh
 nix run .#demo
 ```
 
-Then open http://localhost:3000/auth/login and choose **Sign in as Admin**.
+Open http://localhost:3000/auth/login and choose **Sign in as Admin**.
 
-### Develop locally
+## Run it locally
 
-```sh
-nix develop            # enter the dev shell
-process-compose up     # postgres + the app, on http://localhost:8080
-```
-
-Or `nix run .#dev` to do both at once.
-
-That is the whole loop. `process-compose up` starts PostgreSQL as a plain process, waits for
-it, applies migrations, then runs the hot-reloading dev server. Demo data is seeded the first time,
-so there is nothing to run by hand.
-
-Database state lives in `.data/postgres` and survives restarts; `rm -rf .data` starts over.
-`process-compose down` stops everything.
-
-Migrations run on every `process-compose up`, and only the pending ones are executed. To apply
-a new one without restarting the stack, run `horae-migrate` — it migrates and rebuilds the app,
-which is needed because sqlx checks its queries at compile time.
-
-The 65 original migrations were squashed into one baseline, `0001_baseline.sql`. A database
-migrated before that refuses to start (sqlx reports migration 2 as applied but missing): locally, run
-`rm -rf .data`; on a deployment, run `horae migrate reset --confirm` and then `horae init`.
-
-[pgweb](https://github.com/sosedoff/pgweb) runs alongside the app at http://localhost:8081 for
-browsing and querying the database. To start only part of the stack, name the processes you
-want — `process-compose up postgres migrate` gives you a database on its own, which is what the
-integration tests need.
-
-Open http://localhost:8080/auth/login and choose **Sign in as Admin**. The admin bypass is
-only available when `DEV_LOGIN=1` is set, which the dev stack does for you.
-
-<details>
-<summary>Running PostgreSQL in a VM instead</summary>
-
-`nix run .#postgres` boots a NixOS VM running PostgreSQL (forwarding host `:5432` and `:2222`).
-It exercises the same NixOS module used for self-hosting, which makes it useful for checking
-packaging changes, but it is slower to start and needs KVM. With it running, drive the app by
-hand:
+You need Nix with flakes enabled.
 
 ```sh
-cargo run -p horae --features server -- migrate run   # apply pending migrations
-cargo run -p horae --features server -- seed          # insert demo data (idempotent)
-
-cd crates/horae && DEV_LOGIN=1 dx serve               # dev server on :8080, hot reload
+nix develop            # dev shell: Rust toolchain, dx, sqlx-cli, PostgreSQL
+process-compose up     # PostgreSQL + the app on http://localhost:8080, migrated and seeded
 ```
 
-</details>
+`nix run .#dev` does both at once. Open http://localhost:8080/auth/login and choose
+**Sign in as Admin**. [Development](docs/development.md) covers the rest of the loop: resetting
+the database, new migrations, tests and the sqlx query cache.
 
-## Configuration
+## Deploy it
 
-PostgreSQL 15 or newer with ICU support is required. The bundled Nix PostgreSQL
-includes ICU; externally managed databases must provide it too. Permission-profile
-names use a fixed Unicode collation so case-insensitive uniqueness does not change
-with the database locale.
-
-Horae is configured through environment variables. [.env.example](.env.example) lists
-the supported settings for local development; the binary does not load `.env` files
-automatically. Export the variables in your shell or configure them in your service manager.
-
-`horae` and `horae serve` use the same bind defaults and `HORAE_HOST`/`HORAE_PORT`
-environment settings. Explicit `serve --host`/`--port` flags take precedence over
-those variables. Under `dx serve`, Dioxus's `IP`/`PORT` variables override the bind
-address for hot-reload proxying.
-
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `postgres://localhost/horae` | PostgreSQL connection URL |
-| `HORAE_HOST` | `127.0.0.1` | Bind address |
-| `HORAE_PORT` | `3000` | Listen port |
-| `HORAE_LOG` | `info` | Log level (`trace`, `debug`, `info`, `warn`, `error`) |
-| `HORAE_SECURE_COOKIES` | `0` | Mark session cookies `Secure` (HTTPS only); set to `1` in production |
-| `DEV_LOGIN` | `0` | `1` enables the one-click admin login and bypasses OIDC (dev only) |
-| `HORAE_PLUGINS_DIR` | `plugins` | Directory scanned for plugins at startup |
-| `HORAE_PLUGIN_DATABASE_URL` | unset | Separate unprivileged login for [plugin SQL](specs/001-time-tracking-invoicing/contracts/plugin-interface.md); unset or empty disables it |
-| `HORAE_SENDMAIL_PATH` | unset | Absolute path to the optional budget-alert mail executable; no command arguments |
-| `HORAE_MAIL_FROM` | unset | Sender mailbox for budget alerts; required together with `HORAE_SENDMAIL_PATH` |
-| `HORAE_API_CURSOR_KEY_FILE` | unset | Path to a secret file with the key that signs `/api/v1` list cursors (64 hex characters); see [API cursor key](#api-cursor-key) |
-| `HORAE_API_CURSOR_KEY` | unset | The same key as a value, for development and tests; ignored when `HORAE_API_CURSOR_KEY_FILE` is set |
-| `HORAE_API_RATE_LIMIT` | `100/15` | Requests per personal access token per window, as `<requests>/<seconds>` |
-
-An invalid API setting refuses to start, as does a cursor key file that is missing,
-unreadable or not 64 hex characters. With neither cursor variable set, the server draws
-a random key at start and logs a warning: cursors stop working after a restart. That
-fallback is for development only.
-
-Sessions are stored in PostgreSQL; the cookie contains an opaque session identifier,
-not signed user data. `SESSION_SECRET` is not used and can be removed from existing
-environment files; changing it does not revoke sessions. Serve production traffic over
-HTTPS and set `HORAE_SECURE_COOKIES=1`. The `Secure` flag restricts cookie transport;
-it does not configure TLS or a reverse proxy.
-
-Production authentication uses OIDC. It is enabled only when all four OIDC variables are set
-(and `DEV_LOGIN` is off):
-
-| Variable | Description |
-|---|---|
-| `HORAE_OIDC_ISSUER` | OIDC provider issuer URL |
-| `HORAE_OIDC_CLIENT_ID` | OIDC client ID |
-| `HORAE_OIDC_CLIENT_SECRET` | OIDC client secret |
-| `HORAE_OIDC_REDIRECT_URL` | Exact public callback URL registered with the provider, ending in `/auth/callback` |
-| `HORAE_OIDC_ADDITIONAL_AUDIENCES` | Extra `aud` values to trust (comma-separated); optional |
-| `HORAE_OIDC_BUTTON_LABEL` | Sign-in button text; defaults to `Continue with SSO` |
-| `HORAE_OIDC_AUTO_PROVISION_DOMAINS` | Email domains whose people may create their own account by signing in (comma-separated); optional, see below |
-| `HORAE_OIDC_TRUST_UNVERIFIED_EMAIL` | `1` treats a token without `email_verified` as verified when creating accounts; optional, see below |
-
-Unset or empty required values leave OIDC unconfigured; they do not enable the dev
-bypass. Use the `HORAE_OIDC_*` names above, not the old unprefixed `OIDC_*` examples.
-`DEV_LOGIN=1` bypasses OIDC even when all provider settings are present.
-
-Harvest import has a separate set of optional credentials:
-`HORAE_HARVEST_CLIENT_ID`, `HORAE_HARVEST_CLIENT_SECRET`,
-`HORAE_HARVEST_REDIRECT_URL`, and `HORAE_HARVEST_ENC_KEY`. See the
-[importer setup](specs/004-harvest-importer/quickstart.md) for its callback and
-token-encryption requirements; OIDC settings do not configure Harvest access.
-With only `HORAE_HARVEST_ENC_KEY` set, an administrator can save the OAuth
-client from Import → Harvest → OAuth app instead; its secret is sealed with
-that key. A client ID and secret set in the environment take precedence and
-show there as locked.
-
-### Budget alert email (optional)
-
-Budget alerts use a sendmail-compatible program that you configure separately. Leave both
-mail variables unset or empty to disable delivery; New Project then disables its email
-checkbox and explains why. Setting only one variable, an invalid mailbox, or a path that
-is not an absolute executable file rejects startup.
-
-Set both values in the service environment and restart Horae after configuring the transport:
-
-```dotenv
-HORAE_SENDMAIL_PATH=/absolute/path/to/sendmail
-HORAE_MAIL_FROM=alerts@example.com
-```
-
-Replace the example path with your executable. Horae invokes it directly with
-`-i -f FROM -- TO` and writes the message to stdin; it does not run a shell or configure
-SMTP credentials. Sender and recipient addresses must be plain ASCII mailboxes, without
-display names or multiple recipients. The supported local-part characters are letters,
-digits, `.`, `_`, `+` and `-`; leading `-`/`.`, trailing `.` and consecutive dots are rejected.
-Domains use nonempty DNS-style labels. See [.env.example](.env.example) for the environment
-template.
-
-On NixOS, use `services.horae.secretKeyFile` or `systemd.services.horae.environment`.
-The executable and its configuration must work as the service's dynamic user under
-`NoNewPrivileges`, `ProtectSystem=strict` and `ProtectHome=true`. A transport that needs
-privilege elevation or configuration in a home directory is not compatible with this
-sandbox; configure an unprivileged transport instead of weakening the service protections.
-
-Each attempt has a 20-second deadline. Budget mail allows at most five attempts, independently
-of `HORAE_JOB_MAX_ATTEMPTS`; permanent failures and revoked recipient/project eligibility
-stop delivery earlier. Transport output is discarded, and stored errors are sanitized.
-An exit-zero acknowledgement means transport acceptance, **not final receipt**. A crash or
-lost acknowledgement can cause duplicate delivery with the same Message-ID. Acknowledged
-events are not retried; failed events remain available for inspection.
-
-An operator can inspect delivery state with a read-only query in the administrative database:
-
-```sql
-SELECT id, attempts, delivered_at, failed_at, last_error
-FROM horae_outbox
-WHERE event_kind = 'budget_email'
-ORDER BY created_at DESC;
-```
-
-## Self-hosting
-
-Horae ships as a NixOS module:
+Horae ships as a NixOS module and as an OCI image you build from the flake. A minimal NixOS
+configuration:
 
 ```nix
 {
@@ -235,393 +59,41 @@ Horae ships as a NixOS module:
 
   services.horae = {
     enable = true;
-    host = "127.0.0.1";
-    port = 3000;
-    database.createLocally = true;   # provisions a local PostgreSQL and database
-    # secretKeyFile = "/run/secrets/horae-env";
-    # api.cursorKeyFile = "/run/secrets/horae-api-cursor-key";
-    # openFirewall = true;
+    database.createLocally = true;
   };
 }
 ```
 
-The module runs the server as a systemd service and applies pending migrations on every start.
-
-For production, set `secretKeyFile` to a root-readable runtime file (for example,
-`"/run/secrets/horae-env"`) provisioned outside the Nix store. It is a systemd
-environment file, not a cookie-signing key. For an HTTPS deployment it can contain:
-
-```dotenv
-DEV_LOGIN=0
-HORAE_SECURE_COOKIES=1
-HORAE_OIDC_ISSUER=https://identity.example.com
-HORAE_OIDC_CLIENT_ID=horae
-HORAE_OIDC_CLIENT_SECRET=replace-with-provider-secret
-HORAE_OIDC_REDIRECT_URL=https://time.example.com/auth/callback
-```
-
-Use your provider's issuer and credentials, register the exact redirect URL, and
-configure the HTTPS reverse proxy separately. Do not put real secrets in Nix string
-literals or copy the development admin bypass into a production environment.
-
-### API cursor key
-
-`/api/v1` list cursors are signed, so a client cannot forge a position in a list. Give each
-deployment its own key:
-
-1. Generate a key once: `openssl rand -hex 32` (64 hex characters).
-1. Store it with the deployment's other secrets, so it lands at a runtime path such as
-   `/run/secrets/horae-api-cursor-key`.
-1. Set `services.horae.api.cursorKeyFile` to that path and deploy. The module passes it to the
-   service through systemd `LoadCredential`.
-1. Check the start log: it has no cursor-key warning.
-
-While `api.cursorKeyFile` is unset, the module adds an evaluation warning and the server signs
-with a random key drawn at every start. Rotating the key invalidates every cursor in flight;
-clients start their list again after a `400 invalid_cursor`.
-
-### Upgrading to the release with `/api/v1`
-
-Check these before deploying it:
-
-- **The Harvest-compatible API is off by default.** If anything uses `/harvest/v2` (or `/v2`),
-  set `services.horae.harvestApi.enable = true`, or `HORAE_HARVEST_API=1` outside NixOS. Its
-  clients now authenticate with a personal access token.
-- **`/api/v2` is gone.** A Harvest client configured with a base URL ending in `/api` switches to
-  the host root or to `/harvest`.
-- **Set the cursor key.** Put a key in `services.horae.api.cursorKeyFile`, as in
-  [API cursor key](#api-cursor-key). Without it, cursors stop working at every restart.
-- **Timers changed for everyone, in the web app too.** Start on an entry of today resumes it,
-  starting a timer stops the one already running, and stopping adds the elapsed time to the
-  minutes the entry already had.
-
-### First run
-
-A fresh database has no organization, so create one — along with the first admin user —
-before anyone signs in. `horae seed` inserts demo clients, projects and time entries; it is
-for trying the app out, not for standing one up.
-
-`seed` initializes an empty, migrated database in one transaction, with sample time
-for the current ISO week. Repeating it leaves an existing demo completely unchanged,
-even in a later week: it does not add time, overwrite edits, or restore deleted rows.
-Older or partially populated demos are also left untouched. It refuses a database
-containing any non-demo organization; use a separate empty database to try the demo.
-
-The CLI is the same binary as the service — put it on PATH with
-`environment.systemPackages = [ config.services.horae.package ];`. The service runs under a
-systemd `DynamicUser`, so run the CLI as `horae` while the unit is up and the socket
-credentials match the database owner:
-
-```sh
-sudo -u horae DATABASE_URL=postgres:///horae \
-  horae init --org-name "Contoso" --admin-email ops@contoso.example --admin-name "Ops"
-```
-
-`init` creates exactly one organization and one admin and refuses if an organization already
-exists. Add the rest of the team with `horae user create`. Do not set `DEV_LOGIN` in a
-production deployment — configure OIDC instead, and give the admin the email address the
-provider will assert.
-
-### Linking OIDC identities
-
-On first sign-in, Horae links an account to the provider's issuer and subject when the
-ID token says the account's email is verified. Some providers never send
-`email_verified`; with them, an operator links each account instead:
-
-```sh
-sudo -u horae DATABASE_URL=postgres:///horae horae user list   # ID is the first column
-sudo -u horae DATABASE_URL=postgres:///horae \
-  HORAE_OIDC_ISSUER='<HORAE_OIDC_ISSUER from the service configuration>' \
-  horae user link-oidc --user-id <ID> --issuer '<iss>' --subject '<sub>'
-```
-
-Take `--issuer` and `--subject` from the provider's own records for that person, or from
-the `iss` and `sub` claims of an ID token whose signature, issuer, audience and expiry you
-have checked. An email address is never evidence of a subject. The issuer must match the
-provider's `iss` exactly, trailing slash included.
-
-Copy `HORAE_OIDC_ISSUER` separately from the deployment's own configuration (the value the
-service runs with), not from the same place as `--issuer`. The command then refuses a
-mismatched issuer before touching the database. `sudo` does not pass the service's
-environment to the command, so set this one variable explicitly; do not source the
-service's whole environment or secret file. Without it the issuer is only checked for
-shape.
-
-The command only binds an active account with no binding, or records the issuer on that
-account's existing binding with the same subject. Running it again is safe. It never
-replaces a binding, creates accounts or sessions, or changes permissions. Horae cannot undo a
-wrong link; that needs direct database administration.
-
-**Upgrading**: accounts linked before this release have a subject but no recorded issuer
-and cannot sign in through OIDC until linked. After confirming the configured provider is
-the one that issued their subjects, run `link-oidc` for each with that issuer and the
-account's existing subject. Open sessions keep working until logout or expiry.
-
-### Creating accounts at first sign-in
-
-By default only administrators create accounts. A sign-in that matches no account, or a
-deactivated one, returns to the sign-in page with a notice that names the person's own
-email and tells them to ask an administrator.
-
-To let people from your own email domains create their account by signing in, list the
-domains:
-
-```sh
-HORAE_OIDC_AUTO_PROVISION_DOMAINS=example.com,example.org
-```
-
-A first sign-in then creates an active **member** account with no rates, bound to the
-provider's issuer and subject, when all of these hold:
-
-- the part of the email after its last `@` is one of the listed domains (case-insensitive,
-  exact: `sub.example.com` is not `example.com`);
-- the ID token says the email is verified (`email_verified: true`);
-- no account already has that email, in any letter case and in any state. A deactivated
-  account stays deactivated; signing in never re-creates or reactivates it.
-
-Promote or deactivate the new account in People like any other. There is no wildcard: `*`,
-an empty item or an entry with `@` stops the server at startup.
-
-Some providers never send `email_verified`; tsidp (Tailscale) is one. Its email is the
-person's tailnet login, which they cannot choose. For providers like that, set
-`HORAE_OIDC_TRUST_UNVERIFIED_EMAIL=1` so that a missing claim counts as verified when
-creating an account. A token that says `email_verified: false` is still refused, and the
-setting never lets a sign-in claim an existing account by email: that still needs
-`email_verified: true`, or `link-oidc`. Do not set it for a provider where people can pick
-their own address, or anyone there could join under your domain.
-
-### Container image
-
-The flake also builds the server as an OCI image, for x86_64-linux and aarch64-linux:
-
-```sh
-nix build .#oci-image                                     # host architecture
-nix build .#packages.aarch64-linux.oci-image              # needs an aarch64 builder
-```
-
-`result` is an `oci-archive`: a tar of an OCI image layout (`oci-layout`, `index.json`,
-OCI manifest and config, gzip layers), tagged `horae:<version>`. It is not a `docker save`
-archive. Podman and skopeo read it directly; for Docker, convert it to a Docker archive
-first:
-
-```sh
-podman load -i result
-
-skopeo copy oci-archive:result docker-archive:horae.tar:horae:0.1.0
-docker load -i horae.tar
-```
-
-PostgreSQL runs outside the container; pass its URL and the rest of the configuration as
-environment variables. CLI subcommands run from the same image:
-
-```sh
-podman run --rm -e DATABASE_URL=postgres://horae@db.example/horae horae:0.1.0 migrate run
-podman run --rm -e DATABASE_URL=… horae:0.1.0 \
-  init --org-name "Contoso" --admin-email ops@contoso.example --admin-name "Ops"
-podman run -d -p 127.0.0.1:3000:3000 --read-only --tmpfs /tmp \
-  -e DATABASE_URL=… --env-file /run/secrets/horae-env horae:0.1.0
-```
-
-The image runs `horae serve` as uid/gid 65534 (`nobody`), bound to `0.0.0.0:3000` inside the
-container, from the directory holding the bundled WASM, JS and CSS. That bind is only the
-container's own network namespace: which host addresses reach it depends on how you publish
-the port. The example above publishes it on host loopback only; terminate TLS in a reverse
-proxy or private ingress in front of it, as for the NixOS module. Behind HTTPS, set
-`HORAE_SECURE_COOKIES=1` in the container's environment, since the server marks its own
-cookies.
-
-The image holds the server's runtime closure (the binary and the libraries it links) and
-minimal NSS files for the unprivileged user. It has no shell, database server, data or
-secrets, and no mail transport: a `HORAE_SENDMAIL_PATH` executable or a `HORAE_PLUGINS_DIR`
-has to be provided to the container yourself, for example from a mounted volume. Outbound
-HTTPS to an OIDC provider or Harvest trusts the Mozilla root certificates compiled into the
-binary (webpki-roots); a custom CA, through `SSL_CERT_FILE` or otherwise, is not supported.
-`DEV_LOGIN` is unset, and with the default bind, which is not loopback, the server refuses
-to start if you set it. `serve` applies pending migrations on start.
-
-No image is published to any registry; build it yourself from the flake.
-
-### Versions and releases
-
-Administrators see the running version above the account menu: the server's and the
-browser bundle's. A release build shows its tag (`v0.2.0`); any other build shows `dev`
-and the commit it came from (`dev · 1e1971e`, with `-dirty` for uncommitted changes).
-The server's version is asked again on every page change. When the two differ, the
-browser still runs a bundle from before a deploy, and the panel offers a reload.
-
-A build is a release only when it is given the tag. To cut one:
-
-1. Bump `version` in `crates/horae/Cargo.toml` (for example to `0.2.0`), run `cargo check` so `Cargo.lock` follows, and merge that.
-
-1. Tag the merge commit `v0.2.0`, push the tag, and create the GitHub release from it.
-
-1. Build from the tagged checkout with the tag passed in:
-
-   ```sh
-   nix build --impure --expr '(builtins.getFlake "git+file://${toString ./.}").packages.${builtins.currentSystem}.default.override { releaseTag = "v0.2.0"; }'
-   ```
-
-   The container image takes that package in place of the default one:
-
-   ```sh
-   nix build --impure --expr 'let p = (builtins.getFlake "git+file://${toString ./.}").packages.${builtins.currentSystem}; in p.oci-image.override { horae = p.default.override { releaseTag = "v0.2.0"; }; }'
-   ```
-
-   The `git+file://` reference matters: it reads only tracked files and gives the
-   build its commit. In a git worktree, a bare path is copied whole into the store,
-   `target/` included.
-
-   Outside Nix, set `HORAE_RELEASE_TAG=v0.2.0` for `dx build`. The build fails unless the
-   tag is `v` followed by the crate version, and Nix also refuses a checkout with
-   uncommitted changes.
-
-### Backups and restore
-
-With `database.createLocally = true` the module enables `services.postgresqlBackup` for the
-`horae` database. A nightly `pg_dump` lands in `/var/backup/postgresql/horae.sql.gz`, with the
-previous run kept beside it as `horae.sql.prev.gz`. That is two days of history on the same
-disk as the database — copy it somewhere else if it matters.
-
-```nix
-services.horae.database.backup = {
-  enable = false;                       # opt out; on by default with createLocally
-  location = "/var/backup/postgresql";  # where the dumps land
-  startAt = "*-*-* 01:15:00";           # systemd.time(7) calendar format
-};
-```
-
-The dumps are taken with `pg_dump -C`, so a restore recreates the database:
-
-```sh
-systemctl stop horae
-sudo -u postgres dropdb horae
-gunzip -c /var/backup/postgresql/horae.sql.gz | sudo -u postgres psql -d postgres
-systemctl start horae
-```
-
-Migrations are forward-only — there are no down-migrations — so restoring a dump taken before
-an upgrade is the only way back from one. Take a dump before upgrading.
-
-## Command-line interface
-
-The `server`-feature binary doubles as an admin CLI (`serve` is the default when no subcommand
-is given):
-
-```sh
-horae serve --host 0.0.0.0 --port 3000
-horae init --org-name "Contoso" --admin-email ops@contoso.example --admin-name "Ops"
-horae migrate run                   # apply pending migrations
-horae migrate reset --confirm       # drop every table and re-migrate (dev only)
-horae seed                          # insert demo data (idempotent)
-horae user list
-horae user create --email admin@example.com --name "Admin" --profile administrator
-```
-
-## API
-
-### `/api/v1`
-
-Scripts and other applications read and log time through `/api/v1` with a personal access token
-(**Settings → API tokens**), with the token owner's permissions and the web app's rules:
-
-```sh
-curl -s -H "Authorization: Bearer horae_pat_…" https://time.example.com/api/v1/me
-```
-
-It covers time entries, timers and a read-only catalogue (projects, tasks, clients, people), with
-cursor pagination, `updated_since` for incremental sync, and `application/problem+json` errors.
-Each instance serves its OpenAPI document at `/api/v1/openapi.json`. The
-[API guide](docs/api.md) explains tokens, headers, cursors, sync, errors, limits and the
-compatibility promise.
-
-### Harvest-style subset (read-only)
-
-Endpoints under `/harvest/v2` expose a subset of the
-[Harvest API v2](https://help.getharvest.com/api-v2/) response shape:
-
-```
-GET /harvest/v2/users/me
-GET /harvest/v2/time_entries[?from=&to=&user_id=&project_id=&is_running=&page=&per_page=]
-GET /harvest/v2/time_entries/{id}
-GET /harvest/v2/projects[/{id}]
-GET /harvest/v2/clients[/{id}]
-GET /harvest/v2/tasks[/{id}]
-GET /harvest/v2/users
-```
-
-The subset is off by default: `/harvest/v2/*` and `/v2/*` answer `404` with an empty body. Turn it
-on with `services.horae.harvestApi.enable = true` in the NixOS module, or `HORAE_HARVEST_API=1`
-elsewhere; the setting is read at start. The Harvest importer works either way. There is no
-`/api/v2` alias: a Harvest client configured with a base URL ending in `/api` switches to the
-host root or `/harvest`.
-
-Clients authenticate with a personal access token, the same one `/api/v1` takes, sent as
-`Authorization: Bearer` or the `access_token` query parameter, with the account ID shown on the
-token page as `Harvest-Account-Id`. A signed-in browser session also works. IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and
-maximum `per_page` of 100; follow the returned links to retain filters. Nonpositive page
-numbers, page sizes outside 1–100, and overflowing offsets return `400 Bad Request`.
-
-This is not a drop-in replacement for arbitrary Harvest clients. Check the
-[API contract and compatibility matrix](specs/001-time-tracking-invoicing/contracts/harvest-api.md)
-before connecting a tool; several filters, timestamp semantics, and response fields differ.
-
-### Export
-
-```
-GET /api/reports/export/{csv,xlsx}?from=YYYY-MM-DD&to=YYYY-MM-DD
-GET /api/projects/export/{csv,xlsx}
-GET /api/invoices/{id}/export/{csv,xlsx,pdf}
-```
-
-## Architecture
-
-- **One feature-gated app crate (`crates/horae/`), two build targets.** `main.rs` defines three
-  `cfg`-selected entry points: `server` (Axum + Tokio + the CLI), `web` (compiled to WASM), and a
-  stub. Default features are empty, so builds and tests must select `--features server` (or use
-  `dx`). Server-only modules (`auth`, `cli`, `config`, `db`, `reports`, `seed`,
-  `state`, …) are gated; the shared UI modules compile for both targets.
-- **A pure domain crate (`horae-core`).** Duration parsing, rounding, money, totals, and the entry
-  state machine live here with no I/O dependencies, and are unit-tested in isolation.
-- **The backend and the HTTP surfaces are their own crates.** `horae-server` holds the operations,
-  jobs and migrations; `horae-api` serves `/api/v1`, the exports, `/auth` and `/health`;
-  `horae-harvest-api` serves the optional Harvest-compatible API. The server layers them on top of
-  the Dioxus fullstack router, under a Postgres-backed session layer. The SPA performs mutations
-  through session-authenticated Dioxus `#[server]` functions, and `/api/v1` through the same
-  operations with a token.
-- **PostgreSQL only.** Migrations live in `crates/server/migrations/` and apply via `sqlx`.
-
-Domain invariants worth knowing: durations are stored as integer minutes, money as integer minor
-units (cents) plus an ISO currency code (never floats), and primary keys are UUID v7.
-
-See the [Speckit feature specifications](specs/) and [Horae Constitution](.specify/memory/constitution.md)
-for requirements and cross-cutting invariants, and [DESIGN.md](DESIGN.md) for the design system
-and component conventions.
-
-## Development & testing
-
-```sh
-cargo test -p horae-core                              # pure domain unit tests (no DB, no features)
-DATABASE_URL=… cargo test -p horae --features server  # integration tests (need Postgres w/ CREATEDB)
-cargo clippy -p horae --features server               # lint
-nix fmt                                               # treefmt: rustfmt, taplo, nixpkgs-fmt, mdformat
-```
-
-Integration tests use `#[sqlx::test]` (each spins up a throwaway database, so the DB role needs
-`CREATEDB`). `nix build` builds the package and `nix flake check` runs the whole suite against a
-PostgreSQL started inside the build sandbox, plus clippy, formatting, and the NixOS end-to-end
-tests.
-
-All SQL uses sqlx's compile-time-checked macros; after changing a query or migration, regenerate
-the offline cache with `cargo sqlx prepare --workspace -- --features server --all-targets` and
-commit `.sqlx/`.
-
-The repository also ships agent skills under `.agents/skills/` (Rust best practices, testing,
-async patterns, and more) that capture the conventions this project follows.
+[Deployment](docs/deployment.md) covers secrets, the first organization and administrator, the
+container image, backups and upgrades. Production sign-in uses OIDC; see
+[Authentication](docs/authentication.md).
+
+## Status
+
+Horae is in active Phase-1 development. Expect the schema and the API to keep moving. `/api/v1`
+is the exception: within v1 it only gains additions (see the
+[compatibility promise](docs/api.md#compatibility)).
+
+## Documentation
+
+- [Configuration](docs/configuration.md): environment variables, sessions, budget alert email.
+- [Deployment](docs/deployment.md): NixOS module, container image, first run, backups, upgrading.
+- [Authentication](docs/authentication.md): OIDC, linking identities, accounts created at sign-in,
+  the development login.
+- [API v1](docs/api.md): personal access tokens, cursors, errors, limits.
+- [Harvest](docs/harvest.md): the importer and the Harvest-compatible API.
+- [Command-line interface](docs/cli.md)
+- [Development](docs/development.md) and [Architecture](docs/architecture.md)
+- [Releases](docs/releases.md)
+
+Requirements and plans for each feature live in [specs/](specs/), the cross-cutting rules in the
+[Horae Constitution](.specify/memory/constitution.md), and the design system in
+[DESIGN.md](DESIGN.md).
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and
-guidelines, and the [Speckit feature specifications](specs/) for the current build plan.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains the setup, the
+conventions and how to submit changes.
 
 ## License
 

@@ -23,7 +23,8 @@ Open <http://localhost:8080/auth/login> and click **Sign in as Admin**.
 > lives in `.data/postgres`; `rm -rf .data` starts from scratch.
 >
 > `nix run .#postgres` boots a PostgreSQL VM instead — slower, but it exercises
-> the NixOS module used for self-hosting. See the README for that flow.
+> the NixOS module used for self-hosting. See
+> [docs/development.md](docs/development.md#postgresql-in-a-vm) for that flow.
 
 ______________________________________________________________________
 
@@ -89,7 +90,7 @@ process-compose up     # postgres + hot-reloading dev server on :8080
 
 ```sh
 cargo test -p horae-core                        # pure domain tests (no DB needed)
-cargo test --features server                    # integration tests (needs Postgres with CREATEDB)
+cargo test -p horae --features server           # integration tests (needs Postgres with CREATEDB)
 nix flake check                                 # what CI gates on: tests, clippy, fmt, e2e nixosTest
 ```
 
