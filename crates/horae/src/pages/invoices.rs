@@ -231,7 +231,6 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
         rsx! {
             button {
                 class: if primary { "btn btn-primary" } else { "btn btn-secondary" },
-                style: if !primary { "margin-left: 0.5rem;" },
                 disabled: busy() || editing(),
                 onclick: move |_| {
                     if busy() || editing() || !storage.ready() { return; }
@@ -274,7 +273,6 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                             }
                             a {
                                 class: "btn btn-secondary",
-                                style: "margin-left: 0.5rem;",
                                 href: "/api/invoices/{inv.id}/export/pdf",
                                 target: "_blank",
                                 "Download PDF"
@@ -288,7 +286,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
 
                     div { class: "card mb-6",
                         div { class: "p-5",
-                            div { class: "grid gap-4", style: "grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));",
+                            div { class: "grid gap-4 inv-meta",
                                 div {
                                     div { class: "text-sm text-muted", "Client" }
                                     div { "{cname}" }
