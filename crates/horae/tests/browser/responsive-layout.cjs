@@ -124,6 +124,33 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'Shared editor fits a 320px viewport');
       await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
     });
+    await check('every Timesheet week and Projects column is visible without scrolling from 1280px', async () => {
+      // Assumes the expanded rail, the default; narrower screens may scroll inside the grid.
+      for (const [path, resource, scroller, columns] of [
+        [`/timesheet/week/${week}`, 'load_timesheet_page', '.ts-grid-scroll', ['.ts-total-head', '.ts-body .ts-rowtotal', '.ts-body .ts-del']],
+        ['/projects', 'get_project_overview', '.proj-scroll', ['.proj-head > :nth-last-child(2)', '.proj-row [id^="project-actions-"][id$="-trigger"]']],
+      ]) {
+        await visit(path, resource);
+        await expect(page.locator(columns[1]).first()).toBeVisible();
+        for (const width of [1280, 1440]) {
+          await page.setViewportSize({ width, height: 1000 });
+          const outside = await page.locator(scroller).evaluate((scroll, columns) => {
+            const box = scroll.getBoundingClientRect();
+            const problems = [];
+            if (scroll.scrollWidth > scroll.clientWidth + 1) problems.push(`scrolls: ${scroll.scrollWidth} > ${scroll.clientWidth}`);
+            for (const selector of columns) {
+              const el = scroll.querySelector(selector);
+              if (!el) { problems.push(`${selector}: missing`); continue; }
+              const r = el.getBoundingClientRect();
+              if (r.left < box.left - 1 || r.right > box.right + 1) problems.push(`${selector}: ${r.left}..${r.right} outside ${box.left}..${box.right}`);
+              if (el.scrollWidth > el.clientWidth + 1) problems.push(`${selector}: clipped text`);
+            }
+            return problems;
+          }, columns);
+          assert.deepEqual(outside, [], `${path} at ${width}px`);
+        }
+      }
+    });
     await check('small-screen timesheet pager, date picker and view controls remain usable', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
       await visit(`/timesheet/week/${week}`, 'load_timesheet_page');

@@ -405,7 +405,7 @@ fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> E
                 let grand_cost_amount = money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency);
                 rsx! {
                     DataTable {
-                        table {
+                        table { class: "name-table",
                             thead {
                                 tr {
                                     th { "Group" }
