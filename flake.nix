@@ -60,8 +60,12 @@
         inherit (blueprint) mkPackagesFor;
         fenix = inputs.fenix.overlays.default;
       };
+
+      # blueprint forwards calls on the flake to `self.lib.__functor`, but Horae has no
+      # lib, so an evaluator that calls the flake fails with "attribute '__functor' missing".
+      outputs = removeAttrs blueprint [ "__functor" ];
     in
-    blueprint
+    outputs
     // {
       devShells = blueprint.devShells // darwinBlueprint.devShells;
 
