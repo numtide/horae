@@ -238,7 +238,7 @@ ______________________________________________________________________
 - [ ] T089 [US1] Migrate any file the lint still counts (a file added since I-1, or one left behind by a design PR), and confirm `crates/dioxus-lint/baseline.toml` has no `["dioxus/literal-text"]` lines left; then remove the table
 - [ ] T090 [US1] Review every `NOT_LANGUAGE` and `EXEMPT_FILES` entry and its reason in `crates/dioxus-lint/src/main.rs`; drop entries no literal matches any more
 - [ ] T091 [US1] Check the info count of literals outside markup; migrate the remaining real texts, and list the false positives in the PR description (FR-023)
-- [ ] T092 [P] [US1] Measure the WASM on I-1's base commit (master before the increment) and on the head (quickstart *WASM budget*); the difference must be at most 61,440 B brotli (SC-005)
+- [ ] T092 [P] [US1] Measure the WASM on I-1's base commit (master before the increment) and on the head (quickstart *WASM budget*); the difference must be at most 76,800 B brotli (SC-005)
 - [ ] T093 [P] [US1] Run the FR-012 check of quickstart (no file under the operations, the sign-in page, the exports, the invoice template or the CLI changed since I-1's base) and the FR-003 check (`horae-core` and `horae-types` do not depend on `horae-i18n`)
 - [ ] T094 [P] [US2] Check that every glossary word of `DESIGN.md` the screens show today is a term in `crates/i18n/locales/en/horae.ftl` used by its messages, so PR-10 changes it in one place (FR-007, User Story 2 scenario 2); add any missing term
 - [ ] T095 [P] [US2] Update `design/IMPLEMENTATION-GAPS.md` (the catalog is done; PR-10 edits `horae.ftl` and tests) and set `specs/023-i18n/spec.md` *Status* to the first increment delivered

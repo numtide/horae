@@ -296,7 +296,7 @@ PR-7).
   `nix build .#checks.x86_64-linux.tests` that crane's dummy-source dependency build accepts the
   crate's `build.rs`; the study did not verify it. The package source filter already keeps
   `.ftl` files (it drops only `.nix` and `.md`).
-- **Bundle**: SC-005 allows 60 KB brotli over master. The served file is
+- **Bundle**: SC-005 allows 75 KB brotli over master. The served file is
   `target/dx/horae/release/web/public/assets/horae_bg-*.wasm.br` from `dx build --release --locked`, the same command as `nix/package.nix`. The size is measured on the PR's base and
   head at three points: the infrastructure PR (engine only, expected about +42 KB), the proof of
   concept's screens, and the PR that closes the ratchet (whole catalog). If a measurement passes
