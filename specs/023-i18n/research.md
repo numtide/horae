@@ -22,7 +22,7 @@ Test code is not counted.
 | Importers | 71 | 63 | The ones the import screen and error download show. |
 | Budget email | 5 | 5 | Yes, in the recipient's language. |
 | Invoice PDF template | 20 | 20 | Yes, in the invoice's language. |
-| CSV/XLSX exports | 49 | 30 | English by default, optional language. |
+| CSV/XLSX exports | 49 | 30 | No: headers always in English (spec C-4). |
 | Sign-in page | 18 | 16 | Yes, by `Accept-Language`. |
 | `/api/v1` and Harvest API errors | 85 | 77 | No. |
 | `horae-core` | 69 | 69 | Errors by variant; the English text stays. |
@@ -102,6 +102,21 @@ a browser, and ICU4X's size in WASM (estimated, not measured).
   WASM unless trimmed; `chrono`'s `unstable-locales` embeds every language at once. For Horae's
   few patterns, month and day names can come from the catalog. None of it is needed while English
   is the only language (spec C-8, FR-061).
+
+## How other tools choose the language
+
+| Tool | Interface language | Invoices |
+| --- | --- | --- |
+| Harvest | English only ([help](https://support.getharvest.com/hc/en-us/articles/12917201128973-Can-I-use-Harvest-in-a-language-other-than-English)). | One set of translated labels per account, under Invoices > Configure > Translations; a change applies to every invoice, past ones included ([help](https://support.getharvest.com/hc/en-us/articles/12917201128973-Can-I-use-Harvest-in-a-language-other-than-English)). |
+| Kimai | Per person, in the user preferences, with English as fallback for missing translations; administrators set the default for new users ([user preferences](https://www.kimai.org/documentation/user-preferences.html), [initial setup](https://www.kimai.org/documentation/initial-setup.html)). | Per invoice template: the template's language drives its translations and formats ([invoice templates](https://www.kimai.org/documentation/invoice-templates.html)). |
+| Clockify | Per person only, in Preferences > General ([profile settings](https://clockify.me/help/getting-started/manage-your-profile-settings)). | n/a |
+| GitLab | An instance default, set by administrators, plus a per-person preference stored on the server ([localization](https://docs.gitlab.com/administration/settings/localization/)). | n/a |
+| Grafana | Server default (`default_language`), organization, team and person; the person's choice wins ([user preferences](https://grafana.com/docs/grafana/next/administration/manage-user-preferences)). | n/a |
+
+Horae's order (spec C-2) is Grafana's without teams and with the browser as the last step before
+English. Its invoice language (C-3) is one setting per organization, as in Harvest, but an issued
+invoice keeps its language, which Harvest does not do. A per-client language, close to Kimai's
+per-template one, is left as a possible extension.
 
 ## Language selection
 

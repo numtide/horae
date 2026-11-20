@@ -4,14 +4,14 @@
 
 **Created**: 2026-11-20
 
-**Status**: Draft; awaiting the maintainer's review before `/speckit-plan`
+**Status**: Draft, clarified 2026-11-20; awaiting the maintainer's review before `/speckit-plan`
 
 **Input**: User description: "Internationalize Horae. The first step moves every interface text
 into a catalog, English only, without changing what anyone sees, so that adding a language later
 does not touch the screens."
 
 Research: [research.md](research.md) summarises the study and the proof of concept behind the
-decisions below.
+decisions below, and compares how Kimai, Clockify, GitLab, Grafana and Harvest choose a language.
 
 ## Background
 
@@ -36,15 +36,17 @@ These were decided before this specification and are not reopened here.
   that does not exist, or omits one of its arguments, does not compile. This is the design of the
   proof of concept on `study/i18n`. The cost it adds to the WASM bundle (about 42 KB brotli,
   +3 %) is accepted.
-- **C-2 Interface language.** In order: the person's own preference; if they have none, the
-  organization's default language; and only if the organization sets none, the browser's
-  language (`Accept-Language`). Before sign-in, the browser's language decides. This follows the
-  same pattern as the duration format: the organization sets a default and each person may
+- **C-2 Interface language.** In order: the person's preference, set in My settings and stored in
+  their account; if they have none, the organization's default language, when an administrator
+  sets one; if not, the browser's language (`Accept-Language`); and if Horae does not have that
+  language, English. Before sign-in, the browser's language decides, then English. This follows
+  the same pattern as the duration format: the organization sets a default and each person may
   change it for themselves.
-- **C-3 Invoice PDF.** Its language is configurable: the organization's language by default,
-  changeable per client.
-- **C-4 CSV and XLSX exports.** Headers are English by default, because spreadsheets and scripts
-  depend on them. Exporting offers an option to choose another language.
+- **C-3 Invoice PDF.** The organization's invoicing settings have one invoice language. There is
+  no per-client language (a possible later extension). An issued invoice keeps the language it
+  was issued in; drafts follow the current setting.
+- **C-4 CSV and XLSX exports.** Headers are always in English, because spreadsheets and scripts
+  depend on them. Exports have no language option.
 - **C-5 Server error messages.** They are translated later, and each message gets a stable code
   (`reason`) for that. In the first increment they stay in English. The public API `/api/v1`
   stays in English.
@@ -55,7 +57,23 @@ These were decided before this specification and are not reopened here.
   so this rule comes with its own section in the skill.
 - **C-8 Formats.** Dates, money and durations keep coming from the single formatters of
   `horae-core` (PR-6), with English separators today. When other languages exist, a formatter
-  receives the locale without changing its callers.
+  receives the locale without changing its callers. PR-6 also takes over date formatting, with
+  the same text as today.
+- **C-9 Timing with the design PRs.** The catalog infrastructure lands after PR-4 (screen states)
+  and the `Button` API. PR-8 (buttons) uses the catalog from its first commit.
+
+## Clarifications
+
+### Session 2026-11-20
+
+- Q: Does the infrastructure land before or after PR-4 and the `Button` API? → A: After both;
+  PR-8 uses the catalog from the start (C-9).
+- Q: Does an issued invoice keep its language when the setting changes? → A: Yes; drafts follow
+  the current setting (C-3).
+- Q: Who moves date formatting out of the screens? → A: PR-6, extended to dates with the same
+  text as today (C-8).
+- The maintainer also replaced the per-client invoice language with a single invoice language in
+  the organization's invoicing settings (C-3), and removed the export language option (C-4).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -117,7 +135,8 @@ ______________________________________________________________________
 A second language exists in Horae. An administrator sets it as the organization's default. A
 member who prefers English sets English in My settings. Each of them sees every screen in their
 language from the first paint after sign-in, with no flash of another language while the page
-loads. Someone who has not signed in sees the sign-in page in their browser's language.
+loads, and on any browser they sign in from. Someone who has not signed in sees the sign-in page
+in their browser's language.
 
 **Why this priority**: It is what a reader of another language gets from this feature, but it
 needs User Story 1 first and a translated catalog to be visible.
@@ -129,8 +148,9 @@ agree.
 
 **Acceptance Scenarios**:
 
-1. **Given** a person with a language preference, **When** they open any screen, **Then** it is in
-   that language, whatever the organization's default and the browser's language are.
+1. **Given** a person with a language preference, **When** they open any screen from any browser,
+   **Then** it is in that language, whatever the organization's default and the browser's
+   language are.
 1. **Given** a person with no preference in an organization with a default language, **When**
    they open any screen, **Then** it is in the organization's language.
 1. **Given** a person with no preference in an organization with no default, **When** they open
@@ -170,31 +190,32 @@ ______________________________________________________________________
 
 ### User Story 5 - Documents without a browser use the right language (Priority: P3)
 
-An organization invoices a client abroad. The administrator sets that client's invoice language;
-the client's invoice PDFs come out in it, while other clients' invoices use the organization's
-language. A project manager receives the budget warning email in their own language. An analyst
-exports a report: by default the headers are the English ones their scripts expect, and they can
-pick another language for a one-off export.
+An organization that invoices in Spanish sets Spanish as its invoice language; every invoice
+issued from then on comes out in Spanish, and the invoices issued before keep their English
+labels. A project manager receives the budget warning email in their own language. An analyst
+exports a report and gets the English headers their scripts expect, whatever language their
+interface is in.
 
 **Why this priority**: Emails, PDFs and exports have no browser to negotiate with, so each needs
 its own rule. They come after the interface.
 
-**Independent Test**: Set a client's invoice language and download one of its invoices; trigger a
-budget email for a person with a preference; export a report with and without the language
-option and compare the headers.
+**Independent Test**: Set the invoice language, issue an invoice, change the setting and download
+both the issued invoice and a draft; trigger a budget email for a person with a preference;
+export a report from an interface in a test language and compare the file with one exported in
+English.
 
 **Acceptance Scenarios**:
 
-1. **Given** a client with no invoice language, **When** one of its invoices is rendered, **Then**
-   its labels are in the organization's language.
-1. **Given** a client with an invoice language, **When** one of its invoices is rendered, **Then**
-   its labels are in that language, whoever downloads it.
+1. **Given** an organization with an invoice language, **When** a draft invoice is rendered,
+   **Then** its labels are in that language, whoever downloads it.
+1. **Given** an issued invoice, **When** the organization later changes its invoice language,
+   **Then** the issued invoice still renders in the language it was issued in, and drafts render
+   in the new one.
 1. **Given** a budget email, **When** it is prepared, **Then** it is in the recipient's preference,
-   or the organization's language, or English.
-1. **Given** an export with no language chosen, **When** it is produced, **Then** its headers and
-   fixed values (`Yes`/`No`, `Active`/`Archived`) are byte for byte the English ones of today.
-1. **Given** an export with a language chosen, **When** it is produced, **Then** its headers and
-   fixed values are in that language, and the numbers keep the format exports use today.
+   or the organization's default language, or English.
+1. **Given** any export, **When** it is produced from an interface in any language, **Then** its
+   headers and fixed values (`Yes`/`No`, `Active`/`Archived`) are byte for byte the English ones
+   of today.
 
 ______________________________________________________________________
 
@@ -217,8 +238,11 @@ ______________________________________________________________________
 - **Regional browser languages.** A browser asking for `es-MX` gets `es` when Horae has `es` and
   not `es-MX`. A language Horae does not have is skipped in favour of the next one in the
   browser's list.
-- **Emails and PDFs.** They have no browser: they use the recipient's or the client's language
-  (User Story 5), never the language of whoever triggered them.
+- **A language removed from Horae** while a person, the organization or an issued invoice still
+  names it. The resolution skips it as if unset and moves to the next step of C-2; an issued
+  invoice falls back to English.
+- **Emails and PDFs.** They have no browser: emails use the recipient's language and invoices the
+  organization's invoice language (User Story 5), never the language of whoever triggered them.
 - **The component gallery** (`/components`, `pages/gallery.rs`) is a page for development with
   fictitious data. It is exempt from the catalog and from the lint.
 - **Text that is not language.** The brand (Horae, a catalog term so a language can decline
@@ -244,8 +268,8 @@ ______________________________________________________________________
   message's variables. A missing message or argument MUST fail the build, on the server and in
   WASM.
 - **FR-003**: The catalog crate MUST NOT depend on Dioxus or Axum, and MUST build for the server
-  and for WASM, so the interface, the server (emails, PDFs, exports) and the API layer (sign-in
-  page) share it. `horae-core` and `horae-types` MUST NOT depend on it.
+  and for WASM, so the interface, the server (emails, PDFs) and the API layer (sign-in page)
+  share it. `horae-core` and `horae-types` MUST NOT depend on it.
 - **FR-004**: Every language MUST be compiled into the binaries. Rendering a page MUST NOT fetch
   a catalog.
 - **FR-005**: The build MUST validate each translation against English: syntax, duplicate ids,
@@ -270,12 +294,12 @@ ______________________________________________________________________
   will change later.
 - **FR-012**: The first increment MUST NOT translate or change server error messages, the sign-in
   page, emails, the invoice PDF, export headers or the CLI (C-5; they belong to later
-  increments).
+  increments, and export headers to none).
 - **FR-013**: The first increment MUST be delivered as a series of changes that do not collide
-  with the design PRs in progress (PR-4 screen states, the `Button` API, PR-8 buttons), following
-  [Delivery](#delivery).
+  with the design PRs in progress, following [Delivery](#delivery). Its infrastructure MUST land
+  after PR-4 and the `Button` API (C-9).
 - **FR-014**: After the catalog infrastructure lands, any interface text that a change adds or
-  moves MUST go into the catalog, including text added by design PRs.
+  moves MUST go into the catalog, including text added by design PRs such as PR-8.
 
 #### Check in CI (C-7)
 
@@ -293,13 +317,14 @@ ______________________________________________________________________
 
 #### Choosing the language (C-2)
 
-- **FR-030**: Each person MUST be able to set a language preference in My settings, or clear it
-  to follow the organization.
+- **FR-030**: Each person MUST be able to set a language preference in My settings, stored in
+  their account so it follows them to any browser, or clear it to follow the organization.
 - **FR-031**: Administrators MUST be able to set the organization's default language in the
   workspace settings, or leave it unset.
 - **FR-032**: The interface language MUST be resolved, in order, from the person's preference,
-  the organization's default and the browser's `Accept-Language`, falling back to English. Before
-  sign-in, only the browser's language and English apply.
+  the organization's default and the first language of the browser's `Accept-Language` that
+  Horae has, falling back to English. Before sign-in, only the browser's language and English
+  apply.
 - **FR-033**: The server MUST know the language before rendering, render the page in it, set
   `<html lang>`, and hand the same language to the browser so hydration does not change the
   text.
@@ -321,21 +346,23 @@ ______________________________________________________________________
 
 #### Documents (C-3, C-4)
 
-- **FR-050**: The invoice PDF MUST use the client's invoice language when the client has one, and
-  the organization's language otherwise (English when neither is set). Who downloads the invoice
-  MUST NOT change its language.
-- **FR-051**: Administrators MUST be able to set or clear a client's invoice language.
-- **FR-052**: Exports MUST write English headers and fixed values by default, byte for byte as
-  today. The export screens MUST offer a choice of language, and an export in another language
-  MUST translate the headers and fixed values only.
+- **FR-050**: Administrators MUST be able to set the invoice language in the organization's
+  invoicing settings. There is no per-client invoice language.
+- **FR-051**: A draft invoice MUST render in the current invoice language. Issuing an invoice MUST
+  record its language, and the issued invoice MUST always render in it, whatever the setting
+  becomes later. Who downloads an invoice MUST NOT change its language.
+- **FR-052**: CSV and XLSX exports MUST write their headers and fixed values in English, byte for
+  byte as today, whatever the language of the interface or the person. Exports offer no language
+  option.
 - **FR-053**: Emails MUST use the recipient's resolved language: their preference, then the
   organization's default, then English.
 
 #### Formats (C-8)
 
 - **FR-060**: Dates, money and durations MUST be formatted by the single formatters of
-  `horae-core`, never by a screen. Screens and documents pass the value and, once languages
-  exist, the locale; adding the locale MUST NOT change the formatters' callers.
+  `horae-core`, never by a screen. PR-6 provides them, dates included. Screens and documents pass
+  the value and, once languages exist, the locale; adding the locale MUST NOT change the
+  formatters' callers.
 - **FR-061**: Until a second language ships, formatted values MUST stay exactly as they are
   today (English separators, the app's date format).
 
@@ -345,10 +372,10 @@ ______________________________________________________________________
 - **Message**: one translatable text with an id, its variables and, where it has a count, plural
   forms.
 - **Term**: a reusable word inside messages, such as the brand and the glossary words.
-- **Language preference**: optional, per person.
+- **Language preference**: optional, per person, stored in their account.
 - **Organization default language**: optional, per organization; set by administrators.
-- **Client invoice language**: optional, per client; set by administrators.
-- **Export language**: a choice made for one export, English when not chosen.
+- **Invoice language**: per organization, in its invoicing settings; set by administrators.
+- **Issued invoice's language**: recorded when the invoice is issued, never changed afterwards.
 - **Error reason**: a stable code per user-visible server message, with its arguments.
 
 ## Success Criteria *(mandatory)*
@@ -369,10 +396,10 @@ ______________________________________________________________________
   estimate).
 - **SC-006**: With a second language set, no page shows text in another language during load or
   after hydration, in the server-rendered pages the test suite covers.
-- **SC-007**: An export made without choosing a language is byte for byte the same as before this
-  feature.
-- **SC-008**: Downloading the same invoice twice, by two people with different interface languages,
-  gives the same labels.
+- **SC-007**: Every export is byte for byte the same as before this feature, whatever the
+  interface language of the person who makes it.
+- **SC-008**: An issued invoice renders with the same labels before and after the organization
+  changes its invoice language, and for two people with different interface languages.
 - **SC-009**: No `/api/v1` response changes as a result of this feature (the `api-compat` and
   `api-v1` checks pass unchanged).
 
@@ -387,58 +414,33 @@ texts in three files in about an hour, so the study estimates 5 to 7 days for th
 2 for the infrastructure, the check and review. It ships as a short series of small changes
 (200 to 300 texts each) so each rebases quickly.
 
-1. **Infrastructure, no screens.** The catalog crate and its English catalog with the id
-   conventions, the provider in `App`, the lint rule in ratchet mode with today's counts as its
-   baseline, its section in the `dioxus-best-practices` skill, the unused-message check, and the
-   crate in `nix flake check` (tests and clippy). From here on FR-014 applies. Its timing relative
-   to the design PRs in progress is Question 1 below.
+1. **Infrastructure, no screens**, after PR-4 and the `Button` API have merged (C-9). The catalog
+   crate and its English catalog with the id conventions, the provider in `App`, the lint rule in
+   ratchet mode with the counts of that moment as its baseline, its section in the
+   `dioxus-best-practices` skill, the unused-message check, and the crate in `nix flake check`
+   (tests and clippy). From here on FR-014 applies, and PR-8 writes its text into the catalog.
 1. **The proof of concept's screens.** Settings, API tokens and Tasks, taken from `study/i18n`
    (`26e562bf`), with their before-and-after HTML comparison.
 1. **Shared components** (`crates/horae/src/components`, about 145 texts): sidebar, layout,
-   toast, modal, `DatePicker` day names, permission descriptions. Files that an open design
-   branch changes (`button.rs`, the screen-state components of PR-4) wait for that branch to
-   merge.
-1. **Screens by area**, one change each, starting with those no open design branch touches:
-   Clients, Invoices, Importers, Admin and permissions, Reports, New project, Approvals; Projects
-   and Timesheet last. Before starting an area, the change lists the files that open design
-   branches modify (`git diff --name-only master...<branch>`) and leaves those for after their
-   merge.
+   toast, modal, `DatePicker` day names, permission descriptions, and the screen-state and
+   button components PR-4 and the `Button` API leave behind.
+1. **Screens by area**, one change each: Clients, Invoices, Importers, Admin and permissions,
+   Reports, New project, Approvals; Projects and Timesheet last. Before starting an area, the
+   change lists the files that open design branches modify (`git diff --name-only master...<branch>`, PR-8 above all) and agrees the order with them, so the same file is not
+   rewritten by both at once.
 1. **Close the ratchet.** Every file at zero apart from listed exceptions; SC-001 holds.
 
-PR-10 follows (SC-003). PR-6's formatters (C-8) can land before, during or after this increment;
-the screens keep calling them as they do.
+PR-10 follows (SC-003). PR-6's formatters (C-8), dates included, can land before, during or
+after this increment; the screens keep calling them as they do.
 
 ### Later increments, in this order
 
 1. **Server messages** with stable reasons (User Story 4, FR-041).
 1. **Choosing the language**: preferences, the organization's default, `Accept-Language`, the
    sign-in page, `<html lang>`, and a test language to prove SC-004 and SC-006 (User Story 3).
-1. **Documents**: budget email, invoice PDF with the client's language, the export language
-   option (User Story 5).
+1. **Documents**: the budget email and the invoice PDF with the organization's invoice language
+   (User Story 5). Exports need no change.
 1. **The first translation**, which is outside this specification.
-
-## Open questions
-
-These are the maintainer's to decide. Each carries a recommendation.
-
-1. **When the infrastructure step lands relative to PR-4 and the `Button` API.**
-   \[NEEDS CLARIFICATION: merge step 1 after PR-4 and the `Button` API, or before them?\] Once the
-   lint is on, a design PR that adds or moves text has to use the catalog (FR-014), which would
-   make the two branches in progress rework text they already wrote. **Recommendation:** merge
-   step 1 after both of them; PR-8, not started, then uses the catalog from its first commit.
-1. **Whether an issued invoice keeps its language.**
-   \[NEEDS CLARIFICATION: when a client's invoice language changes, do invoices already issued keep
-   the language they were issued in?\] C-3 says which language an invoice uses, but not whether a
-   later change of the client's setting re-renders old invoices. **Recommendation:** an issued
-   invoice keeps the language it was issued in, so the same invoice is always the same document;
-   drafts follow the current setting.
-1. **Who moves date formatting out of the screens.**
-   \[NEEDS CLARIFICATION: does PR-6 also add the date formatter to `horae-core`, or does a step of
-   this feature do it?\] About 15 places format dates with `chrono` patterns, and `DatePicker` has
-   its own day names. C-8 puts the formatters in `horae-core` (PR-6), but PR-6's row in
-   `design/IMPLEMENTATION-GAPS.md` names only durations. **Recommendation:** extend PR-6 to dates,
-   with the same text as today; the day and month names it needs for other languages are decided
-   when the second language arrives.
 
 ## Assumptions
 
@@ -447,13 +449,13 @@ These are the maintainer's to decide. Each carries a recommendation.
   needs the browser's language anyway.
 - Existing and new organizations start with no default language and people with no preference.
   While English is the only language, that changes nothing.
-- Administrators set the organization's language and clients' invoice languages, with the same
-  permission that governs the other workspace and client settings.
+- The invoice language starts as English for every organization, matching today's invoices.
+  Invoices issued before this feature are recorded as English.
+- Administrators set the organization's language and its invoice language, with the same
+  permission that governs the other workspace and invoicing settings.
 - A missing translation falls back to English at runtime, and the build warns. Whether CI should
   require complete translations is decided when the first translation ships.
 - Changing the language preference may reload the page.
-- Exports in another language translate headers and fixed values only; numbers keep the format
-  exports use today (decimal hours, per DESIGN.md *Formats*).
 - The duration-format preference of PR-6 does not exist in code yet. "Same pattern" refers to the
   rule in DESIGN.md *Formats*, and the two settings can share their screens when both exist.
 
@@ -461,6 +463,9 @@ These are the maintainer's to decide. Each carries a recommendation.
 
 - The plan, tasks and code (`/speckit-plan` and `/speckit-tasks` follow the maintainer's review).
 - Translating Horae into any language.
+- A per-client invoice language. It is a possible later extension of C-3: a client setting that,
+  when present, would take precedence over the organization's invoice language.
+- Translated export headers, and any language option on exports (C-4).
 - Translating `/api/v1`, the Harvest-compatible API, the CLI, logs and the demo seed.
 - Right-to-left layouts and non-Latin scripts beyond what the catalog itself supports.
 - Locale-aware number, date and money formats (C-8 only prepares for them).
