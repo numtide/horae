@@ -2206,7 +2206,7 @@ fn render_week_view(
                             div { key: "{pid}:{tid}", class: "ts-row ts-body",
                                 div { class: "ts-project",
                                     button { class: "ts-project-icon", "aria-label": "Task", "▤" }
-                                    div {
+                                    div { class: "min-w-0 wrap-anywhere",
                                         div { class: "ts-project-title", strong { "{proj}" } }
                                         div { class: "ts-project-task", "{task}" }
                                     }

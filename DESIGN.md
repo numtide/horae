@@ -34,8 +34,10 @@ All colors are CSS custom properties in `assets/css/horae.css`.
 | `--color-text-strong` | `#F6F2E9` | Headings, wordmark |
 | `--color-text` | `#EFEAE0` | Primary body text |
 | `--color-text-secondary` | `#A29C8D` | Labels, captions, sidebar links |
-| `--color-text-muted` | `#7C7565` | Placeholders, section headers |
-| `--color-label` | `#6A6353` | Uppercase micro-labels, table headers |
+| `--color-text-muted` | `#918B7B` | Placeholders, section headers |
+| `--color-label` | `#8D8777` | Uppercase micro-labels, table headers |
+
+The light theme sets muted to `#6E675A` and label to `#70695B`. Both tokens stay at 4.5:1 or more on `--color-bg`, `--color-bg-secondary`, `--color-bg-tertiary` and `--color-menu` in each theme, which leaves little room between them: they now differ mostly in use (case and tracking), not in tone, and a later PR merges them (see the inventory).
 
 ### Borders
 
@@ -110,7 +112,7 @@ The kit draws modals and `ConfirmDialog` at 16px; Horae's dialogs use `--radius-
 - **Content area**: scrollable, generous padding, `--color-bg` (`#100F0C`) background.
 - **Mobile navigation** (up to 768px): a labelled toggle expands the same sidebar above the content. It stays in normal document flow, so short screens can scroll to every link. Selecting a link closes the panel and focuses the content; Escape closes it and returns focus to the toggle. Desktop width and collapse state are preserved independently.
 - **Narrow content**: page headers and actions wrap; the admin subnavigation moves above its panel when the two columns no longer fit. Dense project/time grids and the day-total strip scroll within their own containers. Project names and badges wrap inside an aligned name column instead of overlapping budget figures.
-- **Wide tables at desktop width**: at 1280px with the expanded sidebar, every column of a table or grid is visible without scrolling. The Timesheet week (name, seven days, Total and the delete column) must fit in that space; today Total and delete fall outside it, which is a bug. The name column has a minimum width, as `.client-table` already does with `--width-client-name`, so names wrap inside it instead of breaking one word per line.
+- **Wide tables at desktop width**: at 1280px with the expanded sidebar, every column of a table or grid is visible without scrolling. The Timesheet week (name, seven days, Total and the delete column) fits in that space, and so do all of Projects' columns. The name column has a minimum width, so names wrap inside it instead of breaking one word per line: `--width-name-column` for the Timesheet, Projects and any table marked `.name-table` (People, Tasks, Approvals, Reports), and the wider `--width-client-name` for `.client-table`. In Projects the type badge moves below the name when both do not fit on one line. Below that width the grid or table scrolls inside its own container.
 - **Tables on mobile: *Pending design*.** Neither this file nor the prototypes (which stop at 900px) cover phones. The direction under review is a mixed rule: list tables stack each row as a card, and wide data tables (the Timesheet week, reports) keep horizontal scrolling with a visible indicator that more columns exist. The stacked card and the Timesheet at 390px still need designing, so do not build either until this note is replaced by a rule.
 
 ## Component Inventory
@@ -399,6 +401,7 @@ palette stays themeable and consistent. Notable token groups:
 
 - Colour: `--color-{bg,bg-secondary,bg-tertiary,bg-overlay,menu,row-hover}`, `--color-{text-strong,text,text-secondary,text-subtle,text-muted,label}`, `--color-primary*`, `--color-accent*`, and semantic `--color-{success,warning,danger,info}` with `-bg` / `-fg` / `-line` tints.
 - Foreground-on-fill: `--color-on-{primary,accent,pine}` (text over a solid control).
+- Calendar events: `--color-cal-{event,today}-{bg,border,ink,fg,meta}` for the Timesheet calendar's blocks (pine on most days, brass on today), defined for both themes. Ink is the project name, fg the time and task, meta the client.
 - Chrome: `--color-border`, `--color-border-input`, `--color-border-strong`, `--color-border-danger`, `--color-border-danger-hover`, `--ring` / `--ring-soft` (focus glows).
 - Hover fills: `--color-{primary,accent}-hover`, `--color-pine-hover`, and the brand glows `--glow-{primary,accent,pine}`.
 - Elevation: `--shadow-{sm,md,menu,modal}`.
@@ -502,7 +505,9 @@ acceptance work; this page is not evidence that every final gate has passed.
 
 - Keyboard navigation throughout
 - ARIA labels on icon-only buttons
-- Color contrast meets WCAG AA — `#EFEAE0` on `#1A1813` is ~9:1. Table headers, muted text and placeholders currently fall short of 4.5:1 in places; PR-1 raises those tokens.
+- Color contrast meets WCAG AA — `#EFEAE0` on `#1A1813` is ~9:1. The faintest text tokens, `--color-text-muted` and `--color-label`, are at least 4.5:1 on every resting surface in both themes, placeholders use `--color-text-muted`, and calendar event text is at least 4.5:1 on its block.
+- Exception for hover: a momentary hover state may drop below 4.5:1, never below 4:1. Today that is muted and label text on `--color-bg-overlay` (the sidebar footer on hover: muted 4.20:1 dark, 4.26:1 light) and on `--color-row-hover` in the light theme (table and Projects rows on hover: muted 4.38:1, label 4.25:1). Reaching 4.5:1 there would make muted indistinguishable from `--color-text-secondary`, which is itself 4.45:1 on the light overlay.
+- Focus is the `--ring`: buttons, links and focusable regions (`tabindex="0"`) show it on `:focus-visible`, and controls inside a clipping shell draw it inside instead (`--ring-inset`, or a 2px inset pine outline on the Projects scroll region, whose rows would cover an inset shadow). Elements with `tabindex="-1"` are focus targets, not controls, and get no ring.
 - Form inputs have associated `<label>` elements
 - Shared `Modal` dialogs stay mounted and use native `showModal()` / `close()` for background inertness and focus restoration. Escape, backdrop clicks and Cancel dismiss them unless a mutation is pending; the panel scrolls within the viewport on short screens.
 - Shared `Menu` uses a native popover in the top layer so tables cannot clip it. It opens above or below its trigger within the viewport, dismisses on outside click or anchor scrolling/resizing, and supports arrows, Home/End, initial-letter navigation, Escape and Tab. Each caller supplies a stable, unique ID for the trigger/menu association. The browser owns visibility; the shared script supplies positioning and [menu keyboard behavior](https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/).

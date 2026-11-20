@@ -399,6 +399,7 @@ fn type_family() -> Family {
             "overflow: hidden; text-overflow: ellipsis; white-space: nowrap",
         ),
         ("whitespace-nowrap", "white-space: nowrap"),
+        ("whitespace-pre-line", "white-space: pre-line"),
         ("wrap-anywhere", "overflow-wrap: anywhere"),
     ];
     for (c, d) in fixed {

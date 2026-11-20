@@ -120,7 +120,7 @@ pub(super) fn CanonicalPeople(
                     let actions = actions || loaded.people.iter().any(|entry| entry.can_change_active);
                     rsx! {
                     DataTable {
-                        table {
+                        table { class: "name-table",
                             thead { tr {
                                 th { scope: "col", "Name" }
                                 th { scope: "col", "Email" }

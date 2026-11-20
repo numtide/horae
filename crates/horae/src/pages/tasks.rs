@@ -122,7 +122,7 @@ pub fn TaskCatalog() -> Element {
                     h2 { id: group_id, class: "text-lg font-semibold", {title} }
                     p { class: "text-sm text-secondary mb-3", {hint} }
                     div { class: "table-container rounded-xl bg-secondary",
-                        table { aria_label: title,
+                        table { class: "name-table", aria_label: title,
                             thead { tr {
                                 th { scope: "col", "Task" }
                                 th { scope: "col", "Billable by default" }
