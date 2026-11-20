@@ -4,6 +4,7 @@
 use dioxus::prelude::*;
 use uuid::Uuid;
 
+use crate::components::page_header::PageHeader;
 use crate::pages::settings::api_tokens::TokenTable;
 use crate::server_fns;
 
@@ -21,9 +22,7 @@ pub fn AdminApiTokens() -> Element {
         });
     });
     rsx! {
-        div { class: "page-header",
-            h1 { class: "page-title", "API tokens" }
-        }
+        PageHeader { title: "API tokens" }
         p { class: "text-secondary text-sm mb-4",
             "Every token people in this workspace have created. Revoking one stops it working at once; its owner can create another."
         }

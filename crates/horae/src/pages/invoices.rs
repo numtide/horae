@@ -6,6 +6,8 @@ use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
 use super::loaded;
+use crate::components::back_link::BackLink;
+use crate::components::page_header::PageHeader;
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
@@ -97,9 +99,8 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Invoices" }
-                div { class: "page-actions",
+            PageHeader { title: "Invoices",
+                actions: rsx! {
                     if configures {
                         Link { to: Route::InvoiceSettings {}, class: "btn btn-secondary", "Settings" }
                     }
@@ -113,7 +114,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                         if show_form() { "Cancel" } else { "New Invoice" }
                     }
                     }
-                }
+                },
             }
 
             if prepares && storage.ready() && show_form() {
@@ -137,7 +138,6 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                     Err(message) => rsx! {
                         div { class: "alert alert-danger", role: "alert", "{message}" }
                         button { class: "btn btn-secondary", onclick: move |_| clients.restart(), "Retry" }
-                        Link { to: Route::InvoiceList {}, class: "btn btn-ghost", "Back to Invoices" }
                     }
                 })}
                 }
@@ -229,7 +229,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
         }
         rsx! {
             button {
-                class: if primary { "btn btn-primary" } else { "btn btn-secondary ml-2" },
+                class: if primary { "btn btn-primary" } else { "btn btn-secondary" },
                 disabled: busy() || editing(),
                 onclick: move |_| {
                     if busy() || editing() || !storage.ready() { return; }
@@ -250,15 +250,19 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div {
+            BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
+            // The number names the title once the invoice has loaded.
+            if !matches!(&*invoice_data.read(), Some(Ok(_))) {
+                PageHeader { title: "Invoice" }
+            }
             {loaded(&*invoice_data.read(), |data| {
                 let inv = data.invoice.clone();
                 let lines = data.lines.clone();
                 let cname = &data.client_name;
 
                 rsx! {
-                    div { class: "page-header",
-                        h1 { class: "page-title", "Invoice {inv.number}" }
-                        div { class: "page-actions",
+                    PageHeader { title: format!("Invoice {}", inv.number),
+                        actions: rsx! {
                             match inv.status {
                                 InvoiceStatus::Draft => rsx! {
                                     {status_btn("sent", "Mark Sent", true)}
@@ -271,12 +275,12 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                 _ => rsx! {},
                             }
                             a {
-                                class: "btn btn-secondary ml-2",
+                                class: "btn btn-secondary",
                                 href: "/api/invoices/{inv.id}/export/pdf",
                                 target: "_blank",
                                 "Download PDF"
                             }
-                        }
+                        },
                     }
 
                     if let Some(err) = &*error.read() {

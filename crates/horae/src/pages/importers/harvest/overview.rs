@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use horae_core::importers::harvest::types::{ImportMode, ImportReport, SourceKind, SyncScope};
 
-use super::back_links::BackLinks;
 use super::connect_banner::ConnectBanner;
 use super::connect_outcome::ConnectOutcome;
 use super::connection_card::ConnectionCard;
@@ -114,7 +113,6 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
 
     rsx! {
         div { class: "himp-page min-w-0",
-            BackLinks {}
             ConnectionCard { connection: conn.clone(), refused, importing, on_changed: changed }
             section { class: "card flex flex-col gap-6", aria_label: "Import from Harvest",
                 if let Some(failure) = outcome.0 {

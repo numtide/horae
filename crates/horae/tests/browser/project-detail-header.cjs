@@ -50,7 +50,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
   // Compare rectangles from one coordinate space, so CSS zoom cannot hide overflow.
   const overflowing = () => page.evaluate(() => {
     const root = document.documentElement, frame = root.getBoundingClientRect();
-    const controls = [document.querySelector('h1'), ...['project-detail-back', 'project-detail-edit', 'project-detail-actions-trigger']
+    const controls = [document.querySelector('h1'), ...['page-back', 'project-detail-edit', 'project-detail-actions-trigger']
       .map(id => document.getElementById(id))].filter(Boolean);
     const outside = controls.filter(el => { const r = el.getBoundingClientRect(); return r.left < frame.left - 1 || r.right > frame.right + 1; })
       .map(el => el.id || el.tagName);
@@ -67,7 +67,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     await expect(header).toHaveCount(0);
     await expect(trigger).toHaveCount(0);
     await expect(page.locator('.toast')).toHaveCount(0);
-    await expect(page.locator('#project-detail-back')).toBeFocused();
+    await expect(page.locator('#page-back')).toBeFocused();
   };
   const retry = async () => {
     await page.locator('#project-detail-retry').click();
@@ -250,7 +250,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     assert.equal(statusRequests.length, 0);
     console.log('PASS: header and confirmation fit at 320–1440px, a short viewport, 200% zoom and 200% text in both themes');
 
-    await page.locator('#project-detail-back').focus();
+    await page.locator('#page-back').focus();
     for (let step = 0; step < 8 && await page.evaluate(() => document.activeElement?.id) !== 'project-detail-actions-trigger'; step++) {
       await page.keyboard.press('Tab');
     }
@@ -351,7 +351,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     await expect(page.locator('.toast')).toHaveCount(0);
     // The focused Refresh button unmounts; focus should land on a recovery control, not the page body.
     await expect.poll(() => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName),
-      { message: 'Focus after a denied refresh' }).toMatch(/^project-detail-(retry|back)$/);
+      { message: 'Focus after a denied refresh' }).toMatch(/^(project-detail-retry|page-back)$/);
     await retry();
     await expect(header).toContainText('Archived');
     await page.reload();
@@ -429,7 +429,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
       const heldResponse = page.waitForResponse(isStatusWrite);
       await undo.click();
       // Back is a deliberate choice here too, although reloads use it as their fallback.
-      const moved = page.locator('#project-detail-back');
+      const moved = page.locator('#page-back');
       await moved.focus();
       releaseUndo();
       assert.equal((await heldResponse).status(), 409);
@@ -483,7 +483,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
     await expect(page.locator('.toast')).toHaveCount(0);
-    await expect(page.locator('#project-detail-back')).toBeFocused();
+    await expect(page.locator('#page-back')).toBeFocused();
     assert.equal(active(), 't');
     await retry();
     await expect(header).not.toContainText('Archived');
@@ -757,7 +757,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
         await expect(page.locator('.toast')).toHaveCount(0);
         await expect(dialog).toBeHidden();
         await expect.poll(() => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName),
-          { message: `${change}: focus after a denied Undo` }).toMatch(/^project-detail-(retry|back)$/);
+          { message: `${change}: focus after a denied Undo` }).toMatch(/^(project-detail-retry|page-back)$/);
         assert.equal(active(), 'f', `${change}: a denied Undo changes nothing`);
       } finally {
         await restore();

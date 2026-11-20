@@ -3,6 +3,7 @@
 
 use dioxus::prelude::*;
 
+use crate::components::page_header::PageHeader;
 use crate::route::Route;
 
 #[path = "importers/harvest.rs"]
@@ -20,9 +21,7 @@ pub fn ImporterIndex() -> Element {
     let connection = harvest::Conn::from_resource(&status);
     rsx! {
         div { class: "himp-page min-w-0",
-            div { class: "page-header",
-                h1 { class: "page-title", "Importers" }
-            }
+            PageHeader { title: "Importers" }
             p { class: "text-secondary text-sm mb-6",
                 "Bring data in from another tracker. Start with a preview before importing business data."
             }

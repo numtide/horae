@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::components::badge::Badge;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuItem};
+use crate::components::page_header::PageHeader;
 use crate::components::session::use_session;
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
@@ -163,9 +164,8 @@ pub fn ClientList() -> Element {
 
     rsx! {
         div {
-            div { class: "page-header mb-5",
-                h1 { id: "clients-heading", tabindex: "-1", class: "page-title text-4xl font-semibold text-strong tracking-tight", "Clients" }
-                div { class: "page-actions items-center gap-4",
+            PageHeader { title: "Clients", title_id: "clients-heading",
+                actions: rsx! {
                     if can_manage {
                         button {
                             id: "clients-new",
@@ -200,7 +200,7 @@ pub fn ClientList() -> Element {
                             }
                         },
                     }
-                }
+                },
             }
 
             if ready && list.is_some() {

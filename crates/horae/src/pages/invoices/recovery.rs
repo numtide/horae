@@ -4,6 +4,7 @@ use horae_core::permissions::invoices;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::components::page_header::PageHeader;
 use crate::models::invoice::{InvoiceDefaults, InvoiceDraftSave, InvoiceGenerationRequest};
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -172,7 +173,7 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     });
     if let Some(request) = pending() {
         return rsx! { div { class: "card p-5", "data-editor-kind": "invoice", "data-editor-state": if rejected() && !busy() { "clean" } else { "pending" },
-            h1 { class: "page-title", "Recover invoice request" }
+            PageHeader { title: "Recover invoice request" }
             p { class: "mb-4", "A previous invoice request may have completed. Recover the exact submitted request before starting another. No new invoice is created by an acknowledged retry." }
             if let Some(message) = error() { div { class: "alert alert-danger", role: "alert", "{message}" } }
             button { class: "btn btn-primary", disabled: busy(),

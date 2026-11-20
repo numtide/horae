@@ -10,6 +10,7 @@ use crate::components::date_picker::DatePicker;
 use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::nav::NavItem;
+use crate::components::page_header::PageHeader;
 use crate::components::table::DataTable;
 use crate::components::toast::Toast;
 
@@ -26,9 +27,7 @@ pub fn Gallery() -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Component Library" }
-            }
+            PageHeader { title: "Component Library" }
 
             // ── Buttons ──────────────────────────────────────────────────
             section { class: "gallery-section",

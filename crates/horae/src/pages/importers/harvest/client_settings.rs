@@ -139,14 +139,6 @@ pub(super) fn HarvestOAuthApp(
 
     rsx! {
         div { class: "flex flex-col gap-5",
-            div {
-                Link {
-                    to: Route::HarvestOverview { outcome: Default::default() },
-                    class: "imp-back text-primary text-sm",
-                    "data-testid": "harvest-oauth-back",
-                    "← Back to Harvest"
-                }
-            }
             div { class: "alert alert-warning mb-0",
                 p { class: "font-semibold", "One-time setup" }
                 p { class: "text-sm mt-1",

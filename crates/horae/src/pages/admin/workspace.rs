@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::components::form::FormGroup;
+use crate::components::page_header::PageHeader;
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
 use crate::server_fns;
@@ -15,9 +16,7 @@ pub fn WorkspaceSettings() -> Element {
         _ => None,
     };
     rsx! {
-        div { class: "page-header",
-            h1 { class: "page-title", "Workspace settings" }
-        }
+        PageHeader { title: "Workspace settings" }
         section { class: "card max-w-lg", aria_labelledby: "workspace-timezone-title",
             h2 { id: "workspace-timezone-title", class: "card-title", "Time zone" }
             match saved {

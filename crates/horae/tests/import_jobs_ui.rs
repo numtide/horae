@@ -57,8 +57,15 @@ mod models {
     }
 }
 
+#[path = "../src/components/back_link.rs"]
+pub mod back_link;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
+
 mod components {
-    pub use crate::{menu, modal};
+    pub use crate::{back_link, icons, menu, modal, page_header};
 }
 
 /// The importer routes, as the app declares them.
@@ -1874,7 +1881,7 @@ fn configured_unbound_connection_explains_read_only_access() {
     assert!(ui.html().contains("Connect Harvest"));
     assert!(
         ui.html()
-            .contains("read-only, Horae never writes to Harvest")
+            .contains("Read-only: Horae never writes to Harvest.")
     );
     assert!(!ui.html().contains("data-testid=\"change-account\""));
 }
@@ -1941,7 +1948,7 @@ fn unconfigured_importer_saves_an_oauth_app_and_never_shows_its_secret() {
         "{html}"
     );
     assert!(!html.contains("very-secret"), "{html}");
-    ui.click("harvest-oauth-back");
+    ui.click("page-back");
     assert!(ui.html().contains("Connect Harvest"), "{}", ui.html());
 }
 
@@ -2042,7 +2049,7 @@ fn rendered_page_never_contains_the_client_secret() {
     assert!(!ui.html().contains("rendered-secret"), "{}", ui.html());
 
     // Reopening the view, and replacing the secret, start from an empty field.
-    ui.click("harvest-oauth-back");
+    ui.click("page-back");
     ui.click("harvest-oauth-app");
     assert!(!ui.html().contains("rendered-secret"), "{}", ui.html());
     ui.click("replace-harvest-secret");

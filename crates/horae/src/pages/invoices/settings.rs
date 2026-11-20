@@ -5,7 +5,9 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
+use crate::components::back_link::BackLink;
 use crate::components::form::{FormGroup, Input, Textarea};
+use crate::components::page_header::PageHeader;
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::{OrgBranding, branding_value_error};
 use crate::route::Route;
@@ -171,12 +173,8 @@ pub fn InvoiceSettings() -> Element {
     let branding = use_resource(server_fns::get_org_branding);
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Invoice settings" }
-                div { class: "page-actions",
-                    Link { to: Route::InvoiceList {}, class: "btn btn-secondary", "Back to Invoices" }
-                }
-            }
+            BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
+            PageHeader { title: "Invoice settings" }
             match &*branding.read() {
                 None => rsx! { p { class: "text-muted text-sm", role: "status", "Loading invoice settings…" } },
                 Some(Ok(initial)) => rsx! { SettingsForm { initial: initial.clone() } },

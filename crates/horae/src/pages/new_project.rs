@@ -3,8 +3,10 @@
 use dioxus::prelude::*;
 use uuid::Uuid;
 
+use crate::components::back_link::BackLink;
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
+use crate::components::page_header::PageHeader;
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, EditableProject, ProjectDraft, ProjectEditRequest,
     ProjectEditorContext, ProjectFieldAccess, ProjectFormField, ProjectManagerSelection,
@@ -146,10 +148,10 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
             ProjectEditor { defaults: defaults.clone(), options: options.clone(), draft: draft.clone(), client_context: *client_context, on_reload: move |_| initial.restart() }
         },
         Some(Err(error)) => rsx! {
-            h1 { class: "text-4xl font-semibold text-strong", "New project" }
+            BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
+            PageHeader { title: "New project" }
             div { class: "alert alert-danger", role: "alert", "Could not load project settings: {error}" }
             button { class: "btn btn-secondary", onclick: move |_| initial.restart(), "Retry" }
-            Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
         },
         None => rsx! { p { role: "status", "Loading project settings…" } },
     }
@@ -229,13 +231,13 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
     });
     if unavailable() {
         return rsx! {
-            h1 { class: "text-4xl font-semibold text-strong", "Edit project" }
+            BackLink { to: exit.clone(), label: back_label(&exit) }
+            PageHeader { title: "Edit project" }
             div { class: "alert alert-danger", role: "alert",
                 p { "Your session or project access changed. Reload the project before continuing." }
                 p { "If a save was in progress, check the saved project after reloading." }
             }
             button { id: "np-editor-reload", class: "btn btn-secondary", onclick: move |_| reload.call(()), "Reload project" }
-            Link { to: exit.clone(), class: "btn btn-ghost", {back_label(&exit)} }
         };
     }
     if initial.state()() != UseResourceState::Ready {
@@ -254,10 +256,10 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
             }
         }
         Some(Err(error)) => rsx! {
-            h1 { class: "text-4xl font-semibold text-strong", "Edit project" }
+            BackLink { to: exit.clone(), label: back_label(&exit) }
+            PageHeader { title: "Edit project" }
             div { class: "alert alert-danger", role: "alert", "Could not load project: {error}" }
             button { class: "btn btn-secondary", onclick: move |_| reload.call(()), "Retry" }
-            Link { to: exit.clone(), class: "btn btn-ghost", {back_label(&exit)} }
         },
         Some(Ok(_)) | None => rsx! { p { role: "status", "Loading project…" } },
     }
@@ -632,28 +634,21 @@ fn ProjectEditor(
             "data-project-edit-state": if locked || unresolved_request || (!editing && (busy() || dirty)) { "pending" } else if dirty { "dirty" } else { "clean" },
             div { class: "np-scroll flex-1 min-h-0 overflow-y-auto",
                 div { class: "max-w-project-form px-project-form pt-6 pb-30",
+                    // A button, not `BackLink`: leaving first saves or confirms the draft.
                     button {
                         r#type: "button",
-                        class: "btn btn-ghost text-sm text-muted font-normal border-0 px-2.5 py-1.5 -ml-2.5",
+                        class: "back-link",
                         disabled: locked || unresolved_request,
                         onclick: move |_| request_intent.call(Intent::Leave),
                         span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
                         {back_label(&exit)}
                     }
-                    header { class: "flex flex-wrap items-end gap-4 mt-5 pb-6 border-b border-light",
-                        div {
-                            div { class: "text-xs uppercase tracking-eyebrow text-label",
-                                "Projects"
-                            }
-                            h1 { class: "text-4xl font-semibold text-strong tracking-tight mt-2 mb-0",
-                                if editing { "Edit project" } else { "New project" }
-                            }
-                        }
-                        p {
-                            class: "text-xs text-faint ml-auto mb-0",
-                            role: "status",
-                            aria_live: "polite",
-                            "{status}"
+                    div { class: "border-b border-light",
+                        PageHeader {
+                            title: if editing { "Edit project" } else { "New project" },
+                            actions: rsx! {
+                                p { class: "text-xs text-faint mb-0", role: "status", aria_live: "polite", "{status}" }
+                            },
                         }
                     }
                     if let Some(message) = error() {

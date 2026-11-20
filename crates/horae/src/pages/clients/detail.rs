@@ -3,8 +3,9 @@ use horae_core::{duration::format_hhmm, money::format_cents};
 use uuid::Uuid;
 
 use crate::components::{
+    back_link::BackLink,
     badge::Badge,
-    icons::NavIcon,
+    page_header::PageHeader,
     toast::{Toast, ToastContainer},
 };
 use crate::models::client::ClientDetailView;
@@ -52,7 +53,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
         if let Some(opener) = refocus.take()
             && managed
         {
-            super::restore_opener_focus(opener, "client-back");
+            super::restore_opener_focus(opener, "page-back");
         }
     });
     let mut restoring = use_signal(|| false);
@@ -66,30 +67,21 @@ fn ClientDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div { class: "client-detail min-w-0",
-            Link { id: "client-back", to: Route::ClientList {}, class: "btn btn-ghost text-secondary mb-5 -ml-2.5",
-                NavIcon { name: "arrow-left" }
-                "Back to Clients"
-            }
+            BackLink { to: Route::ClientList {}, label: "Back to Clients" }
             if !ready {
                 p { role: "status", aria_busy: "true", "Loading client…" }
             } else if let Some(Ok(ClientDetailView { details: detail, .. })) = &*data {
-                div { class: "page-header border-b pb-6 mb-4",
-                    div { class: "min-w-0",
-                        p { class: "text-xs text-secondary m-0 mb-2",
-                            "Added to Horae {detail.client.created_at.format(\"%d %b %Y\")}"
-                        }
-                        div { class: "flex flex-wrap items-center gap-3",
-                            h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight wrap-anywhere",
-                                "{detail.client.name}"
-                            }
+                div { class: "border-b mb-4",
+                    PageHeader {
+                        title: detail.client.name.clone(),
+                        context: rsx! { "Added to Horae {detail.client.created_at.format(\"%d %b %Y\")}" },
+                        meta: rsx! {
                             span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
                                 "{detail.client.currency.trim()}"
                             }
                             if !detail.client.active { Badge { variant: "neutral", "Archived" } }
-                        }
-                    }
-                    if can_manage {
-                        div { class: "page-actions",
+                        },
+                        actions: can_manage.then(|| rsx! {
                             if detail.client.active {
                                 Link { to: Route::NewProjectForClient { client: id.to_string() }, class: "btn btn-secondary", "New project" }
                                 Link { to: Route::NewInvoiceForClient { client: id.to_string() }, class: "btn btn-primary", "New invoice" }
@@ -137,7 +129,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                     if restoring() { "Restoring client…" } else { "Restore client" }
                                 }
                             }
-                        }
+                        }),
                     }
                 }
                 if let Some(message) = status_error() {
@@ -180,7 +172,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                         onclick: move |_| details.restart(), "Retry client" }
                 }
             }
-            super::form::ClientEditor { open: show_editor() && can_manage, client_id: Some(id), focus_fallback: "client-back",
+            super::form::ClientEditor { open: show_editor() && can_manage, client_id: Some(id), focus_fallback: "page-back",
                 on_dismiss: move |_| show_editor.set(false),
                 on_saved: move |_| {
                     refocus.set(Some("client-edit"));
@@ -188,7 +180,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                     details.restart();
                 },
             }
-            super::status::ArchiveDialog { target: archiving, pending: archive_pending, focus_fallback: "client-back",
+            super::status::ArchiveDialog { target: archiving, pending: archive_pending, focus_fallback: "page-back",
                 on_archived: move |client: super::status::ArchiveTarget| {
                     status_error.set(None);
                     saved.set(Some(format!("{} archived", client.name)));

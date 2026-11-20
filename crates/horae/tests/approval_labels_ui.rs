@@ -25,6 +25,8 @@ pub mod avatar;
 pub mod badge;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 #[path = "../src/components/session.rs"]
 pub mod session;
 #[path = "../src/components/table.rs"]
@@ -32,7 +34,7 @@ pub mod table;
 #[path = "../src/components/today.rs"]
 pub mod today;
 mod components {
-    pub use super::{avatar, badge, controls, session, table, today};
+    pub use super::{avatar, badge, controls, page_header, session, table, today};
 }
 mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};

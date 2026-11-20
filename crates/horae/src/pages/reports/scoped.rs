@@ -6,6 +6,7 @@ use crate::components::badge::Badge;
 use crate::components::controls::Checkbox;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input, Select};
+use crate::components::page_header::PageHeader;
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
@@ -196,9 +197,8 @@ pub(super) fn ScopedReports(
     let date_error_id = dates.err().map(|_| "report-date-error".to_string());
 
     rsx! {
-        div { class: "page-header",
-            h1 { class: "page-title", "Reports" }
-            div { class: "page-actions",
+        PageHeader { title: "Reports",
+            actions: rsx! {
                 if let Some(query) = download_query {
                     a { class: "btn btn-secondary", href: "/api/reports/export/csv?{query}", "Export CSV" }
                     a { class: "btn btn-secondary", href: "/api/reports/export/xlsx?{query}", "Export XLSX" }
@@ -211,7 +211,7 @@ pub(super) fn ScopedReports(
                 button { id: "reports-retry-access", r#type: "button", class: "btn btn-secondary",
                     onclick: move |_| on_check_access.call(()), "Refresh access"
                 }
-            }
+            },
         }
         div { class: "segmented flex-wrap mb-6", role: "group", aria_label: "Report views",
             button { id: "report-view-time", r#type: "button",

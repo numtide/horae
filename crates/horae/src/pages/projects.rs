@@ -4,12 +4,14 @@ use std::rc::Rc;
 use uuid::Uuid;
 
 use super::run_action;
+use crate::components::back_link::BackLink;
 use crate::components::badge::Badge;
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::Checkbox;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
+use crate::components::page_header::PageHeader;
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
@@ -480,10 +482,9 @@ fn ClientProjectList(client: String) -> Element {
     match &*context.read() {
         Some(Ok(id)) => rsx! { ProjectList { initial_client: Some(*id) } },
         Some(Err(error)) => rsx! {
-            h1 { class: "page-title", "Projects" }
+            PageHeader { title: "Projects" }
             div { class: "alert alert-danger", role: "alert", "Could not load this client's projects: {error}" }
             button { class: "btn btn-secondary", onclick: move |_| context.restart(), "Retry" }
-            Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
         },
         None => rsx! { p { role: "status", "Loading client…" } },
     }
@@ -540,7 +541,7 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     // Nothing is admitted: the first load, an access refresh or a refused read.
     match (&*projects.read(), projects.state()()) {
         (Some(Err(_)), UseResourceState::Ready) => rsx! {
-            div { class: "page-header mb-5", h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" } }
+            PageHeader { title: "Projects" }
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
             }
@@ -551,9 +552,8 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
             }
         },
         _ => rsx! {
-            div { class: "page-header mb-5",
-                onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
-                h1 { id: "project-list-heading", tabindex: "-1", class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
+            div { onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
+                PageHeader { title: "Projects", title_id: "project-list-heading" }
             }
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
@@ -736,7 +736,7 @@ fn ProjectListContent(
         || matches!(&*budget_res.read(), Some(Err(error)) if access_denied(error))
     {
         return rsx! {
-            div { class: "page-header mb-5", h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" } }
+            PageHeader { title: "Projects" }
             div { class: "alert alert-danger", role: "alert", "Your session or project access changed. Refresh access before continuing." }
             // Dropping the admitted list remounts this content, and so its
             // auxiliary reads, only once the reload admits access again.
@@ -749,16 +749,15 @@ fn ProjectListContent(
     rsx! {
         div {
             onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
-            div { class: "page-header mb-5",
-                h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
-                div { class: "page-actions items-center gap-4",
+            PageHeader { title: "Projects",
+                actions: rsx! {
                     if can_create {
-                        Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }
+                        Link { to: Route::NewProject {}, class: "btn btn-primary", "New project" }
                     }
                     if can_change_status {
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
-                            trigger_class: "text-sm py-2 px-4",
+                            trigger_class: "text-sm py-3 px-5",
                             disabled: selected_count == 0 || bulk_locked,
                             div { class: "px-3 pt-1 pb-2 text-xs uppercase text-label", "{selection_label}" }
                             if selected_count > 100 {
@@ -780,11 +779,11 @@ fn ProjectListContent(
                         }
                     }
                     if can_import {
-                        Link { to: Route::ImporterIndex {}, class: "btn btn-secondary py-2 px-4", "Import" }
+                        Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import" }
                     }
                     button {
                         r#type: "button",
-                        class: "btn btn-secondary py-2 px-4",
+                        class: "btn btn-secondary",
                         onclick: move |_| export_open.set(true),
                         "Export"
                     }
@@ -799,7 +798,7 @@ fn ProjectListContent(
                             oninput: move |e| { selected.write().clear(); query.set(e.value()); },
                         }
                     }
-                }
+                },
             }
 
             div { class: "flex flex-wrap items-center gap-4 mb-5",
@@ -1356,7 +1355,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         if !loaded {
             status_saved.set(None);
             status_refused.set(None);
-            restore_detail_focus("project-detail-back");
+            restore_detail_focus("page-back");
         }
         if refocus_actions.take() && loaded {
             restore_detail_focus("project-detail-actions-trigger");
@@ -1390,44 +1389,36 @@ fn ProjectDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div {
-            Link {
-                id: "project-detail-back",
-                to: Route::ProjectList {},
-                class: "btn btn-ghost text-sm text-muted font-normal border-0 px-2.5 py-1.5 -ml-2.5",
-                span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
-                "Back to Projects"
-            }
+            BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
             if !ready {
-                p { class: "mt-5", role: "status", "Loading project details…" }
+                p { role: "status", "Loading project details…" }
             } else if let Some(view) = view {
-                section { class: "mt-5 pb-6 border-b border-light wrap-anywhere", aria_label: "Project details",
-                    header { class: "flex flex-wrap items-end gap-4",
-                        div { class: "flex-1 min-w-0",
+                section { class: "pb-6 border-b border-light wrap-anywhere", aria_label: "Project details",
+                    PageHeader {
+                        title: match view.project.code.as_deref().filter(|code| !code.is_empty()) {
+                            Some(code) => format!("[{code}] {}", view.project.name),
+                            None => view.project.name.clone(),
+                        },
+                        context: rsx! {
                             if view.can_open_client {
-                                Link { to: Route::ClientDetail { id: view.client_id }, class: "text-sm font-semibold",
+                                Link { to: Route::ClientDetail { id: view.client_id }, class: "font-semibold",
                                     "{view.project.client_name}"
                                 }
                             } else {
-                                span { class: "text-sm font-semibold text-muted", "{view.project.client_name}" }
+                                span { class: "font-semibold text-muted", "{view.project.client_name}" }
                             }
-                            div { class: "flex flex-wrap items-center gap-3 mt-2",
-                                h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight wrap-anywhere",
-                                    if let Some(code) = view.project.code.as_deref().filter(|code| !code.is_empty()) {
-                                        "[{code}] "
-                                    }
-                                    "{view.project.name}"
-                                }
-                                span { class: "text-xs text-secondary rounded-full border bg-tertiary px-2 py-1 whitespace-nowrap",
-                                    "{view.project_type.label()}"
-                                }
-                                span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
-                                    "{view.project.currency}"
-                                }
-                                if !view.active { Badge { variant: "neutral", "Archived" } }
+                        },
+                        meta: rsx! {
+                            span { class: "text-xs text-secondary rounded-full border bg-tertiary px-2 py-1 whitespace-nowrap",
+                                "{view.project_type.label()}"
                             }
-                        }
-                        div { class: "flex flex-wrap items-center gap-3",
-                            button { id: "project-detail-refresh", r#type: "button", class: "btn btn-ghost btn-sm",
+                            span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
+                                "{view.project.currency}"
+                            }
+                            if !view.active { Badge { variant: "neutral", "Archived" } }
+                        },
+                        actions: rsx! {
+                            button { id: "project-detail-refresh", r#type: "button", class: "btn btn-ghost",
                                 onclick: move |_| details.restart(), "Refresh details"
                             }
                             if view.can_edit {
@@ -1438,7 +1429,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                             }
                             if view.can_change_status {
                                 Menu { id: "project-detail-actions", label: "Actions", align_right: true,
-                                    trigger_class: "text-sm py-3 px-4", disabled: status_busy(),
+                                    trigger_class: "text-sm py-3 px-5", disabled: status_busy(),
                                     MenuItem {
                                         disabled: status_busy(),
                                         onclick: {
@@ -1454,22 +1445,22 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                     }
                                 }
                             }
-                        }
+                        },
                     }
                     SavedProjectDetails { project: view.project }
                 }
                 section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project tasks",
-                    h2 { class: "page-title text-xl", "Project tasks" }
+                    h2 { class: "card-title", "Project tasks" }
                     if view.tasks.is_empty() { p { class: "text-muted text-sm", "No tasks enabled yet." } }
                     else { ul { for task in view.tasks { li { key: "{task.id}", "{task.name}" } } } }
                 }
                 section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project team",
-                    h2 { class: "page-title text-xl", "Team" }
+                    h2 { class: "card-title", "Team" }
                     if view.team.is_empty() { p { class: "text-muted text-sm", "No visible team members." } }
                     else { ul { for person in view.team { li { key: "{person.id}", "{person.name}" } } } }
                 }
             } else {
-                p { class: "text-danger mt-5", role: "alert",
+                p { class: "text-danger", role: "alert",
                     "Project details are unavailable. Your session or access may have changed."
                 }
                 button { id: "project-detail-retry", r#type: "button", class: "btn btn-secondary btn-sm",
@@ -1479,7 +1470,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
 
             Modal {
                 id: "project-status-dialog", labelledby: "project-status-title",
-                focus_fallback: "project-detail-back",
+                focus_fallback: "page-back",
                 open: status_change().is_some() && can_change_status, busy: status_busy(),
                 // A dialog refusal ends with the dialog; only Undo shows one outside it.
                 on_dismiss: move |_| {
@@ -1567,7 +1558,7 @@ fn restore_detail_focus(target: &'static str) {
     document::eval(&format!(
         "requestAnimationFrame(() => {{
             const active = document.activeElement;
-            if (!active || active === document.body || active.id === 'project-detail-back') {{
+            if (!active || active === document.body || active.id === 'page-back') {{
                 document.getElementById({target})?.focus();
             }}
         }});",

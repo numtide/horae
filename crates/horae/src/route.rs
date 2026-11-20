@@ -28,12 +28,10 @@ pub use crate::pages::new_project::EditReturn;
 fn NotFound(route: Vec<String>) -> Element {
     rsx! {
         div { class: "auth-container",
-            div { class: "auth-card",
-                h1 { style: "font-size: 2rem; color: var(--color-text-muted); text-align: center;", "404" }
-                p { style: "text-align: center; color: var(--color-text-secondary);",
-                    "Page not found: /{route.join(\"/\")}"
-                }
-                div { style: "text-align: center; margin-top: 1rem;",
+            div { class: "auth-card text-center",
+                h1 { class: "page-title mb-2", "404" }
+                p { class: "text-secondary", "Page not found: /{route.join(\"/\")}" }
+                div { class: "mt-4",
                     Link {
                         to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() },
                         class: "btn btn-primary",

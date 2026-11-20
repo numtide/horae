@@ -12,10 +12,12 @@ use futures_util::FutureExt;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
 mod components {
-    pub use super::permission_description;
+    pub use super::{page_header, permission_description};
 }
 pub use horae_types::{permission_audit, permission_editor};
 mod models {

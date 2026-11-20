@@ -10,6 +10,7 @@ use super::loaded;
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
+use crate::components::page_header::PageHeader;
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
 use crate::components::today::today;
@@ -168,9 +169,7 @@ pub fn Approvals(week: String) -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Approvals" }
-            }
+            PageHeader { title: "Approvals" }
 
             // Until the session resolves, nobody is known to lack access.
             if me.read().is_none() || access.is_none() {

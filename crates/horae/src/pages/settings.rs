@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::components::form::{FormGroup, Select};
+use crate::components::page_header::PageHeader;
 use crate::components::theme::Theme;
 use crate::server_fns;
 
@@ -35,9 +36,7 @@ pub fn Settings() -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Settings" }
-            }
+            PageHeader { title: "Settings" }
             profile::ProfileSection {}
             div { class: "card",
                 h2 { class: "card-title", "Appearance" }

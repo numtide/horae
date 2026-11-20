@@ -155,12 +155,6 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
 
     rsx! {
         div {
-            Link {
-                to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() },
-                class: "adm-back inline-flex items-center gap-2 text-sm text-secondary mb-5",
-                span { "←" }
-                "Back to Timesheet"
-            }
             div { class: "flex flex-wrap items-start gap-12",
                 aside { class: "adm-nav",
                     div { class: "adm-head flex items-center gap-3",

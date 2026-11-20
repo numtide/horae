@@ -6,8 +6,6 @@ use horae_core::importers::harvest::types::{ConnectionStatus, EntityType};
 
 use crate::server_fns;
 
-#[path = "harvest/back_links.rs"]
-mod back_links;
 #[path = "harvest/change_account.rs"]
 mod change_account;
 #[path = "harvest/client_settings.rs"]
@@ -138,7 +136,7 @@ async fn pause() {
 /// Harvest's mark beside its name, where Horae imports from it. Decorative:
 /// the name next to it is the text alternative.
 #[component]
-pub(super) fn HarvestLogo(class: &'static str) -> Element {
+pub(super) fn HarvestLogo(class: Option<&'static str>) -> Element {
     rsx! {
         img { class, src: asset!("/assets/harvest-logo.svg"), alt: "", width: "40", height: "40" }
     }

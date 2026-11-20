@@ -23,12 +23,16 @@ pub mod form;
 pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{badge, controls, form, menu, modal, permission_description, table};
+    pub use super::{
+        badge, controls, form, menu, modal, page_header, permission_description, table,
+    };
 }
 pub use horae_types::{
     people as people_model, permission_editor as permission_editor_model, user as user_model,

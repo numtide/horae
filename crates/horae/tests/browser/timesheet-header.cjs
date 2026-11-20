@@ -44,20 +44,21 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
         return { x: r.x, y: r.y, right: innerWidth - r.right };
       });
       const withTotal = await tabs();
-      const total = await page.locator('.ts-header .ts-saved').evaluate(el => {
-        const r = el.getBoundingClientRect();
-        return { right: r.right, y: r.y };
-      });
+      const middle = el => { const r = el.getBoundingClientRect(); return { x: r.x, right: r.right, cy: r.y + r.height / 2 }; };
+      const total = await page.locator('.ts-header .ts-saved').evaluate(middle);
+      const title = await page.locator('.ts-header h1').evaluate(middle);
       const withoutTotal = await page.locator('.ts-header').evaluate(header => {
-        const saved = header.querySelector('.ts-saved'), next = saved.nextSibling;
+        const saved = header.querySelector('.ts-saved'), parent = saved.parentNode, next = saved.nextSibling;
         saved.remove();
         const r = header.querySelector('.segmented').getBoundingClientRect();
-        header.insertBefore(saved, next);
+        parent.insertBefore(saved, next);
         return { x: r.x, y: r.y, right: innerWidth - r.right };
       });
       assert.deepEqual(withoutTotal, withTotal, JSON.stringify({ size, width }));
-      // The total keeps its place beside the tabs.
-      if (Math.abs(total.y - withTotal.y) < 8) assert.ok(withTotal.x - total.right <= 17, JSON.stringify({ size, total, withTotal }));
+      // The total is a fact about the week, so it follows the title (the header's
+      // `meta`) one 12px gap after it; once narrow it follows the tabs instead.
+      if (Math.abs(total.cy - title.cy) < 8) assert.ok(total.x - title.right <= 13, JSON.stringify({ size, total, title }));
+      else assert.ok(total.cy > withTotal.y, JSON.stringify({ size, total, withTotal }));
     }
     console.log('PASS: the timesheet view tabs keep their place without the week total');
 

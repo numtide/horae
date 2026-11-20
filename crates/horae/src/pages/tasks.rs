@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::money::format_cents;
 
+use crate::components::page_header::PageHeader;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::task::{TaskActivity, TaskCursor};
 use crate::server_fns;
@@ -71,11 +72,10 @@ pub fn TaskCatalog() -> Element {
 
     rsx! {
         section { aria_labelledby: "tasks-title", class: "min-w-0",
-            div { class: "flex flex-wrap items-center justify-between gap-3 mb-4",
-                h1 { id: "tasks-title", class: "text-2xl font-semibold", "Tasks" }
-                div { class: "flex flex-wrap gap-3",
+            PageHeader { title: "Tasks", title_id: "tasks-title",
+                actions: rsx! {
                     if let Some(Ok(page)) = current && page.can_edit {
-                        button { id: "tasks-new", r#type: "button", class: "btn btn-primary btn-sm",
+                        button { id: "tasks-new", r#type: "button", class: "btn btn-primary",
                             onclick: {
                                 let selection = editor::Selection { task: None, requester: page.requester,
                                     rate_currency: page.rate_currency.clone().filter(|_| page.can_edit_rates) };
@@ -83,10 +83,10 @@ pub fn TaskCatalog() -> Element {
                             }, "New task"
                         }
                     }
-                    button { id: "tasks-refresh", r#type: "button", class: "btn btn-secondary btn-sm", disabled: pending,
+                    button { id: "tasks-refresh", r#type: "button", class: "btn btn-secondary", disabled: pending,
                         onclick: move |_| { selected.set(None); notice.set(None); catalog.restart(); }, "Refresh tasks"
                     }
-                }
+                },
             }
             div { class: "flex flex-wrap items-center gap-3 mb-4",
                 label { r#for: "tasks-activity", class: "form-label", "Show" }
