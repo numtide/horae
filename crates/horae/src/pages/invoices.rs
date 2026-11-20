@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::loaded;
 use crate::components::back_link::BackLink;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, Loading, Skeleton};
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
@@ -70,8 +71,10 @@ pub fn InvoiceList(#[props(default)] client_context: Option<String>) -> Element 
 #[component]
 fn InvoiceListContent(client_context: Option<String>) -> Element {
     let storage = use_context::<recovery::RecoveryStorage>();
-    let invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
+    let mut invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
     let mut clients = use_resource(|| async move { server_fns::list_clients(false).await });
+    let retry_invoices = use_callback(move |_| invoices.restart());
+    let retry_clients = use_callback(move |_| clients.restart());
 
     // Client picker options: the placeholder, then every active client.
     let client_opts: Vec<(String, String)> =
@@ -119,14 +122,9 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
 
             if prepares && storage.ready() && show_form() {
                 if clients.state()() != UseResourceState::Ready {
-                    p { role: "status", "Loading clients…" }
-                } else if matches!(&*clients.read(), Some(Err(_))) {
-                    div { class: "alert alert-danger", role: "alert",
-                        "Could not load clients for invoicing. "
-                        button { class: "btn btn-secondary btn-sm", onclick: move |_| clients.restart(), "Retry clients" }
-                    }
+                    Loading { label: "Loading clients…" }
                 } else {
-                {loaded(&*clients.read(), |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
+                {loaded(&*clients.read(), "clients for invoicing", retry_clients, |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
                     Ok(initial_client) => rsx! {
                         preparation::PrepareInvoice { client_opts: client_opts.clone(), initial_client, busy,
                             oncreated: move |id| {
@@ -137,19 +135,24 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                     },
                     Err(message) => rsx! {
                         div { class: "alert alert-danger", role: "alert", "{message}" }
-                        button { class: "btn btn-secondary", onclick: move |_| clients.restart(), "Retry" }
+                        button { class: "btn btn-secondary", onclick: move |_| clients.restart(), "Try again" }
                     }
                 })}
                 }
             }
 
-            div { class: "card",
-                {loaded(&*invoices.read(), |list| rsx! {
+            if invoices.read().is_none() {
+                Skeleton { rows: 5, columns: 6, label: "Loading invoices…" }
+            } else {
+            {loaded(&*invoices.read(), "invoices", retry_invoices, |list| rsx! {
                     if list.is_empty() {
-                        div { class: "text-muted text-sm p-5",
-                            "No invoices yet. Generate one from billable time or project fees."
+                        EmptyState {
+                            icon: "invoices",
+                            title: "No invoices yet",
+                            body: "Invoices are generated from a client's billable time or project fees.",
                         }
                     } else {
+                    div { class: "card",
                         DataTable {
                             table {
                                 thead {
@@ -196,6 +199,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                             }
                         }
                     }
+                    }
                 })}
             }
         }
@@ -214,6 +218,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     let storage = use_context::<recovery::RecoveryStorage>();
     let mut invoice_data =
         use_resource(move || async move { server_fns::get_invoice(id.to_string()).await });
+    let retry_invoice = use_callback(move |_| invoice_data.restart());
     let mut error = use_signal(|| None::<String>);
     let editing = use_signal(|| false);
     let mut busy = use_signal(|| false);
@@ -255,7 +260,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
             if !matches!(&*invoice_data.read(), Some(Ok(_))) {
                 PageHeader { title: "Invoice" }
             }
-            {loaded(&*invoice_data.read(), |data| {
+            {loaded(&*invoice_data.read(), "this invoice", retry_invoice, |data| {
                 let inv = data.invoice.clone();
                 let lines = data.lines.clone();
                 let cname = &data.client_name;

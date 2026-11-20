@@ -5,12 +5,14 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
 use crate::pages::settings::api_tokens::TokenTable;
 use crate::server_fns;
 
 #[component]
 pub fn AdminApiTokens() -> Element {
     let mut tokens = use_resource(server_fns::list_org_api_tokens);
+    let retry = use_callback(move |_| tokens.restart());
     let mut revoke_error = use_signal(|| None::<String>);
     let on_revoke = use_callback(move |id: Uuid| {
         revoke_error.set(None);
@@ -30,12 +32,14 @@ pub fn AdminApiTokens() -> Element {
             p { class: "alert alert-danger", role: "alert", "{message}" }
         }
         match &*tokens.read() {
-            None => rsx! { p { class: "text-muted text-sm", role: "status", "Loading tokens…" } },
+            None => rsx! { Loading { label: "Loading tokens…" } },
             Some(Err(_)) => rsx! {
-                p { class: "alert alert-danger", role: "alert", "Could not load the tokens. Reload the page to try again." }
+                ErrorState { title: "Could not load the tokens", body: LOAD_FAILED, onretry: retry }
             },
             Some(Ok(rows)) if rows.is_empty() => rsx! {
-                p { class: "text-muted text-sm", "Nobody has created a token yet." }
+                EmptyState { icon: "settings", title: "No tokens yet",
+                    body: "Tokens people create in My settings appear here, where you can revoke them.",
+                }
             },
             Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: true, on_revoke } },
         }

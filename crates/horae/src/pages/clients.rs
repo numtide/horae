@@ -3,9 +3,9 @@ use std::collections::BTreeSet;
 use uuid::Uuid;
 
 use crate::components::badge::Badge;
-use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::session::use_session;
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
@@ -92,6 +92,7 @@ pub fn ClientList() -> Element {
         bind(binding, overview.requester)?;
         Ok::<_, ServerFnError>(overview)
     });
+    let retry = use_callback(move |_| clients.restart());
     let own = use_session().permissions;
     use_effect(move || {
         if clients.state()() != UseResourceState::Ready {
@@ -259,40 +260,45 @@ pub fn ClientList() -> Element {
             }
 
             if !ready {
-                p { class: "text-sm text-secondary", role: "status", aria_busy: "true", "Loading clients…" }
+                Loading { label: "Loading clients…" }
             } else if let Some(Err(_)) = &*data {
-                div { class: "alert alert-danger", role: "alert",
-                    "Could not load clients. Retry, or reload this page if your account changed. "
-                    button { id: "clients-retry", r#type: "button", class: "btn btn-secondary btn-sm",
-                        onclick: move |_| clients.restart(), "Retry clients" }
+                ErrorState {
+                    title: "Could not load clients",
+                    body: "Try again, or reload this page if your account changed.",
+                    retry_id: "clients-retry",
+                    onretry: retry,
                 }
             } else if denied {
-                div { class: "empty-state rounded-xl",
-                    div { class: "empty-state-icon-tile", aria_hidden: "true", NavIcon { name: "clients" } }
-                    h2 { class: "empty-state-title text-xl m-0", "Client access is unavailable" }
-                    p { class: "empty-state-text m-0", "Your permissions do not include the client list." }
+                ErrorState {
+                    title: "Client access is unavailable",
+                    body: "Your permissions do not include the client list. Ask an Administrator for access.",
                 }
             } else if let Some(list) = list {
                 if visible.is_empty() {
-                    div { class: "empty-state rounded-xl",
-                        div { class: "empty-state-icon-tile", aria_hidden: "true", NavIcon { name: "clients" } }
-                        if list.is_empty() {
-                            h2 { class: "empty-state-title text-xl m-0", "No clients yet" }
-                            p { class: "empty-state-text m-0", "Clients group your projects and billing information." }
-                            div { class: "flex flex-wrap justify-center gap-3",
+                    if list.is_empty() {
+                        EmptyState {
+                            icon: "clients",
+                            title: "No clients yet",
+                            body: "Clients group your projects and billing information.",
+                            actions: rsx! {
                                 if can_manage {
                                     button { class: "btn btn-primary", onclick: move |_| { reset_form(); show_form.set(true); }, "New client" }
                                 }
                                 if can_import {
                                     Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import from Harvest" }
                                 }
-                            }
-                        } else {
-                            h2 { class: "empty-state-title text-xl m-0", "No clients match your filters" }
-                            p { class: "empty-state-text m-0", "Try another name, status or currency." }
-                            button { class: "btn btn-secondary", onclick: move |_| {
-                                query.set(String::new()); currency_filter.set(String::new()); scope.set(ClientScope::All);
-                            }, "Clear filters" }
+                            },
+                        }
+                    } else {
+                        EmptyState {
+                            icon: "clients",
+                            title: "No clients match your filters",
+                            body: "Try another name, status or currency.",
+                            actions: rsx! {
+                                button { class: "btn btn-secondary", onclick: move |_| {
+                                    query.set(String::new()); currency_filter.set(String::new()); scope.set(ClientScope::All);
+                                }, "Clear filters" }
+                            },
                         }
                     }
                 } else {

@@ -61,7 +61,7 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
   // Neither the time nor the detailed view is still loading.
   const settled = async () => {
     await expect(page.locator('p[role="status"]', { hasText: /^Loading/ })).toHaveCount(0);
-    await expect(page.locator('table, .alert, .card.p-8').first()).toBeVisible();
+    await expect(page.locator('table, .alert, .empty-state').first()).toBeVisible();
   };
   const display = async (width, height, theme, fontSize) => {
     await page.setViewportSize({ width, height });
@@ -223,7 +223,7 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
     // A report failure keeps its alert and retry inside the narrow viewport.
     await page.route('**/api/report_time*', route => route.fulfill({ status: 500, body: 'fixture failure' }));
     await control('report-filter-group').selectOption('client');
-    const retry = page.getByRole('button', { name: 'Retry report', exact: true });
+    const retry = page.getByRole('button', { name: 'Try again', exact: true });
     await expect(retry).toBeVisible();
     const retryBox = await retry.boundingBox();
     assert.ok(retryBox.x >= 0 && retryBox.x + retryBox.width <= 320, 'Retry stays inside the viewport');
@@ -299,10 +299,10 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
       await control('report-filter-from').fill('2099-01-01');
     });
     await settled();
-    await expect(page.getByText('No time tracked in this range.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No time in this range', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Detailed time', exact: true }).click();
     await settled();
-    await expect(page.getByText('No entries in this range.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No entries in this range', exact: true })).toBeVisible();
 
     assert.deepEqual(errors, []);
     console.log(`PASS: financial report filter labels (with Project tag), tab order, reflow at ${sizes.map(s => s.join('x')).join('/')} in both themes (bare panel below 640px), base and 32px text, both tabs; keyboard date entry, retry, groupings, client reset, exports, empty states and long chosen names; Chromium ${browser.version()}`);

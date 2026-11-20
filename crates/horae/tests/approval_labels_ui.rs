@@ -25,8 +25,13 @@ pub mod avatar;
 pub mod badge;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/session.rs"]
 pub mod session;
 #[path = "../src/components/table.rs"]
@@ -34,7 +39,9 @@ pub mod table;
 #[path = "../src/components/today.rs"]
 pub mod today;
 mod components {
-    pub use super::{avatar, badge, controls, page_header, session, table, today};
+    pub use super::{
+        avatar, badge, controls, icons, page_header, screen_state, session, table, today,
+    };
 }
 mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};
@@ -91,12 +98,16 @@ struct Probe {
 
 fn loaded<T>(
     state: &Option<Result<T, ServerFnError>>,
+    what: &str,
+    retry: Callback<()>,
     render: impl FnOnce(&T) -> Element,
 ) -> Element {
     match state {
         Some(Ok(value)) => render(value),
-        Some(Err(error)) => rsx! { div { class: "alert alert-danger", "{error}" } },
-        None => rsx! { div { class: "text-muted text-sm", "Loading…" } },
+        Some(Err(error)) => rsx! {
+            screen_state::ErrorState { title: "Could not load {what}", body: "{error}", onretry: retry }
+        },
+        None => rsx! { screen_state::Loading {} },
     }
 }
 
@@ -311,8 +322,8 @@ async fn approval_loading_error_empty_and_denied_states_need_no_directory() {
             true,
             "Approvals unavailable",
         ),
-        (false, None, true, "No approvals found"),
-        (false, None, false, "Approval access is required"),
+        (false, None, true, "Nothing to approve"),
+        (false, None, false, "Approval access is unavailable"),
     ] {
         let probe = Probe {
             pending,
@@ -569,7 +580,7 @@ async fn no_list_is_requested_without_approval_access_or_a_week_start() {
         ..approver(vec![])
     };
     let (dom, _) = render(&member);
-    assert!(html(&dom).contains("Approval access is required"));
+    assert!(html(&dom).contains("Approval access is unavailable"));
     assert!(member.requests.borrow().is_empty());
 
     let unconfigured = Probe {
@@ -590,7 +601,7 @@ async fn a_pending_session_user_shows_loading_not_a_denial() {
     let (dom, _) = render(&probe);
     let html = html(&dom);
     assert!(html.contains("Loading"), "{html}");
-    assert!(!html.contains("Approval access is required"), "{html}");
+    assert!(!html.contains("Approval access is unavailable"), "{html}");
     assert!(probe.requests.borrow().is_empty());
 }
 

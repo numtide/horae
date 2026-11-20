@@ -3,6 +3,7 @@ use horae_core::permissions::catalog::{Permission, profile_label};
 
 use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
 use crate::models::permission_audit::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
@@ -39,6 +40,11 @@ pub fn PermissionAudit() -> Element {
             (cursor, result)
         }
     });
+    let retry = use_callback(move |_| {
+        if history.state()() == UseResourceState::Ready {
+            history.restart();
+        }
+    });
     let response = history.read();
     let pending = history.state()() != UseResourceState::Ready
         || response
@@ -68,12 +74,15 @@ pub fn PermissionAudit() -> Element {
                 "Permission changes, newest first. Expand an event to see its recorded details. Times are shown in UTC."
             }
             if pending {
-                p { class: "text-sm text-secondary", role: "status", "Loading permission history…" }
+                Loading { label: "Loading permission history…" }
             } else if let Some(Ok(page)) = current {
                 if page.entries.is_empty() {
-                    p { class: "text-sm text-secondary", role: "status",
-                        if after().is_some() { "No older permission events." }
-                        else { "No permission events recorded yet. Changes to profiles and project managers will appear here." }
+                    if after().is_some() {
+                        EmptyState { icon: "settings", title: "No older permission events", body: "Go back to the newest events." }
+                    } else {
+                        EmptyState { icon: "settings", title: "No permission events recorded yet",
+                            body: "Changes to profiles and project managers will appear here.",
+                        }
                     }
                 } else {
                     div { class: "table-container rounded-xl bg-secondary",
@@ -109,7 +118,15 @@ pub fn PermissionAudit() -> Element {
                     }
                 }
             } else if let Some(Err(error)) = current {
-                p { class: "text-sm text-danger", role: "alert", "{error_message(error)}" }
+                if let Some(body) = refusal(error) {
+                    ErrorState { title: "Could not load permission history", body }
+                } else {
+                    ErrorState {
+                        title: "Could not load permission history",
+                        body: LOAD_FAILED,
+                        onretry: retry,
+                    }
+                }
             }
             div { class: "flex flex-wrap gap-3 mt-4",
                 button { id: NEWEST_ID, r#type: "button", class: "btn btn-secondary btn-sm",
@@ -131,17 +148,19 @@ pub fn PermissionAudit() -> Element {
     }
 }
 
-fn error_message(error: &ServerFnError) -> &'static str {
+/// Why the history was refused, when a retry cannot help; `None` for a
+/// failure worth repeating.
+fn refusal(error: &ServerFnError) -> Option<&'static str> {
     match error {
         ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
-        } => "Sign in again to view permission history.",
+        } => Some("Sign in again to view permission history."),
         ServerFnError::ServerError {
             code: FORBIDDEN, ..
-        } => {
-            "Administrator access is required for permission history. If you changed accounts, reopen this page."
-        }
-        _ => "Could not load permission history. Refresh history to try again.",
+        } => Some(
+            "Administrator access is required for permission history. If you changed accounts, reopen this page.",
+        ),
+        _ => None,
     }
 }
 

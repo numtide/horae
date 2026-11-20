@@ -200,7 +200,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(page.locator('.proj-row [aria-label="Remaining unavailable"]')).toHaveText('—');
     await expect(page.getByRole('progressbar')).toHaveCount(0);
     spendFails = false;
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(progress).toHaveAttribute('value', '50');
     await expect(page.getByRole('alert')).toHaveCount(0);
     console.log('PASS: failed spend is unavailable; retry restores real amounts');
@@ -254,7 +254,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(page.locator('.proj-row [aria-label="Budget unavailable"]')).toHaveText('—');
     await expect(page.getByRole('progressbar')).toHaveCount(0);
     budgetFails = false;
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(progress).toHaveAttribute('value', '80');
     console.log('PASS: failed configured budget never falls back to lifetime figures');
     budgetRows = [];

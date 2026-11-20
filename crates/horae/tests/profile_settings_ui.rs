@@ -15,15 +15,20 @@ use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 #[allow(dead_code)]
 #[path = "../src/components/session.rs"]
 pub mod session;
 mod components {
-    pub use super::{form, page_header, select_field, session};
+    pub use super::{form, icons, page_header, screen_state, select_field, session};
 }
 pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod models {

@@ -14,6 +14,7 @@ use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
@@ -246,6 +247,8 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
     // The last week's write context, so the next week can start loading its
     // tracking choices without waiting for its sheet.
     let last_context = use_signal(|| None::<TimesheetWriteContext>);
+    let session = use_session();
+    let retry_config = use_callback(move |_| session.refresh());
     let subject = if user.is_empty() {
         None
     } else if let Ok(id) = user.parse::<Uuid>() {
@@ -253,22 +256,27 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
     } else {
         return rsx! { div { class: "alert alert-danger", role: "alert", "Invalid timesheet person. Choose Timesheet from the navigation to return to your own time." } };
     };
-    loaded(&config.read(), |first_day| {
-        let Some(start) = start_of_week(date.0, *first_day)
-            .filter(|start| start.checked_add_days(chrono::Days::new(6)).is_some())
-        else {
-            return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
-        };
-        // Keys reset component state only inside a dynamic fragment. Another
-        // person must discard the previous resources and drafts. Another week
-        // keeps the page mounted, so the last week stays on screen while the
-        // next one loads; TimesheetContent resets its week-scoped state itself.
-        rsx! {
-            for key in [user.clone()] {
-                TimesheetContent { key: "{key}", view, date, span, start, subject, requester, last_context }
+    loaded(
+        &config.read(),
+        "the week settings",
+        retry_config,
+        |first_day| {
+            let Some(start) = start_of_week(date.0, *first_day)
+                .filter(|start| start.checked_add_days(chrono::Days::new(6)).is_some())
+            else {
+                return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
+            };
+            // Keys reset component state only inside a dynamic fragment. Another
+            // person must discard the previous resources and drafts. Another week
+            // keeps the page mounted, so the last week stays on screen while the
+            // next one loads; TimesheetContent resets its week-scoped state itself.
+            rsx! {
+                for key in [user.clone()] {
+                    TimesheetContent { key: "{key}", view, date, span, start, subject, requester, last_context }
+                }
             }
-        }
-    })
+        },
+    )
 }
 
 #[component]
@@ -325,6 +333,7 @@ fn TimesheetContent(
             )
         }
     });
+    let retry_sheet = use_callback(move |_| sheet.restart());
     let current_sheet = use_memo(move || {
         data::current(
             sheet.state() == UseResourceState::Ready,
@@ -1357,7 +1366,7 @@ fn TimesheetContent(
             if let Some(Err(error)) = current_tracking.read().as_ref() {
                 div { class: "alert alert-danger", role: "alert",
                     p { "Could not load available projects and tasks: {error}" }
-                    button { class: "btn btn-secondary btn-sm", onclick: move |_| tracking_page.restart(), "Retry choices" }
+                    button { class: "btn btn-secondary btn-sm", onclick: move |_| tracking_page.restart(), "Try again" }
                 }
             }
 
@@ -1372,11 +1381,13 @@ fn TimesheetContent(
 
             // Content
             if current_sheet.read().is_none() && held().is_none() {
-                div { class: "text-muted text-sm", role: "status", "Loading timesheet…" }
+                Loading { label: "Loading timesheet…" }
             } else if let Some(Err(error)) = current_sheet.read().as_ref() {
-                div { class: "alert alert-danger", role: "alert",
-                    p { "Could not load the complete timesheet: {error}" }
-                    button { class: "btn btn-secondary btn-sm", onclick: move |_| sheet.restart(), "Retry" }
+                ErrorState {
+                    title: "Could not load the timesheet",
+                    body: LOAD_FAILED,
+                    request: error.to_string(),
+                    onretry: retry_sheet,
                 }
             } else {
                 div {
@@ -1876,9 +1887,10 @@ fn render_day_view(
             }
         }
 
-        div { class: "card",
+        // The empty state is a card of its own, so the list's card wraps only entries.
+        div { class: if !day_entries.is_empty() { "card" },
             if day_entries.is_empty() {
-                div { class: "ts-day-empty text-muted text-sm", "No entries for this day." }
+                EmptyState { icon: "timesheet", title: "No time on this day", body: "Start a timer or add an entry to fill in the day." }
             } else {
                 div { class: "ts-day-list",
                     for entry in day_entries.iter() {
@@ -2189,11 +2201,7 @@ fn render_week_view(
                 }
 
                 if row_keys.is_empty() {
-                    div { class: "empty-state",
-                        div { class: "empty-state-icon", "🗓" }
-                        div { class: "empty-state-title", "No time this week" }
-                        p { class: "text-muted text-sm", "Add an entry to start filling your timesheet." }
-                    }
+                    EmptyState { icon: "timesheet", title: "No time this week", body: "Add an entry to start filling your timesheet." }
                 }
 
                 // Project rows

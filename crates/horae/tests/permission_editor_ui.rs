@@ -19,6 +19,8 @@ pub mod badge;
 pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/menu.rs"]
 pub mod menu;
 #[path = "../src/components/modal.rs"]
@@ -27,11 +29,15 @@ pub mod modal;
 pub mod page_header;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
     pub use super::{
-        badge, controls, form, menu, modal, page_header, permission_description, table,
+        badge, controls, form, icons, menu, modal, page_header, permission_description,
+        screen_state, table,
     };
 }
 pub use horae_types::{
@@ -1807,7 +1813,7 @@ async fn storage_load_failure_blocks_new_edits_and_retry_restores_them() {
     *probe.storage_failure.borrow_mut() = Some("load".into());
     let mut ui = Ui::new(probe.clone());
     assert!(!ui.html().contains("permission-review"));
-    assert!(ui.html().contains("Retry recovery check"));
+    assert!(ui.html().contains("Try again"));
     *probe.storage_failure.borrow_mut() = None;
     ui.click("permission-editor-reload");
     assert!(ui.html().contains("permission-review"));

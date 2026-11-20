@@ -21,6 +21,13 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
             circle { cx: "8", cy: "8", r: "6" }
             path { d: "M8 7 V11 M8 4.5 V4.6" }
         },
+        "warning" => rsx! {
+            path { d: "M8 2.2 L14.2 13 H1.8 Z M8 6.5 V9.2 M8 11.2 V11.3" }
+        },
+        "lock" => rsx! {
+            rect { x: "3", y: "7", width: "10", height: "7", rx: "1.5" }
+            path { d: "M5.5 7 V5 A2.5 2.5 0 0 1 10.5 5 V7" }
+        },
         "dashboard" => rsx! {
             rect { x: "2", y: "2", width: "5", height: "5", rx: "1" }
             rect { x: "9", y: "2", width: "5", height: "5", rx: "1" }

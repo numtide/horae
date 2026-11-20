@@ -6,6 +6,7 @@ use crate::components::controls::Checkbox;
 use crate::components::form::FormGroup;
 use crate::components::modal::Modal;
 use crate::components::permission_description::permission_description;
+use crate::components::screen_state::Loading;
 use crate::models::permission_editor::{
     PermissionRequester, ProfileAction, ProfilePreview, ProfileSource,
 };
@@ -80,7 +81,7 @@ pub(super) fn PermissionEditorDialog(
                 ) {
                     "Sign in again to check this tab's permission recovery request."
                 } else {
-                    "Cannot check the current session. Retry before editing permissions."
+                    "Cannot check the current session. Try again before editing permissions."
                 }
                 .to_owned()
             });
@@ -187,7 +188,7 @@ pub(super) fn PermissionEditorDialog(
                     else if pending { "pending" }
                     else if ready && dirty() { "dirty" } else { "clean" },
                 if !ready {
-                    p { role: "status", class: "text-sm text-secondary", "Loading permissions…" }
+                    Loading { label: "Loading permissions…" }
                 } else if let Some(Ok(Some(request))) = &checked {
                     RecoveryForm { key: "recovery-{form_generation}", request: request.clone(), locked,
                         on_finished: move |changed: Option<bool>| {
@@ -200,7 +201,7 @@ pub(super) fn PermissionEditorDialog(
                 } else if let Some(Err(message)) = &checked {
                     p { role: "alert", class: "text-danger text-sm", "{message}" }
                     button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
-                        onclick: move |_| reload.call(()), "Retry recovery check"
+                        onclick: move |_| reload.call(()), "Try again"
                     }
                 } else {
                     {match &*editor.read() {

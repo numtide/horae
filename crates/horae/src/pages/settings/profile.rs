@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 use crate::components::form::{FormGroup, Input};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
 use crate::models::user::{CurrentUser, ProfileOptions, profile_name_is_valid};
@@ -13,6 +14,7 @@ use crate::server_fns;
 pub(super) fn ProfileSection() -> Element {
     let session = use_session();
     let options = use_resource(server_fns::get_profile_options);
+    let retry = use_callback(move |_| session.refresh());
     let access = match &*session.permissions.read() {
         Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => Some(
             own.profile
@@ -28,9 +30,9 @@ pub(super) fn ProfileSection() -> Element {
         section { class: "card mb-4", aria_labelledby: "profile-title",
             h2 { id: "profile-title", class: "card-title", "Profile" }
             match &*me {
-                None => rsx! { p { class: "text-muted text-sm", role: "status", "Loading your profile…" } },
+                None => rsx! { Loading { label: "Loading your profile…" } },
                 Some(Err(_)) => rsx! {
-                    p { class: "alert alert-danger", role: "alert", "Could not load your profile. Reload the page to try again." }
+                    ErrorState { title: "Could not load your profile", body: LOAD_FAILED, inset: true, onretry: retry }
                 },
                 Some(Ok(me)) => rsx! { ProfileForm { key: "{me.id}", me: me.clone(), options, access: access.clone() } },
             }

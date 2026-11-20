@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::models::own_permissions::OwnPermissions;
 
 pub mod admin;
@@ -27,19 +28,28 @@ pub(crate) fn is_administrator(own: &Resource<Result<OwnPermissions, ServerFnErr
     )
 }
 
-/// Render a resource's loaded value, with the standard loading placeholder and
-/// error banner for the pending and failed states.
+/// Render a resource's loaded value, with the shared `Loading` line while it is
+/// pending and an `ErrorState` whose "Try again" calls `retry` when it failed.
+/// `what` names the data in the error title ("Could not load {what}"); make
+/// `retry` with `use_callback` so the error state's props stay equal.
 pub(crate) fn loaded<T>(
     state: &Option<Result<T, ServerFnError>>,
+    what: &str,
+    retry: Callback<()>,
     render: impl FnOnce(&T) -> Element,
 ) -> Element {
     match state {
         Some(Ok(v)) => render(v),
         Some(Err(e)) => rsx! {
-            div { class: "alert alert-danger", "{e}" }
+            ErrorState {
+                title: "Could not load {what}",
+                body: LOAD_FAILED,
+                request: e.to_string(),
+                onretry: retry,
+            }
         },
         None => rsx! {
-            div { class: "text-muted text-sm", "Loading…" }
+            Loading {}
         },
     }
 }

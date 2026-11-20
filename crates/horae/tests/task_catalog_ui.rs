@@ -11,12 +11,17 @@ use uuid::Uuid;
 pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 mod components {
-    pub use super::{controls, form, modal, page_header};
+    pub use super::{controls, form, icons, modal, page_header, screen_state};
 }
 pub use horae_types::{permission_editor, task};
 mod models {

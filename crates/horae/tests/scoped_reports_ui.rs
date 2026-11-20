@@ -63,12 +63,17 @@ pub mod form;
 pub mod icons;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/today.rs"]
 pub mod today;
 mod components {
-    pub use super::{badge, controls, debounce, form, icons, page_header, table, today};
+    pub use super::{
+        badge, controls, debounce, form, icons, page_header, screen_state, table, today,
+    };
 }
 #[path = "../src/pages/reports.rs"]
 mod reports;
@@ -192,6 +197,8 @@ async fn financial_catalogs_wait_for_explicit_authenticated_financial_access() {
 
 fn loaded<T>(
     state: &Option<Result<T, ServerFnError>>,
+    _what: &str,
+    _retry: Callback<()>,
     render: impl FnOnce(&T) -> Element,
 ) -> Element {
     match state {

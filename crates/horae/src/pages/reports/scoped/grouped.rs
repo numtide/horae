@@ -3,6 +3,7 @@ use horae_core::duration::format_hours2 as hours;
 
 use super::{Selection, billability_value, expanded::ExpandedTimeReport, period};
 use crate::components::icons::NavIcon;
+use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
@@ -77,6 +78,7 @@ pub(super) fn GroupedTimeReport(
         .await;
         (key, result)
     });
+    let retry = use_callback(move |_| page.restart());
     let key = (
         dimension(),
         cursors.read().last().cloned().flatten(),
@@ -149,9 +151,9 @@ pub(super) fn GroupedTimeReport(
             }
         }
         if !ready {
-            p { role: "status", class: "text-secondary", "Loading time report…" }
+            Loading { label: "Loading time report…" }
         } else if let Some((_, Err(message))) = current {
-            p { role: "alert", class: "alert alert-danger", "{message}" }
+            ErrorState { title: "Could not load the time report", body: message.to_string(), onretry: retry }
         }
         if let Some(loaded) = loaded {
             dl { class: "flex flex-wrap gap-6 mb-6", aria_label: "Full-period totals",
@@ -160,7 +162,7 @@ pub(super) fn GroupedTimeReport(
                 div { dt { "Non-billable hours" } dd { class: "text-mono m-0", "{hours(loaded.totals.rounded_minutes - loaded.totals.billable_minutes)}" } }
             }
             if loaded.groups.is_empty() {
-                p { role: "status", class: "text-secondary", "No time on this page. Try another date range or return to the previous page." }
+                EmptyState { icon: "reports", title: "No time on this page", body: "Try another date range or return to the previous page." }
             } else {
                 DataTable { table {
                     thead { tr {

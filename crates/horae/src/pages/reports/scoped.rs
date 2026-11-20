@@ -7,6 +7,7 @@ use crate::components::controls::Checkbox;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input, Select};
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
@@ -171,6 +172,7 @@ pub(super) fn ScopedReports(
         .await;
         (key, result)
     });
+    let retry = use_callback(move |_| page.restart());
     let key = (
         from(),
         to(),
@@ -276,9 +278,9 @@ pub(super) fn ScopedReports(
                 on_detail: move |selected| { selection.set(selected); cursors.set(vec![None]); show_groups.set(false); }
             }
         } else if !ready {
-            p { role: "status", class: "text-secondary", "Loading detailed report…" }
+            Loading { label: "Loading detailed report…" }
         } else if let Some((_, Err(message))) = current {
-            p { class: "alert alert-danger", role: "alert", "{message}" }
+            ErrorState { title: "Could not load the detailed report", body: message.to_string(), onretry: retry }
         }
         if let Some(loaded) = loaded {
             if !key.3.is_empty() {
@@ -296,7 +298,7 @@ pub(super) fn ScopedReports(
                 div { dt { "Billable hours" } dd { class: "text-mono m-0", "{hours(loaded.totals.billable_minutes)}" } }
             }
             if loaded.entries.is_empty() {
-                p { role: "status", class: "text-secondary", "No entries on this page. Try another date range or return to the previous page." }
+                EmptyState { icon: "reports", title: "No entries on this page", body: "Try another date range or return to the previous page." }
             } else {
                 DataTable {
                     table {

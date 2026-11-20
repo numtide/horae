@@ -6,6 +6,7 @@ use super::defaults_form::{DefaultsFields, fields_from, parse_fields};
 use super::recovery::{PendingInvoice, RecoveryStorage};
 use crate::components::form::{FormCard, FormGroup, Input};
 use crate::components::modal::Modal;
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::models::invoice::*;
 use crate::server_fns;
 
@@ -18,16 +19,25 @@ pub(super) fn DraftEditor(
 ) -> Element {
     let mut editor =
         use_resource(move || async move { server_fns::get_invoice_editor(id.to_string()).await });
+    let retry = use_callback(move |_| editor.restart());
     rsx! {
         match &*editor.read() {
             Some(Ok(snapshot)) => rsx! { DraftEditForm { id, snapshot: snapshot.clone(), editing, busy, onsaved } },
             state => rsx! {
-                div { class: "card p-5 mb-6", role: "status",
+                div { class: "card p-5 mb-6",
                     if let Some(Err(error)) = state {
-                        p { "{error}" }
-                        button { class: "btn btn-primary", onclick: move |_| editor.restart(), "Retry loading invoice" }
-                    } else { p { "Loading invoice values…" } }
-                    button { class: "btn btn-secondary", onclick: move |_| editing.set(false), "Cancel changes" }
+                        ErrorState {
+                            title: "Could not load the invoice values",
+                            body: LOAD_FAILED,
+                            request: error.to_string(),
+                            inset: true,
+                            onretry: retry,
+                            actions: rsx! { button { class: "btn btn-secondary", onclick: move |_| editing.set(false), "Cancel changes" } },
+                        }
+                    } else {
+                        Loading { label: "Loading invoice values…", class: "mb-4" }
+                        button { class: "btn btn-secondary", onclick: move |_| editing.set(false), "Cancel changes" }
+                    }
                 }
             },
         }

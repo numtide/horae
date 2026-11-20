@@ -12,7 +12,8 @@ mod profile;
 #[component]
 pub fn Settings() -> Element {
     let mut theme = use_signal(|| Theme::Dark);
-    let plugins = use_resource(server_fns::list_plugins);
+    let mut plugins = use_resource(server_fns::list_plugins);
+    let retry_plugins = use_callback(move |_| plugins.restart());
 
     // The active theme lives in `<html data-theme>` / localStorage (set by
     // ThemeInit before first paint), not in Rust state, so read it back once
@@ -57,7 +58,7 @@ pub fn Settings() -> Element {
             api_tokens::ApiTokensSection {}
             div { class: "card mt-4",
                 h2 { class: "card-title", "Plugins" }
-                {crate::pages::loaded(&plugins.read(), |items| rsx! {
+                {crate::pages::loaded(&plugins.read(), "plugins", retry_plugins, |items| rsx! {
                     if items.is_empty() {
                         p { class: "text-muted text-sm", "No plugins installed. Drop .wasm files into the plugins/ directory." }
                     } else {

@@ -11,6 +11,7 @@ use super::run_panel::RunPanel;
 use super::{Conn, pause, presentation, use_connection};
 use crate::components::back_link::BackLink;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{ErrorState, Loading};
 use crate::models::JobStatus;
 use crate::route::Route;
 use crate::server_fns;
@@ -32,6 +33,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
     // or the page coming back into view. A finished run is read once each
     // time, so what it offers (import, retry) never goes stale.
     let mut follow = use_signal(|| 0_u64);
+    let check_again = use_callback(move |_| follow += 1);
 
     use_future(move || async move {
         let mut shown = document::eval(&WATCH_VISIBILITY.replace("RUN_ID", &id.to_string()));
@@ -97,7 +99,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
                 div { class: "himp-page min-w-0", "data-run": "{id}",
                     BackLink { to: RUNS, label: BACK_TO_RUNS }
                     PageHeader { title: "Run" }
-                    p { role: "status", "Loading run…" }
+                    Loading { label: "Loading run…" }
                 }
             };
         }
@@ -106,15 +108,12 @@ pub(super) fn RunView(id: Uuid) -> Element {
                 div { class: "himp-page min-w-0", "data-run": "{id}",
                     BackLink { to: RUNS, label: BACK_TO_RUNS }
                     PageHeader { title: "Run" }
-                    div { class: "alert alert-danger", role: "alert",
-                        p { "Status unavailable. The import may still be running." }
-                        details { summary { "Details" } p { "{error}" } }
-                        button {
-                            r#type: "button", class: "btn btn-secondary btn-sm",
-                            "data-testid": "resume-monitoring".to_owned(),
-                            onclick: move |_| follow += 1,
-                            "Check again"
-                        }
+                    ErrorState {
+                        title: "Status unavailable",
+                        body: "The import may still be running. Try again to check its status.",
+                        request: error.to_string(),
+                        retry_id: "resume-monitoring",
+                        onretry: check_again,
                     }
                 }
             };

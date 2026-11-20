@@ -201,12 +201,14 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 
 `.alert-success` stays only for a state that must remain visible on the page (an import that finished, say), not to confirm an action. Inline "Saved." text, green `text-success` notes and `role=status` paragraphs used as confirmations are replaced by the toast. The kit's *Form dirty state* asks for the same: saving confirms with a toast, never silence.
 
-### Empty, loading and error states (`src/components/`)
+### Empty, loading and error states (`src/components/screen_state.rs`)
 
-- **`EmptyState`**: the Projects variant is the base of `.empty-state` for every screen: a `--color-bg-secondary` card with a border and `--radius-xl` (16px), the icon in a 52px tile (`--radius-icon`, 22px glyph), a Newsreader `xl` title, copy limited to `--width-empty-copy`, and an optional action (Primary, or Secondary when it only resets filters) plus an optional text link. The copy says what to do next. The kit and `EmptyState.dc.html` draw the icon in a round disc; Horae uses the tile. The `tone="success"` variant (an all-clear moment such as nothing to approve) keeps the green icon colours.
-- **`ErrorState`**: for a region or screen that failed to load. It keeps the empty state's silhouette so the eye lands in the same place, including the 52px icon tile (the prototype's round disc is overridden here too), with the icon in the danger tint, a title and body that say what happened and what to do, an optional mono request line for support, and "Try again" as the action. A permission error points to who can grant access instead of offering a retry (see [Screen States](#screen-states)).
-- **`Loading`**: one component for every inline loading message, always with `role=status` and `aria-busy`, so assistive technology hears the same thing everywhere. It replaces the ad hoc `p { "Loading…" }` variants.
-- **`Skeleton`** (optional): a placeholder that mirrors a listing's grid, for tables and lists where the layout is known before the data arrives. Only the data region is replaced; the header, filters and actions stay live.
+- **`EmptyState`**: the Projects variant is the base of `.empty-state` for every screen: a `--color-bg-secondary` card with a border and `--radius-xl` (16px), the icon in a 52px tile (`--radius-icon`, 22px glyph), a Newsreader `xl` title, copy limited to `--width-empty-copy`, and an optional action (Primary, or Secondary when it only resets filters) plus an optional text link. The copy says what to do next. The kit and `EmptyState.dc.html` draw the icon in a round disc; Horae uses the tile. The `success` variant (an all-clear moment such as nothing to approve) keeps the green icon colours. Props: `icon` (a `NavIcon` name), `title`, `body`, `success`, `inset`, `id`, `actions`.
+- **`ErrorState`**: for a region or screen that failed to load. It keeps the empty state's silhouette so the eye lands in the same place, including the 52px icon tile (the prototype's round disc is overridden here too), with the icon in the danger tint, a title and body that say what happened and what to do, an optional mono request line for support, and "Try again" as the action, a Secondary button. A permission error points to who can grant access instead of offering a retry, and shows a lock instead of the warning glyph (see [Screen States](#screen-states)). Props: `title`, `body`, `request`, `onretry` (no retry when absent), `retry_id`, `retry_disabled`, `inset`, `id`, `actions`. `LOAD_FAILED` is the body for a failure the page cannot explain.
+- **Inset**: inside a panel that already has its own border and heading (a card section, the client detail's Projects and Invoices), `inset` drops the state's card and titles it with an `h3`, so a card never sits inside a card.
+- **`Loading`**: one component for every inline loading message, always with `role=status` and `aria-busy`, so assistive technology hears the same thing everywhere. It replaces the ad hoc `p { "Loading…" }` variants. Props: `label` (default "Loading…"), `class`.
+- **`Skeleton`** (optional): a placeholder that mirrors a listing's grid, for tables and lists where the layout is known before the data arrives. Only the data region is replaced; the header, filters and actions stay live. Props: `rows`, `columns`, `label` (its accessible name). The Invoices list uses it.
+- **`pages::loaded`** renders a resource with all three: `Loading` while pending, an `ErrorState` whose "Try again" calls the retry it is given, and the content once loaded.
 
 ## Formats
 
@@ -250,13 +252,13 @@ Conventions:
 
 ## Tokens & utilities
 
-Empty states use one variant: `.empty-state` takes the Projects card (see
-[Empty, loading and error states](#empty-loading-and-error-states-srccomponents)).
-Until PR-4 folds them into the base class, that look is composed from
-`.empty-state-icon-tile` (the 52px tile, 12px radius and 22px glyph tokens),
-`.empty-state-copy` (copy limited to 380px with 1.55 line height) and card
-spacing/radius utilities in markup. The older sunken card with a round icon is
-retired.
+Empty and error states use one look: `.empty-state` is the Projects card (see
+[Empty, loading and error states](#empty-loading-and-error-states-srccomponentsscreen_staters)),
+with `.empty-state-icon` as the 52px tile (`.success` and `.danger` tint it),
+`.empty-state-title`, `.empty-state-text` (copy limited to 380px with 1.55 line
+height), `.empty-state-code`, `.empty-state-actions` and the `.inset` modifier.
+Screens render them through the components, not by hand. The older sunken card
+with a round icon, `.empty-state-icon-tile` and `.empty-state-copy` are gone.
 
 Everything is driven by CSS custom properties in `:root` (`assets/css/horae.css`) —
 never hardcode a colour, spacing, or radius in a rule; reference the token so the

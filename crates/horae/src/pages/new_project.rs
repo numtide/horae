@@ -7,6 +7,7 @@ use crate::components::back_link::BackLink;
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, EditableProject, ProjectDraft, ProjectEditRequest,
     ProjectEditorContext, ProjectFieldAccess, ProjectFormField, ProjectManagerSelection,
@@ -140,8 +141,9 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
             Ok::<_, ServerFnError>((defaults, options, draft, client_context))
         }
     });
+    let retry = use_callback(move |_| initial.restart());
     if initial.state()() != UseResourceState::Ready {
-        return rsx! { p { role: "status", "Loading project settings…" } };
+        return rsx! { Loading { label: "Loading project settings…" } };
     }
     match &*initial.read() {
         Some(Ok((defaults, options, draft, client_context))) => rsx! {
@@ -150,10 +152,14 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
         Some(Err(error)) => rsx! {
             BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
             PageHeader { title: "New project" }
-            div { class: "alert alert-danger", role: "alert", "Could not load project settings: {error}" }
-            button { class: "btn btn-secondary", onclick: move |_| initial.restart(), "Retry" }
+            ErrorState {
+                title: "Could not load project settings",
+                body: LOAD_FAILED,
+                request: error.to_string(),
+                onretry: retry,
+            }
         },
-        None => rsx! { p { role: "status", "Loading project settings…" } },
+        None => rsx! { Loading { label: "Loading project settings…" } },
     }
 }
 
@@ -241,7 +247,7 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
         };
     }
     if initial.state()() != UseResourceState::Ready {
-        return rsx! { p { role: "status", "Loading project…" } };
+        return rsx! { Loading { label: "Loading project…" } };
     }
     match &*initial.read() {
         Some(Ok((defaults, options, project))) if project.id == id => {
@@ -258,10 +264,14 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
         Some(Err(error)) => rsx! {
             BackLink { to: exit.clone(), label: back_label(&exit) }
             PageHeader { title: "Edit project" }
-            div { class: "alert alert-danger", role: "alert", "Could not load project: {error}" }
-            button { class: "btn btn-secondary", onclick: move |_| reload.call(()), "Retry" }
+            ErrorState {
+                title: "Could not load the project",
+                body: LOAD_FAILED,
+                request: error.to_string(),
+                onretry: reload,
+            }
         },
-        Some(Ok(_)) | None => rsx! { p { role: "status", "Loading project…" } },
+        Some(Ok(_)) | None => rsx! { Loading { label: "Loading project…" } },
     }
 }
 

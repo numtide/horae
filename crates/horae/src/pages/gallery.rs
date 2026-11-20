@@ -11,6 +11,7 @@ use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::nav::NavItem;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading, Skeleton};
 use crate::components::table::DataTable;
 use crate::components::toast::Toast;
 
@@ -18,6 +19,7 @@ use crate::components::toast::Toast;
 /// "Components" sheet. Also serves as a smoke test that every component renders.
 #[component]
 pub fn Gallery() -> Element {
+    let noop = use_callback(|_| {});
     let mut segment = use_signal(|| "Week".to_string());
     let mut billable = use_signal(|| true);
     let mut agreed = use_signal(|| false);
@@ -248,18 +250,37 @@ pub fn Gallery() -> Element {
                 }
             }
 
-            // ── Toast & empty state ──────────────────────────────────────
+            // ── Toast ────────────────────────────────────────────────────
             section { class: "gallery-section",
-                h2 { class: "gallery-heading", "Toast & empty state" }
+                h2 { class: "gallery-heading", "Toast" }
                 div { class: "gallery-row",
                     Toast { message: "Invoice sent to Acme.", variant: "success", icon: "✓" }
                     Toast { message: "Timer still running.", variant: "warning", icon: "⏱" }
                     Toast { message: "Draft saved.", dismissible: true }
                 }
-                div { class: "empty-state max-w-md",
-                    div { class: "empty-state-icon", "🗂" }
-                    div { class: "empty-state-title", "No time entries yet" }
-                    p { class: "empty-state-text", "Start a timer or add an entry to see it here." }
+            }
+
+            // ── Empty, error and loading states ──────────────────────────
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Empty, error and loading states" }
+                div { class: "grid gap-4 lg:grid-cols-2",
+                    EmptyState { icon: "timesheet", title: "No time entries yet",
+                        body: "Start a timer or add an entry to see it here.",
+                        actions: rsx! { button { r#type: "button", class: "btn btn-primary", "Add entry" } },
+                    }
+                    EmptyState { icon: "approvals", title: "Nothing to approve", success: true,
+                        body: "No timesheets are waiting for approval this week.",
+                    }
+                    ErrorState { title: "Could not load projects", body: LOAD_FAILED,
+                        request: "list_projects · 503", onretry: noop,
+                    }
+                    ErrorState { title: "Access unavailable",
+                        body: "Your account cannot view this section. Ask an Administrator if you need it.",
+                    }
+                }
+                div { class: "flex flex-col gap-4 mt-4",
+                    Loading { label: "Loading projects…" }
+                    Skeleton { rows: 4, columns: 5, label: "Loading projects…" }
                 }
             }
 

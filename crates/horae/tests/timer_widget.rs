@@ -369,7 +369,15 @@ mod server_fns {
     }
 }
 
+#[path = "../src/components/icons.rs"]
+pub mod icons;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
+
 mod components {
+    pub use super::{icons, screen_state};
+
     pub mod no_tracking {
         use super::super::*;
 

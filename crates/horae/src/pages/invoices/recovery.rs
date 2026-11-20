@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{ErrorState, Loading};
 use crate::models::invoice::{InvoiceDefaults, InvoiceDraftSave, InvoiceGenerationRequest};
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -136,6 +137,7 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     });
     let mut loading_error = use_signal(|| None::<String>);
     let mut attempts = use_signal(|| 0_u64);
+    let retry = use_callback(move |_| attempts += 1);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut rejected = use_signal(|| false);
@@ -210,11 +212,10 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     }
     rsx! {
         if !loaded() {
-            div { role: "status",
-                if let Some(message) = loading_error() {
-                    p { "{message}" }
-                    button { class: "btn btn-secondary", onclick: move |_| attempts += 1, "Retry loading invoices" }
-                } else { p { "Checking invoice recovery…" } }
+            if let Some(message) = loading_error() {
+                ErrorState { title: "Could not check invoice recovery", body: message, onretry: retry }
+            } else {
+                Loading { label: "Checking invoice recovery…" }
             }
         }
         {children}
