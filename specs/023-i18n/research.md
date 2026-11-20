@@ -147,3 +147,213 @@ and its arguments, passed through `details`, lets the interface translate it wit
   rule needs both; the evidence is the `dioxus-rsx` parser it shares with the macro.
 - `ui-strings.rs` already holds the rule's logic (text with a letter, readable attributes, prose
   props) and the exceptions it must allow.
+
+## Planning decisions
+
+Added by `/speckit-plan` ([plan.md](plan.md)). Each entry gives the decision, why, and what else
+was weighed. Counts below were taken on master `af6521cb` with the proof of concept's
+`ui-strings` counter; they differ slightly from the study's because master moved on (PR-1, PR-2,
+PR-7).
+
+### R-1 The catalog crate is the proof of concept's, with four additions
+
+- **Decision**: take `crates/i18n` from `26e562bf` as it is (`build.rs` generator, `Tr`, `Lang`,
+  `split_tag`, English fallback, isolation marks off) and add three things: (1) the generator rejects two ids
+  that map to the same method (`a-b` and `a_b`) and a variable whose name is a Rust keyword;
+  (2) each generated method carries the English text as its doc comment, so an editor shows the
+  words when hovering the call; (3) a test that fails when an English message is not used
+  anywhere (R-6). `Lang::from_tag` and each language's own name wait for the increment that
+  chooses the language, their first caller.
+- **Rationale**: the proof of concept already compiles on both targets and kept the HTML
+  identical. The additions close gaps a full migration would hit: method collisions and keyword
+  variables become likely with 1,400 ids, and the doc comment is the only way a reader of
+  `tr.tasks_empty()` sees the text without opening the catalog.
+- **Alternatives**: `fluent-static`, `fluent-typed`, `es-fluent` (research above); a proc macro
+  instead of `build.rs` (slower to compile, and needs its own crate).
+
+### R-2 One `horae.ftl` per language, with a section per area
+
+- **Decision**: keep one file, `crates/i18n/locales/en/horae.ftl`. The infrastructure PR writes
+  a `##` section header for every area of [Delivery](spec.md#delivery) (shared actions, common
+  words, glossary terms, components, then one per area), and each migration PR adds its messages
+  under its own header.
+- **Rationale**: C-6 and SC-003 name `horae.ftl`, so PR-10 edits one file. Pre-made sections keep
+  parallel PRs' insertions apart, so Git merges them without conflicts in the usual case. The one
+  real clash is two PRs adding the same shared id (`action-save`); `build.rs` rejects the
+  duplicate in the merge queue and the fix is to delete one line.
+- **Alternatives**: one file per area (`locales/en/clients.ftl`, …). It removes the merge risk and
+  `build.rs` could read every `*.ftl` of a directory, but it contradicts the letter of C-6 and
+  makes a glossary change touch several files. Not chosen; it stays possible later without
+  touching any screen.
+
+### R-3 How the screens reach the catalog
+
+- **Decision**: `crates/horae/src/i18n.rs` from the proof of concept: `use_tr_provider()` in
+  `App` puts `Tr::new(Lang::En)` in a context, and `use_tr()` reads it, falling back to English
+  when no provider is above (component tests that mount one section). A component calls
+  `use_tr()` once at the top; plain functions take `tr: Tr` as a parameter. Labels of
+  `horae-core` and `horae-types` enums shown on screen (`ProjectType::label`, the import
+  connection status) become functions in `horae` that take `Tr` and the value; the enum keeps no
+  English label unless the server or an export also uses it.
+- **Rationale**: `Tr` is `Copy` and `PartialEq` and holds only the language, so passing it as a
+  prop or capturing it in a closure costs nothing and never makes props compare unequal
+  (`dioxus-best-practices`, *Props*). Strings returned by `tr.x()` are new on every render but
+  compare equal, so a child with a `String` prop does not re-render for them. FR-003 forbids
+  `horae-core` and `horae-types` from depending on the catalog, so the mapping from a value to its
+  words lives in the app.
+- **Alternatives**: a global `static` language (cannot serve two languages in one server process
+  once preferences exist); passing `Tr` down as props everywhere (noise, no gain over a context).
+
+### R-4 Fluent's whitespace, braces and numbers
+
+- **Decision**: three rules in the catalog conventions, checked in review and by the HTML
+  comparison (R-7):
+  - A message never relies on leading or trailing spaces, because Fluent trims them. Spaces
+    between a message and the markup around it stay in the `rsx!`, as `{" "}` or inside the
+    element's own text.
+  - Literal `{` and `}` in text are written `{"{"}` and `{"}"}`.
+  - Counts that select a plural pass as integers; values that are already formatted (money from
+    `format_cents`, durations, dates) pass as strings. Fluent writes an integer as its decimal
+    digits with no grouping, which is what `format!("{n}")` writes today.
+- **Rationale**: these are the three ways a moved text can render differently from today's
+  while the build stays green, and FR-011 asks for the same output byte for byte.
+- **Alternatives**: `NUMBER()` with options in messages (not needed while English has no
+  separators; C-8 keeps number formats in `horae-core`).
+
+### R-5 The lint rule `dioxus/literal-text`
+
+- **Decision**: a sixth rule in `crates/dioxus-lint/src/main.rs`, with the counting logic of
+  `ui-strings.rs`: a text node with a letter in a literal segment, a literal value of a readable
+  attribute (`placeholder`, `title`, `alt`, `label`, `aria-*` names that are read out,
+  `data-tooltip`), and a literal prop of a component that is not in the machine-prop list
+  (`class`, `id`, `key`, `href`, `to`, `variant`…). It is a ratchet like the others, with its
+  baseline in `baseline.toml`. Two lists in the lint source take text out of the count, each
+  entry with a reason: `EXEMPT_FILES` (the gallery) and `NOT_LANGUAGE`, exact literals that are
+  not language (`horae_pat_`, format patterns, product names). The rule names a new `SKILL.md`
+  section, "Interface text", whose evidence is `rsx/src/text_node.rs` in `dioxus-rsx` 0.7.9,
+  added to `references/source-evidence.md`.
+- The lint also prints, without failing, the count of prose literals outside `rsx!` markup
+  (toasts, messages built in Rust, `if busy { "Saving…" }`) with `ui-strings`' heuristic, so
+  each PR of the first increment can quote it (FR-023). `ui-strings.rs` itself is not merged.
+- **Rationale**: the lint already parses every `rsx!` with the macro's parser and has the
+  ratchet, the per-file baseline and the skill check; a second tool would duplicate them.
+  Listing exceptions by literal keeps them visible in one place, and the reason travels with
+  each one as FR-021 asks.
+- **Alternatives**: an inline marker comment per exception (`// i18n: not language`), which the
+  `dioxus-rsx` parser does not see inside `rsx!`; failing on literals outside markup, which the
+  heuristic's false positives rule out (spec FR-023).
+
+### R-6 The unused-message check is a test of `horae-i18n`
+
+- **Decision**: `crates/i18n/tests/unused_messages.rs` parses the English catalog with
+  `fluent-syntax`, turns every message id into its method name, and fails listing each one that
+  appears as `.method_name(` in no `.rs` file under `crates/` outside `crates/i18n`. A message
+  referenced only from another message counts as used. It runs in `nix flake check` through the
+  tests check, with no database.
+- **Rationale**: FR-006. `dead_code` does not warn about unused public methods. The check fails
+  rather than warns, because a warning nobody reads lets dead text accumulate, and the fix is one
+  deleted line. A consequence for planning: the infrastructure PR adds only messages that some
+  code uses, and shared ids (`action-*`, `common-*`) arrive with the first screen that uses them.
+- **Alternatives**: a rule of the Dioxus lint (it walks only `crates/horae/src`, and the server's
+  emails and the sign-in page will use the catalog later); a `cargo:warning` from `build.rs`
+  (cannot see the callers).
+
+### R-7 Proving that nothing changed
+
+- **Decision**: each migration PR's first commit adds, to the screen's existing test file, a test
+  that writes the server-rendered HTML of every state the file already covers to
+  `$HORAE_HTML_DUMP/<test>.html` and returns early when the variable is unset (the proof of
+  concept's `i18n_study_html_snapshot`, renamed). The PR runs it at that commit and at its last
+  one, strips the random UUIDs and clock times with one `sed` expression per test, and diffs the
+  two. The PR description carries the result. Screens whose tests live in the crate
+  (`pages/projects.rs`, `pages/timesheet.rs`, `pages/reports.rs`, `pages/new_project/billing.rs`)
+  get the dump test in their own `tests` module. The dump tests stay after merge.
+- **Rationale**: SC-002 asks for byte-for-byte identical HTML in each tested state, and the
+  existing UI tests already build those states with mocks. Keeping the dump test lets PR-10 and
+  later refactors repeat the comparison at no cost.
+- **Alternatives**: committed HTML snapshots asserted on every run (they would make every later
+  wording or markup change rewrite large fixtures, and PR-10 would touch them all); comparing in a
+  browser (not byte for byte, and slower).
+
+### R-8 Tests that include page sources with `#[path]`
+
+- **Decision**: the 15 test files under `crates/horae/tests/` that include a page or component
+  with `#[path = "../src/…"]` also include `#[path = "../src/i18n.rs"] mod i18n;`, added by the
+  PR that migrates the included file. `horae-i18n` is a normal dependency of `horae`, so the test
+  crates can use it without a new dev-dependency.
+- **Rationale**: a migrated file names `crate::i18n::use_tr`, and those tests compile it as part
+  of their own crate. The proof of concept did this for `api_tokens_ui.rs`.
+
+### R-9 Build and bundle
+
+- **Decision**: `crates/i18n` joins the workspace, `nix/checks/tests.nix` (`cargo nextest run -p horae-i18n`, no database), `nix/checks/clippy.nix` (host and `wasm32-unknown-unknown`, like
+  `horae-types`), and `watch_path` in `crates/horae/Dioxus.toml` so `dx serve` rebuilds when a
+  catalog changes. The infrastructure PR verifies with `nix build` and
+  `nix build .#checks.x86_64-linux.tests` that crane's dummy-source dependency build accepts the
+  crate's `build.rs`; the study did not verify it. The package source filter already keeps
+  `.ftl` files (it drops only `.nix` and `.md`).
+- **Bundle**: SC-005 allows 60 KB brotli over master. The served file is
+  `target/dx/horae/release/web/public/assets/horae_bg-*.wasm.br` from `dx build --release --locked`, the same command as `nix/package.nix`. The size is measured on the PR's base and
+  head at three points: the infrastructure PR (engine only, expected about +42 KB), the proof of
+  concept's screens, and the PR that closes the ratchet (whole catalog). If a measurement passes
+  50 KB before the last area, the work stops and the maintainer decides (the fallback in this
+  file's *Options compared* is available).
+- **Rationale**: Principle V; the crate builds for both targets, so both are linted. Three
+  measurements bracket the two costs (engine and text) without a release build in every PR.
+
+### R-10 Order against the design PRs
+
+Which pending design PR touches which area, from `design/IMPLEMENTATION-GAPS.md`:
+
+| Area | PR-3 dialogs | PR-5 filters and selects | PR-6 formats and dates | PR-8 buttons and tables | PR-9 toasts |
+| --- | --- | --- | --- | --- | --- |
+| Settings, API tokens, Tasks | token revoke | Settings theme, `tasks.rs`, `tasks/editor.rs` | | Tasks table | yes |
+| Shared components | `Modal`, `ConfirmDialog` | `form::Select`, `SelectField`, `project_task_picker.rs` | `DatePicker` | `Button`, `Badge`, `Menu` | `toast.rs`, `layout.rs` |
+| Clients | archive with projects | filters | | Clients table | yes |
+| Invoices | over-invoicing dialogs | | preparation dates | Invoice settings submits | yes |
+| Importers | disconnect Harvest, change account | | | | yes |
+| Admin and permissions | | `admin/people.rs`, `add_person.rs`, `permission_editor.rs` | | People table | yes |
+| Reports | | three selects, filter card | dates, durations | | |
+| New project | | | milestone dates | | yes |
+| Approvals | | | `PeriodNav` | inline Approve and Reopen, "Approve all" | yes |
+| Projects | archive | filters | page formatter removed | Projects table | yes |
+| Timesheet | `.ts-modal-*` | | `PeriodNav` | "Submit week" split button | yes |
+
+- **Decision**: no area is free of every pending design PR, so the order cannot avoid them all.
+  The rule is the spec's: before an area starts, its PR lists the files that open design branches
+  change (`git diff --name-only master...<branch>`) and agrees the order with their authors, so
+  one file is not rewritten by both at once. When a design PR is open on an area, the migration
+  waits for it to merge, or migrates the rest of the area and leaves that file for a follow-up
+  commit. The migration never changes markup or behaviour, so rebasing a design PR over it means
+  re-applying `tr.x()` calls, not redoing design work.
+- **Rationale**: FR-013, C-9. Migration PRs are mechanical and quick to redo; design PRs are not,
+  so the migration yields.
+
+### R-11 Server messages, the sign-in page and formats stay out of the first increment
+
+- **Decision**: the first increment does not touch `server_fns::op_error`, the operations, the
+  sign-in page (`crates/api/src/auth/page.rs`), the budget email, the invoice template, the
+  exports or the CLI (FR-012). Pages that print a server message as it arrives
+  (`error.message`) keep doing so. Date patterns (`format("%d %b %Y")`, about 9 files) stay where
+  they are until PR-6 moves them into `horae-core` (C-8); they are `NOT_LANGUAGE` entries in the
+  meantime. `DatePicker`'s day abbreviations (`["Mo", …]`) move to the catalog with the shared
+  components, with the same text.
+
+### R-12 Choosing the language (later increment, recorded for its plan)
+
+Not part of `tasks.md`. Recorded so the first increment leaves room for it.
+
+- **Storage**: the same pattern as the time zone (`users.timezone` nullable, read with the
+  organization's value in `server_fns::auth::current_user`): nullable `users.language` and
+  `organizations.language`, written through `ops::profile::update` and an `ops::organization`
+  operation under the permission that governs the workspace settings (`CompanyWrite`)
+  ([data-model.md](data-model.md)).
+- **SSR and hydration**: the study's approach. `App` reads the resolved language with
+  `use_loader` over a server function, which suspends SSR on the first load and serializes the
+  value into the HTML, so the client hydrates with the same `Lang` and no fetch
+  (`dioxus-best-practices`, *Resources and loading*). The provider then holds that `Tr` instead
+  of `Tr::new(Lang::En)`, so no screen changes.
+- **`<html lang>`**: dx writes a fixed `<html>` without `lang` (checked in a release build's
+  `index.html`). How the server sets it per request (an Axum layer over the Dioxus routes that
+  rewrites the opening tag, or a custom `index.html`) is that increment's first research item;
+  nothing here relies on either.
