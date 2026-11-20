@@ -83,8 +83,8 @@ props that can never compare equal, or from reads that subscribe the wrong scope
   committed, so for a non-idempotent mutation the first call's outcome is lost.
   `pending()` stays false until the spawned task first polls, so it is a weak
   double-submit guard. Use it for idempotent or query-like actions. For mutations,
-  do not use it: call the server function the way the page's other mutations do
-  (see above) and disable the button before the call.
+  do not use it: call the server function from a `spawn` as the page already does,
+  keep a busy signal, and disable the button before the call.
 
 ## Lists and nested state (`stores/src`, `examples/01-app-demos/todomvc_store.rs`)
 
