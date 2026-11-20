@@ -11,7 +11,7 @@ use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading, error_line};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
 use crate::components::today::today;
@@ -191,7 +191,7 @@ pub fn Approvals(week: String) -> Element {
                         ErrorState {
                             title: "Could not load the week",
                             body: LOAD_FAILED,
-                            request: e.to_string(),
+                            request: error_line(e),
                             onretry: retry_session,
                         }
                     },

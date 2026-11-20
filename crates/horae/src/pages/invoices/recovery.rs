@@ -213,7 +213,7 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     rsx! {
         if !loaded() {
             if let Some(message) = loading_error() {
-                ErrorState { title: "Could not check invoice recovery", body: message, onretry: retry }
+                ErrorState { title: "Could not open invoices", body: message, onretry: retry }
             } else {
                 Loading { label: "Checking invoice recovery…" }
             }

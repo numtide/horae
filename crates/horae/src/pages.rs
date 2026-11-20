@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, error_line};
 use crate::models::own_permissions::OwnPermissions;
 
 pub mod admin;
@@ -44,7 +44,7 @@ pub(crate) fn loaded<T>(
             ErrorState {
                 title: "Could not load {what}",
                 body: LOAD_FAILED,
-                request: e.to_string(),
+                request: error_line(e),
                 onretry: retry,
             }
         },

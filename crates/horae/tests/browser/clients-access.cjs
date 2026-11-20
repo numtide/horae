@@ -150,7 +150,8 @@ const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${
         await expect(page.getByRole('alert')).toContainText('Could not load project settings');
         await expect(page.locator('.np-page')).toHaveCount(0);
         await visit(`/invoices/new/client/${client}`);
-        await expect(page.getByRole('status')).toContainText('Invoices require access to all invoices');
+        // The refused invoice list shows its own error below the gate's.
+        await expect(page.getByRole('alert').filter({ hasText: 'Invoices require access to all invoices' })).toBeVisible();
         await expect(page.locator('#inv-client')).toHaveCount(0);
       }
       const foreign = await post('get_client_details', { client_id: foreignClient });

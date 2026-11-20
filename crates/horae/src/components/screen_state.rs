@@ -7,6 +7,15 @@ use crate::components::icons::NavIcon;
 pub const LOAD_FAILED: &str =
     "The request did not complete. Try again, or reload the page if it keeps failing.";
 
+/// A server function error as one line for an `ErrorState`: the server's own
+/// message, without the "error running server function" wrapper.
+pub fn error_line(error: &ServerFnError) -> String {
+    match error {
+        ServerFnError::ServerError { message, .. } => message.clone(),
+        other => other.to_string(),
+    }
+}
+
 /// A region with nothing to show yet (`DESIGN.md`, *Empty, loading and error
 /// states*): an icon tile, a serif title and copy that says what to do next.
 /// `actions` holds the optional button and text link; `success` tints the icon

@@ -316,10 +316,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       state.append(icon);
       main.append(state);
     });
-    await expect(page.locator('#default-empty-state')).toHaveCSS('border-radius', '11px');
-    await expect(page.locator('#default-empty-state')).toHaveCSS('padding', '64px 32px');
-    await expect(page.locator('#default-empty-state .empty-state-icon')).toHaveCSS('width', '46px');
-    await expect(page.locator('#default-empty-state .empty-state-icon')).toHaveCSS('border-radius', '50%');
+    // The Projects card is the base `.empty-state` for every screen (PR-4).
+    await expect(page.locator('#default-empty-state')).toHaveCSS('border-radius', '16px');
+    await expect(page.locator('#default-empty-state')).toHaveCSS('padding', '64px 24px');
+    await expect(page.locator('#default-empty-state .empty-state-icon')).toHaveCSS('width', '52px');
+    await expect(page.locator('#default-empty-state .empty-state-icon')).toHaveCSS('border-radius', '12px');
     await expect(page.locator('.nav-item svg').first()).toHaveCSS('width', '15px');
     console.log('PASS: shared Menu, Combobox, empty-state and navigation-icon defaults are unchanged');
     assert.deepEqual(mutations, []);

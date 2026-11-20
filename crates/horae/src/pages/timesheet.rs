@@ -14,7 +14,7 @@ use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{EmptyState, ErrorState, Loading, error_line};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
@@ -1383,10 +1383,10 @@ fn TimesheetContent(
             if current_sheet.read().is_none() && held().is_none() {
                 Loading { label: "Loading timesheet…" }
             } else if let Some(Err(error)) = current_sheet.read().as_ref() {
+                // The server explains a refused sheet (access changed, for one) in its message.
                 ErrorState {
-                    title: "Could not load the timesheet",
-                    body: LOAD_FAILED,
-                    request: error.to_string(),
+                    title: "Could not load the complete timesheet",
+                    body: error_line(error),
                     onretry: retry_sheet,
                 }
             } else {

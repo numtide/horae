@@ -12,7 +12,7 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading, error_line};
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
@@ -488,7 +488,7 @@ fn ClientProjectList(client: String) -> Element {
             ErrorState {
                 title: "Could not load this client's projects",
                 body: LOAD_FAILED,
-                request: error.to_string(),
+                request: error_line(error),
                 onretry: retry,
             }
         },

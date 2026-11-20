@@ -6,7 +6,7 @@ use super::defaults_form::{DefaultsFields, fields_from, parse_fields};
 use super::recovery::{PendingInvoice, RecoveryStorage};
 use crate::components::form::{FormCard, FormGroup, Input};
 use crate::components::modal::Modal;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, error_line};
 use crate::models::invoice::*;
 use crate::server_fns;
 
@@ -29,7 +29,7 @@ pub(super) fn DraftEditor(
                         ErrorState {
                             title: "Could not load the invoice values",
                             body: LOAD_FAILED,
-                            request: error.to_string(),
+                            request: error_line(error),
                             inset: true,
                             onretry: retry,
                             actions: rsx! { button { class: "btn btn-secondary", onclick: move |_| editing.set(false), "Cancel changes" } },

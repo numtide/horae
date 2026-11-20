@@ -184,7 +184,7 @@ let actor, org, owned = false, restoreSeededStates;
     const reader = await success(await loadDetail(zero));
     assert.deepEqual([reader.can_manage, reader.can_read_invoices], [false, true]);
     await expect(page.getByRole('region', { name: 'Invoices', exact: true })).toBeVisible();
-    await expect(page.getByText('No invoices for this client.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No invoices yet', exact: true })).toBeVisible();
     console.log('PASS: organization-wide invoice read shows a client\'s invoices without client management');
 
     setGrants([...floor, 'project_read_managed', 'project_read_all', 'invoice_read_managed', 'invoice_read_all',
