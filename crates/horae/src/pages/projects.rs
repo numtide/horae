@@ -7,10 +7,11 @@ use super::run_action;
 use crate::components::back_link::BackLink;
 use crate::components::badge::Badge;
 use crate::components::combobox::{ComboOption, Combobox};
+use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::components::controls::Checkbox;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
-use crate::components::modal::Modal;
+use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
 use crate::components::page_header::PageHeader;
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
@@ -700,6 +701,44 @@ fn ProjectListContent(
     } else {
         "Archive"
     };
+    let confirm_bulk = use_callback(move |_| {
+        if bulk_busy() {
+            return;
+        }
+        let Some(action) = bulk_action() else {
+            return;
+        };
+        bulk_busy.set(true);
+        bulk_error.set(None);
+        spawn(async move {
+            let ids = action
+                .projects
+                .iter()
+                .map(|(id, _)| id.to_string())
+                .collect();
+            match server_fns::set_projects_active(ids, action.activate, Some(requester)).await {
+                Ok(_) => {
+                    let verb = if action.activate {
+                        "Reactivated"
+                    } else {
+                        "Archived"
+                    };
+                    let noun = if action.projects.len() == 1 {
+                        "project"
+                    } else {
+                        "projects"
+                    };
+                    bulk_success.set(Some(format!("{verb} {} {noun}", action.projects.len())));
+                    selected.write().clear();
+                    bulk_action.set(None);
+                    projects.restart();
+                }
+                Err(error) => bulk_error.set(Some(error.to_string())),
+            }
+            bulk_busy.set(false);
+        });
+    });
+    let cancel_bulk = use_callback(move |_| bulk_action.set(None));
     // Missing/withheld money is not a zero. Empty authorized projects have explicit totals.
     let spend_map = use_memo(move || match &*spend_res.read() {
         Some(Ok(v)) => v
@@ -1122,54 +1161,24 @@ fn ProjectListContent(
             }
             }
 
-            Modal {
+            ConfirmDialog {
                 id: "bulk-projects-dialog", labelledby: "bulk-projects-title",
                 focus_fallback: "project-scope-menu-trigger",
-                open: confirmation.is_some(), busy: bulk_busy(),
-                on_dismiss: move |_| bulk_action.set(None),
-                h2 { id: "bulk-projects-title", class: "modal-title m-0", "{confirm_verb} {confirm_count} {confirm_noun}?" }
-                div { class: "modal-body",
-                    p { class: "text-sm text-secondary", "Only project status changes. Existing time entries, invoices and budgets are kept." }
-                    ul { class: "text-sm",
-                        if let Some(action) = &confirmation {
-                            for (id, name) in &action.projects {
-                                li { key: "{id}", class: "proj-confirm-name", "{name}" }
-                            }
+                open: confirmation.is_some(), busy: bulk_busy(), tone: ConfirmTone::Neutral,
+                title: "{confirm_verb} {confirm_count} {confirm_noun}?",
+                confirm_label: if bulk_busy() { "Updating projects…".to_string() } else { format!("{confirm_verb} projects") },
+                on_dismiss: cancel_bulk,
+                on_confirm: confirm_bulk,
+                p { "Only project status changes. Existing time entries, invoices and budgets are kept." }
+                ul {
+                    if let Some(action) = &confirmation {
+                        for (id, name) in &action.projects {
+                            li { key: "{id}", class: "proj-confirm-name", "{name}" }
                         }
                     }
-                    if let Some(message) = bulk_error() {
-                        div { class: "alert alert-danger", role: "alert", "Could not confirm project status: {message}. You can retry safely or cancel and refresh the list." }
-                    }
-                    div { class: "modal-actions",
-                        button {
-                            r#type: "button", class: "btn btn-primary", disabled: bulk_busy(),
-                            onclick: move |_| {
-                                if bulk_busy() { return; }
-                                let Some(action) = bulk_action() else { return; };
-                                bulk_busy.set(true);
-                                bulk_error.set(None);
-                                spawn(async move {
-                                    let ids = action.projects.iter().map(|(id, _)| id.to_string()).collect();
-                                    match server_fns::set_projects_active(ids, action.activate, Some(requester)).await {
-                                        Ok(_) => {
-                                            let verb = if action.activate { "Reactivated" } else { "Archived" };
-                                            let noun = if action.projects.len() == 1 { "project" } else { "projects" };
-                                            bulk_success.set(Some(format!("{verb} {} {noun}", action.projects.len())));
-                                            selected.write().clear();
-                                            bulk_action.set(None);
-                                            projects.restart();
-                                        }
-                                        Err(error) => bulk_error.set(Some(error.to_string())),
-                                    }
-                                    bulk_busy.set(false);
-                                });
-                            },
-                            if bulk_busy() { "Updating projects…" } else { "{confirm_verb} projects" }
-                        }
-                        button { r#type: "button", class: "btn btn-secondary", disabled: bulk_busy(),
-                            onclick: move |_| bulk_action.set(None), "Cancel"
-                        }
-                    }
+                }
+                if let Some(message) = bulk_error() {
+                    div { class: "alert alert-danger", role: "alert", "Could not confirm project status: {message}. You can retry safely or cancel and refresh the list." }
                 }
             }
 
@@ -1187,8 +1196,8 @@ fn ProjectListContent(
                         requester.user_id,
                     );
                     rsx! {
-                        h2 { id: "export-projects-title", class: "modal-title m-0", "Export projects" }
-                        div { class: "modal-body",
+                        ModalHeader { id: "export-projects-title", title: "Export projects" }
+                        ModalBody {
                             div { id: "export-projects-scope", class: "modal-label", "Which projects?" }
                             div { class: "seg-row", role: "group", aria_labelledby: "export-projects-scope",
                                 for (val , lbl) in [("active", "Active"), ("budgeted", "Budgeted"), ("archived", "Archived")] {
@@ -1213,19 +1222,19 @@ fn ProjectListContent(
                                     }
                                 }
                             }
-                            div { class: "modal-actions",
-                                a {
-                                    class: "btn btn-primary",
-                                    href: "{url}",
-                                    onclick: move |_| export_open.set(false),
-                                    "Export projects"
-                                }
-                                button {
-                                    r#type: "button",
-                                    class: "btn btn-secondary",
-                                    onclick: move |_| export_open.set(false),
-                                    "Cancel"
-                                }
+                        }
+                        ModalFooter {
+                            a {
+                                class: "btn btn-primary",
+                                href: "{url}",
+                                onclick: move |_| export_open.set(false),
+                                "Export projects"
+                            }
+                            button {
+                                r#type: "button",
+                                class: "btn btn-secondary",
+                                onclick: move |_| export_open.set(false),
+                                "Cancel"
                             }
                         }
                     }
@@ -1261,7 +1270,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         access_lost.set(false);
         Ok(view)
     });
-    // The requested status; the dialog is open while it is set.
+    // A requested reactivation: its confirmation is open while it is set.
+    // Archiving needs none, because its toast offers Undo.
     let mut status_change = use_signal(|| None::<bool>);
     let mut status_busy = use_signal(|| false);
     let mut status_failed = use_signal(|| false);
@@ -1288,8 +1298,9 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     let mut status_saved = use_signal(|| None::<bool>);
     let mut undo_failed = use_signal(|| false);
     let mut refocus_actions = use_signal(|| false);
-    // The confirmation and Undo both write the absolute status under the bound
-    // requester. A failure shows where it was requested: the dialog or the toast.
+    // Archive, the reactivation and Undo all write the absolute status under the
+    // bound requester. A failure shows where it was requested: the page, the
+    // dialog or the toast.
     let mut write_status = move |active: bool| {
         let Some(requester) = *binding.peek() else {
             return;
@@ -1297,7 +1308,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         if status_busy() {
             return;
         }
-        let undoing = status_change().is_none();
+        let undoing = active && status_change().is_none();
         let client_id = match &*details.peek() {
             Some(Ok(view)) => Some(view.client_id),
             _ => None,
@@ -1373,7 +1384,6 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     };
     let can_change_status = view.as_ref().is_some_and(|view| view.can_change_status);
     let loaded = view.is_some();
-    let reactivate = status_change() == Some(true);
     // Undo needs the current loaded authority, not the one that archived.
     let undo_label = match (status_saved(), can_change_status, status_busy()) {
         (Some(false), true, true) => "Updating project…",
@@ -1386,6 +1396,18 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         Some(true) => ("Project reactivated.", "success", "✓"),
         _ => ("Project archived.", "success", "✓"),
     };
+    let confirm_reactivation = use_callback(move |_| {
+        if let Some(active) = status_change() {
+            write_status(active);
+        }
+    });
+    // A dialog refusal or failure ends with the dialog; only Archive and Undo
+    // show one outside it.
+    let cancel_reactivation = use_callback(move |_| {
+        status_failed.set(false);
+        status_refused.set(None);
+        status_change.set(None);
+    });
 
     rsx! {
         div {
@@ -1433,12 +1455,16 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                     MenuItem {
                                         disabled: status_busy(),
                                         onclick: {
-                                            let next = !view.active;
+                                            let reactivate = !view.active;
                                             move |_| {
                                                 status_failed.set(false);
                                                 status_refused.set(None);
                                                 status_saved.set(None);
-                                                status_change.set(Some(next));
+                                                if reactivate {
+                                                    status_change.set(Some(true));
+                                                } else {
+                                                    write_status(false);
+                                                }
                                             }
                                         },
                                         if view.active { "Archive" } else { "Reactivate" }
@@ -1468,62 +1494,33 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 }
             }
 
-            Modal {
+            ConfirmDialog {
                 id: "project-status-dialog", labelledby: "project-status-title",
-                focus_fallback: "page-back",
+                focus_fallback: "page-back", tone: ConfirmTone::Neutral,
                 open: status_change().is_some() && can_change_status, busy: status_busy(),
-                // A dialog refusal ends with the dialog; only Undo shows one outside it.
-                on_dismiss: move |_| {
-                    status_refused.set(None);
-                    status_change.set(None);
-                },
-                if can_change_status {
-                    h2 { id: "project-status-title", class: "modal-title m-0",
-                        if reactivate { "Reactivate this project?" } else { "Archive this project?" }
+                title: "Reactivate this project?",
+                confirm_label: if status_busy() { "Updating project…" } else { "Reactivate project" },
+                on_confirm: confirm_reactivation,
+                on_dismiss: cancel_reactivation,
+                p { "Only project status changes. Existing time entries, invoices and budgets are kept." }
+                if status_failed() {
+                    p { class: "alert alert-danger", role: "alert",
+                        "Could not update project status. You can retry safely, or cancel and refresh."
                     }
-                    div { class: "modal-body px-3 sm:px-6 wrap-anywhere",
-                        p { class: "text-sm text-secondary",
-                            if reactivate {
-                                "Only project status changes. Existing time entries, invoices and budgets are kept."
-                            } else {
-                                "Time already tracked stays in reports and invoices. Nobody can log new time until it is reactivated."
-                            }
-                        }
-                        if status_failed() {
-                            p { class: "alert alert-danger", role: "alert",
-                                "Could not update project status. You can retry safely, or cancel and refresh."
-                            }
-                        }
-                        if let Some((message, client)) = status_refused() {
-                            div { class: "alert alert-danger", role: "alert",
-                                p { class: "m-0", "{message}" }
-                                if let Some(client) = client {
-                                    Link { to: Route::ClientDetail { id: client }, class: "font-semibold", "Open the client" }
-                                }
-                            }
-                        }
-                        div { class: "modal-actions flex-wrap",
-                            button {
-                                id: "project-status-confirm", r#type: "button", class: "btn btn-primary",
-                                disabled: status_busy(),
-                                onclick: move |_| {
-                                    if let Some(active) = status_change() {
-                                        write_status(active);
-                                    }
-                                },
-                                if status_busy() { "Updating project…" }
-                                else if reactivate { "Reactivate project" }
-                                else { "Archive project" }
-                            }
-                            button { r#type: "button", class: "btn btn-secondary", disabled: status_busy(),
-                                onclick: move |_| {
-                                    status_refused.set(None);
-                                    status_change.set(None);
-                                },
-                                "Cancel"
-                            }
+                }
+                if let Some((message, client)) = status_refused() {
+                    div { class: "alert alert-danger", role: "alert",
+                        p { class: "m-0", "{message}" }
+                        if let Some(client) = client {
+                            Link { to: Route::ClientDetail { id: client }, class: "font-semibold", "Open the client" }
                         }
                     }
+                }
+            }
+            // A failed Archive, which has no dialog to report in.
+            if status_change().is_none() && loaded && status_failed() {
+                p { class: "alert alert-danger mt-5", role: "alert",
+                    "Could not archive the project. Try again, or refresh the page."
                 }
             }
             // A refusal outside the dialog, such as from Undo.

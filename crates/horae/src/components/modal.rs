@@ -64,3 +64,28 @@ pub fn Modal(
         }
     }
 }
+
+/// The dialog's title bar. `id` is the `labelledby` its `Modal` was given.
+#[component]
+pub fn ModalHeader(id: &'static str, title: String) -> Element {
+    rsx! {
+        h2 { id, class: "modal-title", "{title}" }
+    }
+}
+
+/// The padded content of a dialog, between its header and its footer.
+#[component]
+pub fn ModalBody(children: Element) -> Element {
+    rsx! {
+        div { class: "modal-body", {children} }
+    }
+}
+
+/// The dialog's buttons. A form that submits from it wraps both the
+/// `ModalBody` and this footer.
+#[component]
+pub fn ModalFooter(children: Element) -> Element {
+    rsx! {
+        div { class: "modal-actions", {children} }
+    }
+}

@@ -5,6 +5,7 @@ pub mod badge;
 pub mod button;
 pub mod card;
 pub mod combobox;
+pub mod confirm_dialog;
 pub mod controls;
 pub mod date_picker;
 pub mod debounce;

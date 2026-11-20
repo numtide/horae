@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
 use crate::components::form::FormGroup;
-use crate::components::modal::Modal;
+use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
 use crate::components::permission_description::permission_description;
 use crate::models::permission_editor::{
     PermissionRequester, ProfileAction, ProfilePreview, ProfileSource,
@@ -176,12 +176,10 @@ pub(super) fn PermissionEditorDialog(
             id: "person-permissions-dialog", labelledby: "person-permissions-title",
             open: person().is_some() || recovering, busy: pending || confirming_discard(), large: true,
             on_dismiss: move |_| change_person.call(None),
-            div { class: "px-6 pt-6",
-                h2 { id: "person-permissions-title", class: "text-2xl font-semibold",
-                    if recovering { "Recover permission request" } else { "Edit permissions" }
-                }
+            ModalHeader { id: "person-permissions-title",
+                title: if recovering { "Recover permission request" } else { "Edit permissions" },
             }
-            div { class: "modal-body wrap-anywhere",
+            ModalBody { div { class: "wrap-anywhere",
                 "data-editor-kind": "permissions",
                 "data-editor-state": if recovering { "pending" } else if person().is_none() { "clean" }
                     else if pending { "pending" }
@@ -238,9 +236,9 @@ pub(super) fn PermissionEditorDialog(
                         _ => rsx! {},
                     }}
                 }
-            }
+            } }
             if !pending && !recovering {
-                div { class: "px-6 pb-6",
+                ModalFooter {
                     button { id: CLOSE_BUTTON, r#type: "button", class: "btn btn-secondary",
                         disabled: confirming_discard(), onclick: move |_| change_person.call(None), "Close"
                     }

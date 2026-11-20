@@ -4,7 +4,7 @@ use horae_core::money::format_cents_plain;
 use uuid::Uuid;
 
 use crate::components::form::{FormGroup, Input, Select, Textarea};
-use crate::components::modal::Modal;
+use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
 use crate::models::client::{
     ClientBillingSnapshot, ClientDetails, ClientProfile, ClientProfileEdit, ClientRateChange,
 };
@@ -123,9 +123,7 @@ pub(super) fn ClientEditor(
     rsx! {
         Modal { id: "client-editor-dialog", labelledby: "client-editor-title", open, busy: busy(), focus_fallback: Some(focus_fallback),
             on_dismiss: move |_| { if !busy() { on_dismiss.call(()); } },
-            h2 { id: "client-editor-title", class: "modal-title text-left px-6 py-4 m-0",
-                if client_id.is_some() { "Edit client" } else { "New client" }
-            }
+            ModalHeader { id: "client-editor-title", title: if client_id.is_some() { "Edit client" } else { "New client" } }
             if open {
                 ClientEditorLoader { key: "{client_id:?}", client_id, busy, on_dismiss, on_saved }
             }
@@ -152,16 +150,14 @@ fn ClientEditorLoader(
     let value = initial.read();
     rsx! {
         if !ready {
-            p { class: "modal-body m-0", role: "status", aria_busy: "true", "Loading client editor…" }
+            ModalBody { p { class: "m-0", role: "status", aria_busy: "true", "Loading client editor…" } }
         } else if let Some(Ok(detail)) = &*value {
             ClientForm { initial: detail.clone(), busy, on_dismiss, on_saved }
         } else {
-            div { class: "modal-body",
-                p { role: "alert", "Could not load this client for editing." }
-                div { class: "flex flex-wrap gap-3",
-                    button { r#type: "button", class: "btn btn-primary", onclick: move |_| initial.restart(), "Retry editor" }
-                    button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Cancel" }
-                }
+            ModalBody { p { class: "m-0", role: "alert", "Could not load this client for editing." } }
+            ModalFooter {
+                button { r#type: "button", class: "btn btn-primary", onclick: move |_| initial.restart(), "Retry editor" }
+                button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Cancel" }
             }
         }
     }
@@ -199,7 +195,7 @@ fn ClientForm(
         }
     });
     rsx! {
-        form { class: "modal-body", "data-editor-kind": "client",
+        form { "data-editor-kind": "client",
             "data-editor-state": if busy() { "pending" } else if dirty || uncertain() { "dirty" } else { "clean" },
             onsubmit: move |event| {
                 event.prevent_default();
@@ -236,56 +232,58 @@ fn ClientForm(
                     }
                 });
             },
-            if let Some(message) = error() {
-                div { id: "client-form-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{message}" }
-            }
-            if uncertain() {
-                div { class: "alert alert-warning", role: "status",
-                    p { class: "m-0 mb-3", "Creation may have completed. Check the refreshed client list before attempting another creation. Cancel does not undo a client that was already created." }
-                    a { class: "btn btn-secondary btn-sm", href: "/clients", target: "_blank", rel: "noopener", "Check client list in a new tab" }
-                    button { r#type: "button", class: "btn btn-secondary btn-sm mt-3", onclick: move |_| { uncertain.set(false); error.set(None); }, "I checked the list — allow another attempt" }
+            ModalBody {
+                if let Some(message) = error() {
+                    div { id: "client-form-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{message}" }
                 }
-            }
-            FormGroup { label: "Client name", id: "client-form-name",
-                Input { id: "client-form-name", value: fields.read().name.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().name = event.value() }
-            }
-            div { class: "grid sm:grid-cols-2 gap-3",
-                FormGroup { label: "Currency", id: "client-form-currency",
-                    Select { id: "client-form-currency", selected: fields.read().currency.clone(), disabled: busy(),
-                        options: horae_core::project::PROJECT_CURRENCIES.iter().map(|code| (code.to_string(), code.to_string())).collect(),
-                        onchange: move |event: FormEvent| fields.write().currency = event.value(),
+                if uncertain() {
+                    div { class: "alert alert-warning", role: "status",
+                        p { class: "m-0 mb-3", "Creation may have completed. Check the refreshed client list before attempting another creation. Cancel does not undo a client that was already created." }
+                        a { class: "btn btn-secondary btn-sm", href: "/clients", target: "_blank", rel: "noopener", "Check client list in a new tab" }
+                        button { r#type: "button", class: "btn btn-secondary btn-sm mt-3", onclick: move |_| { uncertain.set(false); error.set(None); }, "I checked the list — allow another attempt" }
                     }
                 }
-                if shows_rate {
-                    FormGroup { label: "Default rate", id: "client-form-rate",
-                        Input { id: "client-form-rate", class: "font-mono", value: fields.read().rate.clone(), disabled: busy(),
-                            oninput: move |event: FormEvent| {
-                                let mut value = fields.write();
-                                value.rate = event.value(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());
-                            }
+                FormGroup { label: "Client name", id: "client-form-name",
+                    Input { id: "client-form-name", value: fields.read().name.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().name = event.value() }
+                }
+                div { class: "grid sm:grid-cols-2 gap-3",
+                    FormGroup { label: "Currency", id: "client-form-currency",
+                        Select { id: "client-form-currency", selected: fields.read().currency.clone(), disabled: busy(),
+                            options: horae_core::project::PROJECT_CURRENCIES.iter().map(|code| (code.to_string(), code.to_string())).collect(),
+                            onchange: move |event: FormEvent| fields.write().currency = event.value(),
                         }
-                        p { class: "text-xs text-secondary mt-1", "Per hour. Blank means not set; zero is a valid rate." }
+                    }
+                    if shows_rate {
+                        FormGroup { label: "Default rate", id: "client-form-rate",
+                            Input { id: "client-form-rate", class: "font-mono", value: fields.read().rate.clone(), disabled: busy(),
+                                oninput: move |event: FormEvent| {
+                                    let mut value = fields.write();
+                                    value.rate = event.value(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());
+                                }
+                            }
+                            p { class: "text-xs text-secondary mt-1", "Per hour. Blank means not set; zero is a valid rate." }
+                        }
                     }
                 }
-            }
-            if needs_confirmation {
-                div { class: "alert alert-warning",
-                    p { class: "m-0 mb-3", "The saved default rate uses a different currency. Confirm this amount in the new currency, enter a replacement or clear it. Existing projects and invoices will not change." }
-                    button { r#type: "button", class: "btn btn-secondary btn-sm", disabled: busy(),
-                        onclick: move |_| {
-                            let mut value = fields.write(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());
-                        },
-                        "Use this rate in {fields.read().currency}"
+                if needs_confirmation {
+                    div { class: "alert alert-warning",
+                        p { class: "m-0 mb-3", "The saved default rate uses a different currency. Confirm this amount in the new currency, enter a replacement or clear it. Existing projects and invoices will not change." }
+                        button { r#type: "button", class: "btn btn-secondary btn-sm", disabled: busy(),
+                            onclick: move |_| {
+                                let mut value = fields.write(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());
+                            },
+                            "Use this rate in {fields.read().currency}"
+                        }
                     }
                 }
+                FormGroup { label: "Billing address", id: "client-form-address",
+                    Textarea { id: "client-form-address", value: fields.read().address.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().address = event.value() }
+                }
+                FormGroup { label: "Tax ID (optional)", id: "client-form-tax",
+                    Input { id: "client-form-tax", value: fields.read().tax_id.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().tax_id = event.value() }
+                }
             }
-            FormGroup { label: "Billing address", id: "client-form-address",
-                Textarea { id: "client-form-address", value: fields.read().address.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().address = event.value() }
-            }
-            FormGroup { label: "Tax ID (optional)", id: "client-form-tax",
-                Input { id: "client-form-tax", value: fields.read().tax_id.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().tax_id = event.value() }
-            }
-            div { class: "flex flex-wrap gap-3 mt-4",
+            ModalFooter {
                 button { r#type: "submit", class: "btn btn-primary", disabled: busy() || uncertain(),
                     if busy() { "Saving…" } else if editing { "Save changes" } else { "Create client" }
                 }

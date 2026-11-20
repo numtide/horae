@@ -11,7 +11,7 @@ use super::loaded;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
-use crate::components::modal::Modal;
+use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
 use crate::components::page_header::PageHeader;
 use crate::components::session::{use_session, use_week_start};
@@ -1450,20 +1450,26 @@ fn TimesheetContent(
                 focus_fallback: "app-main",
                 on_dismiss: move |_| add_open.set(None),
                 if let Some(date) = *add_open.read() {
-                    div { id: "time-entry-title", class: "ts-modal-title",
-                        if editing.read().is_some() { "Edit time entry" } else { "New time entry" }
-                        " for {date.format(\"%A, %d %b\")}"
+                    ModalHeader { id: "time-entry-title",
+                        title: format!(
+                            "{} for {}",
+                            if editing.read().is_some() { "Edit time entry" } else { "New time entry" },
+                            date.format("%A, %d %b"),
+                        ),
                     }
-                    div { class: "ts-modal-body",
-                        tracking::TrackingPicker {
-                            project: add_project, task: add_task, options: tracking(),
-                            disabled: add_saving(),
+                    ModalBody {
+                        div { class: "flex flex-col gap-3",
+                            tracking::TrackingPicker {
+                                project: add_project, task: add_task, options: tracking(),
+                                disabled: add_saving(),
+                            }
+                            EntryFields { notes: add_notes, duration: add_duration, start: add_start, disabled: add_saving() }
+                            if let Some(err) = &*add_error.read() {
+                                div { class: "text-sm text-danger", role: "alert", "{err}" }
+                            }
                         }
-                        EntryFields { notes: add_notes, duration: add_duration, start: add_start, disabled: add_saving() }
-                        if let Some(err) = &*add_error.read() {
-                            div { class: "ts-modal-error", role: "alert", "{err}" }
-                        }
-                        div { class: "ts-modal-actions",
+                    }
+                    ModalFooter {
                             // Harvest-style single primary: with no duration on
                             // today's column it starts a running timer; once a
                             // duration is typed (or on a past day / when editing)
@@ -1570,7 +1576,6 @@ fn TimesheetContent(
                                 onclick: move |_| add_open.set(None),
                                 "Cancel"
                             }
-                        }
                     }
                 }
             }
@@ -1582,12 +1587,15 @@ fn TimesheetContent(
                 open: addrow_open(),
                 on_dismiss: move |_| addrow_open.set(false),
                 if addrow_open() {
-                    div { id: "add-row-title", class: "ts-modal-title", "Add a row" }
-                    div { class: "ts-modal-body",
-                        tracking::TrackingPicker {
-                            project: addrow_project, task: addrow_task, options: tracking(), disabled: busy(),
+                    ModalHeader { id: "add-row-title", title: "Add a row" }
+                    ModalBody {
+                        div { class: "flex flex-col gap-3",
+                            tracking::TrackingPicker {
+                                project: addrow_project, task: addrow_task, options: tracking(), disabled: busy(),
+                            }
                         }
-                        div { class: "ts-modal-actions",
+                    }
+                    ModalFooter {
                             button {
                                 class: "btn btn-primary",
                                 disabled: busy() || tracking.read().is_empty(),
@@ -1611,7 +1619,6 @@ fn TimesheetContent(
                                 onclick: move |_| addrow_open.set(false),
                                 "Cancel"
                             }
-                        }
                     }
                 }
             }
@@ -1642,16 +1649,16 @@ fn EntryFields(
     disabled: bool,
 ) -> Element {
     rsx! {
-        div { class: "ts-modal-row",
+        div { class: "flex gap-3",
             input {
-                class: "form-input ts-modal-notes",
+                class: "form-input flex-1 min-w-0",
                 placeholder: "Notes (optional)",
                 value: "{notes}",
                 disabled,
                 oninput: move |e| notes.set(e.value()),
             }
             input {
-                class: "form-input ts-modal-duration",
+                class: "form-input flex-none w-30 text-right font-mono text-xl",
                 "aria-label": "Duration",
                 placeholder: "0:00",
                 value: "{duration}",

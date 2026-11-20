@@ -2,7 +2,7 @@ use super::*;
 use crate::components::{
     controls::Checkbox,
     form::{FormGroup, Input},
-    modal::Modal,
+    modal::{Modal, ModalBody, ModalFooter, ModalHeader},
 };
 use crate::models::task::{TaskCatalogEntry, TaskRateEdit};
 use horae_core::money::parse_cents;
@@ -78,7 +78,7 @@ fn TaskForm(
     let active = selection.task.as_ref().is_none_or(|task| task.active);
     let currency = selection.rate_currency.clone();
     rsx! {
-        h2 { id: "task-editor-title", class: "modal-title", if task_id.is_some() { "Edit task" } else { "New task" } }
+        ModalHeader { id: "task-editor-title", title: if task_id.is_some() { "Edit task" } else { "New task" } }
         form { id: "task-edit-form", onsubmit: move |event| {
             event.prevent_default();
             if busy() { return; }
@@ -104,7 +104,7 @@ fn TaskForm(
                 finish(result, busy, error, on_saved, on_denied, message);
             });
         },
-            div { class: "modal-body",
+            ModalBody {
                 if let Some(message) = error() { p { id: "task-edit-error", role: "alert", class: "alert alert-danger", "{message}" } }
                 FormGroup { id: "task-name", label: "Task name",
                     Input { id: "task-name", value: name(), disabled: busy(), oninput: move |event: FormEvent| name.set(event.value()) }
@@ -137,7 +137,7 @@ fn TaskForm(
                     }
                 }
             }
-            div { class: "px-6 pb-6 flex flex-wrap justify-end gap-3",
+            ModalFooter {
                 button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| on_cancel.call(()), "Cancel" }
                 button { id: "task-save", r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Saving…" } else { "Save task" } }
             }

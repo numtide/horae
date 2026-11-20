@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::components::{
     form::{FormGroup, Input},
-    modal::Modal,
+    modal::{Modal, ModalBody, ModalFooter, ModalHeader},
 };
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::user::{PersonRate, PersonRates};
@@ -49,18 +49,18 @@ fn RatesForm(
     let rates = match &*loaded.read() {
         None => {
             return rsx! {
-                h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
-                p { class: "modal-body", role: "status", "Loading rates…" }
+                ModalHeader { id: "person-rates-title", title: "Rates for {person.name}" }
+                ModalBody { p { class: "m-0", role: "status", "Loading rates…" } }
             };
         }
         Some(Err(failure)) => {
             let message = load_failure(failure);
             return rsx! {
-                h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
-                div { class: "modal-body",
+                ModalHeader { id: "person-rates-title", title: "Rates for {person.name}" }
+                ModalBody {
                     p { role: "alert", class: "alert alert-danger", "{message}" }
                 }
-                div { class: "px-6 pb-6 flex justify-end",
+                ModalFooter {
                     button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Close" }
                 }
             };
@@ -88,7 +88,7 @@ fn RatesEditor(
     let currency = rates.currency.clone();
     let stored = rates.clone();
     rsx! {
-        h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
+        ModalHeader { id: "person-rates-title", title: "Rates for {person.name}" }
         form { id: "person-rates-form", onsubmit: move |event| {
             event.prevent_default();
             if busy() { return; }
@@ -109,7 +109,7 @@ fn RatesEditor(
                 }
             });
         },
-            div { class: "modal-body",
+            ModalBody {
                 if let Some(message) = error() { p { id: "person-rates-error", role: "alert", class: "alert alert-danger", "{message}" } }
                 p { class: "form-hint",
                     "Amounts are per hour in {currency}, the workspace currency."
@@ -124,7 +124,7 @@ fn RatesEditor(
                         hint: "Used to cost this person's time in reports and in the Harvest-compatible time entry API on projects without a project cost rate for them, past time included. New project teams show it as the suggested cost rate.".to_string() }
                 }
             }
-            div { class: "px-6 pb-6 flex flex-wrap justify-end gap-3",
+            ModalFooter {
                 button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| on_close.call(()),
                     if editable { "Cancel" } else { "Close" }
                 }

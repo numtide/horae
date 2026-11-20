@@ -1844,17 +1844,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-cal-ev-client { font-size: var(--font-size-xs); color: var(--color-cal-event-meta); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ts-cal-col.today .ts-cal-ev-client { color: var(--color-cal-today-meta); }
 
-/* Add–entry modal: opened by the "+" toolbar button or by clicking a calendar
-   day. Dark card centred near the top, matching the design's entry dialog. */
-.ts-modal-title { padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-border); text-align: center; font-family: var(--font-family-display); font-size: 18px; font-weight: 600; color: var(--color-text); }
-.ts-modal-body { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-6); }
-.ts-modal-body .form-label { margin-bottom: 0; }
-.ts-modal-row { display: flex; gap: var(--space-3); }
-.ts-modal-notes { flex: 1; }
-.ts-modal-duration { width: 130px; text-align: right; font-family: var(--font-family-mono); font-size: 20px; }
-.ts-modal-error { font-size: var(--font-size-sm); color: var(--color-danger); }
-.ts-modal-actions { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
-
 /* Projects — client-grouped budget table. Structural only (grid template,
    grouped banding); colours/spacing come from tokens, layout from utilities. */
 .proj-search { width: 300px; max-width: 100%; }
@@ -1928,21 +1917,35 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .modal-lg { width: 640px; }
 @media (max-width: 480px) {
-  .ts-modal-row { flex-wrap: wrap; }
-  .ts-modal-notes { min-width: 0; flex-basis: 100%; }
-  .ts-modal-actions { flex-wrap: wrap; }
   .modal .seg-row { grid-auto-flow: row; }
 }
+/* The fixed slots of every dialog: header, body, footer (DESIGN.md, Dialogs). */
 .modal-title {
-  padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-border);
-  text-align: center; font-family: var(--font-family-display);
+  margin: 0; padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-border);
+  text-align: center; font-family: var(--font-family-display); overflow-wrap: anywhere;
   font-size: var(--font-size-lg); font-weight: 600; color: var(--color-text);
 }
-.modal-body { padding: var(--space-6); }
+.modal-body { padding: var(--space-6) var(--space-3); }
+.modal-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: 0 var(--space-3) var(--space-6); }
+@media (min-width: 640px) {
+  .modal-body { padding: var(--space-6); }
+  .modal-actions { padding: 0 var(--space-6) var(--space-6); }
+}
 .modal-label { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); margin-bottom: var(--space-3); }
 .modal-body .modal-label + .seg-row + .modal-label { margin-top: var(--space-5); }
-.modal-actions { display: flex; gap: var(--space-3); margin-top: var(--space-6); }
 .modal-actions .btn { flex: 1; justify-content: center; }
+.confirm-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: var(--space-10); height: var(--space-10); border: 1px solid; border-radius: var(--radius-icon);
+}
+.confirm-icon svg { width: var(--font-size-xl); height: var(--font-size-xl); }
+.confirm-icon-danger { background: var(--color-danger-bg); color: var(--color-danger-fg); border-color: var(--color-danger-line); }
+.confirm-icon-neutral { background: var(--color-success-bg); color: var(--color-success-fg); border-color: var(--color-success-line); }
+.confirm-body {
+  margin-top: var(--space-2); font-size: var(--font-size-sm);
+  line-height: var(--line-height-copy); color: var(--color-text-secondary);
+}
+.confirm-body > * + * { margin-top: var(--space-3); }
 .seg-row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--space-2); }
 .seg-btn {
   padding: var(--space-3) var(--space-4);

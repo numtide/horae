@@ -154,7 +154,7 @@ pub(super) fn TemplateEditor(
                 }
             } else {
                 button { id: SAVE_BUTTON, r#type: "button",
-                    class: if create { "btn btn-primary" } else { "btn btn-danger" },
+                    class: if create { "btn btn-primary" } else { "btn btn-danger-solid" },
                     disabled: busy() || (!ready_to_save && pending.read().is_none()),
                     onclick: move |_| {
                         if busy() || rejected() || saved() || preview_failed { return; }

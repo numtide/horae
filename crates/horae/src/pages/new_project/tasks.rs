@@ -11,7 +11,7 @@ use crate::components::controls::Checkbox;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::Input;
 use crate::components::icons::NavIcon;
-use crate::components::modal::Modal;
+use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, ProjectEditorContext, ProjectFieldAccess, ProjectForm,
     ProjectFormField, ProjectTaskInput, TaskAccess, TaskSource,
@@ -363,8 +363,8 @@ fn TaskAccessDialog(
     }));
     rsx! {
         Modal { id: "np-task-access", labelledby: "np-task-access-title", open: task_id.is_some(), on_dismiss,
-            div { class: "modal-body px-3 sm:px-6",
-                h2 { id: "np-task-access-title", class: "modal-title", "Who can track to this task?" }
+            ModalHeader { id: "np-task-access-title", title: "Who can track to this task?" }
+            ModalBody {
                 fieldset { class: "border-0 p-0 m-0 min-w-0 flex flex-col gap-3", aria_label: "Task access",
                     label { class: "flex items-center gap-3",
                         input { r#type: "radio", name: "np-task-access-mode", checked: matches!(*access.read(), TaskAccess::Everyone), onchange: move |_| access.set(TaskAccess::Everyone) }
@@ -389,13 +389,13 @@ fn TaskAccessDialog(
                     }
                     if form.read().team.is_empty() { p { class: "form-hint", "Add people to the project team to grant access." } }
                 }
-                div { class: "modal-actions flex-wrap",
-                    button { r#type: "button", class: "btn btn-primary", onclick: move |_| {
-                        if let Some(task) = form.write().tasks.iter_mut().find(|task| Some(task.id) == task_id) { task.access = access(); }
-                        on_dismiss.call(());
-                    }, "Apply access" }
-                    button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Cancel" }
-                }
+            }
+            ModalFooter {
+                button { r#type: "button", class: "btn btn-primary", onclick: move |_| {
+                    if let Some(task) = form.write().tasks.iter_mut().find(|task| Some(task.id) == task_id) { task.access = access(); }
+                    on_dismiss.call(());
+                }, "Apply access" }
+                button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Cancel" }
             }
         }
     }

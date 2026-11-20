@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use uuid::Uuid;
 
-use crate::components::modal::Modal;
+use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -51,62 +51,66 @@ pub(super) fn ArchiveDialog(
     let busy = pending().is_some();
     let shown_error = error().filter(|error| Some(error.client) == current.as_ref().map(|c| c.id));
 
+    let archive = move |_| {
+        let Some(client) = target.peek().clone() else {
+            return;
+        };
+        if pending().is_some() {
+            return;
+        }
+        pending.set(Some(client.id));
+        error.set(None);
+        spawn(async move {
+            let result = server_fns::set_client_active(client.id.to_string(), false).await;
+            pending.set(None);
+            // An authority reset closes it before the result arrives.
+            let still_open = target
+                .peek()
+                .as_ref()
+                .is_some_and(|open| open.id == client.id);
+            match result {
+                Ok(_) => {
+                    if still_open {
+                        target.set(None);
+                    }
+                    on_archived.call(client);
+                }
+                Err(failure) if still_open => {
+                    let (message, refused) = match failure {
+                        ServerFnError::ServerError { message, code, .. } => {
+                            (message, code == CONFLICT)
+                        }
+                        other => (other.to_string(), false),
+                    };
+                    error.set(Some(ArchiveError {
+                        client: client.id,
+                        message,
+                        refused,
+                    }));
+                }
+                Err(_) => {}
+            }
+        });
+    };
+
+    // Archiving one client carries no other record, but its toast has no Undo
+    // yet, so it still asks first.
     rsx! {
-        Modal { id: "client-archive-dialog", labelledby: "client-archive-title",
-            open: current.is_some(), busy, focus_fallback: Some(focus_fallback),
+        ConfirmDialog { id: "client-archive-dialog", labelledby: "client-archive-title",
+            open: current.is_some(), busy, focus_fallback: Some(focus_fallback), tone: ConfirmTone::Neutral,
+            title: current.as_ref().map(|client| format!("Archive {}?", client.name)).unwrap_or_default(),
+            confirm_label: if busy { "Archiving client…" } else { "Archive client" },
+            on_confirm: archive,
             on_dismiss: move |_| close(),
             if let Some(client) = current {
-                h2 { id: "client-archive-title", class: "modal-title m-0 wrap-anywhere", "Archive {client.name}?" }
-                // Only prose may break anywhere; button labels keep their words.
-                div { class: "modal-body px-3 sm:px-6",
-                    p { class: "text-sm text-secondary wrap-anywhere",
-                        "Only the client is archived. Its projects must already be archived. Tracked time, invoices and import history are kept."
-                    }
-                    if let Some(failure) = shown_error {
-                        div { class: "alert alert-danger", role: "alert",
-                            p { class: "m-0 wrap-anywhere", "{failure.message}" }
-                            if failure.refused {
-                                Link { to: Route::ProjectsForClient { client: client.id.to_string() }, class: "font-semibold",
-                                    "View this client's projects"
-                                }
+                p { "Only the client is archived. Its projects must already be archived. Tracked time, invoices and import history are kept." }
+                if let Some(failure) = shown_error {
+                    div { class: "alert alert-danger", role: "alert",
+                        p { class: "m-0", "{failure.message}" }
+                        if failure.refused {
+                            Link { to: Route::ProjectsForClient { client: client.id.to_string() }, class: "font-semibold",
+                                "View this client's projects"
                             }
-                        }
-                    }
-                    div { class: "modal-actions flex-wrap",
-                        button { id: "client-archive-confirm", r#type: "button", class: "btn btn-primary",
-                            disabled: busy,
-                            onclick: move |_| {
-                                if pending().is_some() { return; }
-                                pending.set(Some(client.id));
-                                error.set(None);
-                                let client = client.clone();
-                                spawn(async move {
-                                    let result = server_fns::set_client_active(client.id.to_string(), false).await;
-                                    pending.set(None);
-                                    // An authority reset closes it before the result arrives.
-                                    let still_open = target.peek().as_ref().is_some_and(|open| open.id == client.id);
-                                    match result {
-                                        Ok(_) => {
-                                            if still_open {
-                                                target.set(None);
-                                            }
-                                            on_archived.call(client);
-                                        }
-                                        Err(failure) if still_open => {
-                                            let (message, refused) = match failure {
-                                                ServerFnError::ServerError { message, code, .. } => (message, code == CONFLICT),
-                                                other => (other.to_string(), false),
-                                            };
-                                            error.set(Some(ArchiveError { client: client.id, message, refused }));
-                                        }
-                                        Err(_) => {}
-                                    }
-                                });
-                            },
-                            if busy { "Archiving client…" } else { "Archive client" }
-                        }
-                        button { r#type: "button", class: "btn btn-secondary", disabled: busy,
-                            onclick: move |_| close(), "Cancel"
                         }
                     }
                 }

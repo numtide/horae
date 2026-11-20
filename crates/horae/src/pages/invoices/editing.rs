@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 use super::defaults_form::{DefaultsFields, fields_from, parse_fields};
 use super::recovery::{PendingInvoice, RecoveryStorage};
+use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::components::form::{FormCard, FormGroup, Input};
-use crate::components::modal::Modal;
 use crate::models::invoice::*;
 use crate::server_fns;
 
@@ -194,6 +194,8 @@ fn DraftEditForm(
         .as_ref()
         .is_some_and(|(_, review)| review.fees.iter().any(|fee| fee.excess_cents > 0));
     let currency = snapshot.currency.trim();
+    let save_excess = use_callback(move |_| save.call(true));
+    let keep_editing = use_callback(move |_| confirm.set(false));
     rsx! {
         div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if dirty { "dirty" } else { "clean" },
         FormCard { title: "Edit invoice values", error,
@@ -250,17 +252,18 @@ fn DraftEditForm(
                 button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| editing.set(false), "Cancel changes" }
             }
         }
-        Modal { id: "invoice-excess", labelledby: "invoice-excess-title", open: confirm(), busy: busy(), on_dismiss: move |_| confirm.set(false),
-            h2 { id: "invoice-excess-title", "Confirm over-invoicing" }
-            p { class: "text-sm mb-4", "Saving will exceed the agreed fees by the amounts below. Cancelling changes nothing." }
+        // Over-invoicing can be corrected in the draft afterwards, so it is not
+        // a destructive confirmation.
+        ConfirmDialog { id: "invoice-excess", labelledby: "invoice-excess-title", open: confirm(), busy: busy(),
+            tone: ConfirmTone::Neutral, title: "Confirm over-invoicing",
+            confirm_label: "Confirm excess and save", cancel_label: "Cancel over-invoicing",
+            on_confirm: save_excess,
+            on_dismiss: keep_editing,
+            p { "Saving will exceed the agreed fees by the amounts below. Cancelling changes nothing." }
             if let Some((_, review)) = &ready {
                 for fee in review.fees.iter().filter(|fee| fee.excess_cents > 0) {
                     p { key: "{fee.line_id}", "{fee.period_key} · Excess: {currency} " {format_cents_plain(fee.excess_cents)} }
                 }
-            }
-            div { class: "flex flex-wrap gap-3 mt-4",
-                button { class: "btn btn-danger", disabled: busy(), onclick: move |_| save.call(true), "Confirm excess and save" }
-                button { class: "btn btn-secondary", disabled: busy(), onclick: move |_| confirm.set(false), "Cancel over-invoicing" }
             }
         }
         }
