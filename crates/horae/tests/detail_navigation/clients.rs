@@ -319,7 +319,11 @@ async fn hidden_or_missing_client_detail_reveals_no_identity() {
     );
     let dom = mount(&probe);
     let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("Could not load this client"), "{html}");
+    // A missing record says so and offers no retry that could not help.
+    assert!(
+        html.contains("Client not found") && !html.contains("Try again"),
+        "{html}"
+    );
     for hidden in ["Client-1", "Address-1", "Default rate", "Invoices"] {
         assert!(!html.contains(hidden), "shown {hidden}: {html}");
     }

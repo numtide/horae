@@ -133,7 +133,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.waitForURL(`${base}/`);
     await readsFinished();
     await page.goto(`${base}/admin/audit`);
-    await expect(page.getByText('No permission events recorded yet.', { exact: false })).toBeVisible();
+    await expect(page.getByText('No permission events recorded yet', { exact: false })).toBeVisible();
     await expect.poll(() => page.evaluate(() => ({
       hasTheme: getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() !== '',
       utility: getComputedStyle(document.querySelector('[aria-labelledby="audit-title"] .flex')).display,

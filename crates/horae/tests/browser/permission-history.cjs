@@ -66,7 +66,7 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
         ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','project_read_managed','project_write_managed','project_read_all','project_write_all'], true, 'individual')`);
     fixtureStarted = true;
     await page.goto(`${base}/admin/audit`);
-    await expect(page.getByRole('status')).toContainText('No permission events recorded yet');
+    await expect(page.getByRole('heading', { name: 'No permission events recorded yet', exact: true })).toBeVisible();
     await expect(page.locator('#audit-older')).toBeDisabled();
 
     let revision = Number(initialRevision);

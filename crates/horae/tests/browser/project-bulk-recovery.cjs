@@ -80,7 +80,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
           await expect(scope).toBeFocused();
           await expect(trigger).toBeDisabled();
           failRefresh = false;
-          await alert.getByRole('button', { name: 'Retry', exact: true }).click();
+          await alert.getByRole('button', { name: 'Try again', exact: true }).click();
           await expect(alert).not.toBeVisible();
         }
         if (scenario === 'pending-navigation') {

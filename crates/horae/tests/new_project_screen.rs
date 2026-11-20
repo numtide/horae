@@ -33,6 +33,9 @@ pub mod icons;
 pub mod modal;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 #[path = "../src/components/today.rs"]
@@ -40,7 +43,7 @@ pub mod today;
 mod components {
     pub use super::{
         avatar, back_link, confirm_dialog, controls, date_picker, debounce, form, icons, modal,
-        page_header, select_field, today,
+        page_header, screen_state, select_field, today,
     };
 }
 pub use horae_types::{

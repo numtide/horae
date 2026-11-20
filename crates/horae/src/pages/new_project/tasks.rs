@@ -186,7 +186,7 @@ pub(super) fn Tasks(
                     match &*results.read() {
                         Some((_, Err(problem))) => rsx! {
                             p { class: "text-sm text-danger", role: "alert", "Could not search tasks: {problem}" }
-                            button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| results.restart(), "Retry task search" }
+                            button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| results.restart(), "Try again" }
                         },
                         Some((_, Ok(result))) if result.tasks.is_empty() && !query.read().trim().is_empty() => rsx! { p { class: "text-sm text-subtle m-0", role: "status", "No matching tasks. Add this name as a new task." } },
                         Some((_, Ok(result))) if result.more_tasks => rsx! { p { class: "form-hint", "Showing 50 matches. Refine the name to find another task." } },

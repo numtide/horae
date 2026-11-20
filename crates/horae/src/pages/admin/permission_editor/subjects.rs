@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 use crate::components::menu::{Menu, MenuDivider};
+use crate::components::screen_state::Loading;
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
 
@@ -22,7 +23,7 @@ pub(super) fn SubjectPicker(
         let after = cursors.read().last().copied().flatten();
         let result = server_fns::list_permission_subjects(after)
             .await
-            .map_err(|_| "Could not load people. Retry to check your current access.")?;
+            .map_err(|_| "Could not load people. Try again to check your current access.")?;
         if result.requester != requester {
             return Err(
                 "Your session changed. Close and reopen permissions before choosing another person.",
@@ -34,11 +35,11 @@ pub(super) fn SubjectPicker(
     rsx! {
         div { class: "mb-4",
             if !ready {
-                p { role: "status", class: "text-sm text-secondary", "Loading people…" }
+                Loading { label: "Loading people…" }
             } else if let Some(Err(message)) = &*page.read() {
                 p { role: "alert", class: "text-sm text-danger mb-2", "{message}" }
                 button { id: RETRY, r#type: "button", class: "btn btn-secondary btn-sm",
-                    disabled, onclick: move |_| { if !disabled { page.restart(); } }, "Retry people"
+                    disabled, onclick: move |_| { if !disabled { page.restart(); } }, "Try again"
                 }
             }
             Menu { id: "permission-subjects", label: "Change person",

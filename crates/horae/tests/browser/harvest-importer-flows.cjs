@@ -246,9 +246,10 @@ const longId = 'fixture'.repeat(40);
     await check('a failed status read checks the same run again without starting another', async () => {
       selected = job('running'); statusFailure = true;
       await visitRun();
-      await expect(page.getByText('Status unavailable. The import may still be running.')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Status unavailable', exact: true })).toBeVisible();
+      await expect(page.getByText('The import may still be running.', { exact: false })).toBeVisible();
       statusFailure = false;
-      await page.getByTestId('resume-monitoring').click();
+      await page.locator('#resume-monitoring').click();
       await expect(page.getByTestId('run-badge')).toHaveText('Nothing in Horae changes');
       assert.ok(statusReads.length >= 2, 'The run is read again');
       assert.ok(statusReads.every(value => value === id), 'Only this run is read');

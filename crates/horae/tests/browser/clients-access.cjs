@@ -150,7 +150,8 @@ const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${
         await expect(page.getByRole('alert')).toContainText('Could not load project settings');
         await expect(page.locator('.np-page')).toHaveCount(0);
         await visit(`/invoices/new/client/${client}`);
-        await expect(page.getByRole('status')).toContainText('Invoices require access to all invoices');
+        // The refused invoice list shows its own error below the gate's.
+        await expect(page.getByRole('alert').filter({ hasText: 'Invoices require access to all invoices' })).toBeVisible();
         await expect(page.locator('#inv-client')).toHaveCount(0);
       }
       const foreign = await post('get_client_details', { client_id: foreignClient });
@@ -159,7 +160,9 @@ const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${
       assert.equal(missing.status(), 404);
       assert.equal(await foreign.text(), await missing.text());
       await visit(`/clients/${foreignClient}`);
-      await expect(page.getByRole('alert')).toContainText('Could not load this client');
+      // A foreign client reads as missing, with nothing to retry.
+      await expect(page.getByRole('alert')).toContainText('Client not found');
+      await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
       await expect(page.locator('body')).not.toContainText('Access foreign secret');
       assert.equal(sql(`SELECT row_to_json(c) FROM clients c WHERE id = '${client}'`), baseline);
       console.log(`PASS: clients ${scenario.profile} real-session scope, counts, currencies, billing and negative direct access`);

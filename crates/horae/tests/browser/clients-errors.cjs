@@ -30,7 +30,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     release();
     await expect(page.getByRole('alert')).toContainText('Could not load clients');
     await page.unroute('**/api/client_overview*');
-    await page.getByRole('button', { name: 'Retry clients', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Acme Corp', exact: true })).toBeVisible();
     const search = page.getByRole('searchbox', { name: 'Search clients by name' });
     await search.fill('  aCmE  ');
@@ -83,10 +83,10 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     console.log('PASS: clients loading/error/retry and distinct empty/denied/no-match states');
 
     for (const scenario of [
-      { endpoint: 'client_detail_view', retry: 'Retry client', message: 'Could not load this client' },
-      { endpoint: 'list_projects', retry: 'Retry projects', message: 'Could not load projects' },
-      { endpoint: 'list_project_spend', retry: 'Retry totals', message: 'Could not load project totals' },
-      { endpoint: 'list_client_invoices', retry: 'Retry invoices', message: 'Could not load invoices' },
+      { endpoint: 'client_detail_view', message: 'Could not load this client' },
+      { endpoint: 'list_projects', message: 'Could not load projects' },
+      { endpoint: 'list_project_spend', message: 'Could not load project totals' },
+      { endpoint: 'list_client_invoices', message: 'Could not load invoices' },
     ]) {
       const pattern = `**/api/${scenario.endpoint}*`;
       await page.route(pattern, route => route.abort('failed'));
@@ -97,7 +97,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         await expect(page.getByRole('region', { name: 'Billing', exact: true })).toBeVisible();
       }
       await page.unroute(pattern);
-      await page.getByRole('button', { name: scenario.retry, exact: true }).click();
+      // Only the failed region offers a retry, so its "Try again" is the only one.
+      await page.getByRole('alert').getByRole('button', { name: 'Try again', exact: true }).click();
       await expect(page.getByRole('alert')).toHaveCount(0);
       await expect(page.getByRole('link', { name: /^\[ACME-01\] / })).toBeVisible();
     }
@@ -108,7 +109,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('alert')).toContainText('Could not load this client for editing');
     await page.unroute('**/api/get_client_details*');
-    await dialog.getByRole('button', { name: 'Retry editor', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Try again', exact: true }).click();
     await dialog.getByLabel('Client name', { exact: true }).fill('Retain failed edit');
     await page.route('**/api/update_client_profile*', route => route.abort('failed'));
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -124,7 +125,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.goto(`${base}/projects/new/client/${client}`);
     await expect(page.getByRole('alert')).toContainText('Could not load project settings');
     await page.unroute('**/api/project_creation_client*');
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(page.locator('#np-client')).toContainText('Acme Corp');
     // The prefilled client alone is not an edit, so no draft is written.
     await expect(page.locator('.np-page header').getByRole('status')).toHaveText('No draft saved yet');
@@ -135,7 +136,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.goto(`${base}/invoices/new/client/${client}`);
     await expect(page.getByRole('alert')).toBeVisible();
     await page.unroute('**/api/list_clients*');
-    await page.getByRole('button', { name: 'Retry clients', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(page.locator('#inv-client')).toHaveValue(client);
     console.log('PASS: contextual project/invoice client loading retries preserve the requested client');
     assert.deepEqual(errors, []);

@@ -101,11 +101,11 @@ assert.ok(task.default_rate_cents > 0);
       }
     } finally { if (releaseRead) releaseRead(); }
     if (pendingRead) {
-      await expect(page.getByRole('alert')).toContainText('Could not load project');
+      await expect(page.getByRole('alert')).toContainText('Could not load the project');
       await expect(screen).toHaveCount(0);
       await readsFinished();
       await page.unroute('**/api/load_project_editor*');
-      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      await page.getByRole('button', { name: 'Try again', exact: true }).click();
     }
     await expect(screen.getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
     await expect(screen.locator('#np-currency')).toBeDisabled();

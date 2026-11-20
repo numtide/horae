@@ -8,6 +8,7 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use crate::components::back_link::BackLink;
 use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{ErrorState, LoadError, Loading};
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::{OrgBranding, branding_value_error};
 use crate::route::Route;
@@ -170,20 +171,24 @@ impl Card {
 
 #[component]
 pub fn InvoiceSettings() -> Element {
-    let branding = use_resource(server_fns::get_org_branding);
+    let mut branding = use_resource(server_fns::get_org_branding);
+    let retry = use_callback(move |_| branding.restart());
     rsx! {
         div {
             BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
             PageHeader { title: "Invoice settings" }
             match &*branding.read() {
-                None => rsx! { p { class: "text-muted text-sm", role: "status", "Loading invoice settings…" } },
+                None => rsx! { Loading { label: "Loading invoice settings…" } },
                 Some(Ok(initial)) => rsx! { SettingsForm { initial: initial.clone() } },
                 Some(Err(ServerFnError::ServerError { code: FORBIDDEN, .. })) => rsx! {
-                    div { class: "alert alert-danger", role: "alert",
-                        "Invoice settings are available to people who manage all invoices. Ask an Administrator if you need access."
+                    ErrorState {
+                        title: "Invoice settings are unavailable",
+                        body: "Invoice settings are available to people who manage all invoices. Ask an Administrator if you need access.",
                     }
                 },
-                Some(Err(error)) => rsx! { div { class: "alert alert-danger", role: "alert", {message_of(error.clone())} } },
+                Some(Err(error)) => rsx! {
+                    LoadError { error: error.clone(), what: "invoice settings", retry }
+                },
             }
         }
     }

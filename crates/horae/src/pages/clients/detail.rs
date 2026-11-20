@@ -6,6 +6,7 @@ use crate::components::{
     back_link::BackLink,
     badge::Badge,
     page_header::PageHeader,
+    screen_state::{EmptyState, LoadError, Loading},
     toast::{Toast, ToastContainer},
 };
 use crate::models::client::ClientDetailView;
@@ -35,6 +36,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
         super::bind(binding, view.requester)?;
         Ok::<_, ServerFnError>(view)
     });
+    let retry = use_callback(move |_| details.restart());
     // The header control to refocus once a save or status change has reloaded.
     let mut refocus = use_signal(|| None::<&'static str>);
     let mut saved = use_signal(|| None::<String>);
@@ -68,8 +70,10 @@ fn ClientDetailContent(id: Uuid) -> Element {
     rsx! {
         div { class: "client-detail min-w-0",
             BackLink { to: Route::ClientList {}, label: "Back to Clients" }
-            if !ready {
-                p { role: "status", aria_busy: "true", "Loading client…" }
+            if !ready && !matches!(&*data, Some(Err(_))) {
+                Loading { label: "Loading client…" }
+            } else if let Some(Err(error)) = &*data {
+                LoadError { error: error.clone(), what: "this client", retry, pending: !ready, focus_on_recovery: "page-back" }
             } else if let Some(Ok(ClientDetailView { details: detail, .. })) = &*data {
                 div { class: "border-b mb-4",
                     PageHeader {
@@ -165,12 +169,6 @@ fn ClientDetailContent(id: Uuid) -> Element {
                         if can_read_invoices { ClientInvoices { client_id: id } }
                     }
                 }
-            } else {
-                div { class: "alert alert-danger", role: "alert",
-                    "Could not load this client. It may be unavailable or you may no longer have access. "
-                    button { r#type: "button", class: "btn btn-secondary btn-sm",
-                        onclick: move |_| details.restart(), "Retry client" }
-                }
             }
             super::form::ClientEditor { open: show_editor() && can_manage, client_id: Some(id), focus_fallback: "page-back",
                 on_dismiss: move |_| show_editor.set(false),
@@ -203,6 +201,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
     let mut projects = use_resource(move || async move {
         server_fns::list_projects(Some(client_id.to_string()), true).await
     });
+    let retry = use_callback(move |_| projects.restart());
     let mut spend = use_resource(|| async { server_fns::list_project_spend(None).await });
     let ready = projects.state()() == UseResourceState::Ready;
     let spend_ready = spend.state()() == UseResourceState::Ready;
@@ -215,7 +214,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
     rsx! {
         section { class: "border rounded-xl bg-secondary min-w-0 overflow-hidden", aria_labelledby: "client-projects-title",
             div { class: "flex flex-wrap items-center gap-3 px-5 py-4 border-b",
-                h2 { id: "client-projects-title", class: "text-lg font-semibold m-0", "Projects" }
+                h2 { id: "client-projects-title", tabindex: "-1", class: "text-lg font-semibold m-0", "Projects" }
                 if ready {
                     if let Some(Ok(rows)) = &*data {
                         span { class: "text-xs text-secondary",
@@ -225,19 +224,21 @@ fn ClientProjects(client_id: Uuid) -> Element {
                 }
                 Link { to: Route::ProjectsForClient { client: client_id.to_string() }, class: "text-sm font-semibold ml-auto", "View in Projects" }
             }
-            if !ready {
-                p { class: "p-5 m-0", role: "status", aria_busy: "true", "Loading projects…" }
+            if !ready && !matches!(&*data, Some(Err(_))) {
+                Loading { label: "Loading projects…", class: "p-5" }
             } else if let Some(Ok(rows)) = &*data {
                 if rows.is_empty() {
-                    p { class: "p-5 m-0 text-secondary", "No projects available to you for this client." }
+                    EmptyState { icon: "projects", title: "No projects to show", inset: true,
+                        body: "Projects of this client that you can see appear here.",
+                    }
                 } else {
                     if !spend_ready {
-                        p { class: "px-5 text-sm text-secondary", role: "status", "Loading project totals…" }
+                        Loading { label: "Loading project totals…", class: "px-5" }
                     } else if let Some(Err(_)) = &*spend_data {
                         div { class: "alert alert-danger m-4", role: "alert",
                             "Could not load project totals. "
                             button { r#type: "button", class: "btn btn-secondary btn-sm",
-                                onclick: move |_| spend.restart(), "Retry totals" }
+                                onclick: move |_| spend.restart(), "Try again" }
                         }
                     }
                     div { class: "overflow-x-auto", role: "region", aria_label: "Client projects", tabindex: "0",
@@ -272,11 +273,9 @@ fn ClientProjects(client_id: Uuid) -> Element {
                         }
                     }
                 }
-            } else {
-                div { class: "alert alert-danger m-4", role: "alert",
-                    "Could not load projects. "
-                    button { r#type: "button", class: "btn btn-secondary btn-sm",
-                        onclick: move |_| projects.restart(), "Retry projects" }
+            } else if let Some(Err(error)) = &*data {
+                LoadError { error: error.clone(), what: "projects", retry, pending: !ready, inset: true,
+                    focus_on_recovery: "client-projects-title",
                 }
             }
         }
@@ -288,16 +287,19 @@ fn ClientInvoices(client_id: Uuid) -> Element {
     let mut invoices = use_resource(move || async move {
         server_fns::list_client_invoices(client_id.to_string()).await
     });
+    let retry = use_callback(move |_| invoices.restart());
     let ready = invoices.state()() == UseResourceState::Ready;
     let data = invoices.read();
     rsx! {
         section { class: "border rounded-xl bg-secondary p-5 min-w-0", aria_labelledby: "client-invoices-title",
-            h2 { id: "client-invoices-title", class: "text-lg font-semibold m-0 mb-3", "Invoices" }
-            if !ready {
-                p { role: "status", aria_busy: "true", "Loading invoices…" }
+            h2 { id: "client-invoices-title", tabindex: "-1", class: "text-lg font-semibold m-0 mb-3", "Invoices" }
+            if !ready && !matches!(&*data, Some(Err(_))) {
+                Loading { label: "Loading invoices…" }
             } else if let Some(Ok(rows)) = &*data {
                 if rows.is_empty() {
-                    p { class: "text-sm text-secondary m-0", "No invoices for this client." }
+                    EmptyState { icon: "invoices", title: "No invoices yet", inset: true,
+                        body: "Invoices generated for this client appear here.",
+                    }
                 } else {
                     ul { role: "list", class: "m-0 p-0 flex flex-col gap-3",
                         for invoice in rows {
@@ -309,11 +311,9 @@ fn ClientInvoices(client_id: Uuid) -> Element {
                         }
                     }
                 }
-            } else {
-                div { class: "alert alert-danger", role: "alert",
-                    "Could not load invoices. "
-                    button { r#type: "button", class: "btn btn-secondary btn-sm",
-                        onclick: move |_| invoices.restart(), "Retry invoices" }
+            } else if let Some(Err(error)) = &*data {
+                LoadError { error: error.clone(), what: "invoices", retry, pending: !ready, inset: true,
+                    focus_on_recovery: "client-invoices-title",
                 }
             }
         }

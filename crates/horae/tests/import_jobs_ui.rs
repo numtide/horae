@@ -63,6 +63,9 @@ pub mod back_link;
 pub mod icons;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 
 #[path = "../src/components/button.rs"]
 pub mod button;
@@ -70,7 +73,7 @@ pub mod button;
 pub mod confirm_dialog;
 
 mod components {
-    pub use crate::{back_link, confirm_dialog, icons, menu, page_header};
+    pub use crate::{back_link, confirm_dialog, icons, menu, page_header, screen_state};
 }
 
 /// The importer routes, as the app declares them.

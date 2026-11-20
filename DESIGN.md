@@ -168,7 +168,7 @@ Status:
 | `Chip` | `avatar.rs` | Data display | kept, not yet used (0 calls; New Project's tag chips are hand-written) |
 | `Toast`, `ToastContainer` | `toast.rs` | Feedback | in use (3 pages, each with its own container); one container in `AppLayout` and the new look in PR-9 |
 | `NoTrackingHint` | `no_tracking.rs` | Feedback | in use (Timesheet, `TimerWidget`) |
-| `EmptyState`, `ErrorState`, `Loading`, `Skeleton` | — | Feedback | planned in PR-4 |
+| `EmptyState`, `ErrorState`, `LoadError`, `Loading`, `Skeleton` | `screen_state.rs` | Feedback | in use (`Skeleton` in the Invoices list) |
 | `Modal`, `ModalHeader`, `ModalBody`, `ModalFooter` | `modal.rs` | Overlays | in use (9 dialogs) |
 | `ConfirmDialog` | `confirm_dialog.rs` | Overlays | in use (9) |
 | `use_session`, `use_week_start` | `session.rs` | Helpers | in use |
@@ -235,7 +235,7 @@ Status:
 
 - `Toast` and `ToastContainer` (`toast.rs`) confirm a completed action: a `role=status` notice with an optional action ("Undo") and close button, inside a fixed stack. Today each page renders its own container; PR-9 moves the single container into `AppLayout` and gives the toast its bottom-centre look. Props of `Toast`: `message`, `variant` (`success`, `danger`, `warning`, `info` or empty), `icon`, `dismissible`, `ondismiss`, `action_label`, `action_busy`, `onaction`. See [Toast](#toast-srccomponentstoastrs).
 - `NoTrackingHint` (`no_tracking.rs`) explains why the person cannot track time (no project assigned) wherever a start or add control would sit disabled without a reason, and links managers to Projects. Point the disabled control's `aria-describedby` at its `id`. Props: `id`, `assignee`, `can_manage`, `on_follow`. `no_tracking_message` gives the same sentence as text.
-- `EmptyState`, `ErrorState`, `Loading` and `Skeleton`: planned in PR-4. See [Empty, loading and error states](#empty-loading-and-error-states-srccomponents).
+- `EmptyState`, `ErrorState`, `LoadError`, `Loading` and `Skeleton` (`screen_state.rs`) draw a region with nothing to show, a region that failed to load and a region that is loading. `LoadError` picks the right `ErrorState` for a failed server read, and `loaded` (re-exported as `pages::loaded`) renders a resource with all three. Props and rules in [Empty, loading and error states](#empty-loading-and-error-states-srccomponentsscreen_staters).
 
 #### Overlays
 
@@ -341,12 +341,16 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 
 `.alert-success` stays only for a state that must remain visible on the page (an import that finished, say), not to confirm an action. Inline "Saved." text, green `text-success` notes and `role=status` paragraphs used as confirmations are replaced by the toast. The kit's *Form dirty state* asks for the same: saving confirms with a toast, never silence.
 
-### Empty, loading and error states (`src/components/`)
+### Empty, loading and error states (`src/components/screen_state.rs`)
 
-- **`EmptyState`**: the Projects variant is the base of `.empty-state` for every screen: a `--color-bg-secondary` card with a border and `--radius-xl` (16px), the icon in a 52px tile (`--radius-icon`, 22px glyph), a Newsreader `xl` title, copy limited to `--width-empty-copy`, and an optional action (Primary, or Secondary when it only resets filters) plus an optional text link. The copy says what to do next. The kit and `EmptyState.dc.html` draw the icon in a round disc; Horae uses the tile. The `tone="success"` variant (an all-clear moment such as nothing to approve) keeps the green icon colours.
-- **`ErrorState`**: for a region or screen that failed to load. It keeps the empty state's silhouette so the eye lands in the same place, including the 52px icon tile (the prototype's round disc is overridden here too), with the icon in the danger tint, a title and body that say what happened and what to do, an optional mono request line for support, and "Try again" as the action. A permission error points to who can grant access instead of offering a retry (see [Screen States](#screen-states)).
-- **`Loading`**: one component for every inline loading message, always with `role=status` and `aria-busy`, so assistive technology hears the same thing everywhere. It replaces the ad hoc `p { "Loading…" }` variants.
-- **`Skeleton`** (optional): a placeholder that mirrors a listing's grid, for tables and lists where the layout is known before the data arrives. Only the data region is replaced; the header, filters and actions stay live.
+- **`EmptyState`**: the Projects variant is the base of `.empty-state` for every screen: a `--color-bg-secondary` card with a border and `--radius-xl` (16px), the icon in a 52px tile (`--radius-icon`, 22px glyph), a Newsreader `xl` title, copy limited to `--width-empty-copy`, and an optional action (Primary, or Secondary when it only resets filters) plus an optional text link. The copy says what to do next. The kit and `EmptyState.dc.html` draw the icon in a round disc; Horae uses the tile. The `success` variant (an all-clear moment such as nothing to approve) keeps the green icon colours. Props: `icon` (a `NavIcon` name), `title`, `body`, `success`, `inset`, `id`, `actions`.
+- **`ErrorState`**: for a region or screen that failed to load. It keeps the empty state's silhouette so the eye lands in the same place, including the 52px icon tile (the prototype's round disc is overridden here too), with the icon in the danger tint, a title and body that say what happened and what to do, an optional mono request line for support, and "Try again" as the action. "Try again" is always a Secondary button, whatever else the screen shows, so a failed region never adds a second Primary. A permission error points to who can grant access instead of offering a retry, and shows a lock instead of the warning glyph (see [Screen States](#screen-states)). The request line shows only the server's own message, never transport text ("error sending request…"). Props: `title`, `body`, `request`, `onretry` (no retry when absent), `retry_id`, `retry_disabled`, `focus_on_recovery`, `icon`, `inset`, `id`, `actions`. `LOAD_FAILED` is the body for a failure the page cannot explain.
+- **Retrying**: a failed region stays mounted while its retry runs, with "Try again" disabled; only the first load shows `Loading`. When the retry succeeds, focus moves to the region's heading (`focus_on_recovery`, a heading with `tabindex=-1`), so it never falls back to the page.
+- **`LoadError`**: the `ErrorState` for a failed server read, chosen by what the failure means. A refusal (401, 403) names who can grant access and offers no retry; a missing record (404) takes the server's "… not found" as its title and offers no retry; anything else is `LOAD_FAILED` with "Try again". Props: `error`, `what` (as in "Could not load {what}"), `retry`, `pending`, `inset`, `focus_on_recovery`, `retry_id`.
+- **Inset**: inside a panel that already has its own border and heading (a card section, the client detail's Projects and Invoices), `inset` drops the state's card and titles it with an `h3`, so a card never sits inside a card.
+- **`Loading`**: one component for every inline loading message, a `role=status` line, so assistive technology hears the same thing everywhere. The message itself is not `aria-busy`, which would let a screen reader hold the announcement back; a container that keeps its old content while it reloads (the Timesheet grid, the Projects list) carries `aria-busy` instead. It replaces the ad hoc `p { "Loading…" }` variants. Props: `label` (default "Loading…"), `class`.
+- **`Skeleton`** (optional): a placeholder that mirrors a listing's grid, for tables and lists where the layout is known before the data arrives. Only the data region is replaced; the header, filters and actions stay live. Its rows are `aria-busy` and hidden from assistive technology, and its `label` is a visually hidden `role=status` text (`.sr-only`). Props: `rows`, `columns`, `label`. The Invoices list uses it.
+- **`loaded`** (`pages::loaded`) renders a resource with all three: `Loading` before the first answer, a `LoadError` while the latest answer is a failure (a pending retry included), and the content otherwise. Its `Failure` argument carries `what`, `retry`, `pending`, `inset` and `focus`.
 
 ## Formats
 
@@ -397,13 +401,15 @@ These rules come from the [`dioxus-best-practices`](.agents/skills/dioxus-best-p
 
 ## Tokens & utilities
 
-Empty states use one variant: `.empty-state` takes the Projects card (see
-[Empty, loading and error states](#empty-loading-and-error-states-srccomponents)).
-Until PR-4 folds them into the base class, that look is composed from
-`.empty-state-icon-tile` (the 52px tile, 12px radius and 22px glyph tokens),
-`.empty-state-copy` (copy limited to 380px with 1.55 line height) and card
-spacing/radius utilities in markup. The older sunken card with a round icon is
-retired.
+Empty and error states use one look: `.empty-state` is the Projects card (see
+[Empty, loading and error states](#empty-loading-and-error-states-srccomponentsscreen_staters)),
+with `.empty-state-icon` as the 52px tile (`.success` and `.danger` tint it),
+`.empty-state-title`, `.empty-state-text` (copy limited to 380px with 1.55 line
+height), `.empty-state-code`, `.empty-state-actions` and the `.inset` modifier.
+`.loading` is the inline loading line and `.sr-only` keeps text for assistive
+technology without drawing it.
+Screens render them through the components, not by hand. The older sunken card
+with a round icon, `.empty-state-icon-tile` and `.empty-state-copy` are gone.
 
 Everything is driven by CSS custom properties in `:root` (`assets/css/horae.css`) —
 never hardcode a colour, spacing, or radius in a rule; reference the token so the
@@ -516,7 +522,7 @@ acceptance work; this page is not evidence that every final gate has passed.
 
 ## Screen States
 
-Every new or changed screen and data-bearing component covers these states before it is done; record the check in the feature's `quickstart.md` validation, or its `visual-review.md` where one exists (as in `specs/012-clients-design/increments/mvp/`). Build each state from the shared components and classes below; add a variant to them rather than a new one-off style. `EmptyState`, `ErrorState`, `Loading` and `Skeleton` arrive in PR-4; until then, build the empty and failed-region states from the `.empty-state` classes in [Tokens & utilities](#tokens--utilities), and inline loading as a `role=status` line.
+Every new or changed screen and data-bearing component covers these states before it is done; record the check in the feature's `quickstart.md` validation, or its `visual-review.md` where one exists (as in `specs/012-clients-design/increments/mvp/`). Build each state from the shared components and classes below; add a variant to them rather than a new one-off style.
 
 - **Empty**: `EmptyState` with copy that says what to do next and, where the user can act, the action itself; not a blank table or a loose line of text.
 - **Loading**: `Loading` inline, per region (see Interaction Principles), or a `Skeleton` for a listing; keep the layout stable so content doesn't jump when data arrives.

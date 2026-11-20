@@ -63,12 +63,17 @@ pub mod form;
 pub mod icons;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/today.rs"]
 pub mod today;
 mod components {
-    pub use super::{badge, controls, debounce, form, icons, page_header, table, today};
+    pub use super::{
+        badge, controls, debounce, form, icons, page_header, screen_state, table, today,
+    };
 }
 #[path = "../src/pages/reports.rs"]
 mod reports;
@@ -190,16 +195,7 @@ async fn financial_catalogs_wait_for_explicit_authenticated_financial_access() {
     assert!(probe.queries.borrow().is_empty());
 }
 
-fn loaded<T>(
-    state: &Option<Result<T, ServerFnError>>,
-    render: impl FnOnce(&T) -> Element,
-) -> Element {
-    match state {
-        Some(Ok(value)) => render(value),
-        Some(Err(error)) => rsx! { p { "{error}" } },
-        None => rsx! { p { "Loading…" } },
-    }
-}
+use screen_state::{Failure, loaded};
 
 fn target(dom: &VirtualDom, vnode: &VNode, name: &str) -> Option<dioxus::core::ElementId> {
     use dioxus::core::{AttributeValue, DynamicNode, TemplateAttribute, TemplateNode};

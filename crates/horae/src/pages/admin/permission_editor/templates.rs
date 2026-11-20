@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::components::controls::Checkbox;
 use crate::components::form::{FormGroup, Input};
 use crate::components::permission_description::permission_description;
+use crate::components::screen_state::Loading;
 use crate::models::permission_editor::{
     PermissionRequester, TemplateAction, TemplateChoice, TemplateCommand,
 };
@@ -122,7 +123,7 @@ pub(super) fn TemplateEditor(
                 },
                 TemplateIntent::Delete(template) => rsx! {
                     p { class: "text-sm font-semibold mb-3", "{template.name}" }
-                    if !preview_ready { p { role: "status", class: "text-sm", "Loading affected people…" } }
+                    if !preview_ready { Loading { label: "Loading affected people…" } }
                     else if let Some(Ok(Some(value))) = &*deletion {
                         p { class: "text-sm mb-3", "People using this profile: {value.people.len()}. They keep their permissions as individual configurations. Existing work and management responsibilities will not change." }
                         if value.people.is_empty() { p { class: "text-sm mb-3", "No people currently use this profile." } }
