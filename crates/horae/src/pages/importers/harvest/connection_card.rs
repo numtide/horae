@@ -75,7 +75,7 @@ pub(super) fn ConnectionCard(
     rsx! {
         BackLink { to: Route::ImporterIndex {}, label: "Back to Importers" }
         PageHeader { title: "Harvest",
-            leading: rsx! { HarvestLogo { class: "" } },
+            leading: rsx! { HarvestLogo {} },
             meta: rsx! {
                 span { class: "badge {tone} badge-sm", "data-testid": "connection-status", "{label}" }
             },
@@ -153,9 +153,9 @@ pub(super) fn ConnectionCard(
         p { class: "text-sm text-secondary flex items-center gap-2 flex-wrap mb-6",
             if let Some(account) = &account { span { "Account " span { class: "text-mono", "{account}" } " ·" } }
             if refused {
-                span { class: "text-danger", "reconnect to continue" }
+                span { class: "text-danger", "Reconnect to continue." }
             } else {
-                span { "read-only, Horae never writes to Harvest" }
+                span { "Read-only: Horae never writes to Harvest." }
             }
         }
         if let Some(message) = error() {

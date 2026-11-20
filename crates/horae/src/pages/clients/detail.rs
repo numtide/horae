@@ -72,16 +72,16 @@ fn ClientDetailContent(id: Uuid) -> Element {
                 p { role: "status", aria_busy: "true", "Loading client…" }
             } else if let Some(Ok(ClientDetailView { details: detail, .. })) = &*data {
                 div { class: "border-b mb-4",
-                PageHeader {
-                    title: detail.client.name.clone(),
-                    context: rsx! { "Added to Horae {detail.client.created_at.format(\"%d %b %Y\")}" },
-                    meta: rsx! {
-                        span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
-                            "{detail.client.currency.trim()}"
-                        }
-                        if !detail.client.active { Badge { variant: "neutral", "Archived" } }
-                    },
-                    actions: can_manage.then(|| rsx! {
+                    PageHeader {
+                        title: detail.client.name.clone(),
+                        context: rsx! { "Added to Horae {detail.client.created_at.format(\"%d %b %Y\")}" },
+                        meta: rsx! {
+                            span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
+                                "{detail.client.currency.trim()}"
+                            }
+                            if !detail.client.active { Badge { variant: "neutral", "Archived" } }
+                        },
+                        actions: can_manage.then(|| rsx! {
                             if detail.client.active {
                                 Link { to: Route::NewProjectForClient { client: id.to_string() }, class: "btn btn-secondary", "New project" }
                                 Link { to: Route::NewInvoiceForClient { client: id.to_string() }, class: "btn btn-primary", "New invoice" }
@@ -129,8 +129,8 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                     if restoring() { "Restoring client…" } else { "Restore client" }
                                 }
                             }
-                    }),
-                }
+                        }),
+                    }
                 }
                 if let Some(message) = status_error() {
                     div { class: "alert alert-danger mb-4", role: "alert", "Could not change client status: {message}" }

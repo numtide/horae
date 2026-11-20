@@ -8,7 +8,7 @@ use crate::components::icons::NavIcon;
 pub fn BackLink(#[props(into)] to: NavigationTarget, label: &'static str) -> Element {
     rsx! {
         Link { to, id: "page-back", class: "back-link",
-            NavIcon { name: "arrow-left", class: "size-4" }
+            span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
             "{label}"
         }
     }

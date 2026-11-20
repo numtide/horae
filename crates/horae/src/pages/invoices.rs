@@ -138,7 +138,6 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                     Err(message) => rsx! {
                         div { class: "alert alert-danger", role: "alert", "{message}" }
                         button { class: "btn btn-secondary", onclick: move |_| clients.restart(), "Retry" }
-                        Link { to: Route::InvoiceList {}, class: "btn btn-ghost", "Back to Invoices" }
                     }
                 })}
                 }
@@ -251,13 +250,17 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div {
+            BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
+            // The number names the title once the invoice has loaded.
+            if !matches!(&*invoice_data.read(), Some(Ok(_))) {
+                PageHeader { title: "Invoice" }
+            }
             {loaded(&*invoice_data.read(), |data| {
                 let inv = data.invoice.clone();
                 let lines = data.lines.clone();
                 let cname = &data.client_name;
 
                 rsx! {
-                    BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
                     PageHeader { title: format!("Invoice {}", inv.number),
                         actions: rsx! {
                             match inv.status {

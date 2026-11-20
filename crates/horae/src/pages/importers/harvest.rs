@@ -136,7 +136,7 @@ async fn pause() {
 /// Harvest's mark beside its name, where Horae imports from it. Decorative:
 /// the name next to it is the text alternative.
 #[component]
-pub(super) fn HarvestLogo(class: &'static str) -> Element {
+pub(super) fn HarvestLogo(class: Option<&'static str>) -> Element {
     rsx! {
         img { class, src: asset!("/assets/harvest-logo.svg"), alt: "", width: "40", height: "40" }
     }

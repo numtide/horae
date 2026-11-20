@@ -1881,7 +1881,7 @@ fn configured_unbound_connection_explains_read_only_access() {
     assert!(ui.html().contains("Connect Harvest"));
     assert!(
         ui.html()
-            .contains("read-only, Horae never writes to Harvest")
+            .contains("Read-only: Horae never writes to Harvest.")
     );
     assert!(!ui.html().contains("data-testid=\"change-account\""));
 }

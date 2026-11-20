@@ -128,12 +128,13 @@ One `PageHeader` component (`page_header.rs`, with `back_link.rs`) renders the t
 `PageHeader` has three optional slots besides the actions. Each is for the one thing named here, so headers do not drift apart again:
 
 - **`context`**: one line above the title, only when it carries data about the record: the client of a project (a link when the viewer may open it), the date a client was added. Never a fixed label such as "Projects"; the back link already names the section.
-- **`meta`**: inline after the title, for status badges and short qualifiers: a currency or project-type pill, "Archived", the connection status of an integration, the source of an import run.
+- **`meta`**: inline after the title, for status badges and short qualifiers: a currency or project-type pill, "Archived", the connection status of an integration, the source of an import run, the Timesheet's week total.
 - **`leading`**: before the title, only for an integration's own logo (Harvest), as a 36px mark (`--size-page-mark`) with the button radius. The logo is a local asset shown unaltered (see `AGENTS.md`, *Harvest parity*); no other icon or brand goes here.
 
 Anything longer, such as a status sentence or a description, goes below the header, not in it.
 
 - **Back link**: the kit's *Back link*. A 16px arrow and a 14px label on their own row above the title, muted ink that brightens to pine on hover. It points to the parent in the hierarchy ("Back to Projects" from a project, "Back to Importers" from Harvest), not to the screen the user came from, and only screens that sit under a section have one. Sections reached from the sidebar (Timesheet, Projects, People, Settings, API tokens, Importers, the audit log and the rest) have none, because the sidebar is always there; the `AdminShell`'s "Back to Timesheet" link is removed.
+  - **Exception: editors return where they were opened.** An editor of an existing record goes back to the screen that opened it, because leaving it is closing a task, not moving up the hierarchy. Edit project returns to the project ("Back to project") when opened from its detail and to Projects ("Back to Projects") from the list, as its `return_to` says. The back control of an editor with a draft is a button with the back-link look, because leaving first saves the draft or asks to discard it.
 - **No breadcrumbs.** The back link replaces a breadcrumb; never show both. The Harvest section's `BackLinks` breadcrumb (`Importers / Harvest / …`) is replaced by a back link to the parent. No other style of "back" is allowed: no `btn-ghost` or `btn-secondary` back buttons and no top-right back button.
 
 ### Timer Widget (`src/components/timer_widget.rs`)

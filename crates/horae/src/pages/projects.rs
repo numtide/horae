@@ -482,7 +482,6 @@ fn ClientProjectList(client: String) -> Element {
     match &*context.read() {
         Some(Ok(id)) => rsx! { ProjectList { initial_client: Some(*id) } },
         Some(Err(error)) => rsx! {
-            BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
             PageHeader { title: "Projects" }
             div { class: "alert alert-danger", role: "alert", "Could not load this client's projects: {error}" }
             button { class: "btn btn-secondary", onclick: move |_| context.restart(), "Retry" }

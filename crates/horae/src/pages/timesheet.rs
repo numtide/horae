@@ -1201,10 +1201,10 @@ fn TimesheetContent(
             // Header: title + week total + view toggle
             div { class: "ts-header",
                 PageHeader { title: "Timesheet",
+                    meta: (held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_)))).then(|| rsx! {
+                        span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
+                    }),
                     actions: rsx! {
-                        if held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_))) {
-                            span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
-                        }
                         Segmented {
                             items: vec!["Day".to_string(), "Week".to_string(), "Calendar".to_string()],
                             active: match current_mode {

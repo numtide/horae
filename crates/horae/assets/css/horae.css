@@ -1590,13 +1590,17 @@ tbody tr:hover { background: var(--color-row-hover); }
    the rail beside it is resizable. One row needs about 560px in the brand
    fonts and noticeably more in fallback fonts, hence the margin. The wrapper
    around the shared header is the container (it holds nothing fixed-position,
-   which a container would trap). Below it the actions dissolve into the
-   header's own row, so the title's basis leaves room for the total (up to
-   124px) but never for the tabs. */
+   which a container would trap). Below it the title's wrappers dissolve (see
+   page_header.rs) so the title, the tabs and the total share the header's own
+   rows: the title takes the first row whole, so it never breaks to make room,
+   and the total follows the tabs, so its absence moves nothing before it. */
 .ts-header { container: ts-header / inline-size; }
 @container ts-header (max-width: 680px) {
-  .ts-header .page-actions { display: contents; }
-  .ts-header .page-header > :first-child { flex-basis: calc(100% - 140px); }
+  .ts-header .page-heading,
+  .ts-header .page-heading > div,
+  .ts-header .page-title-row { display: contents; }
+  .ts-header .page-title { flex-basis: 100%; }
+  .ts-header .ts-saved { order: 1; }
 }
 @media (max-width: 480px) {
   .ts-pager-label { flex: 1; justify-content: center; min-width: 0; padding: 0 var(--space-2); }
