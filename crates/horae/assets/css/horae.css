@@ -1964,7 +1964,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .modal-label { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); margin-bottom: var(--space-3); }
 .modal-body .modal-label + .seg-row + .modal-label { margin-top: var(--space-5); }
-.modal-actions .btn { flex: 1; justify-content: center; }
+/* Equal widths while the labels fit; with large text each button takes its own line. */
+.modal-actions .btn { flex: 1 1 var(--space-30); justify-content: center; }
 .confirm-icon {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: var(--space-10); height: var(--space-10); border: 1px solid; border-radius: var(--radius-icon);

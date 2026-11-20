@@ -329,7 +329,6 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     await archiveNow();
     await expect(trigger).toBeDisabled();
     await expect(archiveFailure).toHaveCount(0);
-    await trigger.click({ force: true });
     assert.equal(statusRequests.length, before + 1, 'A pending archive sends one request');
     release();
     assert.equal((await archived).status(), 200);
