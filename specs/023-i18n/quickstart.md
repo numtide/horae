@@ -68,7 +68,7 @@ Negative checks, each undone afterwards:
    Expected: no output (SC-002). The dumps live outside the worktree and are not committed.
 
 1. **Existing tests unchanged.** `git diff origin/master -- crates/horae/tests` shows only the
-   `mod i18n` include (research R-8) and the dump test; no assertion changes. Then:
+   dump test (I-1 already added the `mod i18n` includes, research R-8); no assertion changes. Then:
 
    ```sh
    cargo test -p horae --features server <the area's tests>

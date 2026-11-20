@@ -80,7 +80,10 @@ Each fails the build with the file and the id, except the warning.
 ## Tests of the crate
 
 - Plain messages, variables, plurals (`1 day`, `30 days`), terms, `split_tag` with and without
-  the tag (the proof of concept's four, kept).
+  the tag (the proof of concept's four, kept; they need real messages, so they return with the
+  first screens in I-2).
+- `tests/build_checks.rs`: each check above, through `build/checks.rs`, which `build.rs` and the
+  test share.
 - `tests/unused_messages.rs`: every English message id is used as
   `.method(` in a `.rs` file under `crates/` outside `crates/i18n`, or referenced by a used message
   (research R-6). The failure lists the unused ids.

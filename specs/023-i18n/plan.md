@@ -105,9 +105,11 @@ specs/023-i18n/
 ```text
 crates/i18n/                                  # horae-i18n (new, I-1)
 ├── Cargo.toml
-├── build.rs                                  # generator and translation checks (from 26e562bf, R-1)
+├── build.rs                                  # generator (from 26e562bf, R-1)
+├── build/checks.rs                           # parsing and checks, shared with tests/build_checks.rs
 ├── locales/en/horae.ftl                      # the English catalog, one section per area (R-2)
 ├── src/lib.rs                                # Lang, Tr, split_tag, bundles with English fallback
+├── tests/build_checks.rs                     # each build-time check fails as contracts/catalog.md says
 └── tests/unused_messages.rs                  # every English message is used somewhere (R-6)
 crates/horae/src/i18n.rs                      # use_tr_provider, use_tr (I-1)
 crates/horae/src/app.rs                       # calls use_tr_provider (I-1)
@@ -115,7 +117,7 @@ crates/horae/src/main.rs                      # mod i18n (I-1)
 crates/horae/Cargo.toml                       # horae-i18n dependency (I-1)
 crates/horae/Dioxus.toml                      # watch_path gains ../i18n (I-1)
 crates/horae/src/{pages,components}/**        # migrated area by area (I-2 to I-12)
-crates/horae/tests/*_ui.rs and others         # mod i18n include and HTML dump tests (R-7, R-8)
+crates/horae/tests/*_ui.rs and others         # mod i18n include (I-1, R-8); HTML dump tests (R-7)
 crates/dioxus-lint/src/main.rs                # rule dioxus/literal-text, EXEMPT_FILES, NOT_LANGUAGE (I-1)
 crates/dioxus-lint/baseline.toml              # the rule's per-file baseline, lowered by every PR
 crates/dioxus-lint/fixtures/literal-text/     # bad.rs and good.rs (I-1)
@@ -242,7 +244,7 @@ and passes `nix flake check` on its own.
 
 | PR | Content | Texts (rsx + other) | Depends on |
 | --- | --- | ---: | --- |
-| **I-1** | `horae-i18n` with the R-1 additions; English catalog with only the section headers and `-brand`; `i18n.rs` and the provider in `App`; lint rule with baseline, fixtures, skill section and evidence; unused-message test; Nix checks; `Dioxus.toml`; AGENTS.md; WASM measured | 0 | PR-4 and the `Button` API merged (C-9) |
+| **I-1** | `horae-i18n` with the R-1 additions; English catalog with only the section headers and `-brand`; `i18n.rs` and the provider in `App`; the `mod i18n` include in the 15 UI test files (R-8); lint rule with baseline, fixtures, skill section and evidence; unused-message test; Nix checks; `Dioxus.toml`; AGENTS.md; WASM measured | 0 | PR-4 and the `Button` API merged (C-9) |
 | **I-2** | Settings (`settings.rs`, `settings/*`), API tokens (also `admin/api_tokens.rs`) and Tasks (`tasks.rs`, `tasks/editor.rs`), from `26e562bf` plus the files the proof of concept left; HTML dumps; WASM measured | ~170 | I-1 |
 | **I-3** | Shared components (`crates/horae/src/components/*`: sidebar, `AdminShell`, layout, toast, modal, `DatePicker` day names, `permission_description`, timer, version, the PR-4 states and `Button`) and `app.rs`, `route.rs` | ~145 | I-1 |
 | **I-4** | Clients (`pages/clients.rs`, `clients/*`) | ~110 | I-1 |

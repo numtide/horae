@@ -278,11 +278,15 @@ PR-7).
 ### R-8 Tests that include page sources with `#[path]`
 
 - **Decision**: the 15 test files under `crates/horae/tests/` that include a page or component
-  with `#[path = "../src/…"]` also include `#[path = "../src/i18n.rs"] mod i18n;`, added by the
-  PR that migrates the included file. `horae-i18n` is a normal dependency of `horae`, so the test
+  with `#[path = "../src/…"]` all get `#[allow(dead_code)] #[path = "../src/i18n.rs"] mod i18n;`
+  in I-1, before any screen moves. `horae-i18n` is a normal dependency of `horae`, so the test
   crates can use it without a new dev-dependency.
 - **Rationale**: a migrated file names `crate::i18n::use_tr`, and those tests compile it as part
-  of their own crate. The proof of concept did this for `api_tokens_ui.rs`.
+  of their own crate. Fourteen of the fifteen include shared components (`page_header.rs`,
+  `form.rs`, `modal.rs`, `controls.rs`…), so migrating the components (I-3) would otherwise touch
+  almost every test file at once, and each area PR would depend on whether I-3 had merged. Adding
+  the include up front keeps every later PR's test diff to its dump test. The proof of concept
+  did this for `api_tokens_ui.rs`.
 
 ### R-9 Build and bundle
 
