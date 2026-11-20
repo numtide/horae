@@ -141,7 +141,7 @@ Status:
 | `TimerWidget` | `timer_widget.rs` | Shell and navigation | in use (sidebar) |
 | `VersionInfo` | `version_info.rs` | Shell and navigation | in use (sidebar) |
 | `ThemeInit` | `theme.rs` | Shell and navigation | in use (`app.rs`) |
-| `Button` | `button.rs` | Actions | kept, not yet used (0 calls, 263 hand-written `btn` classes) |
+| `Button` | `button.rs` | Actions | in use (2, Workspace settings; the other screens still write the `btn` classes by hand until PR-8) |
 | `IconButton` | `button.rs` | Actions | kept, not yet used (0 calls) |
 | `SplitButton` | `button.rs` | Actions | kept, not yet used (0 calls; the Timesheet builds `.ts-submit` by hand) |
 | `Menu`, `MenuItem`, `MenuDivider` | `menu.rs` | Menus and pickers | in use (10, 17 and 3) |
@@ -195,13 +195,11 @@ Status:
 
 #### Actions
 
-- `Button` (`button.rs`) is a `button` with the `btn btn-{variant}` classes, an optional `sm` size, `disabled` and `onclick`. It is the intended way to draw an action, but it takes no `type`, `id`, `aria-label` or test attributes, so screens write `button { class: "btn …" }` by hand instead. In new code, use the component when those props are enough; otherwise write the classes, using only the variants in [Buttons](#buttons-srccomponents). Props today: `variant` (default `primary`), `size`, `disabled`, `onclick`, `children`. *Pending code*, in a PR of its own that lands before PR-8:
-  - `Button`, `IconButton` and `SplitButton` accept the native button's attributes through `#[props(extends = button)]` (`type`, `id`, `data-testid`, `aria-*`, `disabled` and the rest), so screens can call them everywhere and the tests that find buttons by `data-testid` keep working unchanged.
-  - The text becomes a `label: String` prop, used by default. `children` stays only for a button with both an icon and text. `children` compares by pointer, so a text button built from children re-renders every time the page does.
-  - In table rows and loops, the handlers passed to it are made with `use_callback`.
-  - The PR checks with `horae-dioxus-lint`, and by measuring the Timesheet, that buttons do not re-render more than they need to.
-- `IconButton` (`button.rs`) is a square icon-only `btn-icon` button with a required `label` for its accessible name. Use it for an action shown only as an icon. Props: `variant` (default `ghost`), `label`, `disabled`, `onclick`, `children`.
-- `SplitButton` (`button.rs`) is the `.btn-split` pair: a main action and a caret button. The caret only fires `ontrigger`; opening a menu of variants is the caller's job. Props: `variant`, `label`, `trigger`, `onclick`, `ontrigger`. See Split button in [Buttons](#buttons-srccomponents).
+- `Button` (`button.rs`) is the way to draw an action: a `button` with the `btn` classes of its variant. Use it instead of writing `button { class: "btn …" }`. Props: `variant` (a `ButtonVariant`: Primary, the default, Secondary, Accent, Danger, DangerSolid or Ghost; see [Buttons](#buttons-srccomponents)), `small` (`btn-sm`), `label` (required: the text), `onclick` (optional) and `children` (only an icon, drawn before the label).
+  - Any native button attribute passes through `#[props(extends = GlobalAttributes, extends = button)]`: `id`, `r#type`, `disabled`, `aria_*`, `"data-testid"`, and a `class` of extra utilities, appended to the button's own. The type is `button` unless one is passed, so a button only submits its form with `r#type: "submit"`.
+  - It re-renders with its page only when its props change. Pass handlers made with `use_callback`: an inline closure is a new callback on every render. `children` compares by pointer, so a button with an icon re-renders whenever its page does; keep those out of hot rows. `tests/button.rs` counts these renders.
+- `IconButton` (`button.rs`) is a square icon-only `btn-icon` button. `label` is required and is its accessible name (`aria-label`); it replaces any `aria_label` passed. Use it for an action shown only as an icon, which goes in `children`. Props: `variant` (default Ghost), `label`, `onclick`, `children`, and the native attributes `Button` takes.
+- `SplitButton` (`button.rs`) is the `.btn-split` pair: a main action and a caret button. The caret only fires `ontrigger`; opening a menu of variants is the caller's job. Native attributes go to the main button, except `disabled`, which disables both. Props: `variant`, `label`, `trigger` (default `▾`), `onclick`, `ontrigger`. See Split button in [Buttons](#buttons-srccomponents).
 
 #### Menus and pickers
 
@@ -311,7 +309,7 @@ The `Button` component (`button.rs`) takes the look as `variant: ButtonVariant`,
 - **Secondary**: tertiary surface, `--color-border-input` border; hover raises the border to `--color-border-strong`
 - **Accent**: brass fill `#D99A3C`, dark text — "Send invoice" and billing actions; hover → `--color-accent-hover` + `--glow-accent`
 - **Danger** (`btn-danger`): transparent with dark red border `#6e3634`; hover tints and lifts the border to `--color-border-danger-hover`. Only for the button that opens a destructive confirmation (see [Destructive actions](#destructive-actions)); never for the confirmation itself and never for archiving.
-- **Danger solid**: red fill with dark ink, the kit's `hb-danger-solid` from `ConfirmDialog.dc.html`. Only for the confirm button of an irreversible action. The class is `.btn-danger-solid` (`ButtonVariant::DangerSolid`); PR-3 moves the confirmations to it. In the light theme the fill is `--color-danger-fg` with white ink, because `--color-danger` reaches only 4.47:1 against white.
+- **Danger solid**: red fill with dark ink, the kit's `hb-danger-solid` from `ConfirmDialog.dc.html`. Only for the confirm button of an irreversible action. The class is `.btn-danger-solid` (`ButtonVariant::DangerSolid`); PR-3 moves the confirmations to it. In the light theme the fill is `--color-danger-fg` with white ink, because `--color-danger` reaches only 4.47:1 against white, and it deepens on hover instead of brightening, as the light Primary does, because a lighter red would fall below 4.5:1 with white ink.
 - **Ghost**: transparent pine-ink link; hover → pine-tint background
 - **Split button** (`.btn-split`): a main action with real variants behind a caret, such as submitting a week with or without notifying. Its body is Primary. The Timesheet's "Submit week" is a `.btn-split` with a Primary body; its own `.ts-submit` button is retired.
 

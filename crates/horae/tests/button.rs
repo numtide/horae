@@ -70,10 +70,10 @@ fn button_appends_caller_classes_and_sizes() {
 fn every_variant_has_its_class() {
     let html = render(|| {
         rsx! {
-            Button { variant: ButtonVariant::Secondary }
-            Button { variant: ButtonVariant::Accent }
-            Button { variant: ButtonVariant::Danger }
-            Button { variant: ButtonVariant::Ghost }
+            Button { variant: ButtonVariant::Secondary, label: "Secondary" }
+            Button { variant: ButtonVariant::Accent, label: "Accent" }
+            Button { variant: ButtonVariant::Danger, label: "Danger" }
+            Button { variant: ButtonVariant::Ghost, label: "Ghost" }
         }
     });
     for class in ["btn-secondary", "btn-accent", "btn-danger", "btn-ghost"] {
@@ -94,6 +94,24 @@ fn icon_button_is_named_by_its_label() {
     assert!(html.contains(r#"class="btn btn-ghost btn-icon""#), "{html}");
     assert!(html.contains(r#"type="button""#), "{html}");
     assert!(html.contains(r#"id="start""#), "{html}");
+}
+
+#[test]
+fn icon_button_label_replaces_a_passed_aria_label() {
+    let html = render(|| rsx! { IconButton { label: "Start timer", aria_label: "Other", "▶" } });
+    assert_eq!(html.matches("aria-label=").count(), 1, "{html}");
+    assert!(html.contains(r#"aria-label="Start timer""#), "{html}");
+}
+
+#[test]
+fn disabled_split_button_disables_its_caret() {
+    let html = render(|| rsx! { SplitButton { label: "Submit week", disabled: true } });
+    let caret = html.split("<button").nth(2).unwrap();
+    assert!(caret.contains("disabled=true"), "{html}");
+
+    let html = render(|| rsx! { SplitButton { label: "Submit week" } });
+    let caret = html.split("<button").nth(2).unwrap();
+    assert!(!caret.contains("disabled"), "{html}");
 }
 
 #[test]
@@ -161,9 +179,9 @@ fn inline_closure_rerenders_the_button() {
 }
 
 #[test]
-fn text_as_children_rerenders_the_button() {
+fn children_rerender_the_button() {
     fn page() -> Element {
-        rsx! { Button { "Save" } }
+        rsx! { Button { label: "Start timer", span { "▶" } } }
     }
     assert!(button_rerenders_with_page(page));
 }

@@ -30,10 +30,11 @@ impl ButtonVariant {
     }
 }
 
-/// A styled action button. The text goes in `label`; `children` is only for an
-/// icon, drawn before the label. Children compare by pointer, so a button built
-/// from them re-renders whenever its parent does, and one with a `label` and a
-/// `use_callback` handler does not.
+/// A styled action button. The text goes in `label`, which is required so the
+/// button always has a name; `children` is only for an icon, drawn before the
+/// label. Children compare by pointer, so a button with them re-renders whenever
+/// its parent does, and one with only a `label` and a `use_callback` handler
+/// does not.
 ///
 /// Any native button attribute passes through (`id`, `r#type`, `disabled`,
 /// `aria_label`, `"data-testid"`, a `class` of extra utilities…). The type is
@@ -42,7 +43,7 @@ impl ButtonVariant {
 pub fn Button(
     #[props(default)] variant: ButtonVariant,
     #[props(default)] small: bool,
-    #[props(default)] label: String,
+    label: String,
     onclick: Option<EventHandler<MouseEvent>>,
     #[props(extends = GlobalAttributes, extends = button)] attributes: Vec<Attribute>,
     children: Element,
@@ -63,8 +64,10 @@ pub fn Button(
     }
 }
 
-/// A square, icon-only button. `label` is its accessible name (aria-label); the
-/// icon goes in `children`. Takes the same native attributes as [`Button`].
+/// A square, icon-only button. `label` is its accessible name (aria-label) and
+/// replaces any `aria_label` passed; the icon goes in `children`, so it
+/// re-renders whenever its parent does. Takes the same native attributes as
+/// [`Button`].
 #[component]
 pub fn IconButton(
     #[props(default = ButtonVariant::Ghost)] variant: ButtonVariant,
@@ -73,10 +76,12 @@ pub fn IconButton(
     #[props(extends = GlobalAttributes, extends = button)] attributes: Vec<Attribute>,
     children: Element,
 ) -> Element {
-    let attributes = with_button_defaults(&format!("btn {} btn-icon", variant.class()), attributes);
+    let mut attributes =
+        with_button_defaults(&format!("btn {} btn-icon", variant.class()), attributes);
+    attributes.retain(|attribute| attribute.name != "aria-label");
+    attributes.push(Attribute::new("aria-label", label, None, false));
     rsx! {
         button {
-            "aria-label": "{label}",
             onclick: move |event| {
                 if let Some(handler) = onclick {
                     handler.call(event);
@@ -90,7 +95,8 @@ pub fn IconButton(
 
 /// A main action joined to a caret that offers its variants (submit a week with
 /// or without notifying). The caret only fires `ontrigger`; opening a menu is the
-/// caller's job. Native attributes go to the main button.
+/// caller's job. Native attributes go to the main button; `disabled` disables
+/// the caret too, since it describes the whole control.
 #[component]
 pub fn SplitButton(
     #[props(default)] variant: ButtonVariant,
@@ -101,6 +107,9 @@ pub fn SplitButton(
     #[props(extends = GlobalAttributes, extends = button)] attributes: Vec<Attribute>,
 ) -> Element {
     let class = format!("btn {}", variant.class());
+    let disabled = attributes.iter().any(|attribute| {
+        attribute.name == "disabled" && matches!(attribute.value, AttributeValue::Bool(true))
+    });
     let attributes = with_button_defaults(&class, attributes);
     rsx! {
         div { class: "btn-split",
@@ -117,6 +126,7 @@ pub fn SplitButton(
                 r#type: "button",
                 class: "{class}",
                 "aria-label": "More actions",
+                disabled,
                 onclick: move |event| {
                     if let Some(handler) = ontrigger {
                         handler.call(event);
