@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::components::avatar::{Avatar, Chip};
 use crate::components::badge::Badge;
-use crate::components::button::{Button, IconButton, SplitButton};
+use crate::components::button::{Button, ButtonVariant, IconButton, SplitButton};
 use crate::components::card::{Card, MetricCard};
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::{Checkbox, Radio, Segmented, Toggle};
@@ -35,18 +35,22 @@ pub fn Gallery() -> Element {
             section { class: "gallery-section",
                 h2 { class: "gallery-heading", "Buttons" }
                 div { class: "gallery-row",
-                    Button { variant: "primary", "Primary" }
-                    Button { variant: "solid", "Submit week" }
-                    Button { variant: "secondary", "Secondary" }
-                    Button { variant: "accent", "Send invoice" }
-                    Button { variant: "danger", "Delete" }
-                    Button { variant: "ghost", "Ghost" }
+                    Button { label: "Primary" }
+                    Button { variant: ButtonVariant::Secondary, label: "Secondary" }
+                    Button { variant: ButtonVariant::Accent, label: "Send invoice" }
+                    Button { variant: ButtonVariant::Danger, label: "Delete…" }
+                    Button { variant: ButtonVariant::DangerSolid, label: "Delete" }
+                    Button { variant: ButtonVariant::Ghost, label: "Ghost" }
                 }
                 div { class: "gallery-row",
-                    Button { variant: "primary", size: "sm", "Small" }
-                    Button { variant: "primary", disabled: true, "Disabled" }
+                    Button { small: true, label: "Small" }
+                    Button { variant: ButtonVariant::Secondary, small: true, label: "Small" }
+                    Button { disabled: true, label: "Disabled" }
+                    Button { variant: ButtonVariant::Secondary, label: "Start timer",
+                        span { aria_hidden: "true", "▶" }
+                    }
                     IconButton { label: "Start timer", "▶" }
-                    SplitButton { label: "Generate PDF" }
+                    SplitButton { label: "Submit week" }
                 }
             }
 
@@ -233,7 +237,7 @@ pub fn Gallery() -> Element {
                                 td { class: "text-mono text-right", "12.0" }
                                 td { Badge { variant: "success", "Approved" } }
                                 td { class: "text-right",
-                                    Button { variant: "ghost", size: "sm", "Reopen" }
+                                    Button { variant: ButtonVariant::Secondary, small: true, label: "Reopen" }
                                 }
                             }
                             tr {
@@ -242,7 +246,7 @@ pub fn Gallery() -> Element {
                                 td { class: "text-mono text-right", "6.5" }
                                 td { Badge { variant: "warning", "Awaiting" } }
                                 td { class: "text-right",
-                                    Button { variant: "primary", size: "sm", "Approve" }
+                                    Button { variant: ButtonVariant::Secondary, small: true, label: "Approve" }
                                 }
                             }
                         }

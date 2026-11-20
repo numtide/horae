@@ -13,6 +13,9 @@ use futures_util::FutureExt;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 #[allow(dead_code)]
+#[path = "../src/components/button.rs"]
+pub mod button;
+#[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -28,7 +31,7 @@ pub mod select_field;
 #[path = "../src/components/session.rs"]
 pub mod session;
 mod components {
-    pub use super::{form, icons, page_header, screen_state, select_field, session};
+    pub use super::{button, form, icons, page_header, screen_state, select_field, session};
 }
 pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod models {
