@@ -36,7 +36,7 @@ All colors are CSS custom properties in `assets/css/horae.css`.
 | `--color-text` | `#EFEAE0` | Primary body text |
 | `--color-text-secondary` | `#A29C8D` | Labels, captions, sidebar links |
 | `--color-text-muted` | `#918B7B` | Placeholders, section headers |
-| `--color-label` | `#8D8777` | Uppercase micro-labels, table headers |
+| `--color-label` | `#8D8777` | Uppercase micro-labels: table headers, sidebar section labels, `MetricCard` labels |
 
 The light theme sets muted to `#6E675A` and label to `#70695B`. Both tokens stay at 4.5:1 or more on `--color-bg`, `--color-bg-secondary`, `--color-bg-tertiary` and `--color-menu` in each theme, which leaves little room between them: they now differ mostly in use (case and tracking), not in tone, and a later PR merges them (see the inventory).
 
@@ -90,7 +90,7 @@ Three typefaces loaded from Google Fonts:
 
 Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `sm` 14 (body, numerals) · `base` 16 · `lg` 18 (H2) · `xl` 20 (empty- and error-state titles) · `2xl` 24 · `3xl` 30 (H1) · `4xl` 34 (page titles) · `display` 44 (hero totals, e.g. invoice "Total due"). Headings resolve to `--color-text-strong`. The kit's text specimen (27, 15 and 11 px) sits off this scale; the scale here wins.
 
-**Section titles.** Inside a screen, either every section is a card or none is, and a section's title is always `card-title` (Newsreader 18/500). Uppercase micro-labels are only for table headers and the sidebar's section labels. Today section titles come in seven styles (18/500, 18/600, 20/500, 20/600, 24/600, 14/600 and 14/700 in capitals), and My settings, Project detail and Harvest mix sections in cards with sections outside them. New Project keeps its own layout (see [New Project](#new-project)), but its section titles use the same class. *Pending code (PR-S).*
+**Section titles.** Inside a screen, either every section is a card or none is, and a section's title is always `card-title` (Newsreader 18/500). Uppercase micro-labels are only for table headers, the sidebar's section labels and the label of a `MetricCard`, whose figure is the heading. Today section titles come in seven styles (18/500, 18/600, 20/500, 20/600, 24/600, 14/600 and 14/700 in capitals), and My settings, Project detail and Harvest mix sections in cards with sections outside them. New Project keeps its own layout (see [New Project](#new-project)), but its section titles use the same class. *Pending code (PR-S).*
 
 **Page title.** Every screen's title is Newsreader 34/600 (`4xl`) with −0.015em tracking (`tracking-tight`), in `--color-text-strong`, rendered by `PageHeader` (see [Page header](#page-header-srccomponents)). This is the size every prototype uses, so one title reads the same on every screen. The 24/500 `.page-title`, the `text-2xl` titles and the 404's 32/700 heading are retired. The sign-in shell keeps its own layout but uses the same 34/600 heading.
 
@@ -193,7 +193,7 @@ Status:
 
 - `AppLayout` (`layout.rs`) is the signed-in shell: the sidebar, its resize handle, the mobile navigation toggle and the `main` region that renders the route. It provides the session, the running timer and the person's UTC offset to everything below it. The router mounts it with `#[layout(AppLayout)]`; pages never render it. No props. See [Layout](#layout).
 - `Sidebar` (`sidebar.rs`) is the left rail: brand, `TimerWidget`, the navigation sections the person may open, `VersionInfo` for administrators and the account menu. Only `AppLayout` renders it. Props: `collapsed: Signal<bool>`, `on_navigate`. See [Sidebar](#sidebar-srccomponentssidebarrs).
-- `AdminShell` (`admin_shell.rs`) wraps the Workspace and Data sections (People, Settings, API tokens, Importers, Audit log) with their subnavigation and checks that the person may open the section. The router mounts it with `#[layout(AdminShell)]`. No props. People leaves it in PR-People and becomes a main screen (see [People](#people)). It sets no maximum width (see Form width in [Layout](#layout)).
+- `AdminShell` (`admin_shell.rs`) wraps the Workspace and Data sections (People, Settings, API tokens, Importers, Audit log) with their subnavigation and checks that the person may open the section. The router mounts it with `#[layout(AdminShell)]`. No props. People leaves it in PR-People and becomes a main screen (see [People](#people)). It is to set no maximum width (see Form width in [Layout](#layout)). *Pending code (PR-S):* `.adm-main` still limits it to 760px.
 - `PageHeader` (`page_header.rs`) and `BackLink` (`back_link.rs`) draw the top of every screen. Props of `PageHeader`: `title`, `title_id` (makes the heading a focus target), `leading`, `context`, `meta`, `actions`. See [Page header](#page-header-srccomponents).
 - `NavItem` (`nav.rs`) is a rail row with an optional text icon. Today it is a `button` with an `onclick` and draws a trailing dot on the active row, so the rail renders its own `Link`s with the same `nav-item` classes instead, and `NavItem` only appears in the gallery. When a screen starts using it, it must take a `Route` and navigate with `Link` (see [Component Conventions](#component-conventions)), and drop the dot, which [Sidebar](#sidebar-srccomponentssidebarrs) no longer has. Props today: `label`, `icon`, `active`, `onclick`.
 - `NavIcon` (`icons.rs`) draws one of the 16px stroked glyphs (`timesheet`, `clients`, `projects`, `arrow-left`, `chevron-down`, `pencil`, `info` and the rest) in `currentColor`. Use it for every icon these names cover rather than a text glyph. An unknown name renders nothing. Props: `name`, `class`.
@@ -222,7 +222,7 @@ Status:
 
 #### Forms
 
-- `FormCard` (`form.rs`) is the card around an inline create or edit form: a small uppercase title, the form's error as an `.alert-danger`, then the fields. Props: `title`, `error: ReadSignal<Option<String>>`, `children`.
+- `FormCard` (`form.rs`) is the card around an inline create or edit form: a small uppercase title, the form's error as an `.alert-danger`, then the fields. Props: `title`, `error: ReadSignal<Option<String>>`, `children`. *Pending code (PR-S):* its title becomes `card-title` (see Section titles in [Type scale](#type-scale)).
 - `FormGroup` (`form.rs`) pairs a label with its control and an optional hint. Give it the control's `id` so the label points at it. Props: `label`, `id`, `hint`, `children`. See [Forms](#forms-srccomponentsformrs).
 - `Input` (`form.rs`) is the text input (`kind` sets the HTML type). Use `label` when there is no visible `FormGroup` label, and `error_id` to point at the field's visible error. Props: `kind`, `id`, `label`, `class`, `value`, `placeholder`, `disabled`, `readonly`, `error_id`, `oninput`. Do not use `kind: "date"`: dates use `DatePicker` (see [Formats](#formats)). Until PR-6, copy the trigger and popover of `pages/new_project/date_field.rs` around it.
 - `Textarea` (`form.rs`) is the multi-line input. Props: `id`, `value`, `placeholder`, `rows` (default 3), `disabled`, `error_id`, `oninput`.
@@ -230,8 +230,8 @@ Status:
 - `Checkbox` (`controls.rs`) is the labelled two-state check drawn as a `button` with `role=checkbox`. `compact` keeps only the accessible name (table rows), `mixed` shows the indeterminate state of a select-all, and `error_id`/`hint_id` link it to its messages. Use it instead of a native checkbox. Props: `checked`, `label`, `id`, `compact`, `mixed`, `disabled`, `error_id`, `hint_id`, `onclick`. It keeps its labelled, two-state defaults: opt into `compact` for an accessible-name-only table control, `mixed` for select-all's indeterminate state, and `disabled` while submitting. `--size-checkbox` preserves the existing 18px square. Projects adds its selection track only through `.proj-grid-selectable`; read-only rows and other shared controls retain their existing layout.
 - `Radio` (`controls.rs`) is one labelled option in a list where exactly one is chosen. Today it is a `button` with `role=radio`. Props today: `selected`, `label`, `onclick`. *Pending code:* it is to wrap a native `<input type=radio>`, keeping its look and the arrow-key movement of a native radio group, and to take an optional help text under the label. It then replaces the hand-written radios of New Project's three option lists: the rate mode, report visibility and task access. New Project's project-type cards are not radios in this sense: they stay their own pattern of choice cards.
 - `Toggle` (`controls.rs`) is an on/off switch (`role=switch`) with an optional label, for a setting that applies at once. Props: `on`, `label`, `onclick`.
-- **`Toggle` or `Checkbox`.** A `Toggle` changes something at once, with no Save button. A `Checkbox` is part of a form that saves. A setting with several named values that applies at once (the theme: Dark or Light) is a `Segmented`, because it is a choice between names, not on or off. A filter is neither: it goes in the `FilterBar`. Affects My settings (Theme, a native `<select>` today), the scoped Reports ("Active projects only", a checkbox that filters) and New Project (8 native checkboxes and 6 native radios in a form that saves).
-- `Segmented` (`controls.rs`) shows several labelled options with one active, and emits the chosen label. Use it to switch between views of the same content (Timesheet day, week and calendar; the Approvals status switch), not to filter a list (see `FilterBar` in [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs)). One exception: a short choice inside a form may also use it, as New Project's fixed-fee mode does (Single fee, Milestones, Monthly). Props: `items: Vec<String>`, `active`, `onselect`. *Pending code:* the fixed-fee mode is still a hand-written radio group and moves to `Segmented`. For that use `Segmented` needs radio-group semantics (`role=radiogroup` with `role=radio` options) instead of its current `role=tablist`, added in the PR that moves it.
+- **`Toggle` or `Checkbox`.** A `Toggle` changes something at once, with no Save button. A `Checkbox` is part of a form that saves. A setting with several named values that applies at once (the theme: Dark or Light) is a `Segmented`, because it is a choice between names, not on or off. A filter is neither: it goes in the `FilterBar`. Today My settings' Theme is a native `<select>`, the scoped Reports filter with an "Active projects only" checkbox, and New Project has 8 native checkboxes and 6 native radios in a form that saves.
+- `Segmented` (`controls.rs`) shows several labelled options with one active, and emits the chosen label. Use it to switch between views of the same content (Timesheet day, week and calendar; the Approvals status switch), or for a setting with a few named values that applies at once (Theme), not to filter a list (see `FilterBar` in [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs)). One exception: a short choice inside a form may also use it, as New Project's fixed-fee mode does (Single fee, Milestones, Monthly). Props: `items: Vec<String>`, `active`, `onselect`. *Pending code:* the fixed-fee mode is still a hand-written radio group and moves to `Segmented`. For that use `Segmented` needs radio-group semantics (`role=radiogroup` with `role=radio` options) instead of its current `role=tablist`, added in the PR that moves it.
 
 #### Data display
 
@@ -271,7 +271,7 @@ These modules render nothing (or almost nothing) but are shared the same way.
 
 Full-height left rail. The brand row leads with the Horae mark and wordmark plus the golden accent dot. Nav rows default to `--color-text-secondary`; hover darkens the background to `--color-bg-tertiary`; the active row raises to `--color-bg-tertiary` with a `--color-border` hairline and tints its glyph `--color-primary`; that highlight is its only marker, with no trailing dot. Section labels: all-caps, wide letter-spacing, muted warm gray. Navigation labels follow the [glossary](#glossary) ("People", not "Team").
 
-The rail offers only the sections the person can open: Invoices and Approvals are filtered by permission like Clients and Tasks, so a member never follows a link to "Access unavailable" (*Pending code, PR-P*). People sits in the ORGANIZE group, shown only to people who may see people, and is not in the admin subnavigation (see [People](#people)).
+The rail offers only the sections the person can open: Invoices and Approvals are filtered by permission like Clients and Tasks, so a member never follows a link to "Access unavailable" (*Pending code, PR-P*). The Organize group already links to People for people who may see people, labelled "Team" today; it is renamed People, and People leaves the admin subnavigation (see [People](#people)).
 
 ### Page header (`src/components/`)
 
@@ -285,7 +285,7 @@ One `PageHeader` component (`page_header.rs`, with `back_link.rs`) renders the t
 
 Anything longer, such as a status sentence or a description, goes below the header, not in it.
 
-- **The main action is in the header.** A screen's Primary action sits in `PageHeader`'s actions. A form's submit goes at the end of the form instead (New Project's fixed footer, the Save of each Invoice settings card), and a row's actions stay in the row. Today People's "Add person" sits in the body, Approvals' "Approve visible timesheets" and the Timesheet's "Submit week" sit at the foot, Invoice preparation's header Primary is "Cancel", and Invoice detail's "Edit invoice values" stands alone between cards. *Pending code (PR-8).*
+- **The main action is in the header.** A screen's Primary action sits in `PageHeader`'s actions. A form's submit goes at the end of the form instead (New Project's fixed footer, the Save of each Invoice settings card), and a row's actions stay in the row. Today People's "Add person" sits in the body, Approvals' "Approve visible timesheets" and the Timesheet's "Submit week" sit at the foot, Invoice preparation's header Primary is "Cancel", and Invoice detail's "Edit invoice values" stands alone between cards. *Pending code (PR-8; PR-People for People).*
 
 - **No search or filters in the header.** The header holds actions only; search and filters go in the `FilterBar` below it (see [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs)). Clients and Projects put their search among the header actions today. *Pending code (PR-5).*
 
@@ -305,7 +305,7 @@ Anything longer, such as a status sentence or a description, goes below the head
 
 Wrapped in `.table-container` (border + 16px `--radius-xl`, see [Border Radius](#border-radius); 20px until PR-S). Headers: uppercase, 0.1em letter-spacing, transparent surface, label-tone ink (`--color-label`). Row hover sinks to `--color-row-hover`. Last row has no bottom border. Status is always a `Badge`, never plain text. A record's actions (edit, archive, permissions, rates…) go in one compact "Actions" menu per row (`Menu`), the same way on every table, rather than as loose buttons that wrap at narrow widths. One exception: Approvals keeps "Approve" and "Reopen" inline in each row, as Secondary `btn-sm` buttons, because approving row by row is the screen's job and a menu would add a click to every approval. The menu shows only the actions the viewer may take on that row; when none remain, the row has no menu. See [Layout](#layout) for column widths and mobile behaviour.
 
-**Catalogues load whole; histories load more.** Clients, Projects, Tasks and People load every record at once and narrow it with the `FilterBar` and its search, so finding a record never means paging through 25 at a time. Only histories (the audit log, Harvest import runs, the detailed report) page, with a single "Load more" at the end of the list that appears only when there is more. Never Previous/Next, and never a pager under an empty state or an error. Today Tasks and People page by 25 with Previous/Next (also around a member's access error in Tasks), the audit log shows "Newest events"/"Older events" under its empty state, and Harvest runs use an "Older runs" link. *Pending code (PR-C).*
+**Catalogues load whole; histories load more.** Clients, Projects, Tasks and People load every record at once and narrow it with the `FilterBar` and its search, so finding a record never means paging through 25 at a time. Only histories (the audit log, Harvest import runs, the detailed report) page, with a single "Load more" at the end of the list that appears only when there is more. Never Previous/Next, and never a pager under an empty state or an error. Today Tasks and People page by 25 with Previous/Next (also around a member's access error in Tasks), the audit log shows "Newest events"/"Older events" under its empty state, and Harvest runs use an "Older runs" link. *Pending code:* PR-People for People, the Tasks PR for Tasks, PR-A for the audit log, and PR-C for Harvest runs and the scoped detailed report.
 
 ### Forms (`src/components/form.rs`)
 
@@ -376,7 +376,7 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 - **`LoadError`**: the `ErrorState` for a failed server read, chosen by what the failure means. A refusal (401, 403) names who can grant access and offers no retry; a missing record (404) takes the server's "… not found" as its title and offers no retry; anything else is `LOAD_FAILED` with "Try again". Props: `error`, `what` (as in "Could not load {what}"), `retry`, `pending`, `inset`, `focus_on_recovery`, `retry_id`.
 - **Inset**: inside a panel that already has its own border and heading (a card section, the client detail's Projects and Invoices), `inset` drops the state's card and titles it with an `h3`, so a card never sits inside a card.
 - **`Loading`**: one component for every inline loading message, a `role=status` line, so assistive technology hears the same thing everywhere. Text is only for small regions (a picker's options, a status badge reading "Checking…"); a list, grid, form or detail loads with a `Skeleton` (see [Screen States](#screen-states)). The message itself is not `aria-busy`, which would let a screen reader hold the announcement back; a container that keeps its old content while it reloads (the Timesheet grid, the Projects list) carries `aria-busy` instead. It replaces the ad hoc `p { "Loading…" }` variants. Props: `label` (default "Loading…"), `class`.
-- **`Skeleton`**: a placeholder shaped like the content that will arrive (the rows and columns of a list, the Timesheet week's grid, a form's fields, a detail's sections), so nothing jumps when the data lands. It appears only after about 300 ms, so a fast answer shows no flash. Only the data region is replaced; the header, filters and actions stay live. A region inside a card with its own title needs the same `inset` that `EmptyState` has. *Pending code:* today only the Invoices list uses it, with 6 columns for a 7-column table, and it shows on the first frame. Its rows are `aria-busy` and hidden from assistive technology, and its `label` is a visually hidden `role=status` text (`.sr-only`). Props: `rows`, `columns`, `label`. The Invoices list uses it.
+- **`Skeleton`**: a placeholder shaped like the content that will arrive (the rows and columns of a list, the Timesheet week's grid, a form's fields, a detail's sections), so nothing jumps when the data lands. It appears only after about 300 ms, so a fast answer shows no flash. Only the data region is replaced; the header, filters and actions stay live. Its rows are `aria-busy` and hidden from assistive technology, and its `label` is a visually hidden `role=status` text (`.sr-only`). Props: `rows`, `columns`, `label`. *Pending code:* today only the Invoices list uses it, with 6 columns for a 7-column table, and it shows on the first frame. A region inside a card with its own title needs an `inset` like `EmptyState`'s, which `Skeleton` does not have yet.
 - **`loaded`** (`pages::loaded`) renders a resource with all three: `Loading` before the first answer, a `LoadError` while the latest answer is a failure (a pending retry included), and the content otherwise. Its `Failure` argument carries `what`, `retry`, `pending`, `inset` and `focus`.
 
 ## Formats
@@ -449,7 +449,7 @@ palette stays themeable and consistent. Notable token groups:
 - Chrome: `--color-border`, `--color-border-input`, `--color-border-strong`, `--color-border-danger`, `--color-border-danger-hover`, `--ring` / `--ring-soft` (focus glows).
 - Hover fills: `--color-{primary,accent}-hover`, `--color-pine-hover`, and the brand glows `--glow-{primary,accent,pine}`.
 - Elevation: `--shadow-{sm,md,menu,modal}`.
-- Scale: `--space-1..16`, `--font-size-*` (`xs`–`4xl`, `display`), `--radius-*` (`sm`, base, `btn`, `lg`, `xl`, `panel`, `full`). `rounded-btn` uses the existing 8px control radius; `rounded-xl` adds the refreshed handoff's 16px grouped-list radius without changing existing cards.
+- Scale: `--space-1..16`, `--font-size-*` (`xs`–`4xl`, `display`), `--radius-*` (`sm`, base, `btn`, `lg`, `xl`, `panel`, `full`). `rounded-btn` uses the existing 8px control radius; `rounded-xl` is the 16px panel radius (see [Border Radius](#border-radius)).
 
 On top of the tokens is a **Tailwind-style utility layer** — `flex`,
 `items-center`, `justify-between`, `gap-4`, `p-4`, directional `pt-/pb-/pl-/pr-`,
@@ -542,12 +542,12 @@ The subsections below record the redesign of four screens decided on 2026-11-20,
 
 People becomes a main screen, like the Timesheet, and leaves the admin shell. *Pending code (PR-People).*
 
-- **Navigation.** It sits in the main sidebar under ORGANIZE, shown only to people who may see people, and is removed from the admin subnavigation (which says "Team" today; the [glossary](#glossary) says "People").
+- **Navigation.** The main sidebar's Organize section already links to it for people who may see people, labelled "Team" today. PR-People renames that entry People (the [glossary](#glossary) word), removes the "Team" link from the admin subnavigation and takes the screen out of `AdminShell`. The route path is decided in PR-People.
 - **Header.** The title "People" and "Add person" (Primary), which opens a `Modal` with the name, the email and the profile, chosen with `Radio` cards.
-- **Week and summary.** A week selector, then a summary card with the week's total, billable and non-billable hours and the bar that splits them.
+- **Week and summary.** A `PeriodNav` week selector, which PR-People extracts from the Timesheet's week pager (PR-6 then reuses it in Approvals), then a summary card with the week's total, billable and non-billable hours and the bar that splits them.
 - **Filters.** A `FilterBar` with a search by name or email, a profile `Menu`, and a status `Menu` (Active, Archived, All; Active by default, each option with its count), as in the other catalogues. It is not a `Segmented`, which switches views and never filters a list.
 - **Table.** Columns: the person (avatar, name as a link, profile badge, email), hours with a billable/non-billable bar, billable hours, billable %, and an "Actions" `Menu`. The menu shows only what the viewer may do: View timesheet; Edit details…, Permissions…, Rates…, Permission history (the audit log filtered to that person); a divider; Archive. Archive follows [Destructive actions](#destructive-actions): it applies at once with an "Undo" toast, with no ellipsis and no danger styling.
-- **Loading.** The whole list loads at once, with no pagination. Changing the week dims the rows until the new hours arrive.
+- **Loading.** The whole list loads at once, with no pagination. Changing the week dims the rows until the new hours arrive: the screen keeps its data on reload, as part of PR-People.
 - **Phases.** Phase 1 needs the profile and the week's hours in the people listing, a small server change. Phase 2, its own PR, adds a weekly capacity per person (a new column and its editor), then utilization and available capacity. An assignments tab and Export come later.
 
 ### Tasks
@@ -559,7 +559,8 @@ People becomes a main screen, like the Timesheet, and leaves the admin shell. *P
 - **Columns** include "Assigned by default".
 - **Whole list with search**: no Previous/Next and no "Refresh tasks" (see [Data Tables](#data-tables-srccomponentstablers)).
 - **Default assignees** are chosen with `PeoplePicker`; exports go through `ExportDialog`.
-- **Radius** 16px, as every panel (see [Border Radius](#border-radius)).
+- **Radius** 16px, like every panel (see [Border Radius](#border-radius)).
+- **Reloads** keep the list on screen, as part of the Tasks PR (see Loading in [Screen States](#screen-states)).
 
 ### My settings
 
@@ -567,7 +568,11 @@ My settings splits into subpages in a side menu, the way the admin shell does. *
 
 - **SETTINGS group:** Profile, Preferences, API tokens.
 - **ACCOUNT group:** Your access. It is not a setting, so it has its own group.
-- **Your access** shows the person's access as a table of areas against View, Edit and Approve. An administrator sees one sentence ("Administrators can do everything…") in place of the table, and no one sees the amber "Only an Administrator can edit your permissions" notice. The page links to "See changes to your access", the audit log filtered to the person, and has no "Refresh permissions". The person's profile is shown here once, not also as a disabled field in Profile.
+- **Your access** depends on who is looking:
+  - A member sees their access as a table of areas against View, Edit and Approve, then the line "To change your access, ask an administrator of this workspace."
+  - An administrator sees no table, only one sentence ("You can see and change everything here…") that links to People > Permissions.
+  - Both see People you manage and Projects you manage, and the link "See changes to your access" (the audit log filtered to the person).
+  - No one sees the amber "Only an Administrator can edit your permissions" notice, and there is no "Refresh permissions". The person's profile is shown here once, not also as a disabled field in Profile.
 - **Plugins** leave My settings: they are installed per server, so they belong to [Workspace settings](#workspace-settings).
 
 ### Workspace settings
@@ -576,7 +581,7 @@ Installed plugins are listed in Workspace settings (`/admin/workspace`), for adm
 
 ### Audit log
 
-`/admin/audit` is redesigned. *Pending code (PR-A).*
+The audit log (`/admin/audit`) changes as follows. *Pending code (PR-A).*
 
 - **Loading more.** No "Refresh history". A single "Load more" at the end replaces "Newest events" and "Older events".
 - **Filters.** A `FilterBar` with the change type, the person and the period. The filters live in the URL, so a filtered view can be shared.
@@ -584,6 +589,7 @@ Installed plugins are listed in Workspace settings (`/admin/workspace`), for adm
 - **Grouping.** Events are grouped by day ("Today", "Yesterday", then dates). Each row is a readable sentence ("Admin User changed the permissions of Maria Ruiz: can now approve managed time…") with a "+2 −1" summary and a badge for its kind (Person, Profile, Managers).
 - **Detail.** Expanding a row shows the same table of areas against View, Edit and Approve as Your access, limited to the areas that changed and with the changed cells highlighted, plus the receipt id with a Copy action.
 - **Links.** The affected person or project links to its page; the actor's name filters the log to that actor.
+- **Reloads** (a filter, "Load more") keep the rows on screen, as part of PR-A.
 - **States.** Empty: its own history icon, "No permission changes yet" and a button to People. With filters and no match: "No changes match these filters" and "Clear filters". Loading: a skeleton shaped like the grouped rows.
 - **Later, in its own PR** (server work): an optional reason on a permission change, CSV export, and "Restore this version" for custom profiles.
 
@@ -606,12 +612,12 @@ Every new or changed screen and data-bearing component covers these states befor
 - **Empty**: `EmptyState` with copy that says what to do next and, where the user can act, the action itself; not a blank table or a loose line of text.
 - **Loading** works the same way on every screen:
   - The shell and the page header come first. The title, filters and actions are visible from the first frame; nothing above or around the header waits on data (Invoices' "Checking invoice recovery…" above the title moves below the header).
-  - The session is rendered on the server, so the sidebar, its sections and every action that depends on a permission are there in the first HTML, with no "Not signed in" and no second wave. This is the `use_loader` session PR.
+  - The session is rendered on the server, so the sidebar, its sections and every action that depends on a permission are in the first HTML, with no "Not signed in", and screens that waited on the session first lose one wave. This is the `use_loader` session PR.
   - The content region shows a `Skeleton` shaped like what arrives, after about 300 ms. `Loading` text is only for small regions.
   - Nothing that depends on the data shows before it: no pager, no "Refresh", no totals as "—", no filters without their options.
   - A reload (a filter, a new week, a refresh after a mutation) keeps the old data on screen, dimmed and `aria-busy`, until the new data replaces it. It never swaps the table back to a loading line, and the dimming makes clear that what is shown is not yet the new answer (the Timesheet's previous week under the new dates).
   - No cascades: a screen asks for what it needs at once instead of in waves (the Timesheet waits on three today, Projects for client on three, Reports on two). Data every screen needs, such as the week start, travels with the session.
-  - *Pending code:* no screen renders data on the server yet, and Clients, Tasks, People, the audit log and Reports unmount their table on reload. The `use_loader` session PR comes first (see the inventory).
+  - *Pending code:* no screen renders data on the server yet (the session PR). Clients, Tasks, People, the audit log and Reports unmount their table on reload, because they check `state() != Ready`; PR-C fixes that screen by screen, unless a screen's own PR (PR-People, the Tasks PR, PR-A) has already done it (see the inventory).
 - **Error**: `.alert.alert-danger` for form errors and for a failed action on a page that otherwise loaded, inline `text-danger` for field errors, `ErrorState` (with "Try again") for a region or screen that failed to load, and `.banner-danger` for an error that needs an action inside a page. Form fields keep the values the user entered after a failed submit.
 - **Success**: a toast (see [Toast](#toast-srccomponentstoastrs)); never a silent save.
 - **No permission**: non-disclosing (spec 015). Name the role that can grant access ("Ask an Administrator", as in `pages/settings/own_permissions.rs`) without revealing the resource, its owner or other people's permissions; out-of-scope direct links behave as not found. Hide actions the user can never take in this context; disable, with the reason, actions that are only temporarily unavailable.
@@ -626,7 +632,7 @@ Every new or changed screen and data-bearing component covers these states befor
 - All data mutations go through `#[server]` functions — never direct fetch calls
 - Optimistic UI where appropriate; rollback on error
 - Loading states shown inline, not full-page spinners, the same way on every screen (see Loading in [Screen States](#screen-states))
-- **No refresh buttons.** A list refreshes by itself after the mutations made on its screen and when the browser tab regains focus (one `visibilitychange` listener in `AppLayout` that the screens' resources follow). No screen shows "Refresh", and no copy tells the user to refresh. A refresh keeps the old data on screen while it runs, so the table never blinks. Today these remain: "Refresh tasks", People's "Refresh", "Refresh history", "Refresh details", "Refresh permissions", and "Refresh report" with "Refresh access" in the scoped Reports. *Pending code (PR-C, PR-P, PR-A).*
+- **No refresh buttons.** A list refreshes by itself after the mutations made on its screen and when the browser tab regains focus (one `visibilitychange` listener in `AppLayout` that the screens' resources follow). No screen shows "Refresh", and no copy tells the user to refresh. A refresh keeps the old data on screen while it runs, so the table never blinks. Today these remain: "Refresh tasks", People's "Refresh", "Refresh history", "Refresh details", "Refresh permissions", and "Refresh report" with "Refresh access" in the scoped Reports. *Pending code:* each screen's own PR removes its button (PR-P, PR-People, the Tasks PR, PR-A); PR-C adds the `visibilitychange` listener and removes the rest.
 - **Catalogues load whole**, with search; only histories use "Load more" (see [Data Tables](#data-tables-srccomponentstablers)).
 - **`Toggle` for what applies at once, `Checkbox` for what a form saves** (see the [catalog](#forms)).
 - **Dialogs.** `Modal` draws every footer: the primary action first and on the left, then the secondary, then Cancel, the buttons sharing the width. Every confirmation goes through `ConfirmDialog`, and no dialog is made by hand (see [Dialogs](#dialogs-srccomponentsmodalrs)).
