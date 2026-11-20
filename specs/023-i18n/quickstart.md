@@ -94,7 +94,9 @@ stat -c %s target/dx/horae/release/web/public/assets/horae_bg-*.wasm.br
 ```
 
 Clear `target/dx/horae/release/web/public/assets/` between the two builds so only one `.wasm.br`
-remains. The difference from master is at most 60 KB (61,440 B) at I-13 (SC-005); I-1 is expected
+remains. At I-13 the base is I-1's base commit (master before the increment), not the PR's own
+base, so the number covers the whole increment. The difference is at most 60 KB (61,440 B) at
+I-13 (SC-005); I-1 is expected
 near 42 KB. Past 50 KB before I-13, stop and ask (research R-9).
 
 ## The increment as a whole (after I-13)
@@ -106,6 +108,7 @@ near 42 KB. Past 50 KB before I-13, stop and ask (research R-9).
 | SC-003 | PR-10's diff: `git diff --name-only <base>...<pr-10>` | only `crates/i18n/locales/en/horae.ftl` and test files |
 | SC-005 | WASM budget above | ≤ 61,440 B brotli over master |
 | FR-006 | `cargo test -p horae-i18n` | no unused message |
+| FR-003 | `cargo tree -p horae-core -i horae-i18n` and the same for `horae-types` | both report that `horae-i18n` is not in the tree |
 | FR-012 | `git diff --name-only <I-1 base>...<I-13>` | no file under `crates/server/src/ops`, `crates/api/src/auth`, `crates/api/src/exports*`, `crates/server/templates`, `crates/horae/src/cli` |
 | FR-023 | the lint's info line | quoted in each PR; near zero after I-12, the rest false positives |
 | Visual spot check | `process-compose up`, sign in as Admin, open Settings, Tasks, Projects and the Timesheet | the same words as on master |
