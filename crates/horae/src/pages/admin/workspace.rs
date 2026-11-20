@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use crate::components::button::{Button, ButtonVariant};
 use crate::components::form::FormGroup;
 use crate::components::page_header::PageHeader;
 use crate::components::select_field::SelectField;
@@ -48,7 +49,8 @@ fn TimezoneForm(
     };
     let changed = *zone.read() != saved;
 
-    let save = move |_| {
+    let cancel = use_callback(move |_| zone.set(saved.clone()));
+    let save = use_callback(move |_| {
         if *saving.peek() {
             return;
         }
@@ -68,7 +70,7 @@ fn TimezoneForm(
             }
             saving.set(false);
         });
-    };
+    });
 
     rsx! {
         FormGroup { label: "Workspace time zone", id: "workspace-timezone",
@@ -82,11 +84,11 @@ fn TimezoneForm(
             p { id: "workspace-timezone-error", class: "alert alert-danger", role: "alert", "{message}" }
         }
         div { class: "flex justify-end gap-2",
-            button { id: "workspace-timezone-cancel", r#type: "button", class: "btn btn-secondary", disabled: !changed || saving(),
-                onclick: move |_| zone.set(saved.clone()), "Cancel"
+            Button { id: "workspace-timezone-cancel", variant: ButtonVariant::Secondary,
+                disabled: !changed || saving(), onclick: cancel, label: "Cancel"
             }
-            button { id: "workspace-timezone-save", r#type: "button", class: "btn btn-primary", disabled: !changed || saving(),
-                onclick: save, if saving() { "Saving…" } else { "Save" }
+            Button { id: "workspace-timezone-save", disabled: !changed || saving(), onclick: save,
+                label: if saving() { "Saving…" } else { "Save" }
             }
         }
     }
