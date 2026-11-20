@@ -4,7 +4,7 @@ use horae_core::money::format_cents_plain;
 use uuid::Uuid;
 
 use crate::components::form::{FormGroup, Input, Select, Textarea};
-use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
+use crate::components::modal::{Modal, ModalAction, ModalActions, ModalBody, ModalHeader};
 use crate::components::screen_state::Loading;
 use crate::models::client::{
     ClientBillingSnapshot, ClientDetails, ClientProfile, ClientProfileEdit, ClientRateChange,
@@ -147,6 +147,7 @@ fn ClientEditorLoader(
             None => Ok(None),
         }
     });
+    let retry = use_callback(move |()| initial.restart());
     let ready = initial.state()() == UseResourceState::Ready;
     let value = initial.read();
     rsx! {
@@ -155,11 +156,8 @@ fn ClientEditorLoader(
         } else if let Some(Ok(detail)) = &*value {
             ClientForm { initial: detail.clone(), busy, on_dismiss, on_saved }
         } else {
+            ModalActions { primary: ModalAction::click("Try again", retry) }
             ModalBody { p { class: "m-0", role: "alert", "Could not load this client for editing." } }
-            ModalFooter {
-                button { r#type: "button", class: "btn btn-primary", onclick: move |_| initial.restart(), "Try again" }
-                button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Cancel" }
-            }
         }
     }
 }
@@ -196,7 +194,14 @@ fn ClientForm(
         }
     });
     rsx! {
-        form { "data-editor-kind": "client",
+        ModalActions {
+            primary: ModalAction::submit(
+                if busy() { "Saving…" } else if editing { "Save changes" } else { "Create client" },
+                "client-form",
+            )
+            .disabled(busy() || uncertain()),
+        }
+        form { id: "client-form", "data-editor-kind": "client",
             "data-editor-state": if busy() { "pending" } else if dirty || uncertain() { "dirty" } else { "clean" },
             onsubmit: move |event| {
                 event.prevent_default();
@@ -283,12 +288,6 @@ fn ClientForm(
                 FormGroup { label: "Tax ID (optional)", id: "client-form-tax",
                     Input { id: "client-form-tax", value: fields.read().tax_id.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().tax_id = event.value() }
                 }
-            }
-            ModalFooter {
-                button { r#type: "submit", class: "btn btn-primary", disabled: busy() || uncertain(),
-                    if busy() { "Saving…" } else if editing { "Save changes" } else { "Create client" }
-                }
-                button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| { if !busy() { on_dismiss.call(()); } }, "Cancel" }
             }
         }
     }

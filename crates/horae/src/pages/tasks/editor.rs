@@ -1,8 +1,9 @@
 use super::*;
 use crate::components::{
+    confirm_dialog::{ConfirmDialog, ConfirmTone},
     controls::Checkbox,
     form::{FormGroup, Input},
-    modal::{Modal, ModalBody, ModalFooter, ModalHeader},
+    modal::{Modal, ModalAction, ModalActions, ModalBody, ModalHeader},
 };
 use crate::models::task::{TaskCatalogEntry, TaskRateEdit};
 use horae_core::money::parse_cents;
@@ -33,7 +34,7 @@ pub(super) fn TaskEditor(
             on_dismiss: move |_| { if !busy() { selected.set(None); } },
             if let Some(selection) = selected() {
                 TaskForm { key: "{key}", selection, busy,
-                    on_cancel: move |_| selected.set(None), on_saved, on_denied }
+                    on_saved, on_denied }
             }
         }
     }
@@ -43,7 +44,6 @@ pub(super) fn TaskEditor(
 fn TaskForm(
     selection: Selection,
     mut busy: Signal<bool>,
-    on_cancel: EventHandler<()>,
     on_saved: EventHandler<String>,
     on_denied: EventHandler<()>,
 ) -> Element {
@@ -77,8 +77,56 @@ fn TaskForm(
     let requester = selection.requester;
     let active = selection.task.as_ref().is_none_or(|task| task.active);
     let currency = selection.rate_currency.clone();
+    let change_activity = use_callback(move |()| {
+        let Some(task_id) = task_id else {
+            return;
+        };
+        if busy() {
+            return;
+        }
+        busy.set(true);
+        error.set(None);
+        spawn(async move {
+            let result = server_fns::set_task_active(task_id.to_string(), !active, requester).await;
+            finish(
+                result,
+                busy,
+                error,
+                on_saved,
+                on_denied,
+                if active {
+                    "Task archived."
+                } else {
+                    "Task restored to the catalog. Restore it in each project where needed."
+                },
+            );
+        });
+    });
+    let keep_status = use_callback(move |()| confirm_activity.set(false));
+    let primary = ModalAction::submit(
+        if busy() { "Saving…" } else { "Save task" },
+        "task-edit-form",
+    )
+    .id("task-save")
+    .disabled(busy());
     rsx! {
+        ModalActions { primary }
+        // Archiving carries the task out of every project, so it asks first.
+        if task_id.is_some() {
+        ConfirmDialog { id: "task-activity-dialog", labelledby: "task-activity-title",
+            open: confirm_activity(), busy: busy(), tone: ConfirmTone::Neutral,
+            title: if active { "Archive this task?" } else { "Restore this task?" },
+            confirm_label: if active { "Confirm archive" } else { "Confirm restore" },
+            cancel_label: "Keep current status",
+            on_confirm: change_activity, on_dismiss: keep_status,
+            p {
+                if active { "It is archived in every project. Existing time is kept. Stop running timers using this task first." }
+                else { "It returns to the catalog. To use it again in an existing project, restore it separately in that project's editor." }
+            }
+        }
+        }
         ModalHeader { id: "task-editor-title", title: if task_id.is_some() { "Edit task" } else { "New task" } }
+        ModalBody {
         form { id: "task-edit-form", onsubmit: move |event| {
             event.prevent_default();
             if busy() { return; }
@@ -104,7 +152,6 @@ fn TaskForm(
                 finish(result, busy, error, on_saved, on_denied, message);
             });
         },
-            ModalBody {
                 if let Some(message) = error() { p { id: "task-edit-error", role: "alert", class: "alert alert-danger", "{message}" } }
                 FormGroup { id: "task-name", label: "Task name",
                     Input { id: "task-name", value: name(), disabled: busy(), oninput: move |event: FormEvent| name.set(event.value()) }
@@ -136,38 +183,14 @@ fn TaskForm(
                         if task_id.is_none() { p { class: "form-hint", "Optional. Leave blank for no default rate; enter 0 for a zero rate." } }
                     }
                 }
-            }
-            ModalFooter {
-                button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| on_cancel.call(()), "Cancel" }
-                button { id: "task-save", r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Saving…" } else { "Save task" } }
-            }
         }
-        if let Some(task_id) = task_id {
-          div { class: "px-6 pb-6",
-            if confirm_activity() {
-                p { class: "text-sm text-secondary mb-3",
-                    if active { "Archive this task in every project? Existing time is kept. Stop running timers using this task first." }
-                    else { "Restore this task to the catalog? To use it again in an existing project, restore it separately in that project's editor." }
-                }
-                div { class: "flex flex-wrap gap-3",
-                    button { id: "task-activity-confirm", r#type: "button", class: "btn btn-secondary", disabled: busy(),
-                        onclick: move |_| {
-                            if busy() { return; }
-                            busy.set(true); error.set(None);
-                            spawn(async move {
-                                let result = server_fns::set_task_active(task_id.to_string(), !active, requester).await;
-                                finish(result, busy, error, on_saved, on_denied, if active { "Task archived." } else { "Task restored to the catalog. Restore it in each project where needed." });
-                            });
-                        }, if active { "Confirm archive" } else { "Confirm restore" }
-                    }
-                    button { r#type: "button", class: "btn btn-ghost", disabled: busy(), onclick: move |_| confirm_activity.set(false), "Keep current status" }
-                }
-            } else {
+        if task_id.is_some() {
+            div { class: "mt-6",
                 button { id: "task-activity", r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| confirm_activity.set(true),
                     if active { "Archive task…" } else { "Restore task…" }
                 }
             }
-          }
+        }
         }
     }
 }

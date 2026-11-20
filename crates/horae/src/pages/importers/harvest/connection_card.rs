@@ -166,7 +166,6 @@ pub(super) fn ConnectionCard(
         ConfirmDialog { id: "harvest-disconnect", labelledby: "harvest-disconnect-title", open: confirm_disconnect(), busy: busy(),
             title: "Disconnect Harvest?",
             confirm_label: if busy() { "Disconnecting…" } else { "Disconnect Harvest" },
-            cancel_first: true,
             on_confirm: disconnect,
             on_dismiss: dismiss,
             if confirm_disconnect() {

@@ -2,9 +2,13 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, profile_label};
 use uuid::Uuid;
 
+use crate::components::button::ButtonVariant;
+use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::controls::Checkbox;
 use crate::components::form::FormGroup;
-use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
+use crate::components::modal::{
+    Modal, ModalAction, ModalActions, ModalBody, ModalCancel, ModalHeader,
+};
 use crate::components::permission_description::permission_description;
 use crate::components::screen_state::Loading;
 use crate::models::permission_editor::{
@@ -51,6 +55,16 @@ pub(super) fn PermissionEditorDialog(
     let mut locked = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut confirming_discard = use_signal(|| false);
+    // The person to switch to (or none, to close), the person and the form
+    // generation the discard confirmation was asked for.
+    #[allow(clippy::type_complexity)]
+    let mut discard_next = use_signal(|| {
+        None::<(
+            Option<(Uuid, PermissionRequester)>,
+            Option<(Uuid, PermissionRequester)>,
+            Uuid,
+        )>
+    });
     // Counts how often a person has been opened; closing leaves it unchanged. The
     // tally lives in a hook because `use_memo` swaps in each render's closure.
     let mut opens = use_hook(|| CopyValue::new((false, 0_u32)));
@@ -150,32 +164,42 @@ pub(super) fn PermissionEditorDialog(
             person.set(next);
             return;
         }
-        let target = person();
-        let current_generation = generation();
+        discard_next.set(Some((next, person(), generation())));
         confirming_discard.set(true);
+    });
+    // Leaving with unsaved changes asks in a ConfirmDialog; the choice applies
+    // only to the person and form it was asked about.
+    let discard = use_callback(move |()| {
+        confirming_discard.set(false);
+        let Some((next, target, asked_generation)) = discard_next.take() else {
+            return;
+        };
         spawn(async move {
-            let confirmed =
-                document::eval("return window.confirm('Discard unsaved permission changes?');")
-                    .join::<bool>()
-                    .await
-                    .unwrap_or(false);
-            confirming_discard.set(false);
-            if confirmed
-                && !locked()
+            // Let the confirmation close and return focus into the editor first,
+            // so closing the editor then returns it to the editor's opener.
+            let _ = document::eval("await new Promise(requestAnimationFrame);").await;
+            if !locked()
                 && editor.state()() == UseResourceState::Ready
                 && recovery.state()() == UseResourceState::Ready
                 && person() == target
-                && generation() == current_generation
+                && generation() == asked_generation
             {
                 dirty.set(false);
                 person.set(next);
             }
         });
     });
+    let keep_changes = use_callback(move |()| {
+        confirming_discard.set(false);
+        discard_next.set(None);
+    });
+    // Hidden while a request is pending or being recovered, which must finish first.
+    let close = (!pending && !recovering).then(|| ModalCancel::new("Close").id(CLOSE_BUTTON));
     rsx! {
         Modal {
             id: "person-permissions-dialog", labelledby: "person-permissions-title",
             open: person().is_some() || recovering, busy: pending || confirming_discard(), large: true,
+            cancel: close.clone(),
             on_dismiss: move |_| change_person.call(None),
             ModalHeader { id: "person-permissions-title",
                 title: if recovering { "Recover permission request" } else { "Edit permissions" },
@@ -197,10 +221,8 @@ pub(super) fn PermissionEditorDialog(
                         },
                     }
                 } else if let Some(Err(message)) = &checked {
+                    ModalActions { primary: ModalAction::click("Try again", reload).id(RELOAD_BUTTON), cancel: close.clone() }
                     p { role: "alert", class: "text-danger text-sm", "{message}" }
-                    button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
-                        onclick: move |_| reload.call(()), "Try again"
-                    }
                 } else {
                     {match &*editor.read() {
                         Some(Ok(Some(value))) if Some((value.user_id, value.requester)) == person() => {
@@ -217,34 +239,28 @@ pub(super) fn PermissionEditorDialog(
                                             person.set(None);
                                             on_saved.call(changed);
                                         },
-                                        on_cancel: move |_| change_person.call(None),
                                     }
                                 },
                                 Err(message) => rsx! {
+                                    ModalActions { primary: ModalAction::click("Reload permissions", reload).id(RELOAD_BUTTON), cancel: close.clone() }
                                     p { class: "text-danger text-sm", role: "alert", "{message}" }
-                                    button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
-                                        onclick: move |_| reload.call(()), "Reload permissions"
-                                    }
                                 },
                             }
                         },
                         Some(Err(error)) => rsx! {
+                            ModalActions { primary: ModalAction::click("Reload permissions", reload).id(RELOAD_BUTTON), cancel: close.clone() }
                             p { role: "alert", class: "text-danger text-sm", "{load_error(error)}" }
-                            button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
-                                onclick: move |_| reload.call(()), "Reload permissions"
-                            }
                         },
                         _ => rsx! {},
                     }}
                 }
             } }
-            if !pending && !recovering {
-                ModalFooter {
-                    button { id: CLOSE_BUTTON, r#type: "button", class: "btn btn-secondary",
-                        disabled: confirming_discard(), onclick: move |_| change_person.call(None), "Close"
-                    }
-                }
-            }
+        }
+        ConfirmDialog { id: "permission-discard-dialog", labelledby: "permission-discard-title",
+            open: confirming_discard(), title: "Discard unsaved permission changes?",
+            confirm_label: "Discard changes", cancel_label: "Keep editing",
+            on_confirm: discard, on_dismiss: keep_changes,
+            p { "The changes in this form are lost. Saved permissions stay as they are." }
         }
     }
 }
@@ -258,7 +274,6 @@ fn PermissionForm(
     on_person_selected: EventHandler<(Uuid, PermissionRequester)>,
     on_reload: EventHandler<()>,
     on_saved: EventHandler<bool>,
-    on_cancel: EventHandler<()>,
 ) -> Element {
     let mut state = use_signal(|| initial);
     let mut busy = use_signal(|| false);
@@ -271,6 +286,85 @@ fn PermissionForm(
     use_effect(move || {
         dirty.set(state.read().has_changes() || (template_intent().is_some() && template_dirty()))
     });
+    let reload = use_callback(move |()| {
+        if !busy() {
+            on_reload.call(());
+        }
+    });
+    let save = use_callback(move |()| {
+        if busy() || reload_required() || unavailable() {
+            return;
+        }
+        let Some(command) = state.write().begin_save() else {
+            return;
+        };
+        let requester = state.peek().editor.requester;
+        busy.set(true);
+        locked.set(true);
+        error.set(None);
+        spawn(async move {
+            let request = PendingPermission {
+                requester,
+                command: PendingCommand::Person(command),
+            };
+            match request.attempt(acknowledged).await {
+                Ok(RecoveryOutcome::Person(outcome)) => {
+                    locked.set(false);
+                    on_saved.call(outcome.changed);
+                }
+                Ok(RecoveryOutcome::Template) => {}
+                Err(RecoveryError::Storage(message) | RecoveryError::Cleanup(message)) => {
+                    error.set(Some(message));
+                    busy.set(false);
+                }
+                Err(RecoveryError::Server(problem)) => {
+                    if definite_rejection(&problem) {
+                        state.write().request = None;
+                        state.write().invalidate_preview();
+                        reload_required.set(true);
+                        unavailable.set(access_denied(&problem));
+                        locked.set(false);
+                        error.set(Some(rejection_message(&problem)));
+                    } else {
+                        error.set(Some("The save could not be confirmed. Retry the same save to check its result before making more changes.".into()));
+                    }
+                    busy.set(false);
+                }
+            }
+        });
+    });
+    let back_to_editing = use_callback(move |()| {
+        if !busy() {
+            state.write().invalidate_preview();
+        }
+    });
+    let review = use_callback(move |()| {
+        if busy() || state.peek().request.is_some() || reload_required() || unavailable() {
+            return;
+        }
+        let proposal = state.peek().draft();
+        busy.set(true);
+        locked.set(true);
+        error.set(None);
+        spawn(async move {
+            match server_fns::preview_person_permissions(proposal).await {
+                Ok(preview) => {
+                    if let Err(message) = state.write().reviewed(preview) {
+                        error.set(Some(message));
+                        reload_required.set(true);
+                    }
+                }
+                Err(problem) => {
+                    unavailable.set(access_denied(&problem));
+                    reload_required.set(definite_rejection(&problem));
+                    error.set(Some(rejection_message(&problem)));
+                }
+            }
+            busy.set(false);
+            locked.set(false);
+        });
+    });
+    // A profile change replaces the form, so no stale profile shows behind it.
     if let Some(intent) = template_intent() {
         return rsx! {
             TemplateEditor {
@@ -289,7 +383,51 @@ fn PermissionForm(
         ProfileAction::BuiltIn { profile } => profile_label(profile).to_owned(),
         ProfileAction::Template { id, .. } => id.to_string(),
     };
+    let (primary, secondary) = if reload_required() || unavailable() {
+        let reload = ModalAction::click("Reload permissions", reload)
+            .variant(ButtonVariant::Secondary)
+            .disabled(busy());
+        (reload, None)
+    } else if snapshot.preview.is_some() {
+        let removals = snapshot
+            .preview
+            .as_ref()
+            .is_some_and(|p| !p.remove_projects.is_empty() || !p.remove_people.is_empty());
+        let label = if busy() {
+            "Saving…"
+        } else if acknowledged.read().is_some() {
+            "Finish recovery cleanup"
+        } else if snapshot.request.is_some() {
+            "Retry same save"
+        } else {
+            "Confirm permissions"
+        };
+        let save = ModalAction::click(label, save)
+            .id(SAVE_BUTTON)
+            .disabled(busy() || (snapshot.request.is_none() && !snapshot.confirmed && removals));
+        let back = snapshot.request.is_none().then(|| {
+            ModalAction::click("Back to editing", back_to_editing)
+                .variant(ButtonVariant::Secondary)
+                .disabled(busy())
+        });
+        (save, back)
+    } else {
+        let review = ModalAction::click(
+            if busy() {
+                "Reviewing…"
+            } else {
+                "Review changes"
+            },
+            review,
+        )
+        .id(REVIEW_BUTTON)
+        .disabled(frozen);
+        (review, None)
+    };
     rsx! {
+        ModalActions { primary, secondary,
+            cancel: ModalCancel::new("Cancel").id(CANCEL_BUTTON).disabled(locked()),
+        }
         if let Some(message) = error() {
             p { role: "alert", class: "text-danger text-sm mb-4", "{message}" }
         }
@@ -435,86 +573,6 @@ fn PermissionForm(
                         },
                     }
                 }
-            }
-        }
-        div { class: "flex flex-wrap items-center gap-3 mt-5",
-            if reload_required() || unavailable() {
-                button { r#type: "button", class: "btn btn-secondary", disabled: busy(),
-                    onclick: move |_| { if !busy() { on_reload.call(()); } }, "Reload permissions"
-                }
-            } else if snapshot.preview.is_some() {
-                button { id: SAVE_BUTTON, r#type: "button", class: "btn btn-primary",
-                    disabled: busy() || (snapshot.request.is_none() && !snapshot.confirmed && snapshot.preview.as_ref().is_some_and(|p| !p.remove_projects.is_empty() || !p.remove_people.is_empty())),
-                    onclick: move |_| {
-                        if busy() || reload_required() || unavailable() { return; }
-                        let Some(command) = state.write().begin_save() else { return; };
-                        let requester = state.peek().editor.requester;
-                        busy.set(true);
-                        locked.set(true);
-                        error.set(None);
-                        spawn(async move {
-                            let request = PendingPermission { requester, command: PendingCommand::Person(command) };
-                            match request.attempt(acknowledged).await {
-                                Ok(RecoveryOutcome::Person(outcome)) => { locked.set(false); on_saved.call(outcome.changed); },
-                                Ok(RecoveryOutcome::Template) => {},
-                                Err(RecoveryError::Storage(message) | RecoveryError::Cleanup(message)) => {
-                                    error.set(Some(message)); busy.set(false);
-                                },
-                                Err(RecoveryError::Server(problem)) => {
-                                    if definite_rejection(&problem) {
-                                        state.write().request = None;
-                                        state.write().invalidate_preview();
-                                        reload_required.set(true);
-                                        unavailable.set(access_denied(&problem));
-                                        locked.set(false);
-                                        error.set(Some(rejection_message(&problem)));
-                                    } else {
-                                        error.set(Some("The save could not be confirmed. Retry the same save to check its result before making more changes.".into()));
-                                    }
-                                    busy.set(false);
-                                },
-                            }
-                        });
-                    },
-                    if busy() { "Saving…" } else if acknowledged.read().is_some() { "Finish recovery cleanup" }
-                    else if snapshot.request.is_some() { "Retry same save" } else { "Confirm permissions" }
-                }
-                if snapshot.request.is_none() {
-                    button { r#type: "button", class: "btn btn-secondary", disabled: busy(),
-                        onclick: move |_| { if !busy() { state.write().invalidate_preview(); } }, "Back to editing"
-                    }
-                }
-            } else {
-                button { id: REVIEW_BUTTON, r#type: "button", class: "btn btn-primary", disabled: frozen,
-                    onclick: move |_| {
-                        if busy() || state.peek().request.is_some() || reload_required() || unavailable() { return; }
-                        let proposal = state.peek().draft();
-                        busy.set(true);
-                        locked.set(true);
-                        error.set(None);
-                        spawn(async move {
-                            match server_fns::preview_person_permissions(proposal).await {
-                                Ok(preview) => {
-                                    if let Err(message) = state.write().reviewed(preview) {
-                                        error.set(Some(message));
-                                        reload_required.set(true);
-                                    }
-                                },
-                                Err(problem) => {
-                                    unavailable.set(access_denied(&problem));
-                                    reload_required.set(definite_rejection(&problem));
-                                    error.set(Some(rejection_message(&problem)));
-                                },
-                            }
-                            busy.set(false);
-                            locked.set(false);
-                        });
-                    },
-                    if busy() { "Reviewing…" } else { "Review changes" }
-                }
-            }
-            button { id: CANCEL_BUTTON, r#type: "button", class: "btn btn-secondary", disabled: locked(),
-                onclick: move |_| { if !locked() { on_cancel.call(()); } }, "Cancel"
             }
         }
     }

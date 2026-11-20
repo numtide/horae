@@ -51,7 +51,7 @@ pub(super) fn ArchiveDialog(
     let busy = pending().is_some();
     let shown_error = error().filter(|error| Some(error.client) == current.as_ref().map(|c| c.id));
 
-    let archive = move |_| {
+    let archive = use_callback(move |()| {
         let Some(client) = target.peek().clone() else {
             return;
         };
@@ -91,7 +91,7 @@ pub(super) fn ArchiveDialog(
                 Err(_) => {}
             }
         });
-    };
+    });
 
     // Archiving one client carries no other record, but its toast has no Undo
     // yet, so it still asks first.

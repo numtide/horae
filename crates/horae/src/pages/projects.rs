@@ -11,7 +11,7 @@ use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::components::controls::Checkbox;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
-use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
+use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, LoadError, Loading};
 use crate::components::toast::{Toast, ToastContainer};
@@ -752,6 +752,14 @@ fn ProjectListContent(
         });
     });
     let cancel_bulk = use_callback(move |_| bulk_action.set(None));
+    let close_export = use_callback(move |()| export_open.set(false));
+    let export_url = format!(
+        "/api/projects/export/{}?scope={}&expected_org_id={}&expected_user_id={}",
+        export_fmt(),
+        export_scope(),
+        requester.org_id,
+        requester.user_id,
+    );
     // Missing/withheld money is not a zero. Empty authorized projects have explicit totals.
     let spend_map = use_memo(move || match &*spend_res.read() {
         Some(Ok(v)) => v
@@ -834,6 +842,7 @@ fn ProjectListContent(
                         Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import" }
                     }
                     button {
+                        id: "projects-export",
                         r#type: "button",
                         class: "btn btn-secondary",
                         onclick: move |_| export_open.set(true),
@@ -1194,15 +1203,9 @@ fn ProjectListContent(
                 id: "export-projects-dialog",
                 labelledby: "export-projects-title",
                 open: export_open(),
-                on_dismiss: move |_| export_open.set(false),
+                primary: ModalAction::link("Export projects", export_url, close_export),
+                on_dismiss: close_export,
                 {
-                    let url = format!(
-                        "/api/projects/export/{}?scope={}&expected_org_id={}&expected_user_id={}",
-                        export_fmt(),
-                        export_scope(),
-                        requester.org_id,
-                        requester.user_id,
-                    );
                     rsx! {
                         ModalHeader { id: "export-projects-title", title: "Export projects" }
                         ModalBody {
@@ -1229,20 +1232,6 @@ fn ProjectListContent(
                                         "{lbl}"
                                     }
                                 }
-                            }
-                        }
-                        ModalFooter {
-                            a {
-                                class: "btn btn-primary",
-                                href: "{url}",
-                                onclick: move |_| export_open.set(false),
-                                "Export projects"
-                            }
-                            button {
-                                r#type: "button",
-                                class: "btn btn-secondary",
-                                onclick: move |_| export_open.set(false),
-                                "Cancel"
                             }
                         }
                     }

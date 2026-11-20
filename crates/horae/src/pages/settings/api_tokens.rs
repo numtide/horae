@@ -136,7 +136,7 @@ pub(super) fn ApiTokensSection() -> Element {
                         body: "Create a token to let a script or another app use Horae on your behalf.",
                     }
                 },
-                Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, on_revoke } },
+                Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, focus_fallback: "api-tokens-title", on_revoke } },
             }
         }
     }
@@ -193,6 +193,8 @@ fn RevealedToken(token: String) -> Element {
 pub(crate) fn TokenTable(
     rows: Vec<ApiTokenRow>,
     show_owner: bool,
+    /// Where focus goes after a revoke, since the row's Revoke button goes away.
+    focus_fallback: &'static str,
     on_revoke: Callback<Uuid>,
 ) -> Element {
     // The token whose revocation is being confirmed, with its name.
@@ -201,6 +203,11 @@ pub(crate) fn TokenTable(
     let revoke = use_callback(move |_| {
         if let Some((id, _)) = revoking.take() {
             on_revoke.call(id);
+            // After the dialog has closed and returned focus to the doomed button.
+            let target = serde_json::json!(focus_fallback);
+            document::eval(&format!(
+                "requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById({target})?.focus()));"
+            ));
         }
     });
     let keep = use_callback(move |_| revoking.set(None));

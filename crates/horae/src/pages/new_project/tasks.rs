@@ -11,7 +11,7 @@ use crate::components::controls::Checkbox;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::Input;
 use crate::components::icons::NavIcon;
-use crate::components::modal::{Modal, ModalBody, ModalFooter, ModalHeader};
+use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, ProjectEditorContext, ProjectFieldAccess, ProjectForm,
     ProjectFormField, ProjectTaskInput, TaskAccess, TaskSource,
@@ -361,8 +361,20 @@ fn TaskAccessDialog(
             access.set(task.access.clone());
         }
     }));
+    let apply = use_callback(move |()| {
+        if let Some(task) = form
+            .write()
+            .tasks
+            .iter_mut()
+            .find(|task| Some(task.id) == task_id)
+        {
+            task.access = access();
+        }
+        on_dismiss.call(());
+    });
     rsx! {
         Modal { id: "np-task-access", labelledby: "np-task-access-title", open: task_id.is_some(), on_dismiss,
+            primary: ModalAction::click("Apply access", apply),
             ModalHeader { id: "np-task-access-title", title: "Who can track to this task?" }
             ModalBody {
                 fieldset { class: "border-0 p-0 m-0 min-w-0 flex flex-col gap-3", aria_label: "Task access",
@@ -389,13 +401,6 @@ fn TaskAccessDialog(
                     }
                     if form.read().team.is_empty() { p { class: "form-hint", "Add people to the project team to grant access." } }
                 }
-            }
-            ModalFooter {
-                button { r#type: "button", class: "btn btn-primary", onclick: move |_| {
-                    if let Some(task) = form.write().tasks.iter_mut().find(|task| Some(task.id) == task_id) { task.access = access(); }
-                    on_dismiss.call(());
-                }, "Apply access" }
-                button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Cancel" }
             }
         }
     }

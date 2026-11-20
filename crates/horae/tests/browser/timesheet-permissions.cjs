@@ -262,7 +262,9 @@ function assignPerson() {
 
     await visit('day', person, nextDay);
     await page.locator('.ts-day-entry').filter({ hasText: 'Delegated timed' }).getByRole('button', { name: 'Edit', exact: true }).click();
-    await mutation('delete', () => dialog.getByRole('button', { name: 'Delete', exact: true }).click());
+    await dialog.getByRole('button', { name: 'Delete…', exact: true }).click();
+    await mutation('delete', () => page.getByRole('dialog', { name: 'Delete this time entry?', exact: true })
+      .getByRole('button', { name: 'Delete entry', exact: true }).click());
     assert.equal(sql(`SELECT count(*) FROM time_entries WHERE id='${timedId}'`), '0');
     await expect(page.locator('.ts-day-entry').filter({ hasText: 'Delegated timed' })).toHaveCount(0);
     assert.deepEqual(stored(untimedId), expectedEntry(nextDay, 60, null));

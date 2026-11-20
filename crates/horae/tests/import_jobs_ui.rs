@@ -2014,7 +2014,7 @@ fn changes_that_disconnect_harvest_ask_first() {
     ui.click("save-harvest-client");
     assert!(probe.client_saves.borrow().is_empty());
     assert!(ui.html().contains("disconnects Harvest"), "{}", ui.html());
-    ui.click("confirm-harvest-client-change");
+    ui.click("harvest-client-change-confirm");
     assert_eq!(probe.client_saves.borrow().len(), 1);
     assert!(
         probe.client_saves.borrow()[0].3,
@@ -2032,7 +2032,7 @@ fn changes_that_disconnect_harvest_ask_first() {
         "{}",
         ui.html()
     );
-    ui.click("confirm-harvest-client-change");
+    ui.click("harvest-client-change-confirm");
     assert_eq!(*probe.client_removes.borrow(), 1);
     assert!(ui.html().contains("Not configured"));
 }

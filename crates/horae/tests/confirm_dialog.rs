@@ -61,12 +61,12 @@ fn danger_confirms_with_the_solid_red_button_first() {
 }
 
 #[test]
-fn neutral_uses_primary_and_keeps_a_cancel_first_footer() {
+fn neutral_uses_primary_with_its_own_cancel_label() {
     let html = render(|| {
         rsx! {
             ConfirmDialog { id: "archive", labelledby: "archive-title", open: true,
                 title: "Archive 2 projects?", confirm_label: "Archive projects",
-                tone: ConfirmTone::Neutral, cancel_first: true, cancel_label: "Keep them",
+                tone: ConfirmTone::Neutral, cancel_label: "Keep them",
                 on_confirm: |_| {}, on_dismiss: |_| {},
             }
         }
@@ -76,7 +76,107 @@ fn neutral_uses_primary_and_keeps_a_cancel_first_footer() {
     let (cancel_at, _) = button(&html, "archive-cancel");
     assert!(confirm.contains("btn btn-primary"), "{confirm}");
     assert!(html.contains(">Keep them<"), "{html}");
-    assert!(cancel_at < confirm_at, "{html}");
+    assert!(
+        confirm_at < cancel_at,
+        "the primary action always comes first: {html}"
+    );
+}
+
+#[test]
+fn modal_draws_primary_then_secondary_then_cancel() {
+    let html = render(|| {
+        let save = use_callback(|()| {});
+        let remove = use_callback(|()| {});
+        rsx! {
+            // Declared in any order, drawn in the fixed one.
+            modal::Modal { id: "entry", labelledby: "entry-title", open: true,
+                cancel: modal::ModalCancel::new("Close"),
+                secondary: modal::ModalAction::click("Delete", remove).variant(button::ButtonVariant::Danger),
+                primary: modal::ModalAction::click("Save", save).id("entry-save"),
+                on_dismiss: |_| {},
+            }
+        }
+    });
+    let save = html.find(">Save<").expect(&html);
+    let delete = html.find(">Delete<").expect(&html);
+    let close = button(&html, "entry-cancel").0;
+    assert!(save < delete && delete < close, "{html}");
+    assert!(
+        button(&html, "entry-save").1.contains("btn btn-primary"),
+        "{html}"
+    );
+    assert_eq!(html.matches("class=\"modal-actions\"").count(), 1, "{html}");
+}
+
+#[test]
+fn danger_opens_on_cancel_and_the_body_describes_the_dialog() {
+    let danger = render(|| {
+        rsx! {
+            ConfirmDialog { id: "drop", labelledby: "drop-title", open: true,
+                title: "Delete it?", confirm_label: "Delete",
+                on_confirm: |_| {}, on_dismiss: |_| {},
+                p { "It cannot be undone." }
+            }
+        }
+    });
+    assert!(
+        button(&danger, "drop-cancel").1.contains("autofocus"),
+        "{danger}"
+    );
+    assert!(
+        !button(&danger, "drop-confirm").1.contains("autofocus"),
+        "{danger}"
+    );
+    assert!(
+        danger.contains(r#"aria-describedby="drop-body""#),
+        "{danger}"
+    );
+    assert!(
+        danger.contains(r#"<div id="drop-body" class="confirm-body">"#),
+        "{danger}"
+    );
+    let neutral = render(|| {
+        rsx! {
+            ConfirmDialog { id: "keep", labelledby: "keep-title", open: true,
+                tone: ConfirmTone::Neutral, title: "Archive it?", confirm_label: "Archive",
+                on_confirm: |_| {}, on_dismiss: |_| {},
+            }
+        }
+    });
+    assert!(!neutral.contains("autofocus"), "{neutral}");
+}
+
+#[test]
+fn confirm_disabled_holds_the_button() {
+    let html = render(|| {
+        rsx! {
+            ConfirmDialog { id: "wait", labelledby: "wait-title", open: true, confirm_disabled: true,
+                title: "Delete it?", confirm_label: "Delete",
+                on_confirm: |_| {}, on_dismiss: |_| {},
+            }
+        }
+    });
+    assert!(
+        button(&html, "wait-confirm").1.contains("disabled=true"),
+        "{html}"
+    );
+    assert!(
+        !button(&html, "wait-cancel").1.contains("disabled=true"),
+        "{html}"
+    );
+}
+
+#[test]
+fn closed_it_renders_no_buttons() {
+    let html = render(|| {
+        rsx! {
+            ConfirmDialog { id: "shut", labelledby: "shut-title", open: false,
+                title: "Delete it?", confirm_label: "Delete",
+                on_confirm: |_| {}, on_dismiss: |_| {},
+            }
+        }
+    });
+    assert!(!html.contains("<button"), "{html}");
 }
 
 #[test]

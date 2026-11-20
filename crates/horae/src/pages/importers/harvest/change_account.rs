@@ -63,7 +63,6 @@ pub(super) fn ChangeAccount(
             id: "harvest-change-account", labelledby: "harvest-change-account-title", open: inspected().is_some(), busy: busy(),
             title: "Change Harvest account?",
             confirm_label: if busy() { "Changing account…" } else { "Change account and connect" },
-            cancel_first: true,
             on_confirm: confirm,
             on_dismiss: dismiss,
             if let Some(snapshot) = inspected() {
