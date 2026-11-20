@@ -16,6 +16,7 @@ pub(crate) use horae_server::{
 
 mod app;
 mod components;
+mod i18n;
 mod pages;
 mod route;
 mod server_fns;

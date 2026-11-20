@@ -17,6 +17,9 @@ use uuid::Uuid;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[allow(dead_code)]

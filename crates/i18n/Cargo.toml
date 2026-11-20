@@ -1,0 +1,19 @@
+[package]
+name = "horae-i18n"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# The interface's text catalog. It builds for the server and for WASM and has no
+# Dioxus, Axum or I/O dependency, so the UI, the server functions and the server's
+# mails and PDFs can share it.
+[dependencies]
+fluent-bundle = "0.16"
+unic-langid = "0.9"
+
+[build-dependencies]
+fluent-syntax = "0.12"
+
+[dev-dependencies]
+# The tests parse the catalog the same way build.rs does.
+fluent-syntax = "0.12"

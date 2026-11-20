@@ -270,6 +270,31 @@ never prevents form submission by default.
 A raw `a { href }` takes none of these paths, so the browser performs a full
 navigation.
 
+## Text nodes
+
+**`rsx/src/text_node.rs`**: a text node is a `HotReloadFormattedSegment`, the literal
+string split into literal and `{…}` segments. A static one becomes
+`DynamicNode::Text(VText::new(#txt.to_string()))`, a formatted one the same `VText`
+built from the segments:
+
+```rust
+pub struct TextNode {
+    pub input: HotReloadFormattedSegment,
+    pub dyn_idx: DynIdx,
+}
+// to_tokens
+if txt.is_static() {
+    quote! { dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string())) }
+} else {
+    let as_lit = HotLiteral::Fmted(txt.clone());
+    quote! { dioxus_core::DynamicNode::Text(dioxus_core::VText::new( #as_lit )) }
+}
+```
+
+The words are fixed at compile time, in the screen's source, so no catalog can reach
+them. `crates/dioxus-lint` parses the same `TextNode` and attribute `HotLiteral`s with
+this crate, which is how `dioxus/literal-text` sees exactly what the macro renders.
+
 ## Effects and cleanup
 
 **`hooks/src/use_effect.rs`**: `use_effect(callback: impl FnMut() + 'static) -> Effect`,
