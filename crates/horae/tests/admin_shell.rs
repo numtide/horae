@@ -22,13 +22,16 @@ use tokio::sync::oneshot;
 mod admin_shell;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
+#[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 #[path = "../src/components/session.rs"]
 pub mod session;
 pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod components {
-    pub use super::{icons, screen_state, session};
+    pub use super::{icons, page_header, screen_state, session};
 }
 mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};

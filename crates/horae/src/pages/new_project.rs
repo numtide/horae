@@ -7,7 +7,7 @@ use crate::components::back_link::BackLink;
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, error_line};
+use crate::components::screen_state::{LoadError, Loading};
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, EditableProject, ProjectDraft, ProjectEditRequest,
     ProjectEditorContext, ProjectFieldAccess, ProjectFormField, ProjectManagerSelection,
@@ -152,12 +152,7 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
         Some(Err(error)) => rsx! {
             BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
             PageHeader { title: "New project" }
-            ErrorState {
-                title: "Could not load project settings",
-                body: LOAD_FAILED,
-                request: error_line(error),
-                onretry: retry,
-            }
+            LoadError { error: error.clone(), what: "project settings", retry }
         },
         None => rsx! { Loading { label: "Loading project settings…" } },
     }
@@ -264,12 +259,7 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
         Some(Err(error)) => rsx! {
             BackLink { to: exit.clone(), label: back_label(&exit) }
             PageHeader { title: "Edit project" }
-            ErrorState {
-                title: "Could not load the project",
-                body: LOAD_FAILED,
-                request: error_line(error),
-                onretry: reload,
-            }
+            LoadError { error: error.clone(), what: "the project", retry: reload }
         },
         Some(Ok(_)) | None => rsx! { Loading { label: "Loading project…" } },
     }

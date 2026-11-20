@@ -136,13 +136,14 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                 }
                 match &step {
                     Step::Loading => rsx! { Loading { label: "Checking connection… CSV import remains available." } },
-                    Step::Unavailable(detail) => rsx! {
+                    // The detail is a transport message; the state says what to do instead.
+                    Step::Unavailable(_) => rsx! {
                         ErrorState {
                             title: "Could not check Harvest connection",
-                            body: "Horae could not reach Harvest to check the connection. CSV import remains available.",
-                            request: detail.to_string(),
+                            body: "The connection status did not load. CSV import remains available.",
                             retry_id: "recheck-connection",
                             onretry: recheck,
+                            inset: true,
                             actions: csv_link,
                         }
                     },
@@ -219,14 +220,15 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
             }
             section { class: "flex flex-col gap-3 mt-6", aria_labelledby: "history-title",
                 div { class: "flex items-center justify-between gap-3",
-                    h2 { id: "history-title", class: "himp-title", "History" }
+                    h2 { id: "history-title", tabindex: "-1", class: "himp-title", "History" }
                     Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "all-runs", "All runs" }
                 }
                 match &*history.read() {
                     None => rsx! { Loading { label: "Loading runs…" } },
-                    Some(Err(message)) => rsx! {
-                        ErrorState { title: "Could not load runs", body: LOAD_FAILED, request: message.to_string(),
+                    Some(Err(_)) => rsx! {
+                        ErrorState { title: "Could not load runs", body: LOAD_FAILED,
                             retry_id: "refresh-history", onretry: refresh_history,
+                            focus_on_recovery: "history-title",
                         }
                     },
                     Some(Ok(jobs)) if jobs.is_empty() => rsx! {

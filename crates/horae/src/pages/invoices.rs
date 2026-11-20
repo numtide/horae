@@ -5,7 +5,10 @@ use horae_core::permissions::invoices;
 use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
-use super::loaded;
+use super::{Failure, loaded};
+
+/// The Invoices title, where focus lands once a failed read loads again.
+const INVOICES_HEADING: &str = "invoices-heading";
 use crate::components::back_link::BackLink;
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, Loading, Skeleton};
@@ -102,7 +105,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
 
     rsx! {
         div {
-            PageHeader { title: "Invoices",
+            PageHeader { title: "Invoices", title_id: INVOICES_HEADING,
                 actions: rsx! {
                     if configures {
                         Link { to: Route::InvoiceSettings {}, class: "btn btn-secondary", "Settings" }
@@ -121,10 +124,13 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
             }
 
             if prepares && storage.ready() && show_form() {
-                if clients.state()() != UseResourceState::Ready {
+                if clients.state()() != UseResourceState::Ready && !matches!(&*clients.read(), Some(Err(_))) {
                     Loading { label: "Loading clients…" }
                 } else {
-                {loaded(&*clients.read(), "clients for invoicing", retry_clients, |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
+                {loaded(&*clients.read(), Failure {
+                    what: "clients for invoicing", retry: retry_clients, inset: false,
+                    pending: clients.state()() != UseResourceState::Ready, focus: Some(INVOICES_HEADING),
+                }, |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
                     Ok(initial_client) => rsx! {
                         preparation::PrepareInvoice { client_opts: client_opts.clone(), initial_client, busy,
                             oncreated: move |id| {
@@ -144,7 +150,10 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
             if invoices.read().is_none() {
                 Skeleton { rows: 5, columns: 6, label: "Loading invoices…" }
             } else {
-            {loaded(&*invoices.read(), "invoices", retry_invoices, |list| rsx! {
+            {loaded(&*invoices.read(), Failure {
+                what: "invoices", retry: retry_invoices, inset: false,
+                pending: invoices.state()() != UseResourceState::Ready, focus: Some(INVOICES_HEADING),
+            }, |list| rsx! {
                     if list.is_empty() {
                         EmptyState {
                             icon: "invoices",
@@ -260,7 +269,10 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
             if !matches!(&*invoice_data.read(), Some(Ok(_))) {
                 PageHeader { title: "Invoice" }
             }
-            {loaded(&*invoice_data.read(), "this invoice", retry_invoice, |data| {
+            {loaded(&*invoice_data.read(), Failure {
+                what: "this invoice", retry: retry_invoice, inset: false,
+                pending: invoice_data.state()() != UseResourceState::Ready, focus: Some("page-back"),
+            }, |data| {
                 let inv = data.invoice.clone();
                 let lines = data.lines.clone();
                 let cname = &data.client_name;

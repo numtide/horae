@@ -259,13 +259,16 @@ pub fn ClientList() -> Element {
                 div { class: "alert alert-danger", role: "alert", "Could not change client status: {message}" }
             }
 
-            if !ready {
+            // A failed list stays up, its retry disabled, while the retry runs.
+            if !ready && !matches!(&*data, Some(Err(_))) {
                 Loading { label: "Loading clients…" }
             } else if let Some(Err(_)) = &*data {
                 ErrorState {
                     title: "Could not load clients",
                     body: "Try again, or reload this page if your account changed.",
                     retry_id: "clients-retry",
+                    retry_disabled: !ready,
+                    focus_on_recovery: "clients-heading",
                     onretry: retry,
                 }
             } else if denied {

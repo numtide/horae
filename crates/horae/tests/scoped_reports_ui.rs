@@ -195,18 +195,7 @@ async fn financial_catalogs_wait_for_explicit_authenticated_financial_access() {
     assert!(probe.queries.borrow().is_empty());
 }
 
-fn loaded<T>(
-    state: &Option<Result<T, ServerFnError>>,
-    _what: &str,
-    _retry: Callback<()>,
-    render: impl FnOnce(&T) -> Element,
-) -> Element {
-    match state {
-        Some(Ok(value)) => render(value),
-        Some(Err(error)) => rsx! { p { "{error}" } },
-        None => rsx! { p { "Loading…" } },
-    }
-}
+use screen_state::{Failure, loaded};
 
 fn target(dom: &VirtualDom, vnode: &VNode, name: &str) -> Option<dioxus::core::ElementId> {
     use dioxus::core::{AttributeValue, DynamicNode, TemplateAttribute, TemplateNode};

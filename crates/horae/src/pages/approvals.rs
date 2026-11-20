@@ -6,12 +6,12 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use horae_core::types::EntryState;
 use horae_core::week::week_bounds;
 
-use super::loaded;
+use super::{Failure, loaded};
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading, error_line};
+use crate::components::screen_state::{EmptyState, ErrorState, LoadError, Loading};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
 use crate::components::today::today;
@@ -172,7 +172,7 @@ pub fn Approvals(week: String) -> Element {
 
     rsx! {
         div {
-            PageHeader { title: "Approvals" }
+            PageHeader { title: "Approvals", title_id: "approvals-heading" }
 
             // Until the session resolves, nobody is known to lack access.
             if me.read().is_none() || access.is_none() {
@@ -188,12 +188,7 @@ pub fn Approvals(week: String) -> Element {
                         Loading {}
                     },
                     (Some(Err(e)), _) => rsx! {
-                        ErrorState {
-                            title: "Could not load the week",
-                            body: LOAD_FAILED,
-                            request: error_line(e),
-                            onretry: retry_session,
-                        }
+                        LoadError { error: e.clone(), what: "the week", retry: retry_session }
                     },
                     (Some(Ok(_)), None) => rsx! {
                         div { class: "alert alert-danger mb-4", "This week is outside the supported date range." }
@@ -244,7 +239,11 @@ pub fn Approvals(week: String) -> Element {
                                 div { class: "alert alert-success mb-4", "{text}" }
                             }
 
-                            {loaded(&shown, "approvals", retry_list, |items| {
+                            {loaded(&shown, Failure {
+                                what: "approvals", retry: retry_list, inset: false,
+                                pending: approvals.state()() != UseResourceState::Ready,
+                                focus: Some("approvals-heading"),
+                            }, |items| {
                                     if items.is_empty() {
                                         let (title, body) = match status_label().as_str() {
                                             "Pending" => ("Nothing to approve", "No timesheets are waiting for approval this week."),

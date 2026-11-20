@@ -6,7 +6,7 @@ use horae_core::duration::format_hours2 as hours;
 use horae_core::money::format_cents as money;
 use horae_core::money::{Withheld, sum_by_currency};
 
-use super::loaded;
+use super::{Failure, loaded};
 use crate::components::badge::Badge;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input};
@@ -14,6 +14,9 @@ use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::table::DataTable;
 use crate::server_fns;
+
+/// The Reports title, where focus lands once a failed report loads again.
+const REPORTS_HEADING: &str = "reports-heading";
 
 #[path = "reports/scoped.rs"]
 mod scoped;
@@ -223,7 +226,7 @@ fn FinancialReports() -> Element {
 
     rsx! {
         div {
-            PageHeader { title: "Reports",
+            PageHeader { title: "Reports", title_id: REPORTS_HEADING,
                 actions: rsx! {
                     a { class: "btn btn-secondary", href: "{export_csv_url}", "Export CSV" }
                     a { class: "btn btn-secondary", href: "{export_xlsx_url}", "Export XLSX" }
@@ -387,11 +390,14 @@ fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> E
         async move { server_fns::report_time(f, t, g, cl, pr, us, tag).await }
     });
     let retry = use_callback(move |_| summary.restart());
+    let pending = summary.state()() != UseResourceState::Ready;
+    // A failed report stays up while its retry runs, so focus keeps its button.
+    let failed = matches!(&*summary.read(), Some(Err(_)));
     rsx! {
-        if summary.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
+        if !failed && (pending || !(filters.dates_settled)()) {
             Loading { label: "Loading report…" }
         } else {
-            {loaded(&*summary.read(), "the report", retry, |rows| {
+            {loaded(&*summary.read(), Failure { what: "the report", retry, pending, inset: false, focus: Some(REPORTS_HEADING) }, |rows| {
                 if rows.is_empty() {
                     return rsx! {
                         EmptyState { icon: "reports", title: "No time in this range", body: "Pick other dates or clear a filter to see tracked time." }
@@ -458,11 +464,13 @@ fn FinancialDetailedReport(filters: FinancialFilters) -> Element {
         async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
     });
     let retry = use_callback(move |_| detailed.restart());
+    let pending = detailed.state()() != UseResourceState::Ready;
+    let failed = matches!(&*detailed.read(), Some(Err(_)));
     rsx! {
-        if detailed.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
+        if !failed && (pending || !(filters.dates_settled)()) {
             Loading { label: "Loading detailed report…" }
         } else {
-            {loaded(&*detailed.read(), "the detailed report", retry, |entries| {
+            {loaded(&*detailed.read(), Failure { what: "the detailed report", retry, pending, inset: false, focus: Some(REPORTS_HEADING) }, |entries| {
                 if entries.is_empty() {
                     return rsx! {
                         EmptyState { icon: "reports", title: "No entries in this range", body: "Pick other dates or clear a filter to see time entries." }

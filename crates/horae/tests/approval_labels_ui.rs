@@ -96,20 +96,7 @@ struct Probe {
     navigator: Rc<Cell<Option<(Navigator, ScopeId)>>>,
 }
 
-fn loaded<T>(
-    state: &Option<Result<T, ServerFnError>>,
-    what: &str,
-    retry: Callback<()>,
-    render: impl FnOnce(&T) -> Element,
-) -> Element {
-    match state {
-        Some(Ok(value)) => render(value),
-        Some(Err(error)) => rsx! {
-            screen_state::ErrorState { title: "Could not load {what}", body: "{error}", onretry: retry }
-        },
-        None => rsx! { screen_state::Loading {} },
-    }
-}
+use screen_state::{Failure, loaded};
 
 fn app(probe: Probe) -> Element {
     let path = format!("/approvals?week={}", probe.week);

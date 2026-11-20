@@ -57,6 +57,12 @@ pub fn PermissionAudit() -> Element {
     let next = current
         .and_then(|result| result.as_ref().ok())
         .and_then(|page| page.next_after);
+    // The latest answer for this page, even while a retry is pending: a
+    // failure stays on screen, disabled, instead of becoming a loading line.
+    let failed = response
+        .as_ref()
+        .filter(|(cursor, _)| *cursor == after())
+        .and_then(|(_, result)| result.as_ref().err());
 
     rsx! {
         section { aria_labelledby: "audit-title", class: "min-w-0",
@@ -73,7 +79,19 @@ pub fn PermissionAudit() -> Element {
             p { class: "text-sm text-secondary mb-5",
                 "Permission changes, newest first. Expand an event to see its recorded details. Times are shown in UTC."
             }
-            if pending {
+            if let Some(error) = failed {
+                if let Some(body) = refusal(error) {
+                    ErrorState { title: "Could not load permission history", body }
+                } else {
+                    ErrorState {
+                        title: "Could not load permission history",
+                        body: LOAD_FAILED,
+                        onretry: retry,
+                        retry_disabled: pending,
+                        focus_on_recovery: "audit-title",
+                    }
+                }
+            } else if pending {
                 Loading { label: "Loading permission history…" }
             } else if let Some(Ok(page)) = current {
                 if page.entries.is_empty() {
@@ -115,16 +133,6 @@ pub fn PermissionAudit() -> Element {
                     }
                     if next.is_none() {
                         p { class: "text-sm text-secondary mt-3", role: "status", "No more permission events." }
-                    }
-                }
-            } else if let Some(Err(error)) = current {
-                if let Some(body) = refusal(error) {
-                    ErrorState { title: "Could not load permission history", body }
-                } else {
-                    ErrorState {
-                        title: "Could not load permission history",
-                        body: LOAD_FAILED,
-                        onretry: retry,
                     }
                 }
             }

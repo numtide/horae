@@ -8,7 +8,7 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use crate::components::back_link::BackLink;
 use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, Loading};
+use crate::components::screen_state::{ErrorState, LoadError, Loading};
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::{OrgBranding, branding_value_error};
 use crate::route::Route;
@@ -187,7 +187,7 @@ pub fn InvoiceSettings() -> Element {
                     }
                 },
                 Some(Err(error)) => rsx! {
-                    ErrorState { title: "Could not load invoice settings", body: message_of(error.clone()), onretry: retry }
+                    LoadError { error: error.clone(), what: "invoice settings", retry }
                 },
             }
         }

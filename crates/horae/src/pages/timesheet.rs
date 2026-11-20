@@ -7,14 +7,17 @@ use uuid::Uuid;
 use horae_core::duration::format_hhmm;
 use horae_core::week::week_start as start_of_week;
 
-use super::loaded;
+use super::{Failure, loaded};
+
+/// The Timesheet title, where focus lands once a failed week loads again.
+const TIMESHEET_HEADING: &str = "timesheet-heading";
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, Loading, error_line};
+use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
@@ -258,8 +261,13 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
     };
     loaded(
         &config.read(),
-        "the week settings",
-        retry_config,
+        Failure {
+            what: "the week settings",
+            retry: retry_config,
+            pending: config.state()() != UseResourceState::Ready,
+            inset: false,
+            focus: None,
+        },
         |first_day| {
             let Some(start) = start_of_week(date.0, *first_day)
                 .filter(|start| start.checked_add_days(chrono::Days::new(6)).is_some())
@@ -1209,7 +1217,7 @@ fn TimesheetContent(
             "data-editor-state": if busy() { "pending" } else if dirty { "dirty" } else { "clean" },
             // Header: title + week total + view toggle
             div { class: "ts-header",
-                PageHeader { title: "Timesheet",
+                PageHeader { title: "Timesheet", title_id: TIMESHEET_HEADING,
                     meta: (held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_)))).then(|| rsx! {
                         span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
                     }),
@@ -1380,15 +1388,21 @@ fn TimesheetContent(
             }
 
             // Content
-            if current_sheet.read().is_none() && held().is_none() {
-                Loading { label: "Loading timesheet…" }
-            } else if let Some(Err(error)) = current_sheet.read().as_ref() {
-                // The server explains a refused sheet (access changed, for one) in its message.
-                ErrorState {
-                    title: "Could not load the complete timesheet",
-                    body: error_line(error),
-                    onretry: retry_sheet,
+            // A failed week stays up, disabled, while its retry runs.
+            if let Some(error) = sheet.read().as_ref()
+                .filter(|(week, _)| *week == week_start())
+                .and_then(|(_, result)| result.as_ref().err())
+                .cloned()
+            {
+                LoadError {
+                    error,
+                    what: "the complete timesheet",
+                    retry: retry_sheet,
+                    pending: sheet.state()() != UseResourceState::Ready,
+                    focus_on_recovery: TIMESHEET_HEADING,
                 }
+            } else if current_sheet.read().is_none() && held().is_none() {
+                Loading { label: "Loading timesheet…" }
             } else {
                 div {
                     class: "ts-content",

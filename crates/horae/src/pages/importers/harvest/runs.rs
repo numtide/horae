@@ -14,7 +14,7 @@ pub fn HarvestRuns(before: RunsCursor) -> Element {
     rsx! {
         div { class: "himp-page min-w-0",
             BackLink { to: Route::HarvestOverview { outcome: Default::default() }, label: "Back to Harvest" }
-            PageHeader { title: "Harvest runs" }
+            PageHeader { title: "Harvest runs", title_id: "harvest-runs-heading" }
             if cursor.is_some() {
                 Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "newer-history", "Newest runs" }
             }

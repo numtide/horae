@@ -845,18 +845,7 @@ fn is_administrator(
     matches!(&*own.read(), Some(Ok(own)) if own.is_administrator)
 }
 
-fn loaded<T>(
-    state: &Option<Result<T, ServerFnError>>,
-    _what: &str,
-    _retry: Callback<()>,
-    render: impl FnOnce(&T) -> Element,
-) -> Element {
-    match state {
-        Some(Ok(value)) => render(value),
-        Some(Err(error)) => rsx! { div { "{error}" } },
-        None => rsx! { div { "Loading…" } },
-    }
-}
+use screen_state::{Failure, loaded};
 
 // Mirrors the production helper only for tests that opt into client or project activity.
 fn run_action<O: 'static, T: 'static>(
@@ -915,10 +904,16 @@ mod server_fns {
     /// Administrator identity, which offers the Harvest importer, varies.
     pub async fn get_my_permissions()
     -> Result<super::own_permissions::OwnPermissions, ServerFnError> {
+        let administrator = !consume_context::<Probe>().member;
         Ok(super::own_permissions::OwnPermissions {
             catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
-            grants: Vec::new(),
-            is_administrator: !consume_context::<Probe>().member,
+            // An Administrator's stored state holds every grant, as the server's does.
+            grants: if administrator {
+                horae_core::permissions::catalog::Permission::ALL.to_vec()
+            } else {
+                Vec::new()
+            },
+            is_administrator: administrator,
             profile: None,
             access_revision: 1,
             person_revision: 1,

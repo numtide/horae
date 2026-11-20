@@ -6,7 +6,7 @@ use crate::components::{
     back_link::BackLink,
     badge::Badge,
     page_header::PageHeader,
-    screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading},
+    screen_state::{EmptyState, LoadError, Loading},
     toast::{Toast, ToastContainer},
 };
 use crate::models::client::ClientDetailView;
@@ -70,8 +70,10 @@ fn ClientDetailContent(id: Uuid) -> Element {
     rsx! {
         div { class: "client-detail min-w-0",
             BackLink { to: Route::ClientList {}, label: "Back to Clients" }
-            if !ready {
+            if !ready && !matches!(&*data, Some(Err(_))) {
                 Loading { label: "Loading client…" }
+            } else if let Some(Err(error)) = &*data {
+                LoadError { error: error.clone(), what: "this client", retry, pending: !ready, focus_on_recovery: "page-back" }
             } else if let Some(Ok(ClientDetailView { details: detail, .. })) = &*data {
                 div { class: "border-b mb-4",
                     PageHeader {
@@ -167,12 +169,6 @@ fn ClientDetailContent(id: Uuid) -> Element {
                         if can_read_invoices { ClientInvoices { client_id: id } }
                     }
                 }
-            } else {
-                ErrorState {
-                    title: "Could not load this client",
-                    body: "It may be unavailable, or you may no longer have access. Try again, or go back to Clients.",
-                    onretry: retry,
-                }
             }
             super::form::ClientEditor { open: show_editor() && can_manage, client_id: Some(id), focus_fallback: "page-back",
                 on_dismiss: move |_| show_editor.set(false),
@@ -218,7 +214,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
     rsx! {
         section { class: "border rounded-xl bg-secondary min-w-0 overflow-hidden", aria_labelledby: "client-projects-title",
             div { class: "flex flex-wrap items-center gap-3 px-5 py-4 border-b",
-                h2 { id: "client-projects-title", class: "text-lg font-semibold m-0", "Projects" }
+                h2 { id: "client-projects-title", tabindex: "-1", class: "text-lg font-semibold m-0", "Projects" }
                 if ready {
                     if let Some(Ok(rows)) = &*data {
                         span { class: "text-xs text-secondary",
@@ -228,7 +224,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
                 }
                 Link { to: Route::ProjectsForClient { client: client_id.to_string() }, class: "text-sm font-semibold ml-auto", "View in Projects" }
             }
-            if !ready {
+            if !ready && !matches!(&*data, Some(Err(_))) {
                 Loading { label: "Loading projects…", class: "p-5" }
             } else if let Some(Ok(rows)) = &*data {
                 if rows.is_empty() {
@@ -277,8 +273,10 @@ fn ClientProjects(client_id: Uuid) -> Element {
                         }
                     }
                 }
-            } else {
-                ErrorState { title: "Could not load projects", body: LOAD_FAILED, inset: true, onretry: retry }
+            } else if let Some(Err(error)) = &*data {
+                LoadError { error: error.clone(), what: "projects", retry, pending: !ready, inset: true,
+                    focus_on_recovery: "client-projects-title",
+                }
             }
         }
     }
@@ -294,8 +292,8 @@ fn ClientInvoices(client_id: Uuid) -> Element {
     let data = invoices.read();
     rsx! {
         section { class: "border rounded-xl bg-secondary p-5 min-w-0", aria_labelledby: "client-invoices-title",
-            h2 { id: "client-invoices-title", class: "text-lg font-semibold m-0 mb-3", "Invoices" }
-            if !ready {
+            h2 { id: "client-invoices-title", tabindex: "-1", class: "text-lg font-semibold m-0 mb-3", "Invoices" }
+            if !ready && !matches!(&*data, Some(Err(_))) {
                 Loading { label: "Loading invoices…" }
             } else if let Some(Ok(rows)) = &*data {
                 if rows.is_empty() {
@@ -313,8 +311,10 @@ fn ClientInvoices(client_id: Uuid) -> Element {
                         }
                     }
                 }
-            } else {
-                ErrorState { title: "Could not load invoices", body: LOAD_FAILED, inset: true, onretry: retry }
+            } else if let Some(Err(error)) = &*data {
+                LoadError { error: error.clone(), what: "invoices", retry, pending: !ready, inset: true,
+                    focus_on_recovery: "client-invoices-title",
+                }
             }
         }
     }

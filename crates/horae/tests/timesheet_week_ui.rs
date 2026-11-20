@@ -125,22 +125,9 @@ mod components {
 // A directory path keeps the page's own submodules under `pages/timesheet/`.
 #[path = "../src/pages"]
 mod pages {
-    use dioxus::prelude::*;
-
     pub mod timesheet;
 
-    pub(crate) fn loaded<T>(
-        state: &Option<Result<T, ServerFnError>>,
-        _what: &str,
-        _retry: Callback<()>,
-        render: impl FnOnce(&T) -> Element,
-    ) -> Element {
-        match state {
-            Some(Ok(v)) => render(v),
-            Some(Err(e)) => rsx! { div { "{e}" } },
-            None => rsx! { div { "Loading…" } },
-        }
-    }
+    pub(crate) use crate::screen_state::{Failure, loaded};
 }
 use pages::timesheet;
 
@@ -751,11 +738,14 @@ async fn retrying_a_failed_week_does_not_bring_back_the_last_one() {
     assert!(html.contains("week unavailable"), "{html}");
     assert!(!html.contains("Old week project"), "{html}");
 
-    let retry = find_click(failed, |html| !html.contains("week unavailable"));
+    // While the retry runs, the failure stays on screen with its button disabled.
+    let retrying = |html: &str| html.contains("aria-disabled=\"true\">Try again");
+    assert!(!retrying(&html), "{html}");
+    let retry = find_click(failed, retrying);
     let mut page = failed();
     page.click(retry);
     let html = page.html();
-    assert!(html.contains("Loading timesheet"), "{html}");
+    assert!(html.contains("week unavailable"), "{html}");
     assert!(!html.contains("Old week project"), "{html}");
     assert!(!html.contains("inert"), "{html}");
 }

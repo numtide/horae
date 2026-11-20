@@ -198,7 +198,7 @@ let actor, org, owned = false, restoreSeededStates;
     await capture('denied-list');
     const denied = await loadDetail(zero);
     assert.equal(denied.status(), 404);
-    await expect(page.getByRole('alert')).toContainText('Could not load this client');
+    await expect(page.getByRole('alert')).toContainText('Client not found');
     await expect(page.getByRole('heading', { name: 'Permission zero client', exact: true })).toHaveCount(0);
     console.log('PASS: unrelated grants withhold the catalog as denied, not empty, and direct IDs are not found');
     assert.deepEqual(errors, []);

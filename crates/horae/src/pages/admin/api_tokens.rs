@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::pages::settings::api_tokens::TokenTable;
 use crate::server_fns;
 
@@ -24,7 +24,7 @@ pub fn AdminApiTokens() -> Element {
         });
     });
     rsx! {
-        PageHeader { title: "API tokens" }
+        PageHeader { title: "API tokens", title_id: "admin-api-tokens-title" }
         p { class: "text-secondary text-sm mb-4",
             "Every token people in this workspace have created. Revoking one stops it working at once; its owner can create another."
         }
@@ -33,8 +33,10 @@ pub fn AdminApiTokens() -> Element {
         }
         match &*tokens.read() {
             None => rsx! { Loading { label: "Loading tokens…" } },
-            Some(Err(_)) => rsx! {
-                ErrorState { title: "Could not load the tokens", body: LOAD_FAILED, onretry: retry }
+            Some(Err(error)) => rsx! {
+                LoadError { error: error.clone(), what: "the tokens", retry,
+                    pending: tokens.state()() != UseResourceState::Ready, focus_on_recovery: "admin-api-tokens-title",
+                }
             },
             Some(Ok(rows)) if rows.is_empty() => rsx! {
                 EmptyState { icon: "settings", title: "No tokens yet",

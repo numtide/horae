@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 use crate::components::form::{FormGroup, Input, Select};
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::models::api_tokens::{ApiTokenRow, CreatedApiToken};
 use crate::server_fns;
 
@@ -75,7 +75,7 @@ pub(super) fn ApiTokensSection() -> Element {
 
     rsx! {
         section { class: "card mt-4", aria_labelledby: "api-tokens-title",
-            h2 { id: "api-tokens-title", class: "card-title", "API tokens" }
+            h2 { id: "api-tokens-title", tabindex: "-1", class: "card-title", "API tokens" }
             p { class: "text-secondary text-sm mb-4",
                 "A token lets a script or another app use Horae as you, with your permissions. Treat it like a password. "
                 "The API is described in "
@@ -125,8 +125,10 @@ pub(super) fn ApiTokensSection() -> Element {
             }
             match &*tokens.read() {
                 None => rsx! { Loading { label: "Loading your tokens…" } },
-                Some(Err(_)) => rsx! {
-                    ErrorState { title: "Could not load your tokens", body: LOAD_FAILED, inset: true, onretry: retry }
+                Some(Err(error)) => rsx! {
+                    LoadError { error: error.clone(), what: "your tokens", retry, inset: true,
+                        pending: tokens.state()() != UseResourceState::Ready, focus_on_recovery: "api-tokens-title",
+                    }
                 },
                 Some(Ok(rows)) if rows.is_empty() => rsx! {
                     EmptyState { icon: "settings", title: "No tokens yet", inset: true,

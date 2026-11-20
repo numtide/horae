@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
+use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{ErrorState, Loading};
 use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
@@ -14,6 +15,19 @@ enum Section {
     Audit,
     Importers,
     ApiTokens,
+}
+
+impl Section {
+    /// The section page's own title, for the header of its no-access state.
+    fn title(self) -> &'static str {
+        match self {
+            Section::People => "People",
+            Section::Settings => "Workspace settings",
+            Section::Audit => "Audit log",
+            Section::Importers => "Importers",
+            Section::ApiTokens => "API tokens",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -109,6 +123,7 @@ pub fn AdminShell() -> Element {
         }
         // Non-disclosing: it names who can grant access, not what the section holds.
         Some(Ok(_)) => rsx! {
+            PageHeader { title: section.title() }
             ErrorState {
                 title: "Access unavailable",
                 body: "Your account cannot view this workspace section. Ask an Administrator if you need it.",

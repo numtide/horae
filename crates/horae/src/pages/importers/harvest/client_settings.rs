@@ -9,7 +9,7 @@ use horae_core::importers::harvest::client::{
 
 use super::connect_outcome::SecretFocus;
 use super::redirect_url_field::{RedirectUrlField, redirect_url, use_origin};
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, error_line};
+use crate::components::screen_state::{LoadError, Loading};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -108,12 +108,7 @@ pub(super) fn HarvestOAuthApp(
         }
         Some(Err(failure)) => {
             return rsx! {
-                ErrorState {
-                    title: "Could not load the Harvest OAuth app",
-                    body: LOAD_FAILED,
-                    request: error_line(&failure),
-                    onretry: retry,
-                }
+                LoadError { error: failure, what: "the Harvest OAuth app", retry }
             };
         }
         Some(Ok(current)) => current,

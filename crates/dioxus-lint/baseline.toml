@@ -42,13 +42,11 @@ reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. H
 reason = "Predates the check; each needs its own first-load gate and aria-busy fix (horae-application.md section 3), one per PR."
 "crates/horae/src/pages/admin/permission_editor/subjects.rs" = 1
 "crates/horae/src/pages/admin/permission_editor/templates.rs" = 1
-"crates/horae/src/pages/clients.rs" = 1
-"crates/horae/src/pages/clients/detail.rs" = 4
+"crates/horae/src/pages/clients/detail.rs" = 1
 "crates/horae/src/pages/clients/form.rs" = 1
-"crates/horae/src/pages/invoices.rs" = 1
 "crates/horae/src/pages/new_project.rs" = 2
 "crates/horae/src/pages/projects.rs" = 1
-"crates/horae/src/pages/reports.rs" = 3
+"crates/horae/src/pages/reports.rs" = 1
 
 ["dioxus/internal-href"]
 reason = "settings/own_permissions.rs permission_content links to /admin/audit; a Link needs a router, and its unit tests render it with bare ssr::render_element, so the fix comes with a test harness change."

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, Loading};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::models::invoice::{InvoiceDefaults, InvoiceDraftSave, InvoiceGenerationRequest};
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -136,6 +136,9 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
         loaded,
     });
     let mut loading_error = use_signal(|| None::<String>);
+    // The stored permissions hold no invoice access: a retry cannot help.
+    let mut denied = use_signal(|| false);
+    let mut checking = use_signal(|| false);
     let mut attempts = use_signal(|| 0_u64);
     let retry = use_callback(move |_| attempts += 1);
     let mut busy = use_signal(|| false);
@@ -145,8 +148,9 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     use_effect(move || {
         let _ = attempts();
         spawn(async move {
+            // A previous failure stays on screen, its retry disabled, until this check answers.
             loaded.set(false);
-            loading_error.set(None);
+            checking.set(true);
             let result = async {
                 let user = server_fns::get_me()
                     .await
@@ -154,7 +158,9 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
                 let own = server_fns::get_my_permissions()
                     .await
                     .map_err(|error| error.to_string())?;
-                if !reads_invoices(&own) {
+                let refused = !reads_invoices(&own);
+                denied.set(refused);
+                if refused {
                     return Err("Invoices require access to all invoices.".to_owned());
                 }
                 storage_key.set(format!(
@@ -167,10 +173,12 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
             match result {
                 Ok(request) => {
                     pending.set(request);
+                    loading_error.set(None);
                     loaded.set(true);
                 }
                 Err(message) => loading_error.set(Some(message)),
             }
+            checking.set(false);
         });
     });
     if let Some(request) = pending() {
@@ -210,10 +218,28 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
             }
         } };
     }
+    // No invoice access replaces the screen, below its header, instead of
+    // sitting above a list that would be refused beside it.
+    if !loaded() && denied() {
+        return rsx! {
+            PageHeader { title: "Invoices" }
+            ErrorState {
+                title: "Access unavailable",
+                body: "Invoices require access to all invoices. Ask an Administrator if you need it.",
+            }
+        };
+    }
+    // A failed check leaves the page usable without invoice actions, as before.
     rsx! {
         if !loaded() {
-            if let Some(message) = loading_error() {
-                ErrorState { title: "Could not open invoices", body: message, onretry: retry }
+            if loading_error().is_some() {
+                ErrorState {
+                    title: "Could not open invoices",
+                    body: LOAD_FAILED,
+                    onretry: retry,
+                    retry_disabled: checking(),
+                    focus_on_recovery: "invoices-heading",
+                }
             } else {
                 Loading { label: "Checking invoice recovery…" }
             }

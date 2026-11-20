@@ -29,7 +29,7 @@ pub(super) fn DraftEditor(
                         ErrorState {
                             title: "Could not load the invoice values",
                             body: LOAD_FAILED,
-                            request: error_line(error),
+                            request: error_line(error).unwrap_or_default(),
                             inset: true,
                             onretry: retry,
                             actions: rsx! { button { class: "btn btn-secondary", onclick: move |_| editing.set(false), "Cancel changes" } },

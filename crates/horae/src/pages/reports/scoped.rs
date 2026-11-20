@@ -280,7 +280,7 @@ pub(super) fn ScopedReports(
         } else if !ready {
             Loading { label: "Loading detailed report…" }
         } else if let Some((_, Err(message))) = current {
-            ErrorState { title: "Could not load the detailed report", body: message.to_string(), onretry: retry }
+            ErrorState { title: "Could not load the detailed report", body: *message, onretry: retry }
         }
         if let Some(loaded) = loaded {
             if !key.3.is_empty() {

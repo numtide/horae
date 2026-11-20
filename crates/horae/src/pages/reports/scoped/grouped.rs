@@ -153,7 +153,7 @@ pub(super) fn GroupedTimeReport(
         if !ready {
             Loading { label: "Loading time report…" }
         } else if let Some((_, Err(message))) = current {
-            ErrorState { title: "Could not load the time report", body: message.to_string(), onretry: retry }
+            ErrorState { title: "Could not load the time report", body: *message, onretry: retry }
         }
         if let Some(loaded) = loaded {
             dl { class: "flex flex-wrap gap-6 mb-6", aria_label: "Full-period totals",

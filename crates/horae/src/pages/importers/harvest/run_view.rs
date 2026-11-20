@@ -11,7 +11,7 @@ use super::run_panel::RunPanel;
 use super::{Conn, pause, presentation, use_connection};
 use crate::components::back_link::BackLink;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, Loading};
+use crate::components::screen_state::{ErrorState, Loading, error_line};
 use crate::models::JobStatus;
 use crate::route::Route;
 use crate::server_fns;
@@ -48,7 +48,8 @@ pub(super) fn RunView(id: Uuid) -> Element {
             loop {
                 let current = server_fns::get_harvest_import_job(id)
                     .await
-                    .map_err(|error| error.to_string())
+                    // Only the server's own message; a transport error has none to show.
+                    .map_err(|error| error_line(&error).unwrap_or_default())
                     .and_then(|found| {
                         found.ok_or_else(|| "Import job not found or no longer available".into())
                     });
@@ -103,7 +104,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
                 }
             };
         }
-        Some(Err(error)) => {
+        Some(Err(message)) => {
             return rsx! {
                 div { class: "himp-page min-w-0", "data-run": "{id}",
                     BackLink { to: RUNS, label: BACK_TO_RUNS }
@@ -111,7 +112,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
                     ErrorState {
                         title: "Status unavailable",
                         body: "The import may still be running. Try again to check its status.",
-                        request: error.to_string(),
+                        request: message.clone(),
                         retry_id: "resume-monitoring",
                         onretry: check_again,
                     }

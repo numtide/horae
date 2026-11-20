@@ -72,6 +72,12 @@ pub fn TaskCatalog() -> Element {
         .filter(|_| catalog.state()() == UseResourceState::Ready)
         .map(|(_, result)| result);
     let pending = current.is_none();
+    // The latest answer for this filter, even while a retry is pending: a
+    // failure stays on screen, disabled, instead of becoming a loading line.
+    let failed = response
+        .as_ref()
+        .filter(|(requested, _)| *requested == key)
+        .and_then(|(_, result)| result.as_ref().err());
     let next = current
         .and_then(|result| result.as_ref().ok())
         .and_then(|page| page.next_after.clone());
@@ -111,9 +117,7 @@ pub fn TaskCatalog() -> Element {
                 }
             }
             if let Some(message) = notice() { p { class: "text-sm text-secondary mb-3", role: "status", "{message}" } }
-            if pending {
-                Loading { label: "Loading tasks…" }
-            } else if let Some(Err(error)) = current {
+            if let Some(error) = failed {
                 if let Some(body) = refusal(error) {
                     ErrorState { title: "Could not load tasks", body }
                 } else {
@@ -121,8 +125,12 @@ pub fn TaskCatalog() -> Element {
                         title: "Could not load tasks",
                         body: LOAD_FAILED,
                         onretry: retry,
+                        retry_disabled: pending,
+                        focus_on_recovery: "tasks-title",
                     }
                 }
+            } else if pending {
+                Loading { label: "Loading tasks…" }
             } else if let Some(Ok(page)) = current {
                 if !page.can_edit { p { class: "text-sm text-secondary mb-3", "You have read-only access to tasks." } }
                 if page.tasks.is_empty() {

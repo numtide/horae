@@ -12,7 +12,7 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading, error_line};
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, LoadError, Loading};
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
@@ -485,12 +485,7 @@ fn ClientProjectList(client: String) -> Element {
         Some(Ok(id)) => rsx! { ProjectList { initial_client: Some(*id) } },
         Some(Err(error)) => rsx! {
             PageHeader { title: "Projects" }
-            ErrorState {
-                title: "Could not load this client's projects",
-                body: LOAD_FAILED,
-                request: error_line(error),
-                onretry: retry,
-            }
+            LoadError { error: error.clone(), what: "this client's projects", retry }
         },
         None => rsx! { Loading { label: "Loading client…" } },
     }
@@ -547,7 +542,8 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     }
     // Nothing is admitted: the first load, an access refresh or a refused read.
     match (&*projects.read(), projects.state()()) {
-        (Some(Err(_)), UseResourceState::Ready) => rsx! {
+        // A refused read stays up, disabled, while its retry runs.
+        (Some(Err(_)), state) => rsx! {
             PageHeader { title: "Projects" }
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
@@ -557,6 +553,8 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
                     title: "Project access is unavailable",
                     body: "Try again, or sign in again if your account changed.",
                     retry_id: "projects-retry-access",
+                    retry_disabled: state != UseResourceState::Ready,
+                    focus_on_recovery: "project-list-heading",
                     onretry: retry_access,
                 }
             }
@@ -764,7 +762,7 @@ fn ProjectListContent(
     rsx! {
         div {
             onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
-            PageHeader { title: "Projects",
+            PageHeader { title: "Projects", title_id: "project-list-heading",
                 actions: rsx! {
                     if can_create {
                         Link { to: Route::NewProject {}, class: "btn btn-primary", "New project" }

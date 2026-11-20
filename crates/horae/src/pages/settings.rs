@@ -58,8 +58,11 @@ pub fn Settings() -> Element {
             own_permissions::OwnPermissionSection {}
             api_tokens::ApiTokensSection {}
             div { class: "card mt-4",
-                h2 { class: "card-title", "Plugins" }
-                {crate::pages::loaded(&plugins.read(), "plugins", retry_plugins, |items| rsx! {
+                h2 { id: "plugins-title", tabindex: "-1", class: "card-title", "Plugins" }
+                {crate::pages::loaded(&plugins.read(), crate::pages::Failure {
+                    what: "plugins", retry: retry_plugins, inset: true,
+                    pending: plugins.state()() != UseResourceState::Ready, focus: Some("plugins-title"),
+                }, |items| rsx! {
                     if items.is_empty() {
                         EmptyState { icon: "settings", title: "No plugins installed", inset: true,
                             body: "Drop .wasm files into the plugins/ directory.",

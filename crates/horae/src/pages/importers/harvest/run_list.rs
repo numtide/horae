@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use super::history_table::HistoryTable;
 use super::runs_cursor::RunsCursor;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading, error_line};
+use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -20,8 +20,8 @@ pub(super) fn RunList(before: Option<Uuid>, limit: i64, #[props(default)] paged:
         match &*runs.read() {
             None => rsx! { Loading { label: "Loading runs…", class: "mt-4" } },
             Some(Err(error)) => rsx! {
-                ErrorState { title: "Could not load runs", body: LOAD_FAILED, request: error_line(error),
-                    retry_id: "refresh-history", onretry: retry,
+                LoadError { error: error.clone(), what: "runs", retry, pending: loading,
+                    retry_id: "refresh-history", focus_on_recovery: "harvest-runs-heading",
                 }
             },
             Some(Ok(jobs)) if jobs.is_empty() => rsx! {
