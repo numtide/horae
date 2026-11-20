@@ -93,7 +93,9 @@ pub fn parse(file: &str, source: &str) -> Result<Catalog, String> {
             ));
         }
         if let Some(missing) = found.terms.iter().find(|t| !terms.contains_key(*t)) {
-            return Err(format!("{file}: `{id}` references unknown term `-{missing}`"));
+            return Err(format!(
+                "{file}: `{id}` references unknown term `-{missing}`"
+            ));
         }
     }
 
@@ -101,14 +103,20 @@ pub fn parse(file: &str, source: &str) -> Result<Catalog, String> {
     for (id, (found, _)) in &messages {
         let method = rust_name(id);
         if KEYWORDS.contains(&method.as_str()) {
-            return Err(format!("{file}: `{id}` is a Rust keyword, so it cannot name a method"));
+            return Err(format!(
+                "{file}: `{id}` is a Rust keyword, so it cannot name a method"
+            ));
         }
         if let Some(other) = methods.insert(method.clone(), id) {
             return Err(format!(
                 "{file}: `{other}` and `{id}` both become the method `{method}`"
             ));
         }
-        if let Some(var) = found.vars.iter().find(|v| KEYWORDS.contains(&rust_name(v).as_str())) {
+        if let Some(var) = found
+            .vars
+            .iter()
+            .find(|v| KEYWORDS.contains(&rust_name(v).as_str()))
+        {
             return Err(format!(
                 "{file}: `{id}` uses the variable `${var}`, a Rust keyword; rename it"
             ));
@@ -129,7 +137,11 @@ pub fn parse(file: &str, source: &str) -> Result<Catalog, String> {
 /// Checks a translation against English: it fails on a message English lacks or
 /// on other variables than English's, and returns how many English messages it
 /// lacks (those show in English).
-pub fn check_translation(file: &str, english: &Catalog, translated: &Catalog) -> Result<usize, String> {
+pub fn check_translation(
+    file: &str,
+    english: &Catalog,
+    translated: &Catalog,
+) -> Result<usize, String> {
     for (id, message) in translated {
         match english.get(id) {
             None => return Err(format!("{file}: `{id}` is not in the English catalog")),
@@ -142,7 +154,10 @@ pub fn check_translation(file: &str, english: &Catalog, translated: &Catalog) ->
             Some(_) => {}
         }
     }
-    Ok(english.keys().filter(|id| !translated.contains_key(*id)).count())
+    Ok(english
+        .keys()
+        .filter(|id| !translated.contains_key(*id))
+        .count())
 }
 
 /// Adds the variables of `id` and of every message it references, once each.

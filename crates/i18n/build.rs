@@ -53,8 +53,8 @@ fn main() {
     let english = &catalogs[0];
     for (lang, translated) in locales.iter().zip(&catalogs).skip(1) {
         let file = format!("locales/{lang}/horae.ftl");
-        let missing = checks::check_translation(&file, english, translated)
-            .unwrap_or_else(|e| panic!("{e}"));
+        let missing =
+            checks::check_translation(&file, english, translated).unwrap_or_else(|e| panic!("{e}"));
         if missing > 0 {
             println!("cargo:warning={file} lacks {missing} messages; they show in English");
         }

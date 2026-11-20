@@ -15,9 +15,6 @@ use horae_core::types::{InvoiceStatus, ProjectRole};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-#[allow(dead_code)]
-#[path = "../src/i18n.rs"]
-mod i18n;
 #[path = "../src/components/back_link.rs"]
 pub mod back_link;
 #[path = "../src/components/badge.rs"]
@@ -28,6 +25,9 @@ pub mod combobox;
 pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/menu.rs"]

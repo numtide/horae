@@ -103,7 +103,10 @@ mod tests {
 
     #[test]
     fn a_sentence_without_the_tag_comes_back_whole() {
-        assert_eq!(split_tag("No link here.", "link"), ("No link here.", "", ""));
+        assert_eq!(
+            split_tag("No link here.", "link"),
+            ("No link here.", "", "")
+        );
     }
 
     #[test]

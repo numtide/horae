@@ -393,7 +393,12 @@ impl<'ast> Visit<'ast> for Checker {
         (self.in_render, self.closure_depth) = (render, 0);
         self.in_test |= is_test(&item.attrs);
         visit::visit_item_fn(self, item);
-        (self.in_render, self.closure_depth, self.state_flags, self.in_test) = saved;
+        (
+            self.in_render,
+            self.closure_depth,
+            self.state_flags,
+            self.in_test,
+        ) = saved;
     }
 
     fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
@@ -485,9 +490,9 @@ impl<'ast> Visit<'ast> for Checker {
         }
         // format!, vec!, toast helpers: their arguments are expressions. Macros with
         // another syntax are skipped, as before this count existed.
-        if let Ok(args) = mac.parse_body_with(
-            syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated,
-        ) {
+        if let Ok(args) = mac
+            .parse_body_with(syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated)
+        {
             for arg in &args {
                 self.visit_expr(arg);
             }
@@ -868,7 +873,12 @@ mod tests {
                     .filter(|f| f.rule == rule.id || f.rule != "dioxus/literal-text")
                     .collect()
             };
-            assert_eq!(ours(check_source(&bad).unwrap()), marked, "{}: bad.rs", rule.id);
+            assert_eq!(
+                ours(check_source(&bad).unwrap()),
+                marked,
+                "{}: bad.rs",
+                rule.id
+            );
             let good = ours(check_source(&good).unwrap());
             assert_eq!(good, vec![], "{}: good.rs is flagged", rule.id);
         }

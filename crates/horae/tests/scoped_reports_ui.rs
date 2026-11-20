@@ -49,9 +49,6 @@ mod models {
     }
 }
 #[allow(dead_code)]
-#[path = "../src/i18n.rs"]
-mod i18n;
-#[allow(dead_code)]
 #[path = "../src/components/badge.rs"]
 pub mod badge;
 #[allow(dead_code)]
@@ -62,6 +59,9 @@ pub mod debounce;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/page_header.rs"]

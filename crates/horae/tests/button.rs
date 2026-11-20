@@ -6,11 +6,11 @@
 
 use dioxus::prelude::*;
 
+#[path = "../src/components/button.rs"]
+mod button;
 #[allow(dead_code)]
 #[path = "../src/i18n.rs"]
 mod i18n;
-#[path = "../src/components/button.rs"]
-mod button;
 
 use button::{Button, ButtonVariant, IconButton, SplitButton};
 

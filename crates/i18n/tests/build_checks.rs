@@ -31,13 +31,19 @@ fn a_message_without_a_value_is_refused() {
 #[test]
 fn a_reference_to_an_unknown_message_is_refused() {
     let e = error("tasks-title = { tasks-missing } list\n");
-    assert!(e.contains("`tasks-title` references unknown message `tasks-missing`"), "{e}");
+    assert!(
+        e.contains("`tasks-title` references unknown message `tasks-missing`"),
+        "{e}"
+    );
 }
 
 #[test]
 fn a_reference_to_an_unknown_term_is_refused() {
     let e = error("tasks-title = { -missing } tasks\n");
-    assert!(e.contains("`tasks-title` references unknown term `-missing`"), "{e}");
+    assert!(
+        e.contains("`tasks-title` references unknown term `-missing`"),
+        "{e}"
+    );
 }
 
 #[test]
@@ -54,7 +60,11 @@ fn a_keyword_variable_is_refused() {
 
 #[test]
 fn variables_come_through_referenced_messages() {
-    let catalog = parse("horae.ftl", "a-inner = { $count }\na-outer = { a-inner } of { $total }\n").unwrap();
+    let catalog = parse(
+        "horae.ftl",
+        "a-inner = { $count }\na-outer = { a-inner } of { $total }\n",
+    )
+    .unwrap();
     let vars: Vec<&str> = catalog["a-outer"].vars.iter().map(String::as_str).collect();
     assert_eq!(vars, ["count", "total"]);
 }
@@ -88,5 +98,8 @@ fn a_translation_with_other_variables_is_refused() {
 #[test]
 fn a_translation_that_lacks_messages_counts_them() {
     let translated = parse("xx/horae.ftl", "a-one = Uno\n").unwrap();
-    assert_eq!(check_translation("xx/horae.ftl", &english(), &translated), Ok(1));
+    assert_eq!(
+        check_translation("xx/horae.ftl", &english(), &translated),
+        Ok(1)
+    );
 }

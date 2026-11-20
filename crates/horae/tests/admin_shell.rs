@@ -18,11 +18,11 @@ use futures_util::FutureExt;
 use horae_core::permissions::catalog::Permission;
 use tokio::sync::oneshot;
 
+#[path = "../src/components/admin_shell.rs"]
+mod admin_shell;
 #[allow(dead_code)]
 #[path = "../src/i18n.rs"]
 mod i18n;
-#[path = "../src/components/admin_shell.rs"]
-mod admin_shell;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/page_header.rs"]
