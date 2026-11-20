@@ -8,8 +8,10 @@ claiming a gain (see "Before claiming a performance fix" in `SKILL.md`).
 
 ## Usage today
 
-`DESIGN.md` makes `use_signal` and `use_resource` the defaults, and `pages.rs`
-`run_action` already covers mutations (error signal, `on_ok`, resource restart). The
+`DESIGN.md` makes `use_signal` and `use_resource` the defaults. Mutations are not on
+one path yet: `pages.rs` `run_action` (error signal, `on_ok`, resource restart) has a
+single caller, `pages/projects.rs`, and the other pages call their server functions
+from a `spawn` of their own. A separate PR unifies them on one path. The
 zero counts below are not violations. They mark options to try only after measuring a
 problem they fix.
 
@@ -17,7 +19,7 @@ problem they fix.
 |---|---|---|
 | `use_resource` | 58 | every page loads through it, so nothing is in the SSR HTML |
 | `use_loader`, `use_server_future`, `SuspenseBoundary`, `ErrorBoundary` | 0 | hand-written loading/error blocks stand in for them |
-| `use_action` | 0 | `run_action` and `spawn(async …)` blocks in handlers |
+| `use_action` | 0 | `spawn(async …)` blocks in handlers, and `run_action` in one place |
 | `use_store` / `#[derive(Store)]` | 0 | the editable lists use `Signal<Vec<_>>` |
 | `use_callback` | 33 | it is the pattern, but inline closure props remain (see below) |
 
@@ -111,7 +113,9 @@ problem they fix.
 
   Don't use `use_server_future` for data that reloads (section "Resources and loading"
   in `SKILL.md`).
-- **Mutations.** Keep `pages.rs` `run_action` for them. `use_action` cancels only the
+- **Mutations.** Today only `pages/projects.rs` calls `pages.rs` `run_action`; the other
+  pages run their own `spawn`, and a separate PR unifies them on one path (`run_action`
+  or its successor). Don't move them to `use_action` meanwhile: it cancels only the
   client task on a second call, so a non-idempotent server fn can commit with no
   result shown, and its `pending()` is false until the task first polls. Consider it
   only for idempotent or query-like actions.
