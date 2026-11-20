@@ -115,6 +115,43 @@ props that can never compare equal, or from reads that subscribe the wrong scope
   (`use_on_unmount` is deprecated). Tasks from
   `spawn` are cancelled on unmount.
 
+## Interface text (`rsx/src/text_node.rs`)
+
+A text node or a literal attribute in `rsx!` is fixed in the screen's source, so no
+language can replace it. Every visible or audible text comes from the English catalog,
+`crates/i18n/locales/en/horae.ftl` (spec `specs/023-i18n`), whose header holds the id
+conventions.
+
+- No loose text in `rsx!`: text nodes, readable attributes (`placeholder`, `title`,
+  `alt`, `label`, `aria-*`) and prose props of components. The same goes for text built
+  in Rust that a page shows (toasts, inline messages, `if busy { "Saving…" }`, error
+  fallbacks). Text that arrives from the server (`error.message`, names, notes) is shown
+  as it arrives.
+- A component calls `let tr = crate::i18n::use_tr();` once at the top, then writes
+  `{tr.tasks_title()}`, `aria_label: tr.tasks_pages()` or `label: tr.action_edit()`.
+  `Tr` is `Copy` and compares by language, so it is safe in props, closures and
+  `use_callback` captures. A plain function that returns text takes `tr: Tr`; a constant
+  table of text becomes a function of `tr`; the label of a `horae-core` or
+  `horae-types` value is a function in the app that takes `tr` (`project_type_label(tr, t)`),
+  because those crates cannot depend on the catalog.
+- A missing message or argument does not compile: each message is a generated method,
+  and its doc comment shows the English text.
+- A text with a count is one message with the count as a variable and the plural forms
+  inside it. Never choose between two messages with `n == 1` or write "item(s)".
+- A sentence with a link or emphasis inside is one message with `<tag>…</tag>` around
+  the part; split it with `horae_i18n::split_tag` and wrap the middle. Never assemble a
+  sentence from fragments, because word order differs between languages.
+- Fluent trims a message's leading and trailing spaces, so a space between a message and
+  the markup around it stays in the `rsx!` (`{" "}`). Write a literal brace as `{"{"}`.
+  Pass plural counts as integers, and money, durations and dates already formatted by
+  `horae-core`, as strings.
+- Not language: product names, currency codes, token prefixes and format patterns stay
+  as literals only through a `NOT_LANGUAGE` entry with its reason in
+  `crates/dioxus-lint/src/main.rs`. The brand is the `-brand` term, not an exception.
+  The component gallery (`pages/gallery.rs`) is exempt (`EXEMPT_FILES`).
+- `dioxus/literal-text` counts loose text per file, as a ratchet. Swapping one loose text
+  for another keeps a file's count, so the lint does not see it; review rejects it.
+
 ## Common mistakes
 
 | Mistake | Fix |
