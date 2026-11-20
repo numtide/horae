@@ -33,6 +33,9 @@ const KEYWORDS: &[&str] = &[
     "typeof", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ];
 
+/// The methods `Tr` defines in `src/lib.rs`, which a generated method cannot repeat.
+const TR_METHODS: &[&str] = &["new", "lang", "format"];
+
 /// Direct variables and direct references of one entry.
 #[derive(Default)]
 struct Found {
@@ -105,6 +108,11 @@ pub fn parse(file: &str, source: &str) -> Result<Catalog, String> {
         if KEYWORDS.contains(&method.as_str()) {
             return Err(format!(
                 "{file}: `{id}` is a Rust keyword, so it cannot name a method"
+            ));
+        }
+        if TR_METHODS.contains(&method.as_str()) {
+            return Err(format!(
+                "{file}: `{id}` would become `Tr::{method}`, which `Tr` already has; rename it"
             ));
         }
         if let Some(other) = methods.insert(method.clone(), id) {

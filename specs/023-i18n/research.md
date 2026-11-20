@@ -300,8 +300,10 @@ PR-7).
   `target/dx/horae/release/web/public/assets/horae_bg-*.wasm.br` from `dx build --release --locked`, the same command as `nix/package.nix`. The size is measured on the PR's base and
   head at three points: the infrastructure PR (engine only, expected about +42 KB), the proof of
   concept's screens, and the PR that closes the ratchet (whole catalog). If a measurement passes
-  50 KB before the last area, the work stops and the maintainer decides (the fallback in this
-  file's *Options compared* is available).
+  75 KB before the last area, the work stops and the maintainer decides (the fallback in this
+  file's *Options compared* is available). The threshold was 50 KB; I-1's review measured the
+  engine alone at +42,965 B once a message is used, and the maintainer kept Fluent in the
+  browser and raised the threshold.
 - **Rationale**: Principle V; the crate builds for both targets, so both are linted. Three
   measurements bracket the two costs (engine and text) without a release build in every PR.
 

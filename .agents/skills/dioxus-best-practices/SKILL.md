@@ -123,9 +123,10 @@ language can replace it. Every visible or audible text comes from the English ca
 conventions.
 
 - No loose text in `rsx!`: text nodes, readable attributes (`placeholder`, `title`,
-  `alt`, `label`, `aria-*`) and prose props of components. The same goes for text built
-  in Rust that a page shows (toasts, inline messages, `if busy { "Saving…" }`, error
-  fallbacks). Text that arrives from the server (`error.message`, names, notes) is shown
+  `alt`, `label`, `aria-label`, `aria-description`, `aria-valuetext`,
+  `aria-roledescription`, `data-tooltip`) and prose props of components. The same goes
+  for text built in Rust that a page shows (toasts, inline messages,
+  `if busy { "Saving…" }`, error fallbacks). Text that arrives from the server (`error.message`, names, notes) is shown
   as it arrives.
 - A component calls `let tr = crate::i18n::use_tr();` once at the top, then writes
   `{tr.tasks_title()}`, `aria_label: tr.tasks_pages()` or `label: tr.action_edit()`.

@@ -96,8 +96,9 @@ stat -c %s target/dx/horae/release/web/public/assets/horae_bg-*.wasm.br
 Clear `target/dx/horae/release/web/public/assets/` between the two builds so only one `.wasm.br`
 remains. At I-13 the base is I-1's base commit (master before the increment), not the PR's own
 base, so the number covers the whole increment. The difference is at most 60 KB (61,440 B) at
-I-13 (SC-005); I-1 is expected
-near 42 KB. Past 50 KB before I-13, stop and ask (research R-9).
+I-13 (SC-005). I-1 measures about +2 KB: no message calls the engine yet, so the release build
+leaves it out. The engine arrives with I-2's first message, about +42 KB (+42,965 B measured in
+I-1's review), which is not a regression. Past 75 KB before I-13, stop and ask (research R-9).
 
 ## The increment as a whole (after I-13)
 

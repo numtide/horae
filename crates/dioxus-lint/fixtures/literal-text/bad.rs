@@ -17,5 +17,23 @@ fn Tasks(count: usize, busy: bool) -> Element {
             // next line flagged
             span { "Saving…" }
         }
+        // next line flagged
+        Button { label: "API" }
+        // next line flagged
+        Button { label: "{count} selected" }
+        // next line flagged
+        p { {"Hello"} }
+        input {
+            // next line flagged
+            placeholder: if busy { "Add tags…" } else { "" },
+        }
+    }
+}
+
+#[cfg(not(test))]
+fn Shipped() -> Element {
+    rsx! {
+        // next line flagged
+        p { "Production code" }
     }
 }

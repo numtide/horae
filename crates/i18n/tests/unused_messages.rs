@@ -1,6 +1,7 @@
 //! Every English message is used: its method is called somewhere under `crates/`
 //! outside this crate, or a used message references it. `dead_code` cannot see
-//! this, because the generated methods are public.
+//! this, because the generated methods are public. A call from a test (`crates/horae/tests`)
+//! counts as a use too.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

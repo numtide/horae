@@ -106,11 +106,18 @@ fn main() {
             params.join(", ")
         )
         .unwrap();
-        out.push_str("        let mut args = FluentArgs::new();\n");
-        for var in &message.vars {
-            writeln!(out, "        args.set({var:?}, {});", rust_name(var)).unwrap();
-        }
-        writeln!(out, "        self.format({id:?}, Some(&args))\n    }}\n").unwrap();
+        // No local binding, so no message variable can shadow it.
+        let args: Vec<String> = message
+            .vars
+            .iter()
+            .map(|var| format!("({var:?}, Into::<FluentValue>::into({}))", rust_name(var)))
+            .collect();
+        writeln!(
+            out,
+            "        self.format({id:?}, Some(&FluentArgs::from_iter([{}])))\n    }}\n",
+            args.join(", ")
+        )
+        .unwrap();
     }
     out.push_str("}\n");
 

@@ -47,6 +47,17 @@ fn a_reference_to_an_unknown_term_is_refused() {
 }
 
 #[test]
+fn an_id_that_repeats_a_method_of_tr_is_refused() {
+    for id in ["new", "lang", "format"] {
+        let e = error(&format!("{id} = Text\n"));
+        assert!(
+            e.contains(&format!("`{id}` would become `Tr::{id}`")),
+            "{e}"
+        );
+    }
+}
+
+#[test]
 fn two_ids_with_one_method_name_are_refused() {
     let e = error("tasks-title = Tasks\ntasks_title = Tasks\n");
     assert!(e.contains("both become the method `tasks_title`"), "{e}");

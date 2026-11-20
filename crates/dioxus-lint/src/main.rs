@@ -12,7 +12,9 @@
 //! Known gaps: `resource-gate` sees only `state()` compared with `UseResourceState::Ready`
 //! (directly, through a `let`, or joined by `||`), not a `match` on the state, `pending()`
 //! or a gate inside a helper fn. `render-helper` sees only free `fn render_*` returning
-//! `Element`, not methods, closures or helpers with other names.
+//! `Element`, not methods, closures or helpers with other names. `literal-text` sees literals
+//! only (alone, as `{"…"}` or as `if` branches), not `format!(…)` or other expressions in a
+//! readable attribute or prose prop, nor `value` on a submit `input`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -155,6 +157,19 @@ const MACHINE_PROPS: &[&str] = &[
     "menu_id",
     "popover_id",
     "panel_id",
+    // Element ids: `Modal`'s labelling heading and focus fallback, `PageHeader`'s heading,
+    // `LoadError`'s retry button and the element it focuses after a recovery.
+    "labelledby",
+    "focus_fallback",
+    "title_id",
+    "retry_id",
+    "focus_on_recovery",
+    // A test hook passed through to the element.
+    "data-testid",
+    // `MetricCard`'s trend arrow (`up`, `down`), mapped to an icon.
+    "direction",
+    // `document::Link`'s icon dimensions (`32x32`).
+    "sizes",
 ];
 
 /// Macros whose string arguments never reach a person: logs, panics, SQL, includes.
@@ -286,6 +301,23 @@ impl Checker {
                 }
                 BodyNode::RawExpr(raw) => {
                     if let Some(expr) = self.parsed(raw.expr.as_expr()) {
+                        // `{"Save"}` is a text node written as an expression.
+                        let inner = match &expr {
+                            Expr::Block(b) => match b.block.stmts.as_slice() {
+                                [Stmt::Expr(e, None)] => e,
+                                _ => &expr,
+                            },
+                            e => e,
+                        };
+                        if let Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(lit),
+                            ..
+                        }) = inner
+                            && !self.in_test
+                            && is_language(&lit.value())
+                        {
+                            self.push("dioxus/literal-text", lit.span());
+                        }
                         self.visit_expr(&expr);
                     }
                 }
@@ -329,6 +361,14 @@ impl Checker {
             };
             // `class: if x { "a b" } else { "c" }` is not prose.
             let quiet = usize::from(name == "class" || name.ends_with("_class"));
+            let readable = if component {
+                !MACHINE_PROPS.contains(&name.as_str())
+            } else {
+                READABLE_ATTRS.contains(&name.as_str())
+            };
+            if readable && !self.in_test {
+                self.literal_text(&attribute.value);
+            }
             match &attribute.value {
                 AttributeValue::EventTokens(closure) => {
                     if let Some(body) = self.parsed(closure.body.as_expr()) {
@@ -349,20 +389,25 @@ impl Checker {
                     self.visit_expr_if(&value.if_expr);
                     self.quiet -= quiet;
                 }
-                AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) => {
-                    let loose = if component {
-                        !MACHINE_PROPS.contains(&name.as_str())
-                            && is_prose(&joined(&lit.segments))
-                            && has_language(&lit.segments)
-                    } else {
-                        READABLE_ATTRS.contains(&name.as_str()) && has_language(&lit.segments)
-                    };
-                    if loose && !self.in_test {
-                        self.push("dioxus/literal-text", lit.span());
-                    }
-                }
                 AttributeValue::Shorthand(_) | AttributeValue::AttrLiteral(_) => {}
             }
+        }
+    }
+
+    /// The value of a readable attribute or prose prop: a literal with a letter, alone or
+    /// as a branch of `if`. An expression such as `format!(…)` is not seen (see the gaps).
+    fn literal_text(&mut self, value: &AttributeValue) {
+        match value {
+            AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) if has_language(&lit.segments) => {
+                self.push("dioxus/literal-text", lit.span());
+            }
+            AttributeValue::IfExpr(value) => {
+                self.literal_text(&value.then_value);
+                if let Some(other) = &value.else_value {
+                    self.literal_text(other);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -500,32 +545,36 @@ impl<'ast> Visit<'ast> for Checker {
     }
 }
 
-/// `#[test]`, `#[tokio::test]`, `#[sqlx::test]` or `#[cfg(test)]`.
+/// `#[test]`, `#[tokio::test]`, `#[sqlx::test]`, `#[cfg(test)]` or `#[cfg(all(test, …))]`.
+/// `cfg(not(test))` and `cfg(feature = "test-support")` are production code.
 fn is_test(attrs: &[syn::Attribute]) -> bool {
+    fn only_in_tests(meta: &syn::Meta) -> bool {
+        match meta {
+            syn::Meta::Path(path) => path.is_ident("test"),
+            syn::Meta::List(list) if list.path.is_ident("all") => list
+                .parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                )
+                .is_ok_and(|metas| metas.iter().any(only_in_tests)),
+            _ => false,
+        }
+    }
     attrs.iter().any(|a| {
         last_is(a.path(), "test")
             || (a.path().is_ident("cfg")
-                && (a.meta.require_list()).is_ok_and(|l| l.tokens.to_string().contains("test")))
+                && a.parse_args::<syn::Meta>().is_ok_and(|m| only_in_tests(&m)))
     })
-}
-
-/// The literal parts of a text with `{…}` for each formatted part, as written.
-fn joined(segments: &[Segment]) -> String {
-    segments
-        .iter()
-        .map(|s| match s {
-            Segment::Literal(l) => l.clone(),
-            Segment::Formatted(f) => format!("{{{}}}", f.format_args),
-        })
-        .collect()
 }
 
 /// A literal part with a letter that is not a `NOT_LANGUAGE` entry.
 fn has_language(segments: &[Segment]) -> bool {
-    segments.iter().any(|s| {
-        matches!(s, Segment::Literal(l)
-            if l.chars().any(char::is_alphabetic) && !NOT_LANGUAGE.iter().any(|(n, _)| n == l))
-    })
+    segments
+        .iter()
+        .any(|s| matches!(s, Segment::Literal(l) if is_language(l)))
+}
+
+fn is_language(text: &str) -> bool {
+    text.chars().any(char::is_alphabetic) && !NOT_LANGUAGE.iter().any(|(n, _)| *n == text)
 }
 
 /// A literal a person would read: a capitalised word followed by more text, or
