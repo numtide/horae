@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 use crate::components::form::{FormGroup, Select};
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::EmptyState;
 use crate::components::theme::Theme;
 use crate::server_fns;
 
@@ -60,7 +61,9 @@ pub fn Settings() -> Element {
                 h2 { class: "card-title", "Plugins" }
                 {crate::pages::loaded(&plugins.read(), "plugins", retry_plugins, |items| rsx! {
                     if items.is_empty() {
-                        p { class: "text-muted text-sm", "No plugins installed. Drop .wasm files into the plugins/ directory." }
+                        EmptyState { icon: "settings", title: "No plugins installed", inset: true,
+                            body: "Drop .wasm files into the plugins/ directory.",
+                        }
                     } else {
                         div { class: "flex flex-col gap-3",
                             for plugin in items {

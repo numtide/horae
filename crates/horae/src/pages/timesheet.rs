@@ -2201,7 +2201,7 @@ fn render_week_view(
                 }
 
                 if row_keys.is_empty() {
-                    EmptyState { icon: "timesheet", title: "No time this week", body: "Add an entry to start filling your timesheet." }
+                    EmptyState { icon: "timesheet", title: "No time this week", inset: true, body: "Add an entry to start filling your timesheet." }
                 }
 
                 // Project rows
