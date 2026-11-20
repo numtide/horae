@@ -14,8 +14,12 @@ tag `v0.7.9`; paths are relative to `packages/`), so re-verify the rules after a
 common beliefs about Dioxus are wrong for this version, so go by these rules, not by
 memory or by third-party skills.
 
-Horae's defaults stay as `DESIGN.md` says: `use_signal` for local state,
-`use_resource` for server data, and `pages.rs` `run_action` for mutations. Stores,
+Horae's defaults stay as `DESIGN.md` says: `use_signal` for local state and
+`use_resource` for server data. Mutations are not on one path yet: `pages.rs`
+`run_action` has a single caller (`pages/projects.rs`), and the other pages call
+their server functions from a `spawn` of their own, each with its own busy, error
+and notice handling. A separate PR unifies them on one path (`run_action` or its
+successor). Stores,
 `use_action` and `use_loader` are options to reach for after you have measured a
 problem they fix. They are not defaults.
 
@@ -79,7 +83,8 @@ props that can never compare equal, or from reads that subscribe the wrong scope
   committed, so for a non-idempotent mutation the first call's outcome is lost.
   `pending()` stays false until the spawned task first polls, so it is a weak
   double-submit guard. Use it for idempotent or query-like actions. For mutations,
-  keep `run_action` and disable the button before the call.
+  do not use it: call the server function from a `spawn` as the page already does,
+  keep a busy signal, and disable the button before the call.
 
 ## Lists and nested state (`stores/src`, `examples/01-app-demos/todomvc_store.rs`)
 
