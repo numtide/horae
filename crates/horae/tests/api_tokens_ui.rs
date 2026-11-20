@@ -15,6 +15,9 @@ use futures_util::FutureExt;
 use uuid::Uuid;
 
 #[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
+#[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
 mod components {

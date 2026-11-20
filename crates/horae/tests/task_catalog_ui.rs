@@ -7,6 +7,9 @@ use std::{any::Any, cell::RefCell, collections::VecDeque, rc::Rc};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/form.rs"]

@@ -4,6 +4,9 @@
 
 use dioxus::prelude::*;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/combobox.rs"]
 mod combobox;
 #[path = "../src/components/controls.rs"]

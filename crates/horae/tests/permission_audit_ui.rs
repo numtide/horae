@@ -12,6 +12,9 @@ use futures_util::FutureExt;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
 #[path = "../src/components/permission_description.rs"]

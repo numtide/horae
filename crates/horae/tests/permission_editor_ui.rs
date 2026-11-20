@@ -13,6 +13,9 @@ use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/badge.rs"]
 pub mod badge;
 #[path = "../src/components/controls.rs"]

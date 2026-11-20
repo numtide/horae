@@ -11,6 +11,9 @@ use dioxus::router::components::HistoryProvider;
 use futures_util::FutureExt;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/avatar.rs"]
 pub mod avatar;
 #[path = "../src/components/back_link.rs"]

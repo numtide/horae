@@ -6,6 +6,9 @@
 
 use dioxus::prelude::*;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/button.rs"]
 mod button;
 

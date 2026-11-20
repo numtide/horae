@@ -19,6 +19,9 @@ use uuid::Uuid;
 pub use horae_types::{
     approval as approval_model, own_permissions as own_permissions_model, user as user_model,
 };
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/avatar.rs"]
 pub mod avatar;
 #[path = "../src/components/badge.rs"]

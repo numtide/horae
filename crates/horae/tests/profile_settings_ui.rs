@@ -13,6 +13,9 @@ use futures_util::FutureExt;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 #[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
+#[allow(dead_code)]
 #[path = "../src/components/button.rs"]
 pub mod button;
 #[allow(dead_code)]
