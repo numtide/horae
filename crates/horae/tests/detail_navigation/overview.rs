@@ -215,7 +215,7 @@ async fn pending_or_denied_overview_starts_no_auxiliary_reads_or_actions() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains("Project access is unavailable") && html.contains("Retry access"),
+        html.contains("Project access is unavailable") && html.contains("Try again"),
         "{html}"
     );
     assert!(
@@ -457,7 +457,7 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
         html.contains("1 project selected") && bulk_disabled(&html),
         "hidden rows take no bulk action: {html}"
     );
-    press(&mut dom, By::Text("Retry"), false);
+    press(&mut dom, By::Text("Try again"), false);
     let html = dioxus::ssr::render(&dom);
     assert!(
         filtered(&html) && html.contains("No projects match your filters"),

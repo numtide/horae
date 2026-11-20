@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::components::no_tracking::NoTrackingHint;
 use crate::components::project_task_picker::ProjectTaskPicker;
+use crate::components::screen_state::Loading;
 use crate::components::session::use_session;
 use crate::server_fns;
 
@@ -305,7 +306,7 @@ pub fn TimerWidget() -> Element {
                         }
                         if catalog_pending {
                             div { class: "sidebar-timer-pop-body",
-                                p { class: "no-tracking-hint", "Loading projects…" }
+                                Loading { label: "Loading projects…" }
                             }
                         } else if nothing_to_track {
                             div { class: "sidebar-timer-pop-body",

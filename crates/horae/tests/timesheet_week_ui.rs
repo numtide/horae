@@ -50,19 +50,25 @@ pub mod menu {
         rsx! { super::real_menu::Menu { id, label, {children} } }
     }
 }
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 #[path = "../src/components/no_tracking.rs"]
 pub mod no_tracking;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 #[path = "../src/components/today.rs"]
 pub mod today;
 mod components {
     pub use super::{
-        controls, date_picker, menu, modal, no_tracking, page_header, select_field, today,
+        controls, date_picker, icons, menu, modal, no_tracking, page_header, screen_state,
+        select_field, today,
     };
 
     /// The shell's week start and a viewer who cannot manage projects, without
@@ -70,12 +76,15 @@ mod components {
     pub mod session {
         use dioxus::prelude::*;
 
+        #[derive(Clone, Copy)]
         pub struct Session;
 
         impl Session {
             pub fn can_create_projects(&self) -> bool {
                 false
             }
+
+            pub fn refresh(self) {}
         }
 
         pub fn use_session() -> Session {
@@ -119,22 +128,20 @@ mod components {
 // A directory path keeps the page's own submodules under `pages/timesheet/`.
 #[path = "../src/pages"]
 mod pages {
-    use dioxus::prelude::*;
-
     pub mod timesheet;
 
-    pub(crate) fn loaded<T>(
-        state: &Option<Result<T, ServerFnError>>,
-        render: impl FnOnce(&T) -> Element,
-    ) -> Element {
-        match state {
-            Some(Ok(v)) => render(v),
-            Some(Err(e)) => rsx! { div { "{e}" } },
-            None => rsx! { div { "Loading…" } },
-        }
-    }
+    pub(crate) use crate::screen_state::{Failure, loaded};
 }
 use pages::timesheet;
+
+/// Whether the sheet itself is marked busy while a reload is held. Loading
+/// lines elsewhere on the page (the person picker's) carry `aria-busy` too.
+fn sheet_busy(html: &str) -> bool {
+    html.split("class=\"ts-content\"")
+        .nth(1)
+        .and_then(|rest| rest.split('>').next())
+        .is_some_and(|tag| tag.contains("aria-busy"))
+}
 
 /// The routes the page links to.
 mod route {
@@ -538,7 +545,7 @@ async fn a_week_change_keeps_the_last_week_on_screen_and_inert() {
     assert!(!html.contains("Loading timesheet"), "{html}");
     assert!(html.contains("Old week project"), "{html}");
     assert!(html.contains("inert"), "{html}");
-    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert!(sheet_busy(&html), "{html}");
     // The pager already names the requested week.
     assert!(html.contains("14 Sep – 20 Sep 2026"), "{html}");
 }
@@ -647,7 +654,7 @@ async fn a_reload_after_a_save_keeps_the_sheet_and_the_saved_value() {
     assert!(!html.contains("Loading timesheet"), "{html}");
     assert!(html.contains("Old week project"), "{html}");
     assert!(html.contains("this week"), "{html}");
-    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert!(sheet_busy(&html), "{html}");
     // The saved value stays until the reload brings it, and the page waits
     // for that reload rather than reading as unsaved.
     assert!(html.contains("value=\"1:07\""), "{html}");
@@ -671,7 +678,7 @@ async fn a_reload_after_a_save_keeps_the_sheet_and_the_saved_value() {
     assert!(!html.contains("value=\"1:07\""), "{html}");
     assert!(html.contains("value=\"0:45\""), "{html}");
     assert!(html.contains("data-editor-state=\"dirty\""), "{html}");
-    assert!(!html.contains("aria-busy=\"true\""), "{html}");
+    assert!(!sheet_busy(&html), "{html}");
 }
 
 #[tokio::test]
@@ -704,7 +711,7 @@ async fn an_added_row_survives_the_reload_after_its_first_save() {
     page.type_into_last_cell("2:00");
     assert_eq!(COMMANDS.with_borrow(Vec::len), 1);
     let html = page.html();
-    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert!(sheet_busy(&html), "{html}");
     assert_eq!(cells(&html), added, "{html}");
     assert!(html.contains("value=\"2:00\""), "{html}");
 }
@@ -734,11 +741,14 @@ async fn retrying_a_failed_week_does_not_bring_back_the_last_one() {
     assert!(html.contains("week unavailable"), "{html}");
     assert!(!html.contains("Old week project"), "{html}");
 
-    let retry = find_click(failed, |html| !html.contains("week unavailable"));
+    // While the retry runs, the failure stays on screen with its button disabled.
+    let retrying = |html: &str| html.contains("aria-disabled=\"true\">Try again");
+    assert!(!retrying(&html), "{html}");
+    let retry = find_click(failed, retrying);
     let mut page = failed();
     page.click(retry);
     let html = page.html();
-    assert!(html.contains("Loading timesheet"), "{html}");
+    assert!(html.contains("week unavailable"), "{html}");
     assert!(!html.contains("Old week project"), "{html}");
     assert!(!html.contains("inert"), "{html}");
 }
@@ -856,7 +866,7 @@ async fn a_dropped_block_stays_put_while_its_move_is_sent() {
     let_commands_through();
     page.settle();
     let html = page.html();
-    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert!(sheet_busy(&html), "{html}");
     assert!(html.contains("5:00–6:00"), "{html}");
     release(
         monday(),
@@ -869,7 +879,7 @@ async fn a_dropped_block_stays_put_while_its_move_is_sent() {
     page.settle();
     let html = page.html();
     assert!(html.contains("5:00–6:00"), "{html}");
-    assert!(!html.contains("aria-busy=\"true\""), "{html}");
+    assert!(!sheet_busy(&html), "{html}");
 }
 
 #[tokio::test]
@@ -880,7 +890,7 @@ async fn a_refused_move_puts_the_block_back() {
     drop_on_tuesday_at_five(&mut page, block);
     // The refusal reloads the sheet; while that is held, the block is home.
     let html = page.html();
-    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert!(sheet_busy(&html), "{html}");
     assert!(html.contains("Could not change entry"), "{html}");
     assert!(html.contains("3:00–4:00"), "{html}");
     assert!(!html.contains("5:00–6:00"), "{html}");
@@ -899,7 +909,7 @@ async fn an_unrelated_reload_during_a_move_keeps_the_block_put() {
     page.dom.in_scope(ScopeId::APP, || timer.refresh());
     page.settle();
     let html = page.html();
-    assert!(!html.contains("aria-busy=\"true\""), "{html}");
+    assert!(!sheet_busy(&html), "{html}");
     assert!(html.contains("5:00–6:00"), "{html}");
     assert!(!html.contains("3:00–4:00"), "{html}");
 }

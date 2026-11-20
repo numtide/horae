@@ -150,7 +150,7 @@ const rows = [
     // The failed reload hides the selected row, so no bulk action may apply to it.
     const bulkAfterFailure = await page.locator('#project-bulk-menu-trigger').isDisabled().catch(() => null);
     failOverview = false;
-    await page.getByRole('button', { name: /^Retry( access)?$/ }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(page.getByText(/No projects match your filters|Visible|Alpha four/).first()).toBeVisible();
 
     console.log(JSON.stringify({ results, afterRow, failedAlert, bulkAfterFailure }, null, 2));

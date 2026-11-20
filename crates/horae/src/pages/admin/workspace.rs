@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::form::FormGroup;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::Loading;
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
 use crate::server_fns;
@@ -21,7 +22,7 @@ pub fn WorkspaceSettings() -> Element {
         section { class: "card max-w-lg", aria_labelledby: "workspace-timezone-title",
             h2 { id: "workspace-timezone-title", class: "card-title", "Time zone" }
             match saved {
-                None => rsx! { p { class: "text-muted text-sm", role: "status", "Loading…" } },
+                None => rsx! { Loading {} },
                 Some(saved) => rsx! { TimezoneForm { key: "{saved}", saved, zones } },
             }
         }

@@ -6,11 +6,12 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use horae_core::types::EntryState;
 use horae_core::week::week_bounds;
 
-use super::loaded;
+use super::{Failure, loaded};
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, LoadError, Loading};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
 use crate::components::today::today;
@@ -138,7 +139,7 @@ pub fn Approvals(week: String) -> Element {
 
     // Each response carries the week it was requested for, so a slower answer
     // for a week no longer selected is never shown under the current one.
-    let approvals = use_resource(move || {
+    let mut approvals = use_resource(move || {
         let f = status_arg(&status_label.read());
         let _tick = *refresh.read();
         let start = selected()
@@ -152,6 +153,8 @@ pub fn Approvals(week: String) -> Element {
             ))
         }
     });
+    let retry_list = use_callback(move |_| approvals.restart());
+    let retry_session = use_callback(move |_| session.refresh());
 
     let access = review_access(&own.read());
     // Hide decisions the server would refuse; it re-checks every one.
@@ -169,22 +172,23 @@ pub fn Approvals(week: String) -> Element {
 
     rsx! {
         div {
-            PageHeader { title: "Approvals" }
+            PageHeader { title: "Approvals", title_id: "approvals-heading" }
 
             // Until the session resolves, nobody is known to lack access.
             if me.read().is_none() || access.is_none() {
-                div { class: "text-muted text-sm", role: "status", "Loading…" }
+                Loading {}
             } else if access == Some(false) {
-                div { class: "card p-8 text-center",
-                    p { class: "text-muted", "Approval access is required to review timesheets." }
+                ErrorState {
+                    title: "Approval access is unavailable",
+                    body: "Reviewing timesheets needs approval access. Ask an Administrator to grant it.",
                 }
             } else {
                 match (&*first_day.read(), selected()) {
                     (None, _) => rsx! {
-                        div { class: "text-muted text-sm", "Loading…" }
+                        Loading {}
                     },
                     (Some(Err(e)), _) => rsx! {
-                        div { class: "alert alert-danger", "{e}" }
+                        LoadError { error: e.clone(), what: "the week", retry: retry_session }
                     },
                     (Some(Ok(_)), None) => rsx! {
                         div { class: "alert alert-danger mb-4", "This week is outside the supported date range." }
@@ -235,12 +239,19 @@ pub fn Approvals(week: String) -> Element {
                                 div { class: "alert alert-success mb-4", "{text}" }
                             }
 
-                            {loaded(&shown, |items| {
+                            {loaded(&shown, Failure {
+                                what: "approvals", retry: retry_list, inset: false,
+                                pending: approvals.state()() != UseResourceState::Ready,
+                                focus: Some("approvals-heading"),
+                            }, |items| {
                                     if items.is_empty() {
+                                        let (title, body) = match status_label().as_str() {
+                                            "Pending" => ("Nothing to approve", "No timesheets are waiting for approval this week."),
+                                            "Approved" => ("No approved timesheets", "Timesheets approved for this week appear here."),
+                                            _ => ("No timesheets submitted", "Timesheets appear here once people submit their week."),
+                                        };
                                         return rsx! {
-                                            div { class: "card p-8 text-center",
-                                                p { class: "text-muted", "No approvals found." }
-                                            }
+                                            EmptyState { icon: "approvals", title, body, success: status_label() == "Pending" }
                                         };
                                     }
                                     let total: i64 = items.iter().map(|s| s.total_minutes).sum();

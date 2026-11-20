@@ -23,11 +23,18 @@ use tokio::sync::oneshot;
 mod i18n;
 #[path = "../src/components/admin_shell.rs"]
 mod admin_shell;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/session.rs"]
 pub mod session;
 pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod components {
-    pub use super::session;
+    pub use super::{icons, page_header, screen_state, session};
 }
 mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};
@@ -188,7 +195,9 @@ async fn people_without_a_people_grant_never_mount_admin_content() {
             html.contains("Access unavailable"),
             "expected access notice: {html}"
         );
-        assert!(html.contains("Back to Timesheet"));
+        // A no-permission state names who can grant access instead of a way out.
+        assert!(html.contains("Ask an Administrator"), "{html}");
+        assert!(!html.contains("Back to Timesheet"), "{html}");
     }
 }
 
@@ -226,7 +235,7 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
         .unwrap_or_else(|_| panic!("auth request was dropped"));
     let mutations = settle(&mut dom);
     assert_panel_hidden(&dom, &probe);
-    assert!(dioxus::ssr::render(&dom).contains("Retry"));
+    assert!(dioxus::ssr::render(&dom).contains("Try again"));
     let retry = mutations
         .into_iter()
         .find_map(|mutation| match mutation {

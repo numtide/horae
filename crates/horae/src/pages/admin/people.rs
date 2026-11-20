@@ -5,6 +5,7 @@ use super::permission_editor::PermissionEditorDialog;
 use super::rates::{PersonRatesDialog, RatesTarget};
 use crate::components::badge::Badge;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::table::DataTable;
 use crate::models::people::{PeopleActivity, PeopleCursor};
 use crate::models::permission_editor::PermissionRequester;
@@ -33,7 +34,7 @@ pub(super) fn CanonicalPeople(
         let result = async {
             let loaded = server_fns::list_people(filter, cursor.clone())
                 .await
-                .map_err(|_| "Could not load people. Check your access and retry.")?;
+                .map_err(|_| "Check your access and try again.")?;
             let expected = *requester.peek();
             if expected.is_some_and(|expected| expected != loaded.requester) {
                 return Err("Your session changed. Reload this page before selecting a person.");
@@ -44,6 +45,7 @@ pub(super) fn CanonicalPeople(
         .await;
         ((filter, cursor), result)
     });
+    let retry = use_callback(move |_| page.restart());
     let key = (activity(), cursors.read().last().cloned().flatten());
     let response = page.read();
     let current = response.as_ref().filter(|(requested, _)| *requested == key);
@@ -108,12 +110,12 @@ pub(super) fn CanonicalPeople(
             }
         }
         if !ready {
-            p { role: "status", class: "text-secondary", "Loading people…" }
+            Loading { label: "Loading people…" }
         } else if let Some((_, result)) = current {
             match result {
-                Err(message) => rsx! { p { role: "alert", class: "alert alert-danger", "{message}" } },
+                Err(message) => rsx! { ErrorState { title: "Could not load people", body: *message, onretry: retry } },
                 Ok(loaded) if loaded.people.is_empty() => rsx! {
-                    p { class: "text-secondary", role: "status", "No people match this filter within your access. Try another filter." }
+                    EmptyState { icon: "users", title: "No people match this filter", body: "Try another filter. Only people within your access are listed." }
                 },
                 Ok(loaded) => {
                     // Archiving is decided row by row (managed people, administrators).

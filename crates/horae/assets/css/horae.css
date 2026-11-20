@@ -1142,30 +1142,62 @@ tbody tr:hover { background: var(--color-row-hover); }
   box-shadow: 0 24px 60px -34px rgba(0, 0, 0, 0.7);
 }
 
-/* Empty state — a sunken card with a round glyph badge (design spec) */
+/* Empty, error and loading states (DESIGN.md, Empty, loading and error states).
+   EmptyState and ErrorState share this card; only the icon tile's tint differs. */
 .empty-state {
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-3);
   text-align: center;
-  padding: var(--space-16) var(--space-8);
-  background: var(--color-cell-empty-bg); border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
+  padding: var(--space-16) var(--space-6);
+  background: var(--color-bg-secondary); border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   color: var(--color-text-secondary);
 }
+/* Inside a panel that has its own border and heading. */
+.empty-state.inset { background: transparent; border: 0; border-radius: 0; padding: var(--space-10) var(--space-6); }
 .empty-state-icon {
-  width: 46px; height: 46px; border-radius: 50%;
+  width: var(--size-empty-icon-tile); height: var(--size-empty-icon-tile); flex: none;
+  border-radius: var(--radius-icon);
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--color-bg-tertiary); border: 1px solid var(--color-border-input);
-  color: var(--color-text-muted); font-size: var(--font-size-xl);
+  color: var(--color-border-strong);
 }
-.empty-state-title { font-family: var(--font-family-display); font-size: var(--font-size-lg); font-weight: 600; color: var(--color-text-strong); }
-.empty-state-text { font-size: var(--font-size-sm); color: var(--color-text-secondary); max-width: 420px; line-height: 1.5; }
-/* Opt-in tile/copy variants leave existing empty states unchanged. */
-.empty-state-icon-tile {
-  width: var(--size-empty-icon-tile); height: var(--size-empty-icon-tile);
-  border-radius: var(--radius-icon); color: var(--color-border-strong);
+.empty-state-icon svg { width: var(--size-icon-lg); height: var(--size-icon-lg); }
+.empty-state-icon.success { background: var(--color-success-bg); border-color: var(--color-success-line); color: var(--color-success-fg); }
+.empty-state-icon.danger { background: var(--color-danger-bg); border-color: var(--color-danger-line); color: var(--color-danger-fg); }
+.empty-state-title { margin: 0; font-family: var(--font-family-display); font-size: var(--font-size-xl); font-weight: 600; color: var(--color-text-strong); }
+.empty-state-text { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-subtle); max-width: var(--width-empty-copy); line-height: var(--line-height-copy); }
+.empty-state-code {
+  font-family: var(--font-family-mono); font-size: var(--font-size-xs); color: var(--color-text-muted);
+  padding: var(--space-1) var(--space-2); background: var(--color-bg);
+  border: 1px solid var(--color-border-light); border-radius: var(--radius);
+  max-width: 100%; overflow-wrap: anywhere;
 }
-.empty-state-icon-tile svg { width: var(--size-icon-lg); height: var(--size-icon-lg); }
-.empty-state-copy { max-width: var(--width-empty-copy); line-height: var(--line-height-copy); }
+.empty-state-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-4); margin-top: var(--space-1); }
+.loading { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+/* Read by assistive technology, not drawn (the Skeleton's status text). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* Skeleton: placeholder rows for a listing (DESIGN.md, Skeleton). */
+.skeleton { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-xl); overflow: hidden; }
+.skeleton-row { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); }
+.skeleton-row + .skeleton-row { border-top: 1px solid var(--color-border-light); }
+.skeleton-cell { flex: 1; display: flex; justify-content: flex-end; }
+.skeleton-cell:first-child { flex: 2; justify-content: flex-start; }
+.skeleton-bar {
+  display: block; width: 60%; height: var(--space-3); border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--color-bg-tertiary) 0%, var(--color-bg-overlay) 40%, var(--color-bg-tertiary) 80%);
+  background-size: 200% 100%; animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+/* Fixed, varied widths so the rows do not read as ruled lines. */
+.skeleton-row:nth-child(3n+1) .skeleton-cell:first-child .skeleton-bar { width: 75%; }
+.skeleton-row:nth-child(3n+2) .skeleton-cell:first-child .skeleton-bar { width: 55%; }
+.skeleton-row:nth-child(3n) .skeleton-cell:first-child .skeleton-bar { width: 85%; }
+.skeleton-row:nth-child(even) .skeleton-cell:nth-child(odd) .skeleton-bar { width: 45%; }
+@keyframes skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; } }
 
 /* Alert / flash messages */
 .alert {
@@ -1662,7 +1694,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-weektotal:hover { background: none; }
 
 /* Day view entries: stacked rows (project / task / notes + duration + actions). */
-.ts-day-empty { padding: var(--space-8); text-align: center; }
 .ts-day-list { display: flex; flex-direction: column; }
 .ts-day-entry {
   display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-4);

@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::duration::format_hours2 as hours;
 
 use super::{Selection, period};
+use crate::components::screen_state::Loading;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
     TimeReportBillability, TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping,
@@ -83,9 +84,11 @@ pub(super) fn ExpandedTimeReport(
         TimeReportGrouping::Person => "Team",
     };
     rsx! {
-        if !ready { p { role: "status", class: "text-secondary", "Loading breakdown…" } }
+        if !ready { Loading { label: "Loading breakdown…" } }
         else if let Some((_, Err(message))) = current {
-            p { role: "alert", class: "alert alert-danger", "{message}" }
+            div { role: "alert", class: "alert alert-danger", "{message} "
+                button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| page.restart(), "Try again" }
+            }
         }
         if let Some(loaded) = loaded {
             if loaded.groups.is_empty() {

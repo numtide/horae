@@ -7,6 +7,7 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 use crate::components::form::{FormGroup, Input, Select};
+use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::models::api_tokens::{ApiTokenRow, CreatedApiToken};
 use crate::server_fns;
 
@@ -22,6 +23,7 @@ const EXPIRIES: [(&str, &str); 5] = [
 #[component]
 pub(super) fn ApiTokensSection() -> Element {
     let mut tokens = use_resource(server_fns::list_api_tokens);
+    let retry = use_callback(move |_| tokens.restart());
     let mut name = use_signal(String::new);
     let mut expiry = use_signal(|| "90".to_string());
     let mut creating = use_signal(|| false);
@@ -73,7 +75,7 @@ pub(super) fn ApiTokensSection() -> Element {
 
     rsx! {
         section { class: "card mt-4", aria_labelledby: "api-tokens-title",
-            h2 { id: "api-tokens-title", class: "card-title", "API tokens" }
+            h2 { id: "api-tokens-title", tabindex: "-1", class: "card-title", "API tokens" }
             p { class: "text-secondary text-sm mb-4",
                 "A token lets a script or another app use Horae as you, with your permissions. Treat it like a password. "
                 "The API is described in "
@@ -122,12 +124,16 @@ pub(super) fn ApiTokensSection() -> Element {
                 p { class: "alert alert-danger", role: "alert", "{message}" }
             }
             match &*tokens.read() {
-                None => rsx! { p { class: "text-muted text-sm", role: "status", "Loading your tokens…" } },
-                Some(Err(_)) => rsx! {
-                    p { class: "alert alert-danger", role: "alert", "Could not load your tokens. Reload the page to try again." }
+                None => rsx! { Loading { label: "Loading your tokens…" } },
+                Some(Err(error)) => rsx! {
+                    LoadError { error: error.clone(), what: "your tokens", retry, inset: true,
+                        pending: tokens.state()() != UseResourceState::Ready, focus_on_recovery: "api-tokens-title",
+                    }
                 },
                 Some(Ok(rows)) if rows.is_empty() => rsx! {
-                    p { class: "text-muted text-sm", "You have no tokens yet." }
+                    EmptyState { icon: "settings", title: "No tokens yet", inset: true,
+                        body: "Create a token to let a script or another app use Horae on your behalf.",
+                    }
                 },
                 Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, on_revoke } },
             }

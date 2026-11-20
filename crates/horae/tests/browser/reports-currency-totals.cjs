@@ -244,7 +244,7 @@ const format = (code, cents) => {
     assert.deepEqual(await assertTotals('after a delayed load'), billable);
     await page.route('**/api/report_time*', route => route.fulfill({ status: 500, body: 'fixture failure' }));
     await select('Group by').selectOption('project');
-    const retry = page.getByRole('button', { name: 'Retry report', exact: true });
+    const retry = page.getByRole('button', { name: 'Try again', exact: true });
     await expect(retry).toBeVisible();
     await expect(totalRow).toHaveCount(0);
     await page.unroute('**/api/report_time*');

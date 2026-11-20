@@ -15,12 +15,17 @@ use uuid::Uuid;
 #[allow(dead_code)]
 #[path = "../src/i18n.rs"]
 mod i18n;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 mod components {
-    pub use super::{page_header, permission_description};
+    pub use super::{icons, page_header, permission_description, screen_state};
 }
 pub use horae_types::{permission_audit, permission_editor};
 mod models {

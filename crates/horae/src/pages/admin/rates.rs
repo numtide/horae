@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::components::{
     form::{FormGroup, Input},
     modal::Modal,
+    screen_state::Loading,
 };
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::user::{PersonRate, PersonRates};
@@ -50,7 +51,7 @@ fn RatesForm(
         None => {
             return rsx! {
                 h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
-                p { class: "modal-body", role: "status", "Loading rates…" }
+                Loading { label: "Loading rates…", class: "modal-body" }
             };
         }
         Some(Err(failure)) => {

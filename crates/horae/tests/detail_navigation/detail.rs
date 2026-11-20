@@ -117,7 +117,7 @@ async fn pending_and_denied_detail_never_mount_sensitive_children_or_render_raw_
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains("Project details are unavailable") && html.contains("Retry details"),
+        html.contains("Project details are unavailable") && html.contains("Try again"),
         "{html}"
     );
     assert!(

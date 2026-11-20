@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
+use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{ErrorState, Loading};
 use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
-use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -14,6 +15,19 @@ enum Section {
     Audit,
     Importers,
     ApiTokens,
+}
+
+impl Section {
+    /// The section page's own title, for the header of its no-access state.
+    fn title(self) -> &'static str {
+        match self {
+            Section::People => "People",
+            Section::Settings => "Workspace settings",
+            Section::Audit => "Audit log",
+            Section::Importers => "Importers",
+            Section::ApiTokens => "API tokens",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -94,6 +108,7 @@ pub fn AdminShell() -> Element {
         _ => Section::Importers,
     };
     let session = use_session();
+    let retry = use_callback(move |_| session.refresh());
     // Mount the workspace and its outlet once the session has loaded. A refresh
     // keeps a resolved answer until the new one arrives, so switching sections
     // or re-reading permissions never unmounts the open panel; server functions
@@ -106,34 +121,25 @@ pub fn AdminShell() -> Element {
         Some(Ok(access)) if access.allows(section) => {
             rsx! { AdminWorkspace { access } }
         }
+        // Non-disclosing: it names who can grant access, not what the section holds.
         Some(Ok(_)) => rsx! {
-            div { class: "card flex flex-col items-start gap-3 max-w-md",
-                h1 { class: "page-title", "Access unavailable" }
-                p { class: "text-secondary", "Your account cannot view this workspace section." }
-                Link {
-                    to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() },
-                    class: "btn btn-secondary",
-                    "Back to Timesheet"
-                }
+            PageHeader { title: section.title() }
+            ErrorState {
+                title: "Access unavailable",
+                body: "Your account cannot view this workspace section. Ask an Administrator if you need it.",
             }
             if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| session.refresh() } }
         },
         Some(Err(())) => rsx! {
-            div { class: "card flex flex-col items-start gap-3 max-w-md",
-                div { class: "alert alert-danger", role: "alert",
-                    "Could not verify workspace access. Sign in again or retry."
-                }
-                button {
-                    class: "btn btn-secondary",
-                    r#type: "button",
-                    onclick: move |_| session.refresh(),
-                    "Retry"
-                }
+            ErrorState {
+                title: "Could not verify workspace access",
+                body: "Try again, or sign in again if it keeps failing.",
+                onretry: retry,
             }
             if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| session.refresh() } }
         },
         None => rsx! {
-            div { class: "text-muted text-sm", role: "status", "Loading…" }
+            Loading {}
         },
     }
 }

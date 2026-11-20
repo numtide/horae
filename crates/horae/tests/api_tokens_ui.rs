@@ -20,8 +20,13 @@ mod i18n;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 mod components {
-    pub use super::form;
+    pub use super::{form, icons, screen_state};
 }
 mod models {
     pub use horae_types::api_tokens;
@@ -165,7 +170,7 @@ async fn the_harvest_account_id_shows_only_while_the_harvest_api_is_on() {
 async fn an_empty_list_says_so_and_create_waits_for_a_name() {
     let dom = mount(&Probe::default());
     let html = html(&dom);
-    assert!(html.contains("You have no tokens yet."), "{html}");
+    assert!(html.contains("No tokens yet"), "{html}");
     assert!(
         html.contains(r#"href="/api/v1/openapi.json""#),
         "the section links the API description: {html}"
