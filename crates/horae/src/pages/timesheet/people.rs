@@ -80,7 +80,7 @@ pub(super) fn PersonPicker(
                 },
                 if let Some(Err(error)) = current.read().as_ref() {
                     p { class: "text-sm text-danger p-2", role: "alert", "{error}" }
-                    button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| page.restart(), "Retry people" }
+                    button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| page.restart(), "Try again" }
                 }
                 if let Some(Ok(value)) = current.read().as_ref() {
                     if value.people.is_empty() {

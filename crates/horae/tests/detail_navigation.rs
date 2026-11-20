@@ -33,6 +33,9 @@ pub mod menu;
 pub mod modal;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/session.rs"]
 pub mod session;
 #[path = "../src/components/table.rs"]
@@ -41,8 +44,8 @@ pub mod table;
 pub mod toast;
 mod components {
     pub use super::{
-        back_link, badge, combobox, controls, form, icons, menu, modal, page_header, session,
-        table, toast,
+        back_link, badge, combobox, controls, form, icons, menu, modal, page_header, screen_state,
+        session, table, toast,
     };
 }
 #[path = "../src/pages/clients.rs"]
@@ -322,7 +325,7 @@ async fn pending_or_failed_client_navigation_never_shows_previous_identity_or_wo
         .unwrap();
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("Retry client"), "{html}");
+    assert!(html.contains("Try again"), "{html}");
     assert!(!html.contains("No projects"), "{html}");
     assert_eq!(*probe.client_invoice_requests.borrow(), [first]);
 }
@@ -365,10 +368,10 @@ async fn client_project_failure_preserves_billing_and_invoices() {
         .unwrap();
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
-    for expected in ["Address-1", "INV-1", "Retry projects"] {
+    for expected in ["Address-1", "INV-1", "Could not load projects", "Try again"] {
         assert!(html.contains(expected), "missing {expected}: {html}");
     }
-    assert!(!html.contains("No projects available"), "{html}");
+    assert!(!html.contains("No projects to show"), "{html}");
 }
 
 #[tokio::test]
@@ -390,7 +393,8 @@ async fn client_project_totals_failure_does_not_invent_zero_or_hide_project_link
     let html = dioxus::ssr::render(&dom);
     for expected in [
         "Client-project-1",
-        "Retry totals",
+        "Could not load project totals",
+        "Try again",
         &format!("href=\"/projects/{id}\""),
         &format!("href=\"/invoices/{id}\""),
     ] {
@@ -484,7 +488,12 @@ async fn failed_client_invoices_keep_identity_and_projects_without_claiming_empt
         .unwrap();
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
-    for expected in ["Client-1", "Client-project-1", "Retry invoices"] {
+    for expected in [
+        "Client-1",
+        "Client-project-1",
+        "Could not load invoices",
+        "Try again",
+    ] {
         assert!(html.contains(expected), "missing {expected}: {html}");
     }
     assert!(!html.contains("No invoices"), "{html}");
@@ -768,7 +777,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains("Project details are unavailable") && html.contains("Retry details"),
+        html.contains("Project details are unavailable") && html.contains("Try again"),
         "{html}"
     );
     assert!(!html.contains("Metadata unavailable"), "{html}");
@@ -836,16 +845,7 @@ fn is_administrator(
     matches!(&*own.read(), Some(Ok(own)) if own.is_administrator)
 }
 
-fn loaded<T>(
-    state: &Option<Result<T, ServerFnError>>,
-    render: impl FnOnce(&T) -> Element,
-) -> Element {
-    match state {
-        Some(Ok(value)) => render(value),
-        Some(Err(error)) => rsx! { div { "{error}" } },
-        None => rsx! { div { "Loading…" } },
-    }
-}
+use screen_state::{Failure, loaded};
 
 // Mirrors the production helper only for tests that opt into client or project activity.
 fn run_action<O: 'static, T: 'static>(
@@ -904,10 +904,16 @@ mod server_fns {
     /// Administrator identity, which offers the Harvest importer, varies.
     pub async fn get_my_permissions()
     -> Result<super::own_permissions::OwnPermissions, ServerFnError> {
+        let administrator = !consume_context::<Probe>().member;
         Ok(super::own_permissions::OwnPermissions {
             catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
-            grants: Vec::new(),
-            is_administrator: !consume_context::<Probe>().member,
+            // An Administrator's stored state holds every grant, as the server's does.
+            grants: if administrator {
+                horae_core::permissions::catalog::Permission::ALL.to_vec()
+            } else {
+                Vec::new()
+            },
+            is_administrator: administrator,
             profile: None,
             access_revision: 1,
             person_revision: 1,

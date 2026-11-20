@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::modal::Modal;
+use crate::components::screen_state::Loading;
 use crate::models::client::{
     ClientBillingSnapshot, ClientDetails, ClientProfile, ClientProfileEdit, ClientRateChange,
 };
@@ -152,14 +153,14 @@ fn ClientEditorLoader(
     let value = initial.read();
     rsx! {
         if !ready {
-            p { class: "modal-body m-0", role: "status", aria_busy: "true", "Loading client editor…" }
+            Loading { label: "Loading client editor…", class: "modal-body" }
         } else if let Some(Ok(detail)) = &*value {
             ClientForm { initial: detail.clone(), busy, on_dismiss, on_saved }
         } else {
             div { class: "modal-body",
                 p { role: "alert", "Could not load this client for editing." }
                 div { class: "flex flex-wrap gap-3",
-                    button { r#type: "button", class: "btn btn-primary", onclick: move |_| initial.restart(), "Retry editor" }
+                    button { r#type: "button", class: "btn btn-primary", onclick: move |_| initial.restart(), "Try again" }
                     button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Cancel" }
                 }
             }

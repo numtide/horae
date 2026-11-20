@@ -14,12 +14,17 @@ use futures_util::FutureExt;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use tokio::sync::oneshot;
 
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
+#[allow(dead_code)]
+#[path = "../src/components/screen_state.rs"]
+pub mod screen_state;
 #[path = "../src/components/session.rs"]
 pub mod session;
 mod components {
-    pub use super::{permission_description, session};
+    pub use super::{icons, permission_description, screen_state, session};
 }
 pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod models {

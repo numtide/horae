@@ -182,7 +182,7 @@ pub(super) fn Team(
                                 match &*people.read() {
                                     Some(Err(problem)) => rsx! {
                                         p { class: "text-sm text-danger p-2", role: "alert", "Could not search teammates: {problem}" }
-                                        button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| people.restart(), "Retry teammate search" }
+                                        button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| people.restart(), "Try again" }
                                     },
                                     Some(Ok(result)) if result.people.is_empty() => rsx! { p { class: "text-sm text-subtle p-2 m-0", role: "status", "No matching teammates." } },
                                     Some(Ok(result)) if result.more_people => rsx! { p { class: "form-hint p-2", "Showing 50 matches. Refine your search, or use Add everyone for the whole active team." } },

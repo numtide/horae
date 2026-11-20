@@ -1,5 +1,7 @@
 use dioxus::prelude::*;
 
+use crate::components::screen_state::Loading;
+
 /// A full-width form selector using the shared menu surface and native popover.
 /// An optional query signal connects the search field to the caller's catalog.
 /// `error_id` links a rejected selection to its existing visible error message.
@@ -66,7 +68,7 @@ pub fn SelectField(
                     }
                 }
             }
-            if pending { p { class: "text-sm text-subtle p-2 m-0", role: "status", "Loading choices…" } }
+            if pending { Loading { label: "Loading choices…", class: "text-subtle p-2" } }
             {children}
         }
     }

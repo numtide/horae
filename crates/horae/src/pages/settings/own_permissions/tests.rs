@@ -16,7 +16,15 @@ fn snapshot() -> OwnPermissions {
 }
 
 fn render(pending: bool, response: Option<Result<OwnPermissions, ServerFnError>>) -> String {
-    dioxus::ssr::render_element(permission_content(pending, &response))
+    // The error state's retry handler needs a scope, so render inside a VirtualDom.
+    let mut dom = VirtualDom::new_with_props(
+        |(pending, response): (bool, Option<Result<OwnPermissions, ServerFnError>>)| {
+            permission_content(pending, &response, use_callback(|_| {}))
+        },
+        (pending, response),
+    );
+    dom.rebuild_in_place();
+    dioxus::ssr::render(&dom)
 }
 
 #[test]

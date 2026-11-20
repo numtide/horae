@@ -8,6 +8,7 @@ use super::history_table::HistoryTable;
 use super::run_panel::RunPanel;
 use super::runs_cursor::RunsCursor;
 use super::{Conn, go_to_harvest, pause, presentation, use_connection};
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
 use crate::models::{CommitAvailability, JobErrorKind, JobStatus, RetryAvailability};
 use crate::route::Route;
 use crate::server_fns;
@@ -20,6 +21,8 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
     let mut history = use_signal(|| None::<Result<Vec<JobStatus>, String>>);
     // Bumped to read the runs again after an action.
     let mut follow = use_signal(|| 0_u64);
+    let recheck = use_callback(move |_| status.restart());
+    let refresh_history = use_callback(move |_| follow += 1);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
 
@@ -132,17 +135,16 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     }
                 }
                 match &step {
-                    Step::Loading => rsx! { p { class: "text-sm text-secondary", role: "status", "Checking connection… CSV import remains available." } },
-                    Step::Unavailable(detail) => rsx! {
-                        div { class: "alert alert-danger", role: "alert",
-                            p { "Could not check Harvest connection. Try checking again." }
-                            details { summary { "Details" } p { "{detail}" } }
-                        }
-                        div { class: "flex gap-4 items-center flex-wrap",
-                            button { r#type: "button", class: "btn btn-secondary", "data-testid": "recheck-connection".to_owned(),
-                                onclick: move |_| status.restart(), "Check again"
-                            }
-                            {csv_link}
+                    Step::Loading => rsx! { Loading { label: "Checking connection… CSV import remains available." } },
+                    // The detail is a transport message; the state says what to do instead.
+                    Step::Unavailable(_) => rsx! {
+                        ErrorState {
+                            title: "Could not check Harvest connection",
+                            body: "The connection status did not load. CSV import remains available.",
+                            retry_id: "recheck-connection",
+                            onretry: recheck,
+                            inset: true,
+                            actions: csv_link,
                         }
                     },
                     Step::Setup => rsx! {
@@ -218,20 +220,20 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
             }
             section { class: "flex flex-col gap-3 mt-6", aria_labelledby: "history-title",
                 div { class: "flex items-center justify-between gap-3",
-                    h2 { id: "history-title", class: "himp-title", "History" }
+                    h2 { id: "history-title", tabindex: "-1", class: "himp-title", "History" }
                     Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "all-runs", "All runs" }
                 }
                 match &*history.read() {
-                    None => rsx! { p { class: "text-sm", "Loading runs…" } },
-                    Some(Err(message)) => rsx! {
-                        div { role: "alert",
-                            p { "Could not load runs: {message}" }
-                            button { r#type: "button", class: "btn btn-ghost btn-sm", "data-testid": "refresh-history".to_owned(),
-                                onclick: move |_| follow += 1, "Try again"
-                            }
+                    None => rsx! { Loading { label: "Loading runs…" } },
+                    Some(Err(_)) => rsx! {
+                        ErrorState { title: "Could not load runs", body: LOAD_FAILED,
+                            retry_id: "refresh-history", onretry: refresh_history,
+                            focus_on_recovery: "history-title",
                         }
                     },
-                    Some(Ok(jobs)) if jobs.is_empty() => rsx! { p { class: "text-sm text-secondary", "No runs yet. Start a preview to create one." } },
+                    Some(Ok(jobs)) if jobs.is_empty() => rsx! {
+                        EmptyState { icon: "import", title: "No runs yet", body: "Start a preview to create one." }
+                    },
                     Some(Ok(jobs)) => rsx! { HistoryTable { jobs: jobs.clone() } },
                 }
             }

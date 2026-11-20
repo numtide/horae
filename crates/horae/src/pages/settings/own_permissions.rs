@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 use crate::components::permission_description::permission_description;
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
 
@@ -10,6 +11,7 @@ pub(super) fn OwnPermissionSection() -> Element {
     // Refreshing the shared copy also updates the rail and every other reader.
     let mut permissions = use_session().permissions;
     let pending = permissions.state()() != UseResourceState::Ready;
+    let retry = use_callback(move |_| permissions.restart());
     rsx! {
         section { class: "mt-6 mb-6 wrap-anywhere", aria_labelledby: "own-permissions-title",
             div { class: "flex flex-wrap items-center justify-between gap-3 mb-2",
@@ -26,7 +28,7 @@ pub(super) fn OwnPermissionSection() -> Element {
             p { class: "text-sm text-secondary mb-5",
                 "Your permissions determine what you can see and do in this workspace."
             }
-            {permission_content(pending, &permissions.read())}
+            {permission_content(pending, &permissions.read(), retry)}
         }
     }
 }
@@ -34,27 +36,34 @@ pub(super) fn OwnPermissionSection() -> Element {
 fn permission_content(
     pending: bool,
     response: &Option<Result<OwnPermissions, ServerFnError>>,
+    retry: Callback<()>,
 ) -> Element {
     if pending || response.is_none() {
-        return rsx! { p { class: "text-sm text-secondary", role: "status", "Loading your permissions…" } };
+        return rsx! { Loading { label: "Loading your permissions…" } };
     }
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
     let own = match response {
         Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
         other => {
-            let message = match other {
+            let refusal = match other {
                 Some(Err(ServerFnError::ServerError {
                     code: UNAUTHORIZED, ..
-                })) => "Sign in again to view your permissions.",
+                })) => Some("Sign in again to view your permissions."),
                 Some(Err(ServerFnError::ServerError {
                     code: FORBIDDEN, ..
-                })) => {
-                    "Your permissions cannot be viewed with the current account. Ask an Administrator to check your access."
-                }
-                _ => "Could not load your permissions. Refresh permissions to try again.",
+                })) => Some(
+                    "Your permissions cannot be viewed with the current account. Ask an Administrator to check your access.",
+                ),
+                _ => None,
             };
-            return rsx! { p { class: "text-sm text-danger", role: "alert", "{message}" } };
+            return rsx! {
+                if let Some(body) = refusal {
+                    ErrorState { title: "Could not load your permissions", body }
+                } else {
+                    ErrorState { title: "Could not load your permissions", body: LOAD_FAILED, onretry: retry }
+                }
+            };
         }
     };
     rsx! {

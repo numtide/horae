@@ -12,6 +12,7 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, LoadError, Loading};
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
@@ -479,14 +480,14 @@ fn ClientProjectList(client: String) -> Element {
             Ok::<_, ServerFnError>(id)
         }
     });
+    let retry = use_callback(move |_| context.restart());
     match &*context.read() {
         Some(Ok(id)) => rsx! { ProjectList { initial_client: Some(*id) } },
         Some(Err(error)) => rsx! {
             PageHeader { title: "Projects" }
-            div { class: "alert alert-danger", role: "alert", "Could not load this client's projects: {error}" }
-            button { class: "btn btn-secondary", onclick: move |_| context.restart(), "Retry" }
+            LoadError { error: error.clone(), what: "this client's projects", retry }
         },
-        None => rsx! { p { role: "status", "Loading client…" } },
+        None => rsx! { Loading { label: "Loading client…" } },
     }
 }
 
@@ -533,6 +534,7 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
         admitted.set(Some(response));
         Ok(())
     });
+    let retry_access = use_callback(move |_| projects.restart());
     if let Some(overview) = admitted() {
         return rsx! {
             ProjectListContent { overview, projects, admitted, bulk_success, initial_client }
@@ -540,15 +542,21 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     }
     // Nothing is admitted: the first load, an access refresh or a refused read.
     match (&*projects.read(), projects.state()()) {
-        (Some(Err(_)), UseResourceState::Ready) => rsx! {
+        // A refused read stays up, disabled, while its retry runs.
+        (Some(Err(_)), state) => rsx! {
             PageHeader { title: "Projects" }
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
             }
-            div { class: "alert alert-danger", role: "alert", "Project access is unavailable. Sign in again or reload this page if your account changed." }
-            button { id: "projects-retry-access", r#type: "button", class: "btn btn-secondary",
-                onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
-                onclick: move |_| projects.restart(), "Retry access"
+            div { onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
+                ErrorState {
+                    title: "Project access is unavailable",
+                    body: "Try again, or sign in again if your account changed.",
+                    retry_id: "projects-retry-access",
+                    retry_disabled: state != UseResourceState::Ready,
+                    focus_on_recovery: "project-list-heading",
+                    onretry: retry_access,
+                }
             }
         },
         _ => rsx! {
@@ -558,7 +566,7 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
             }
-            p { class: "text-sm text-secondary", role: "status", "Loading projects…" }
+            Loading { label: "Loading projects…" }
         },
     }
 }
@@ -605,6 +613,11 @@ fn ProjectListContent(
         use_signal(|| initial_client.map(|id| id.to_string()).unwrap_or_default());
     let mut tag_filter = use_signal(|| None::<Uuid>);
     let mut selected = use_signal(BTreeSet::<Uuid>::new);
+    let retry_list = use_callback(move |_| {
+        selected.write().clear();
+        projects.restart();
+        document::eval("document.getElementById('project-scope-menu-trigger')?.focus();");
+    });
     let mut bulk_action = use_signal(|| None::<BulkProjectAction>);
     let mut bulk_busy = use_signal(|| false);
     let mut bulk_error = use_signal(|| None::<String>);
@@ -749,7 +762,7 @@ fn ProjectListContent(
     rsx! {
         div {
             onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
-            PageHeader { title: "Projects",
+            PageHeader { title: "Projects", title_id: "project-list-heading",
                 actions: rsx! {
                     if can_create {
                         Link { to: Route::NewProject {}, class: "btn btn-primary", "New project" }
@@ -853,31 +866,25 @@ fn ProjectListContent(
                         button { class: "btn btn-secondary btn-sm", onclick: move |_| {
                             spend_res.restart();
                             budget_res.restart();
-                        }, "Retry" }
+                        }, "Try again" }
                     }
             } else if !spend_ready {
-                p { class: "text-sm text-secondary mb-4", role: "status", "Loading project progress…" }
+                Loading { label: "Loading project progress…", class: "mb-4" }
             }
 
             if matches!(&*tags_res.read(), Some(Err(_))) {
                 div { class: "alert alert-danger", role: "alert",
                     "Could not load project tags. "
-                    button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| { selected.write().clear(); tags_res.restart(); }, "Retry tags" }
+                    button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| { selected.write().clear(); tags_res.restart(); }, "Try again" }
                 }
             }
             if tag_filter().is_some() && !tags_ready {
                 p { class: "text-sm text-secondary", role: "status", "Tagged projects are unavailable until tags finish loading." }
             } else if !projects_loading && matches!(&*projects.read(), Some(Err(_))) {
-                div { class: "alert alert-danger", role: "alert",
-                    "Could not load projects. Retry to refresh the list. "
-                    button { r#type: "button", class: "btn btn-secondary btn-sm",
-                        onclick: move |_| {
-                            selected.write().clear();
-                            projects.restart();
-                            document::eval("document.getElementById('project-scope-menu-trigger')?.focus();");
-                        },
-                        "Retry"
-                    }
+                ErrorState {
+                    title: "Could not load projects",
+                    body: LOAD_FAILED,
+                    onretry: retry_list,
                 }
             } else {
             div {
@@ -905,44 +912,45 @@ fn ProjectListContent(
                     }
                     let link_clients = overview.can_open_clients;
                     if groups.is_empty() {
-                        rsx! {
-                            div { class: "empty-state bg-secondary border rounded-xl px-6 justify-center",
-                                span { class: "empty-state-icon empty-state-icon-tile", aria_hidden: "true", NavIcon { name: "briefcase" } }
-                                if list.is_empty() {
-                                    h2 { class: "empty-state-title text-xl m-0", "No projects yet" }
-                                    p { class: "empty-state-text empty-state-copy text-subtle m-0",
+                        if list.is_empty() {
+                            rsx! {
+                                EmptyState {
+                                    icon: "briefcase",
+                                    title: "No projects yet",
+                                    body: if can_create {
+                                        "Projects hold the tasks your team tracks against. Create one to get started."
+                                    } else {
+                                        "Projects hold the tasks your team tracks against. Ask a manager to create your first project."
+                                    },
+                                    actions: rsx! {
                                         if can_create {
-                                            "Projects hold the tasks your team tracks against. Create one to get started."
-                                        } else {
-                                            "Projects hold the tasks your team tracks against. Ask a manager to create your first project."
-                                        }
-                                    }
-                                    div { class: "flex flex-wrap items-center justify-center gap-3 mt-1",
-                                        if can_create {
-                                            Link {
-                                                to: Route::NewProject {},
-                                                class: "btn btn-primary py-3 px-5",
-                                                "New project"
-                                            }
+                                            Link { to: Route::NewProject {}, class: "btn btn-primary", "New project" }
                                         }
                                         if can_import {
                                             Link { to: Route::ImporterIndex {}, class: "text-sm font-semibold", "Import from Harvest →" }
                                         }
-                                    }
-                                } else {
-                                    h2 { class: "empty-state-title text-xl m-0", "No projects match your filters" }
-                                    p { class: "empty-state-text empty-state-copy text-subtle m-0", "Try another search, client, tag or project status." }
-                                    button {
-                                        class: "btn btn-secondary",
-                                        onclick: move |_| {
-                                            selected.write().clear();
-                                            query.set(String::new());
-                                            client_filter.set(String::new());
-                                            tag_filter.set(None);
-                                            scope.set("active".to_string());
-                                        },
-                                        "Reset filters"
-                                    }
+                                    },
+                                }
+                            }
+                        } else {
+                            rsx! {
+                                EmptyState {
+                                    icon: "briefcase",
+                                    title: "No projects match your filters",
+                                    body: "Try another search, client, tag or project status.",
+                                    actions: rsx! {
+                                        button {
+                                            class: "btn btn-secondary",
+                                            onclick: move |_| {
+                                                selected.write().clear();
+                                                query.set(String::new());
+                                                client_filter.set(String::new());
+                                                tag_filter.set(None);
+                                                scope.set("active".to_string());
+                                            },
+                                            "Reset filters"
+                                        }
+                                    },
                                 }
                             }
                         }
@@ -1261,6 +1269,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         access_lost.set(false);
         Ok(view)
     });
+    let retry_details = use_callback(move |_| details.restart());
     // The requested status; the dialog is open while it is set.
     let mut status_change = use_signal(|| None::<bool>);
     let mut status_busy = use_signal(|| false);
@@ -1391,7 +1400,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         div {
             BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
             if !ready {
-                p { role: "status", "Loading project details…" }
+                Loading { label: "Loading project details…" }
             } else if let Some(view) = view {
                 section { class: "pb-6 border-b border-light wrap-anywhere", aria_label: "Project details",
                     PageHeader {
@@ -1451,20 +1460,28 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 }
                 section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project tasks",
                     h2 { class: "card-title", "Project tasks" }
-                    if view.tasks.is_empty() { p { class: "text-muted text-sm", "No tasks enabled yet." } }
+                    if view.tasks.is_empty() {
+                        EmptyState { icon: "tasks", title: "No tasks yet", inset: true,
+                            body: if view.can_edit { "Edit the project to choose the tasks people track time against." } else { "A project manager chooses the tasks people track time against." },
+                        }
+                    }
                     else { ul { for task in view.tasks { li { key: "{task.id}", "{task.name}" } } } }
                 }
                 section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project team",
                     h2 { class: "card-title", "Team" }
-                    if view.team.is_empty() { p { class: "text-muted text-sm", "No visible team members." } }
+                    if view.team.is_empty() {
+                        EmptyState { icon: "team", title: "No team members to show", inset: true,
+                            body: if view.can_edit { "Edit the project to assign the people who track time on it." } else { "People assigned to this project that you can see appear here." },
+                        }
+                    }
                     else { ul { for person in view.team { li { key: "{person.id}", "{person.name}" } } } }
                 }
             } else {
-                p { class: "text-danger", role: "alert",
-                    "Project details are unavailable. Your session or access may have changed."
-                }
-                button { id: "project-detail-retry", r#type: "button", class: "btn btn-secondary btn-sm",
-                    onclick: move |_| details.restart(), "Retry details"
+                ErrorState {
+                    title: "Project details are unavailable",
+                    body: "Your session or access may have changed. Try again, or go back to Projects.",
+                    retry_id: "project-detail-retry",
+                    onretry: retry_details,
                 }
             }
 

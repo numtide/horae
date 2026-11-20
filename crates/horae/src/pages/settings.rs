@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 use crate::components::form::{FormGroup, Select};
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::EmptyState;
 use crate::components::theme::Theme;
 use crate::server_fns;
 
@@ -12,7 +13,8 @@ mod profile;
 #[component]
 pub fn Settings() -> Element {
     let mut theme = use_signal(|| Theme::Dark);
-    let plugins = use_resource(server_fns::list_plugins);
+    let mut plugins = use_resource(server_fns::list_plugins);
+    let retry_plugins = use_callback(move |_| plugins.restart());
 
     // The active theme lives in `<html data-theme>` / localStorage (set by
     // ThemeInit before first paint), not in Rust state, so read it back once
@@ -56,10 +58,15 @@ pub fn Settings() -> Element {
             own_permissions::OwnPermissionSection {}
             api_tokens::ApiTokensSection {}
             div { class: "card mt-4",
-                h2 { class: "card-title", "Plugins" }
-                {crate::pages::loaded(&plugins.read(), |items| rsx! {
+                h2 { id: "plugins-title", tabindex: "-1", class: "card-title", "Plugins" }
+                {crate::pages::loaded(&plugins.read(), crate::pages::Failure {
+                    what: "plugins", retry: retry_plugins, inset: true,
+                    pending: plugins.state()() != UseResourceState::Ready, focus: Some("plugins-title"),
+                }, |items| rsx! {
                     if items.is_empty() {
-                        p { class: "text-muted text-sm", "No plugins installed. Drop .wasm files into the plugins/ directory." }
+                        EmptyState { icon: "settings", title: "No plugins installed", inset: true,
+                            body: "Drop .wasm files into the plugins/ directory.",
+                        }
                     } else {
                         div { class: "flex flex-col gap-3",
                             for plugin in items {

@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use crate::components::screen_state::{ErrorState, Loading};
 use crate::components::session::use_session;
 
 mod add_person;
@@ -16,6 +17,7 @@ pub use workspace::WorkspaceSettings;
 pub fn AdminUsers() -> Element {
     let session = use_session();
     let own = session.permissions;
+    let retry = use_callback(move |_| session.refresh());
     let mut notice = use_signal(|| None::<String>);
     let on_saved = use_callback(move |changed: bool| {
         notice.set(Some(
@@ -36,7 +38,7 @@ pub fn AdminUsers() -> Element {
     // pending rather than repeating the old error.
     let resolved = matches!(&*own.read(), Some(Ok(_)));
     if !resolved && own.state()() != UseResourceState::Ready {
-        return rsx! { p { role: "status", "Loading people access…" } };
+        return rsx! { Loading { label: "Loading people access…" } };
     }
     let content = match &*own.read() {
         Some(Ok(access))
@@ -71,8 +73,11 @@ pub fn AdminUsers() -> Element {
             }
         }
         _ => rsx! {
-            p { class: "alert alert-danger", role: "alert", "People access is unavailable. Sign in again or retry." }
-            button { r#type: "button", class: "btn btn-secondary", onclick: move |_| session.refresh(), "Retry" }
+            ErrorState {
+                title: "People access is unavailable",
+                body: "Try again, or sign in again if it keeps failing.",
+                onretry: retry,
+            }
             PermissionRecovery { on_saved }
         },
     };

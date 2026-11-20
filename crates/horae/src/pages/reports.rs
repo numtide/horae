@@ -6,13 +6,17 @@ use horae_core::duration::format_hours2 as hours;
 use horae_core::money::format_cents as money;
 use horae_core::money::{Withheld, sum_by_currency};
 
-use super::loaded;
+use super::{Failure, loaded};
 use crate::components::badge::Badge;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input};
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::table::DataTable;
 use crate::server_fns;
+
+/// The Reports title, where focus lands once a failed report loads again.
+const REPORTS_HEADING: &str = "reports-heading";
 
 #[path = "reports/scoped.rs"]
 mod scoped;
@@ -81,15 +85,16 @@ pub fn Reports() -> Element {
         let expected = *binding.peek();
         let result = server_fns::get_time_report_access(expected.map(|value| value.requester))
             .await
-            .map_err(|_| "Report access is unavailable. Sign in again or retry.")?;
+            .map_err(|_| "Report access is unavailable. Try again, or sign in again if it keeps failing.")?;
         if expected.is_some_and(|expected| expected != result) {
             return Err("Your session or report access changed. Reload this page to continue.");
         }
         binding.set(Some(result));
         Ok(result)
     });
+    let retry_access = use_callback(move |_| access.restart());
     if access.state()() != UseResourceState::Ready {
-        return rsx! { p { role: "status", "Loading report access…" } };
+        return rsx! { Loading { label: "Loading report access…" } };
     }
     match &*access.read() {
         Some(Ok(access)) if access.financial => rsx! { FinancialReports {} },
@@ -104,12 +109,14 @@ pub fn Reports() -> Element {
                 .as_ref()
                 .and_then(|result| result.as_ref().err())
                 .copied()
-                .unwrap_or("Report access is unavailable. Sign in again or retry.");
+                .unwrap_or("Report access could not be checked. Try again, or sign in again if it keeps failing.");
             rsx! {
                 PageHeader { title: "Reports" }
-                p { class: "alert alert-danger", role: "alert", "{message}" }
-                button { id: "reports-retry-access", r#type: "button", class: "btn btn-secondary",
-                    onclick: move |_| access.restart(), "Retry access"
+                ErrorState {
+                    title: "Could not check report access",
+                    body: message,
+                    retry_id: "reports-retry-access",
+                    onretry: retry_access,
                 }
             }
         }
@@ -219,7 +226,7 @@ fn FinancialReports() -> Element {
 
     rsx! {
         div {
-            PageHeader { title: "Reports",
+            PageHeader { title: "Reports", title_id: REPORTS_HEADING,
                 actions: rsx! {
                     a { class: "btn btn-secondary", href: "{export_csv_url}", "Export CSV" }
                     a { class: "btn btn-secondary", href: "{export_xlsx_url}", "Export XLSX" }
@@ -311,7 +318,7 @@ fn FinancialReports() -> Element {
 
             if matches!(&*tags.read(), Some(Err(_))) {
                 div { class: "alert alert-danger", role: "alert", "Could not load project tags. "
-                    button { class: "btn btn-secondary btn-sm", onclick: move |_| tags.restart(), "Retry tags" }
+                    button { class: "btn btn-secondary btn-sm", onclick: move |_| tags.restart(), "Try again" }
                 }
             }
 
@@ -382,20 +389,18 @@ fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> E
         let g = group_by.read().clone();
         async move { server_fns::report_time(f, t, g, cl, pr, us, tag).await }
     });
+    let retry = use_callback(move |_| summary.restart());
+    let pending = summary.state()() != UseResourceState::Ready;
+    // A failed report stays up while its retry runs, so focus keeps its button.
+    let failed = matches!(&*summary.read(), Some(Err(_)));
     rsx! {
-        if summary.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
-            p { role: "status", "Loading report…" }
-        } else if matches!(&*summary.read(), Some(Err(_))) {
-            div { class: "alert alert-danger", role: "alert", "Could not load report. "
-                button { class: "btn btn-secondary btn-sm", onclick: move |_| summary.restart(), "Retry report" }
-            }
+        if !failed && (pending || !(filters.dates_settled)()) {
+            Loading { label: "Loading report…" }
         } else {
-            {loaded(&*summary.read(), |rows| {
+            {loaded(&*summary.read(), Failure { what: "the report", retry, pending, inset: false, focus: Some(REPORTS_HEADING) }, |rows| {
                 if rows.is_empty() {
                     return rsx! {
-                        div { class: "card p-8 text-center",
-                            p { class: "text-muted", "No time tracked in this range." }
-                        }
+                        EmptyState { icon: "reports", title: "No time in this range", body: "Pick other dates or clear a filter to see tracked time." }
                     };
                 }
                 let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
@@ -458,20 +463,17 @@ fn FinancialDetailedReport(filters: FinancialFilters) -> Element {
         let (f, t, cl, pr, us, tag) = filters.read();
         async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
     });
+    let retry = use_callback(move |_| detailed.restart());
+    let pending = detailed.state()() != UseResourceState::Ready;
+    let failed = matches!(&*detailed.read(), Some(Err(_)));
     rsx! {
-        if detailed.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
-            p { role: "status", "Loading detailed report…" }
-        } else if matches!(&*detailed.read(), Some(Err(_))) {
-            div { class: "alert alert-danger", role: "alert", "Could not load detailed report. "
-                button { class: "btn btn-secondary btn-sm", onclick: move |_| detailed.restart(), "Retry detailed report" }
-            }
+        if !failed && (pending || !(filters.dates_settled)()) {
+            Loading { label: "Loading detailed report…" }
         } else {
-            {loaded(&*detailed.read(), |entries| {
+            {loaded(&*detailed.read(), Failure { what: "the detailed report", retry, pending, inset: false, focus: Some(REPORTS_HEADING) }, |entries| {
                 if entries.is_empty() {
                     return rsx! {
-                        div { class: "card p-8 text-center",
-                            p { class: "text-muted", "No entries in this range." }
-                        }
+                        EmptyState { icon: "reports", title: "No entries in this range", body: "Pick other dates or clear a filter to see time entries." }
                     };
                 }
                 rsx! {

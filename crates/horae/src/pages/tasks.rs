@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::money::format_cents;
 
 use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::task::{TaskActivity, TaskCursor};
 use crate::server_fns;
@@ -58,6 +59,11 @@ pub fn TaskCatalog() -> Element {
             ((filter, cursor), result)
         }
     });
+    let retry = use_callback(move |_| {
+        selected.set(None);
+        notice.set(None);
+        catalog.restart();
+    });
     let key = (activity(), cursors.read().last().cloned().flatten());
     let response = catalog.read();
     let current = response
@@ -66,6 +72,12 @@ pub fn TaskCatalog() -> Element {
         .filter(|_| catalog.state()() == UseResourceState::Ready)
         .map(|(_, result)| result);
     let pending = current.is_none();
+    // The latest answer for this filter, even while a retry is pending: a
+    // failure stays on screen, disabled, instead of becoming a loading line.
+    let failed = response
+        .as_ref()
+        .filter(|(requested, _)| *requested == key)
+        .and_then(|(_, result)| result.as_ref().err());
     let next = current
         .and_then(|result| result.as_ref().ok())
         .and_then(|page| page.next_after.clone());
@@ -105,14 +117,24 @@ pub fn TaskCatalog() -> Element {
                 }
             }
             if let Some(message) = notice() { p { class: "text-sm text-secondary mb-3", role: "status", "{message}" } }
-            if pending {
-                p { role: "status", class: "text-secondary", "Loading tasks…" }
-            } else if let Some(Err(error)) = current {
-                p { role: "alert", class: "text-danger", "{error_message(error)}" }
+            if let Some(error) = failed {
+                if let Some(body) = refusal(error) {
+                    ErrorState { title: "Could not load tasks", body }
+                } else {
+                    ErrorState {
+                        title: "Could not load tasks",
+                        body: LOAD_FAILED,
+                        onretry: retry,
+                        retry_disabled: pending,
+                        focus_on_recovery: "tasks-title",
+                    }
+                }
+            } else if pending {
+                Loading { label: "Loading tasks…" }
             } else if let Some(Ok(page)) = current {
                 if !page.can_edit { p { class: "text-sm text-secondary mb-3", "You have read-only access to tasks." } }
                 if page.tasks.is_empty() {
-                    p { role: "status", class: "text-secondary", "No tasks match this filter. Try another filter." }
+                    EmptyState { icon: "tasks", title: "No tasks match this filter", body: "Try another filter." }
                 } else {
                     // The server lists common tasks first, so a page holds the end of
                     // one group and the start of the other at most.
@@ -183,14 +205,16 @@ fn rate_label(cents: Option<i64>, currency: Option<&str>) -> String {
     }
 }
 
-fn error_message(error: &ServerFnError) -> &'static str {
+/// Why the catalog was refused, when a retry cannot help; `None` for a
+/// failure worth repeating.
+fn refusal(error: &ServerFnError) -> Option<&'static str> {
     match error {
         ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
-        } => "Sign in again to view tasks.",
+        } => Some("Sign in again to view tasks."),
         ServerFnError::ServerError {
             code: FORBIDDEN, ..
-        } => "Task access is unavailable. If you changed accounts, reopen this page.",
-        _ => "Could not load tasks. Refresh tasks to try again.",
+        } => Some("Task access is unavailable. If you changed accounts, reopen this page."),
+        _ => None,
     }
 }

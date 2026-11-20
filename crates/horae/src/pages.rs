@@ -27,22 +27,7 @@ pub(crate) fn is_administrator(own: &Resource<Result<OwnPermissions, ServerFnErr
     )
 }
 
-/// Render a resource's loaded value, with the standard loading placeholder and
-/// error banner for the pending and failed states.
-pub(crate) fn loaded<T>(
-    state: &Option<Result<T, ServerFnError>>,
-    render: impl FnOnce(&T) -> Element,
-) -> Element {
-    match state {
-        Some(Ok(v)) => render(v),
-        Some(Err(e)) => rsx! {
-            div { class: "alert alert-danger", "{e}" }
-        },
-        None => rsx! {
-            div { class: "text-muted text-sm", "Loading…" }
-        },
-    }
-}
+pub(crate) use crate::components::screen_state::{Failure, loaded};
 
 /// Run a mutating server action: on success clear `error`, run `on_ok` (form
 /// reset / close), and restart `resource` so the list re-loads; on failure

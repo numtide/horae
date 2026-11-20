@@ -112,14 +112,14 @@ const sql = query => require('node:child_process').execFileSync('psql',
         if (endpoint === 'project_creation_options') {
           await page.getByRole('link', { name: 'New project', exact: true }).click();
         } else {
-          await page.getByRole('button', { name: 'Retry', exact: true }).click();
+          await page.getByRole('button', { name: 'Try again', exact: true }).click();
         }
         await expect(page.getByRole('status').filter({ hasText: 'Loading project settings' })).toBeVisible();
         await expect(screen).toHaveCount(0);
         assert.equal(draftWrites, 0, 'Loading cannot create or replace a draft');
         release();
         await expect(page.getByRole('alert')).toContainText('Could not load project settings');
-        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
+        await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeEnabled();
         await expect(page.getByRole('link', { name: 'Back to Projects', exact: true })).toBeVisible();
         await expect(screen).toHaveCount(0);
         assert.equal(draftWrites, 0, 'Failed initialization cannot create or replace a draft');
@@ -128,7 +128,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
         await page.unroute(pattern);
       }
     }
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/new`);
     await expect(draftStatus).toHaveText('No draft saved yet');
     assert.equal(draftWrites, 0);
@@ -430,7 +430,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(screen.getByRole('button', { name: 'Remove Admin User from project', exact: true })).toHaveCount(1);
     await readsFinished(page);
     await page.unroute('**/api/project_creation_options*');
-    await peoplePicker.getByRole('button', { name: 'Retry teammate search', exact: true }).click();
+    await peoplePicker.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(peoplePicker.getByRole('status')).toHaveText('No matching teammates.');
     await peopleSearch.press('Escape');
     await expect(addPerson).toBeFocused();
@@ -480,7 +480,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(tasksSection.getByRole('button', { name: 'Remove task Browser custom task', exact: true })).toHaveCount(0);
     await readsFinished(page);
     await page.unroute('**/api/project_creation_options*');
-    await tasksSection.getByRole('button', { name: 'Retry task search', exact: true }).click();
+    await tasksSection.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(tasksSection.getByRole('status')).toHaveText('No matching tasks. Add this name as a new task.');
     await addTask.click();
     await expect(taskSearch).toBeFocused();
@@ -760,7 +760,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(screen).toHaveCount(0);
     assert.equal(draftWrites, writesBeforeFailedResume);
     await page.unroute('**/api/load_project_draft*');
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('Recoverable browser project');
     await expect(screen.locator('#np-code')).toHaveValue('BROWSER-NEW');
     await expect(screen.locator('#np-start')).toHaveText('01 Sep 2026');
@@ -1314,11 +1314,11 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await page.getByRole('button', { name: 'Time', exact: true }).click();
     await page.route('**/api/report_time*', route => route.abort());
     await reportTag.selectOption('');
-    await expect(page.getByRole('alert')).toContainText('Could not load report');
+    await expect(page.getByRole('alert')).toContainText('Could not load the report');
     await expect(page.locator('tbody tr')).toHaveCount(0);
     await readsFinished(page);
     await page.unroute('**/api/report_time*');
-    await page.getByRole('button', { name: 'Retry report', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await expect(page.locator('tbody tr')).not.toHaveCount(0);
     await readsFinished(page);
     console.log('PASS: a new tagged project reaches reports and both exports; pending/error filters never show stale rows');
