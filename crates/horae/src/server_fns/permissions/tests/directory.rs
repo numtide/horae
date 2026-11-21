@@ -1,15 +1,10 @@
 use super::*;
-use crate::models::people::{PeopleActivity, PeoplePage};
+use crate::models::people::PeoplePage;
 use crate::ops::{Caller, OpError};
 
-async fn read(
-    pool: &PgPool,
-    org: Uuid,
-    actor: Uuid,
-    activity: PeopleActivity,
-) -> Result<PeoplePage, OpError> {
+async fn read(pool: &PgPool, org: Uuid, actor: Uuid) -> Result<PeoplePage, OpError> {
     let week = chrono::NaiveDate::default();
-    crate::server_fns::users::people_page(pool, Caller::session(org, actor), activity, week).await
+    crate::server_fns::users::people_page(pool, Caller::session(org, actor), week).await
 }
 
 fn forbidden(result: &Result<PeoplePage, OpError>, message: &str) -> bool {
@@ -61,7 +56,7 @@ async fn directory_uses_each_profiles_people_grants_not_other_scope(pool: PgPool
         .await
         .unwrap();
         grants(&pool, ids.user_id, profile.selection()).await;
-        let result = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All).await;
+        let result = read(&pool, ids.org_id, ids.user_id).await;
         match profile {
             BuiltInProfile::PeopleAdmin
             | BuiltInProfile::ExecutiveManager
@@ -87,9 +82,7 @@ async fn directory_uses_each_profiles_people_grants_not_other_scope(pool: PgPool
         PermissionSelection::new(&[Permission::PeopleReadManaged]),
     )
     .await;
-    let page = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All)
-        .await
-        .unwrap();
+    let page = read(&pool, ids.org_id, ids.user_id).await.unwrap();
     assert_eq!(
         page.people.iter().map(|row| row.id).collect::<Vec<_>>(),
         [target]
@@ -137,10 +130,7 @@ async fn directory_rechecks_grant_revocation_and_direct_deactivation_after_wait(
             .unwrap()
             .unwrap();
         let db = pool.clone();
-        let pending =
-            tokio::spawn(
-                async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await },
-            );
+        let pending = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id).await });
         wait_for_blocked(&pool, holder).await;
         revoke.commit().await.unwrap();
         assert!(forbidden(&pending.await.unwrap(), READ_REQUIRED));
@@ -181,15 +171,14 @@ async fn directory_cancellation_releases_connection_and_preserves_pool_defaults(
         .unwrap()
         .unwrap();
     let db = reader.clone();
-    let pending =
-        tokio::spawn(async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await });
+    let pending = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id).await });
     wait_for_blocked(&pool, holder).await;
     pending.abort();
     assert!(pending.await.unwrap_err().is_cancelled());
     writer.rollback().await.unwrap();
     let page = tokio::time::timeout(
         Duration::from_secs(6),
-        read(&reader, ids.org_id, ids.user_id, PeopleActivity::All),
+        read(&reader, ids.org_id, ids.user_id),
     )
     .await
     .unwrap()
@@ -227,9 +216,7 @@ async fn directory_lists_everyone_at_once_by_name_then_id(pool: PgPool) {
         expected.push(target);
     }
     expected.reverse();
-    let page = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All)
-        .await
-        .unwrap();
+    let page = read(&pool, ids.org_id, ids.user_id).await.unwrap();
     assert_eq!(
         page.people.iter().map(|row| row.id).collect::<Vec<_>>(),
         expected
@@ -269,9 +256,7 @@ async fn directory_scopes_before_activity_and_returns_no_grants(pool: PgPool) {
         }
     }
     visible.sort_unstable();
-    let first = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All)
-        .await
-        .unwrap();
+    let first = read(&pool, ids.org_id, ids.user_id).await.unwrap();
     assert_eq!(
         first.people.iter().map(|row| row.id).collect::<Vec<_>>(),
         visible
@@ -290,6 +275,7 @@ async fn directory_scopes_before_activity_and_returns_no_grants(pool: PgPool) {
             [
                 "active",
                 "can_change_active",
+                "can_read_rates",
                 "email",
                 "id",
                 "name",
@@ -299,16 +285,8 @@ async fn directory_scopes_before_activity_and_returns_no_grants(pool: PgPool) {
         );
         assert_ne!(row.id, foreign.user_id);
     }
-    let archived = read(&pool, ids.org_id, ids.user_id, PeopleActivity::Archived)
-        .await
-        .unwrap();
-    assert_eq!(archived.people.len(), 1);
-    assert!(!archived.people[0].active);
-    let active = read(&pool, ids.org_id, ids.user_id, PeopleActivity::Active)
-        .await
-        .unwrap();
-    assert_eq!(active.people.len(), 52);
-    assert!(active.people.iter().all(|row| row.active));
+    // Archived people come back too; the page filters by status itself.
+    assert_eq!(first.people.iter().filter(|row| !row.active).count(), 1);
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -334,7 +312,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
     .await
     .unwrap();
     assert!(
-        read(&pool, ids.org_id, ids.user_id, PeopleActivity::All)
+        read(&pool, ids.org_id, ids.user_id)
             .await
             .unwrap()
             .people
@@ -342,7 +320,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
     );
     manage(&pool, ids.org_id, ids.user_id, target).await;
     assert_eq!(
-        read(&pool, ids.org_id, ids.user_id, PeopleActivity::All)
+        read(&pool, ids.org_id, ids.user_id)
             .await
             .unwrap()
             .people
@@ -371,8 +349,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
         .unwrap()
         .unwrap();
     let db = pool.clone();
-    let pending =
-        tokio::spawn(async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await });
+    let pending = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id).await });
     wait_for_blocked(&pool, holder).await;
     removal.commit().await.unwrap();
     assert!(pending.await.unwrap().unwrap().people.is_empty());
@@ -388,10 +365,10 @@ async fn directory_denies_foreign_inactive_and_invalid_authority(pool: PgPool) {
         (foreign.org_id, ids.user_id),
         (ids.org_id, Uuid::now_v7()),
     ] {
-        let result = read(&pool, org, actor, PeopleActivity::All).await;
+        let result = read(&pool, org, actor).await;
         assert!(forbidden(&result, READ_REQUIRED), "{result:?}");
     }
-    let page = || read(&pool, ids.org_id, ids.user_id, PeopleActivity::All);
+    let page = || read(&pool, ids.org_id, ids.user_id);
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await

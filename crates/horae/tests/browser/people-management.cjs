@@ -84,12 +84,11 @@ let restoreSeededStates = () => {};
     assert.equal(sql(`SELECT active FROM users WHERE email='${email}'`), 't');
     await status('Active');
 
-    // The last administrator cannot archive themselves.
+    // Nobody is offered to archive themselves: the Undo would need the session
+    // the archive ends.
     const self = sql(`SELECT name FROM users WHERE id='${actor.id}'`);
-    await rowAction(self, 'Archive');
-    await expect(page.getByRole('alert')).toContainText('at least one active administrator');
-    assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}'`), 't');
-    console.log('PASS: an administrator adds people with a profile, archives with Undo, restores them, and keeps an administrator');
+    assert.ok(!(await menuItems(self)).includes('Archive'));
+    console.log('PASS: an administrator adds people with a profile, archives with Undo, restores them, and cannot archive themselves');
 
     // A People Admin adds Members only and cannot edit permissions. The actor
     // takes the grants the new People Admin was given.

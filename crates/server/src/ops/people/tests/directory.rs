@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::super::directory::page;
-use crate::models::people::{PeopleActivity, PeoplePage, WeekMinutes};
+use crate::models::people::{PeoplePage, PersonProfile, WeekMinutes};
 use crate::ops::testing::provision;
 use crate::ops::{Caller, OpError};
 use crate::testing::{SeedIds, add_person, seed};
@@ -17,7 +17,7 @@ const WEEK: NaiveDate = NaiveDate::from_ymd_opt(2026, 9, 7).unwrap();
 
 async fn read(pool: &PgPool, ids: &SeedIds) -> Result<PeoplePage, OpError> {
     let mut read = crate::ops::begin_read(pool, Caller::session(ids.org_id, ids.user_id)).await?;
-    let result = page(&mut read.tx, &read.actor, PeopleActivity::All, WEEK).await;
+    let result = page(&mut read.tx, &read.actor, WEEK).await;
     read.finish(result).await
 }
 
@@ -105,8 +105,14 @@ async fn an_administrator_sees_everyones_profile_and_only_the_weeks_hours(pool: 
     );
     assert_eq!(week_of(&listed, ids.user_id), Some(WeekMinutes::default()));
     // Ordered by name: "Teammate", then "Test User".
-    let profiles: Vec<_> = listed.people.iter().map(|p| p.profile.as_deref()).collect();
-    assert_eq!(profiles, [Some("Project Manager"), Some("Administrator")]);
+    let profiles: Vec<_> = listed.people.iter().map(|p| p.profile.clone()).collect();
+    assert_eq!(
+        profiles,
+        [
+            Some(PersonProfile::BuiltIn(BuiltInProfile::ProjectManager)),
+            Some(PersonProfile::BuiltIn(BuiltInProfile::Administrator)),
+        ]
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -180,9 +186,15 @@ async fn reading_managed_people_lists_only_them(pool: PgPool) {
     let people: Vec<_> = listed
         .people
         .iter()
-        .map(|p| (p.id, p.profile.as_deref()))
+        .map(|p| (p.id, p.profile.clone()))
         .collect();
-    assert_eq!(people, [(managed, Some("Member"))]);
+    assert_eq!(
+        people,
+        [(
+            managed,
+            Some(PersonProfile::BuiltIn(BuiltInProfile::Member))
+        )]
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -202,5 +214,116 @@ async fn grants_chosen_one_by_one_read_as_individual(pool: PgPool) {
 
     let listed = read(&pool, &ids).await.unwrap();
 
-    assert_eq!(listed.people[0].profile.as_deref(), Some("Individual"));
+    assert_eq!(listed.people[0].profile, Some(PersonProfile::Individual));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_custom_profile_arrives_by_its_name(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let template = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO permission_templates (id, org_id, name, catalog_version, grants)
+         VALUES ($1, $2, 'Night shift', 1, ARRAY[]::text[])",
+        template,
+        ids.org_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let person = add_person(&pool, &ids, BuiltInProfile::Member)
+        .await
+        .user_id;
+    sqlx::query!(
+        "UPDATE person_permission_states SET source = 'template', built_in_profile = NULL,
+                template_id = $2, applied_template_revision = 1
+          WHERE user_id = $1",
+        person,
+        template,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let listed = read(&pool, &ids).await.unwrap();
+
+    let profile = listed.people.iter().find(|p| p.id == person).unwrap();
+    assert_eq!(
+        profile.profile,
+        Some(PersonProfile::Custom("Night shift".into()))
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn rates_are_offered_only_on_rows_whose_rates_the_viewer_may_read(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let managed = add_person(&pool, &ids, BuiltInProfile::Member)
+        .await
+        .user_id;
+    let other = add_person(&pool, &ids, BuiltInProfile::Member)
+        .await
+        .user_id;
+    manage_person(&pool, &ids, managed).await;
+    let rows = |page: &PeoplePage| -> Vec<(Uuid, bool)> {
+        let mut rows: Vec<_> = page
+            .people
+            .iter()
+            .filter(|p| p.id != ids.user_id)
+            .map(|p| (p.id, p.can_read_rates))
+            .collect();
+        rows.sort();
+        rows
+    };
+    let sorted = |mut rows: Vec<(Uuid, bool)>| {
+        rows.sort();
+        rows
+    };
+
+    provision(
+        &pool,
+        &ids,
+        &[
+            Permission::PeopleReadAll,
+            Permission::BillableRateReadManaged,
+        ],
+        false,
+    )
+    .await;
+    let listed = read(&pool, &ids).await.unwrap();
+    assert_eq!(rows(&listed), sorted(vec![(managed, true), (other, false)]));
+
+    for all in [Permission::BillableRateReadAll, Permission::CostRateReadAll] {
+        provision(&pool, &ids, &[Permission::PeopleReadAll, all], false).await;
+        let listed = read(&pool, &ids).await.unwrap();
+        assert_eq!(
+            rows(&listed),
+            sorted(vec![(managed, true), (other, true)]),
+            "{all:?}"
+        );
+    }
+
+    provision(&pool, &ids, &[Permission::PeopleReadAll], false).await;
+    let listed = read(&pool, &ids).await.unwrap();
+    assert!(listed.people.iter().all(|p| !p.can_read_rates));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_administrator_may_not_archive_their_own_row(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    // Another administrator, so archiving oneself would otherwise be allowed.
+    let other = add_person(&pool, &ids, BuiltInProfile::Administrator)
+        .await
+        .user_id;
+
+    let listed = read(&pool, &ids).await.unwrap();
+
+    let can_change = |id: Uuid| {
+        listed
+            .people
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap()
+            .can_change_active
+    };
+    assert!(!can_change(ids.user_id));
+    assert!(can_change(other));
 }

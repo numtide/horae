@@ -18,6 +18,10 @@ pub fn Menu(
     /// Disable the native trigger without changing other menus' defaults.
     #[props(default)]
     disabled: bool,
+    /// The trigger's accessible name when `label` alone is ambiguous, such as
+    /// one "Actions" menu per table row.
+    #[props(into)]
+    aria_label: Option<String>,
     children: Element,
 ) -> Element {
     let popover = if align_right {
@@ -33,6 +37,7 @@ pub fn Menu(
                 r#type: "button",
                 class: "btn btn-secondary btn-sm {trigger_class}",
                 disabled,
+                aria_label,
                 "aria-haspopup": "menu",
                 "aria-expanded": "false",
                 "aria-controls": "{id}",

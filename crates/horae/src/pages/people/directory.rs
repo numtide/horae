@@ -16,10 +16,13 @@ use crate::components::period_nav::PeriodNav;
 use crate::components::screen_state::{EmptyState, LoadError, Skeleton};
 use crate::components::table::DataTable;
 use crate::components::toast::{Toast, ToastContainer};
-use crate::i18n::use_tr;
-use crate::models::people::{PeopleActivity, PeoplePage, PersonSummary, WeekMinutes};
+use crate::i18n::{Tr, use_tr};
+use crate::models::people::{
+    PeopleActivity, PeoplePage, PersonProfile, PersonSummary, WeekMinutes,
+};
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 /// A confirmation toast; `undo` names the archive or restore to reverse.
 #[derive(Clone, PartialEq)]
@@ -34,7 +37,6 @@ struct Notice {
 pub(super) fn PeopleDirectory(
     can_edit_permissions: bool,
     can_manage_people: bool,
-    can_view_rates: bool,
     first_day: Weekday,
     today: NaiveDate,
     on_saved: EventHandler<bool>,
@@ -45,7 +47,7 @@ pub(super) fn PeopleDirectory(
     let this_week = horae_core::week::week_start(today, first_day).unwrap_or(today);
     let mut week = use_signal(|| this_week);
     let status = use_signal(|| PeopleActivity::Active);
-    let profile = use_signal(|| None::<String>);
+    let profile = use_signal(|| None::<PersonProfile>);
     let query = use_signal(String::new);
     let mut adding = use_signal(|| false);
     let mut notice = use_signal(|| None::<Notice>);
@@ -57,7 +59,7 @@ pub(super) fn PeopleDirectory(
     // Every person at once; status, profile and search narrow it here.
     let mut page = use_resource(move || async move {
         let week = week();
-        let loaded = server_fns::list_people(PeopleActivity::All, week).await?;
+        let loaded = server_fns::list_people(week).await?;
         if requester
             .peek()
             .is_some_and(|expected| expected != loaded.requester)
@@ -165,11 +167,22 @@ pub(super) fn PeopleDirectory(
         Some(Ok((loaded_week, loaded))) => {
             // A new week keeps the old rows on screen, dimmed, until its hours arrive.
             let stale = reloading || *loaded_week != shown_week;
+            // The summary counts the people the status filter shows.
+            let shown = status();
+            let totals = loaded
+                .people
+                .iter()
+                .filter(|person| shows(shown, person))
+                .filter_map(|person| person.week)
+                .fold(WeekMinutes::default(), |sum, week| WeekMinutes {
+                    total: sum.total + week.total,
+                    billable: sum.billable + week.billable,
+                });
             rsx! {
-                Summary { people: loaded.people.clone() }
+                Summary { week: totals }
                 Listing {
                     page: loaded.clone(), week: *loaded_week, stale, status, profile, query,
-                    can_view_rates, can_edit_permissions, busy: changing(),
+                    can_edit_permissions, busy: changing(),
                     on_view_timesheet, on_view_history,
                     on_rates: open_rates, on_permissions: open_permissions, on_set_active: change_active,
                 }
@@ -213,19 +226,11 @@ pub(super) fn PeopleDirectory(
     }
 }
 
-/// The week's hours of everyone listed whose time the viewer may read, before
-/// any filter.
+/// The week's hours of the people the status filter shows whose time the
+/// viewer may read; the profile filter and the search leave it alone.
 #[component]
-fn Summary(people: Vec<PersonSummary>) -> Element {
+fn Summary(week: WeekMinutes) -> Element {
     let tr = use_tr();
-    let week =
-        people
-            .iter()
-            .filter_map(|person| person.week)
-            .fold(WeekMinutes::default(), |sum, week| WeekMinutes {
-                total: sum.total + week.total,
-                billable: sum.billable + week.billable,
-            });
     let share = percent(week.billable, week.total);
     let figures = [
         (tr.people_total_hours(), week.total),
@@ -260,9 +265,8 @@ fn Listing(
     week: NaiveDate,
     stale: bool,
     status: Signal<PeopleActivity>,
-    profile: Signal<Option<String>>,
+    profile: Signal<Option<PersonProfile>>,
     query: Signal<String>,
-    can_view_rates: bool,
     can_edit_permissions: bool,
     busy: bool,
     on_view_timesheet: Callback<(Uuid, NaiveDate)>,
@@ -285,15 +289,20 @@ fn Listing(
         count(PeopleActivity::Archived),
         people.len(),
     );
-    let mut profiles: Vec<String> = people.iter().filter_map(|p| p.profile.clone()).collect();
-    profiles.sort();
-    profiles.dedup();
+    let mut profiles: Vec<(String, PersonProfile)> = Vec::new();
+    for present in people.iter().filter_map(|p| p.profile.as_ref()) {
+        if !profiles.iter().any(|(_, seen)| seen == present) {
+            profiles.push((profile_label(tr, present), present.clone()));
+        }
+    }
+    profiles.sort_by(|a, b| a.0.cmp(&b.0));
     let typed = query();
     let needle = typed.trim().to_lowercase();
+    let wanted = profile();
     let visible: Vec<&PersonSummary> = people
         .iter()
         .filter(|p| shows(status(), p))
-        .filter(|p| profile().is_none_or(|wanted| p.profile.as_deref() == Some(wanted.as_str())))
+        .filter(|p| wanted.is_none() || p.profile == wanted)
         .filter(|p| {
             needle.is_empty()
                 || p.name.to_lowercase().contains(&needle)
@@ -311,31 +320,30 @@ fn Listing(
         PeopleActivity::Archived => tr.people_status_archived(archived),
         PeopleActivity::All => tr.people_status_all(all),
     };
-    let profile_label = profile().unwrap_or_else(|| tr.people_any_profile());
+    let profile_shown = wanted
+        .as_ref()
+        .map_or_else(|| tr.people_any_profile(), |p| profile_label(tr, p));
     let search_hint = match status() {
         PeopleActivity::Active => tr.people_search_hint_active(),
         PeopleActivity::Archived => tr.people_search_hint_archived(),
         PeopleActivity::All => tr.people_search_hint_all(),
     };
-    let filters_title = if status() == PeopleActivity::Archived && profile().is_none() {
+    let filters_title = if status() == PeopleActivity::Archived && wanted.is_none() {
         tr.people_none_archived()
     } else {
         tr.people_none_match_filters()
     };
-    let actions = can_view_rates
-        || can_edit_permissions
-        || people
-            .iter()
-            .any(|p| p.week.is_some() || p.can_change_active)
-        || on_view_history.is_some();
+    let actions = people
+        .iter()
+        .any(|p| has_menu(p, can_edit_permissions, on_view_history.is_some()));
 
     rsx! {
         FilterBar {
             filters: rsx! {
-                Menu { id: "people-profile-menu", label: profile_label, trigger_class: "text-sm px-4",
+                Menu { id: "people-profile-menu", label: profile_shown, trigger_class: "text-sm px-4",
                     ProfileOption { value: None, label: tr.people_any_profile(), profile }
-                    for name in profiles {
-                        ProfileOption { key: "{name}", value: Some(name.clone()), label: name, profile }
+                    for (label, value) in profiles {
+                        ProfileOption { key: "{label}", value: Some(value), label, profile }
                     }
                 }
                 Menu { id: "people-status-menu", label: status_label, trigger_class: "text-sm px-4",
@@ -376,7 +384,7 @@ fn Listing(
                         tbody {
                             for entry in visible {
                                 PersonRow { key: "{entry.id}", person: entry.clone(), week, scale, actions,
-                                    can_view_rates, can_edit_permissions, busy,
+                                    can_edit_permissions, busy,
                                     on_view_timesheet, on_view_history, on_rates, on_permissions, on_set_active,
                                 }
                             }
@@ -388,9 +396,45 @@ fn Listing(
     }
 }
 
+/// The name a profile shows under. A custom profile's name is data.
+fn profile_label(tr: Tr, profile: &PersonProfile) -> String {
+    match profile {
+        PersonProfile::BuiltIn(BuiltInProfile::Member) => tr.people_profile_member(),
+        PersonProfile::BuiltIn(BuiltInProfile::ProjectManager) => {
+            tr.people_profile_project_manager()
+        }
+        PersonProfile::BuiltIn(BuiltInProfile::PeopleAdmin) => tr.people_profile_people_admin(),
+        PersonProfile::BuiltIn(BuiltInProfile::Accounting) => tr.people_profile_accounting(),
+        PersonProfile::BuiltIn(BuiltInProfile::ExecutiveManager) => {
+            tr.people_profile_executive_manager()
+        }
+        PersonProfile::BuiltIn(BuiltInProfile::Administrator) => tr.people_profile_administrator(),
+        PersonProfile::Custom(name) => name.clone(),
+        PersonProfile::Individual => tr.people_profile_individual(),
+    }
+}
+
+/// Whether the row has any action for this viewer.
+fn has_menu(person: &PersonSummary, can_edit_permissions: bool, has_history: bool) -> bool {
+    opens_timesheet(person)
+        || can_edit_permissions
+        || person.can_read_rates
+        || has_history
+        || person.can_change_active
+}
+
+/// The Timesheet opens only for an active person whose time the viewer reads.
+fn opens_timesheet(person: &PersonSummary) -> bool {
+    person.active && person.week.is_some()
+}
+
 /// One profile in the profile filter; `None` is "Any profile".
 #[component]
-fn ProfileOption(value: Option<String>, label: String, profile: Signal<Option<String>>) -> Element {
+fn ProfileOption(
+    value: Option<PersonProfile>,
+    label: String,
+    profile: Signal<Option<PersonProfile>>,
+) -> Element {
     let mut profile = profile;
     let selected = profile() == value;
     let choose = use_callback(move |_: MouseEvent| profile.set(value.clone()));
@@ -430,7 +474,6 @@ fn PersonRow(
     week: NaiveDate,
     scale: i64,
     actions: bool,
-    can_view_rates: bool,
     can_edit_permissions: bool,
     busy: bool,
     on_view_timesheet: Callback<(Uuid, NaiveDate)>,
@@ -441,8 +484,10 @@ fn PersonRow(
 ) -> Element {
     let tr = use_tr();
     let id = person.id;
-    let manage = can_view_rates || can_edit_permissions || on_view_history.is_some();
-    let has_menu = person.week.is_some() || manage || person.can_change_active;
+    let timesheet = opens_timesheet(&person);
+    let above_divider =
+        timesheet || can_edit_permissions || person.can_read_rates || on_view_history.is_some();
+    let menu = has_menu(&person, can_edit_permissions, on_view_history.is_some());
     let (name, active) = (person.name.clone(), person.active);
     let view_timesheet = use_callback(move |_: MouseEvent| on_view_timesheet.call((id, week)));
     let edit_permissions = use_callback(move |_: MouseEvent| on_permissions.call(id));
@@ -462,7 +507,7 @@ fn PersonRow(
                         div { class: "flex flex-wrap items-center gap-2",
                             span { class: "font-semibold", "{person.name}" }
                             if let Some(profile) = &person.profile {
-                                Badge { variant: "neutral", "{profile}" }
+                                Badge { variant: "neutral", {profile_label(tr, profile)} }
                             }
                             if !person.active {
                                 Badge { variant: "warning", {tr.people_archived()} }
@@ -497,22 +542,23 @@ fn PersonRow(
             }
             if actions {
                 td { class: "text-right",
-                    if has_menu {
-                        Menu { id: "person-actions-{id}", label: tr.people_actions(), align_right: true,
-                            if person.week.is_some() {
+                    if menu {
+                        Menu { id: "person-actions-{id}", label: tr.people_actions(),
+                            aria_label: tr.people_actions_for(&person.name), align_right: true,
+                            if timesheet {
                                 MenuItem { id: "person-timesheet-{id}", onclick: view_timesheet, {tr.people_view_timesheet()} }
                             }
                             if can_edit_permissions {
                                 MenuItem { id: "person-permissions-{id}", onclick: edit_permissions, {tr.people_permissions()} }
                             }
-                            if can_view_rates {
+                            if person.can_read_rates {
                                 MenuItem { id: "person-rates-{id}", onclick: edit_rates, {tr.people_rates()} }
                             }
                             if on_view_history.is_some() {
                                 MenuItem { id: "person-history-{id}", onclick: view_history, {tr.people_permission_history()} }
                             }
                             if person.can_change_active {
-                                if person.week.is_some() || manage { MenuDivider {} }
+                                if above_divider { MenuDivider {} }
                                 MenuItem { id: "person-active-{id}", disabled: busy, onclick: toggle_active,
                                     if person.active { {tr.people_archive()} } else { {tr.people_restore()} }
                                 }

@@ -76,11 +76,18 @@ let restoreSeededStates = () => {};
     await expect(summary).toHaveText(thisWeek);
     console.log('PASS: changing the week keeps the rows dimmed until the new hours arrive');
 
-    // The row menu of an administrator offers every action, Archive last.
-    await row(actor.name).getByRole('button', { name: /^Actions/ }).click();
+    // Each row's menu is named after its person. An administrator gets every
+    // action on someone else's row, Archive last.
     const items = page.locator('.menu-popover:popover-open [role="menuitem"]');
+    const other = page.locator('tbody tr').filter({ hasNot: page.getByText(actor.name, { exact: true }) }).first();
+    const otherName = (await other.locator('.font-semibold').first().textContent()).trim();
+    await page.getByRole('button', { name: `Actions for ${otherName}`, exact: true }).click();
     await expect(items).toHaveText(['View timesheet', 'Permissions…', 'Rates…', 'Permission history', 'Archive']);
     await shot('row-menu');
+    await page.keyboard.press('Escape');
+    // Their own row has no Archive: once archived, they could not undo it.
+    await page.getByRole('button', { name: `Actions for ${actor.name}`, exact: true }).click();
+    await expect(items).toHaveText(['View timesheet', 'Permissions…', 'Rates…', 'Permission history']);
     await items.filter({ hasText: 'View timesheet' }).click();
     await page.waitForURL(url => url.pathname.startsWith('/timesheet/week/') && url.searchParams.get('user') === actor.id);
     await page.goto(`${base}/people`);
@@ -124,7 +131,7 @@ let restoreSeededStates = () => {};
     const others = page.locator('tbody tr').filter({ hasNot: page.getByText(actor.name, { exact: true }) });
     await expect(others.first().getByLabel('Hours not available', { exact: true })).toBeVisible();
     await expect(others.first().getByRole('button', { name: /^Actions/ })).toHaveCount(0);
-    await row(actor.name).getByRole('button', { name: /^Actions/ }).click();
+    await page.getByRole('button', { name: `Actions for ${actor.name}`, exact: true }).click();
     await expect(items).toHaveText(['View timesheet']);
     await page.keyboard.press('Escape');
     await shot('read-only');

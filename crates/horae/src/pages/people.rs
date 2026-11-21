@@ -5,10 +5,7 @@ use chrono::{NaiveDate, Weekday};
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{
     PERMISSION_CATALOG_VERSION,
-    Permission::{
-        BillableRateReadAll, BillableRateReadManaged, CostRateReadAll, PeopleReadAll,
-        PeopleReadManaged, PeopleWriteAll,
-    },
+    Permission::{PeopleReadAll, PeopleReadManaged, PeopleWriteAll},
 };
 use uuid::Uuid;
 
@@ -20,7 +17,10 @@ use crate::i18n::use_tr;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 
+// Explicit paths let the UI tests include this file with `#[path]`.
+#[path = "people/add_person.rs"]
 mod add_person;
+#[path = "people/directory.rs"]
 mod directory;
 
 // The directory names its dialogs as siblings, so it also builds in the UI
@@ -73,20 +73,10 @@ pub fn People() -> Element {
                 && (access.grants.contains(&PeopleReadAll)
                     || access.grants.contains(&PeopleReadManaged)) =>
         {
-            // Per-person access is decided when the dialog loads; with a
-            // managed-only grant, other people's rows show a refusal there.
-            let can_view_rates = [
-                BillableRateReadManaged,
-                BillableRateReadAll,
-                CostRateReadAll,
-            ]
-            .iter()
-            .any(|grant| access.grants.contains(grant));
             rsx! {
                 directory::PeopleDirectory {
                     can_edit_permissions: access.is_administrator,
                     can_manage_people: access.grants.contains(&PeopleWriteAll),
-                    can_view_rates,
                     first_day: first_day.unwrap_or(Weekday::Mon),
                     today: today(),
                     on_saved,

@@ -1,5 +1,6 @@
 //! Scoped directory values, independent of account and permission administration.
 
+use horae_core::permissions::catalog::BuiltInProfile;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -31,14 +32,27 @@ pub struct PersonSummary {
     pub name: String,
     pub email: String,
     pub active: bool,
-    /// The built-in or custom profile's name, "Individual" for grants chosen
-    /// one by one, `None` without stored permissions.
-    pub profile: Option<String>,
+    /// The person's profile, `None` without stored permissions.
+    pub profile: Option<PersonProfile>,
     /// The requested week's time, `None` when the requester may not read this
     /// person's time.
     pub week: Option<WeekMinutes>,
-    /// Whether the requester may archive or restore this person now.
+    /// Whether the requester may archive or restore this person now. Never on
+    /// the requester's own row: once archived, they could not undo it.
     pub can_change_active: bool,
+    /// Whether the requester may read this person's rates.
+    pub can_read_rates: bool,
+}
+
+/// Where a person's permissions come from. The app labels it; a custom
+/// profile's name is data and shows as stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PersonProfile {
+    BuiltIn(BuiltInProfile),
+    Custom(String),
+    /// Grants chosen one by one.
+    Individual,
 }
 
 /// Minutes tracked in one week: all of them, and the billable ones.

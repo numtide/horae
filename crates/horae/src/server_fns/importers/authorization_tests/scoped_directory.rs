@@ -9,7 +9,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
-    let request = json!({"activity":"all","week":"2026-09-07"});
+    let request = json!({"week":"2026-09-07"});
     assert_eq!(
         api.call("list_people", request.clone(), None, false)
             .await
@@ -50,7 +50,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .unwrap();
     let expected = json!({
         "requester":{"org_id":ids.org_id,"user_id":ids.user_id},
-        "people":[{"id":target,"name":"Test User","email":format!("{target}@test.com"),"active":true,"profile":null,"week":null,"can_change_active":false}]
+        "people":[{"id":target,"name":"Test User","email":format!("{target}@test.com"),"active":true,"profile":null,"week":null,"can_change_active":false,"can_read_rates":false}]
     });
     assert_eq!(
         api.json("list_people", request.clone(), &cookie).await,
@@ -60,7 +60,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.json(
             "list_people",
-            json!({"activity":"all","week":"2026-09-07",
+            json!({"week":"2026-09-07",
         "org_id":foreign.org_id,"user_id":foreign.user_id,"is_administrator":true}),
             &cookie
         )
@@ -71,24 +71,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .execute(pool)
         .await
         .unwrap();
-    let archived = api
-        .json(
-            "list_people",
-            json!({"activity":"archived","week":"2026-09-07"}),
-            &cookie,
-        )
-        .await;
+    let archived = api.json("list_people", request.clone(), &cookie).await;
     assert_eq!(archived["people"][0]["active"], false);
     assert_eq!(archived["people"][0]["id"], json!(target));
-    assert_eq!(
-        api.json(
-            "list_people",
-            json!({"activity":"active","week":"2026-09-07"}),
-            &cookie
-        )
-        .await["people"],
-        json!([])
-    );
 
     let revoked: Vec<String> =
         serde_json::from_value(json!(BuiltInProfile::Member.selection())).unwrap();

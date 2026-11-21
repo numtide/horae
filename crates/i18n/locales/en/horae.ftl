@@ -125,6 +125,7 @@ people-column-person = Person
 people-column-hours = Hours
 people-column-billable-share = Billable %
 people-actions = Actions
+people-actions-for = Actions for { $name }
 people-archived = Archived
 people-hours-unavailable-label = Hours not available
 people-billable-unavailable-label = Billable hours not available
@@ -157,6 +158,9 @@ people-profile-people-admin = People Admin
 people-profile-people-admin-hint = Also manages { -people(case: "lower") } and everyone's time.
 people-profile-executive-manager = Executive Manager
 people-profile-executive-manager-hint = Also manages projects, { -people(case: "lower") } and invoicing.
+people-profile-administrator = Administrator
+# A person whose grants were chosen one by one rather than from a profile.
+people-profile-individual = Individual
 
 permissions-discard-title = Discard unsaved permission changes?
 permissions-discard-body = The changes in this form are lost. Saved permissions stay as they are.

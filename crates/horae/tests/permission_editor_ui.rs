@@ -1,4 +1,7 @@
 #![cfg(feature = "server")]
+// The directory and the Add person dialog are mounted on their own and again
+// inside the whole People page, which declares them as its submodules.
+#![allow(clippy::duplicate_mod)]
 
 use std::any::Any;
 use std::cell::RefCell;
@@ -58,7 +61,8 @@ pub mod today;
 mod components {
     pub use super::{
         avatar, badge, button, confirm_dialog, controls, filter_bar, form, icons, menu, modal,
-        page_header, period_nav, permission_description, screen_state, table, toast, today,
+        page_header, period_nav, permission_description, screen_state, session, table, toast,
+        today,
     };
 }
 pub use horae_types::{
@@ -73,6 +77,126 @@ mod models {
 mod add_person;
 #[path = "../src/pages/people/directory.rs"]
 mod people;
+// The whole People page, for its access gate. It includes the directory again
+// as its own submodule.
+#[path = "../src/pages/people.rs"]
+mod people_page;
+mod admin {
+    pub(crate) use super::{permission_editor, rates};
+    use dioxus::prelude::*;
+
+    /// Stands in for the recovery dialog, which has its own tests.
+    #[component]
+    pub fn PermissionRecovery(on_saved: EventHandler<bool>) -> Element {
+        let _ = on_saved;
+        rsx! { div { id: "permission-recovery" } }
+    }
+}
+mod pages {
+    pub mod timesheet {
+        //! The Timesheet's route values, as the People page names them.
+        use std::fmt;
+        use std::str::FromStr;
+
+        #[derive(Clone, Copy, PartialEq, Debug, Default)]
+        pub enum ViewMode {
+            #[default]
+            Week,
+        }
+        #[derive(Clone, Copy, PartialEq, Debug)]
+        pub struct Anchor(pub chrono::NaiveDate);
+        #[derive(Clone, Copy, PartialEq, Debug, Default)]
+        pub enum CalSpan {
+            #[default]
+            Week,
+        }
+
+        impl fmt::Display for ViewMode {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("week")
+            }
+        }
+        impl FromStr for ViewMode {
+            type Err = String;
+            fn from_str(_: &str) -> Result<Self, String> {
+                Ok(Self::Week)
+            }
+        }
+        impl fmt::Display for Anchor {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+        impl FromStr for Anchor {
+            type Err = String;
+            fn from_str(text: &str) -> Result<Self, String> {
+                text.parse().map(Self).map_err(|e| format!("{e}"))
+            }
+        }
+        impl fmt::Display for CalSpan {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("week")
+            }
+        }
+        impl FromStr for CalSpan {
+            type Err = String;
+            fn from_str(_: &str) -> Result<Self, String> {
+                Ok(Self::Week)
+            }
+        }
+    }
+}
+mod route {
+    use super::pages::timesheet::{Anchor, CalSpan, ViewMode};
+    use super::people_page::People;
+    use dioxus::prelude::*;
+
+    #[derive(Routable, Clone, PartialEq)]
+    #[rustfmt::skip]
+    pub enum Route {
+        #[route("/people")]
+        People {},
+        #[route("/timesheet/:view/:date/:span/:user")]
+        Timesheet { view: ViewMode, date: Anchor, span: CalSpan, user: String },
+        #[route("/admin/audit")]
+        PermissionAudit {},
+    }
+
+    #[component]
+    fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> Element {
+        let _ = (view, date, span, user);
+        rsx! {}
+    }
+
+    #[component]
+    fn PermissionAudit() -> Element {
+        rsx! {}
+    }
+}
+pub mod session {
+    //! The shared session, answering with the probe's permissions.
+    use dioxus::prelude::*;
+    use horae_types::own_permissions::OwnPermissions;
+
+    #[derive(Clone, Copy)]
+    pub struct Session {
+        pub permissions: Resource<Result<OwnPermissions, ServerFnError>>,
+    }
+
+    impl Session {
+        pub fn refresh(mut self) {
+            self.permissions.restart();
+        }
+    }
+
+    pub fn use_session() -> Session {
+        use_context::<Session>()
+    }
+
+    pub fn use_week_start() -> Resource<Result<chrono::Weekday, ServerFnError>> {
+        use_resource(|| async { Ok(chrono::Weekday::Mon) })
+    }
+}
 #[path = "../src/pages/admin/permission_editor.rs"]
 mod permission_editor;
 #[path = "../src/pages/admin/rates.rs"]
@@ -87,7 +211,7 @@ type LoadReply = oneshot::Receiver<Result<PermissionEditor, ServerFnError>>;
 type IdentityReply = oneshot::Receiver<Result<PermissionRequester, ServerFnError>>;
 type SubjectsReply = oneshot::Receiver<Result<PermissionSubjectPage, ServerFnError>>;
 type PeopleReply = oneshot::Receiver<Result<people_model::PeoplePage, ServerFnError>>;
-type PeopleQuery = (people_model::PeopleActivity, chrono::NaiveDate);
+type PeopleQuery = chrono::NaiveDate;
 
 /// A Wednesday; its week, starting on Monday, begins on the 7th.
 const TODAY: chrono::NaiveDate = chrono::NaiveDate::from_ymd_opt(2026, 9, 9).unwrap();
@@ -95,6 +219,8 @@ const WEEK: chrono::NaiveDate = chrono::NaiveDate::from_ymd_opt(2026, 9, 7).unwr
 
 #[derive(Clone)]
 struct Probe {
+    /// Mount the whole People page, with these as the viewer's permissions.
+    page_access: Option<Result<horae_types::own_permissions::OwnPermissions, ServerFnError>>,
     directory: Option<bool>,
     manage_people: bool,
     view_rates: bool,
@@ -128,6 +254,7 @@ struct Probe {
 impl Probe {
     fn new() -> Self {
         Self {
+            page_access: None,
             directory: None,
             manage_people: false,
             view_rates: false,
@@ -254,9 +381,12 @@ fn app(probe: Probe) -> Element {
         timesheets.borrow_mut().push(view);
     });
     let view_history = use_callback(|()| {});
+    if probe.page_access.is_some() {
+        return rsx! { PeoplePageHost {} };
+    }
     if let Some(can_edit_permissions) = probe.directory {
         return rsx! { people::PeopleDirectory {
-            can_edit_permissions, can_manage_people: probe.manage_people, can_view_rates: probe.view_rates,
+            can_edit_permissions, can_manage_people: probe.manage_people,
             first_day: chrono::Weekday::Mon, today: TODAY,
             on_saved: move |changed| probe.saved.borrow_mut().push(changed),
             on_view_timesheet: view_timesheet,
@@ -775,13 +905,121 @@ fn directory_page(probe: &Probe) -> people_model::PeoplePage {
             name: "Directory person".into(),
             email: "person@example.test".into(),
             active: true,
-            profile: Some("Member".into()),
+            profile: Some(people_model::PersonProfile::BuiltIn(
+                horae_core::permissions::catalog::BuiltInProfile::ProjectManager,
+            )),
             week: Some(people_model::WeekMinutes {
                 total: 120,
                 billable: 90,
             }),
             can_change_active: probe.manage_people,
+            can_read_rates: probe.view_rates,
         }],
+    }
+}
+
+/// The People page under a router at `/people`, with the probe's permissions
+/// as the session's.
+#[component]
+fn PeoplePageHost() -> Element {
+    let probe = use_context::<Probe>();
+    let permissions = use_resource(move || {
+        let answer = probe.page_access.clone().expect("page access");
+        async move { answer }
+    });
+    use_context_provider(|| session::Session { permissions });
+    rsx! {
+        dioxus::router::components::HistoryProvider {
+            history: move |_| {
+                std::rc::Rc::new(dioxus::history::MemoryHistory::with_initial_path("/people"))
+                    as std::rc::Rc<dyn dioxus::history::History>
+            },
+            Router::<route::Route> {}
+        }
+    }
+}
+
+fn own_permissions(
+    administrator: bool,
+    grants: &[Permission],
+) -> horae_types::own_permissions::OwnPermissions {
+    horae_types::own_permissions::OwnPermissions {
+        catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
+        grants: grants.to_vec(),
+        is_administrator: administrator,
+        profile: None,
+        access_revision: 1,
+        person_revision: 1,
+        managed_person_ids: vec![],
+        managed_project_ids: vec![],
+    }
+}
+
+/// Without a People grant the page shows the access notice and the recovery
+/// dialog, and never mounts the directory or asks for it.
+#[tokio::test]
+async fn people_without_a_people_grant_never_mount_the_directory() {
+    for access in [
+        own_permissions(false, &[]),
+        own_permissions(false, &[Permission::TaskReadAll]),
+        // The Administrator identity is not a People grant.
+        own_permissions(true, &[]),
+    ] {
+        let mut probe = Probe::new();
+        probe.open_person = false;
+        probe.page_access = Some(Ok(access));
+        let ui = Ui::new(probe.clone());
+        let html = ui.html();
+        assert!(html.contains("Access unavailable"), "{html}");
+        assert!(html.contains("Ask an Administrator"), "{html}");
+        assert!(html.contains("id=\"permission-recovery\""), "{html}");
+        assert!(!html.contains("people-week"), "{html}");
+        assert!(probe.people_queries.borrow().is_empty());
+    }
+}
+
+/// Either People read grant opens the directory.
+#[tokio::test]
+async fn people_opens_with_either_people_read_grant() {
+    for (administrator, grant) in [
+        (true, Permission::PeopleReadAll),
+        (false, Permission::PeopleReadManaged),
+    ] {
+        let mut probe = Probe::new();
+        probe.open_person = false;
+        probe.page_access = Some(Ok(own_permissions(administrator, &[grant])));
+        let _pending = directory_reply(&probe);
+        let ui = Ui::new(probe.clone());
+        let html = ui.html();
+        assert!(html.contains("id=\"people-week"), "{html}");
+        assert!(!html.contains("permission-recovery"), "{html}");
+        assert_eq!(probe.people_queries.borrow().len(), 1);
+    }
+}
+
+/// A failed permission read, or permissions from another catalog version,
+/// keep only the notice and recovery.
+#[tokio::test]
+async fn failed_or_future_people_projection_keeps_only_recovery() {
+    let mut future = own_permissions(true, &[Permission::PeopleReadAll]);
+    future.catalog_version += 1;
+    for (access, notice) in [
+        (
+            Err(ServerFnError::new("private projection error")),
+            "Could not verify your access",
+        ),
+        (Ok(future), "Access unavailable"),
+    ] {
+        let mut probe = Probe::new();
+        probe.open_person = false;
+        probe.page_access = Some(access);
+        let ui = Ui::new(probe.clone());
+        let html = ui.html();
+        assert!(html.contains(notice), "{html}");
+        assert!(html.contains("id=\"permission-recovery\""), "{html}");
+        assert!(!html.contains("private projection error"), "{html}");
+        assert!(!html.contains("people-week"), "{html}");
+        assert!(probe.people_queries.borrow().is_empty());
     }
 }
 
@@ -805,6 +1043,11 @@ async fn directory_filters_loaded_people_without_asking_again() {
     archived.id = Uuid::now_v7();
     archived.name = "Archived person".into();
     archived.active = false;
+    archived.profile = Some(people_model::PersonProfile::Individual);
+    archived.week = Some(people_model::WeekMinutes {
+        total: 600,
+        billable: 0,
+    });
     page.people.push(archived);
     first.send(Ok(page)).unwrap();
     ui.settle();
@@ -814,6 +1057,14 @@ async fn directory_filters_loaded_people_without_asking_again() {
     assert!(html.contains("Active (1)"));
     assert!(html.contains("2:00"), "the week's hours: {html}");
     assert!(html.contains("75%"), "the billable share: {html}");
+    // The summary counts only the people the status filter shows.
+    assert!(
+        !html.contains("12:00"),
+        "an archived person's hours: {html}"
+    );
+    // Profiles are labelled from the catalog, in the badge and the filter.
+    assert!(html.contains("Project Manager"), "{html}");
+    assert!(html.contains("Individual"), "the profile filter: {html}");
 
     ui.click("people-status-archived");
     assert!(ui.html().contains("Archived person"));
@@ -825,10 +1076,7 @@ async fn directory_filters_loaded_people_without_asking_again() {
     assert!(ui.html().contains("Directory person"));
     assert!(!ui.html().contains("Archived person"));
 
-    assert_eq!(
-        *probe.people_queries.borrow(),
-        vec![(people_model::PeopleActivity::All, WEEK)]
-    );
+    assert_eq!(*probe.people_queries.borrow(), vec![WEEK]);
     assert_eq!(*probe.loads.borrow(), 0);
 }
 
@@ -874,25 +1122,31 @@ async fn changing_the_week_keeps_the_rows_dimmed_until_its_hours_arrive() {
     assert!(!html.contains("Directory person"));
 
     let next_week = WEEK + chrono::Duration::days(7);
-    assert_eq!(
-        *probe.people_queries.borrow(),
-        vec![
-            (people_model::PeopleActivity::All, WEEK),
-            (people_model::PeopleActivity::All, next_week),
-            (people_model::PeopleActivity::All, WEEK),
-        ]
-    );
+    assert_eq!(*probe.people_queries.borrow(), vec![WEEK, next_week, WEEK]);
 }
 
 /// The row's menu offers only what the viewer may do on that row.
 #[tokio::test]
 async fn the_row_menu_follows_the_viewers_permissions() {
-    for (administrator, rates, history, manage, hours, expected) in [
-        (false, false, false, false, true, vec!["timesheet"]),
-        (false, false, false, false, false, vec![]),
-        (false, true, false, false, true, vec!["timesheet", "rates"]),
-        (false, false, false, true, false, vec!["active"]),
+    // (administrator, rates, history, manage, hours, active, expected)
+    for (administrator, rates, history, manage, hours, active, expected) in [
+        (false, false, false, false, true, true, vec!["timesheet"]),
+        (false, false, false, false, false, true, vec![]),
         (
+            false,
+            true,
+            false,
+            false,
+            true,
+            true,
+            vec!["timesheet", "rates"],
+        ),
+        (false, false, false, true, false, true, vec!["active"]),
+        // The Timesheet refuses an archived person, so the row does not offer it.
+        (false, false, false, false, true, false, vec![]),
+        (false, false, false, true, true, false, vec!["active"]),
+        (
+            true,
             true,
             true,
             true,
@@ -910,12 +1164,23 @@ async fn the_row_menu_follows_the_viewers_permissions() {
         if !hours {
             page.people[0].week = None;
         }
+        page.people[0].active = active;
         directory_reply(&probe).send(Ok(page)).unwrap();
-        let ui = Ui::new(probe.clone());
+        let mut ui = Ui::new(probe.clone());
+        if !active {
+            ui.click("people-status-archived");
+        }
         let html = ui.html();
         assert_eq!(row_actions(&html, probe.editor.user_id), expected, "{html}");
         let menu = format!("id=\"person-actions-{}\"", probe.editor.user_id);
         assert_eq!(html.contains(&menu), !expected.is_empty());
+        if !expected.is_empty() {
+            // Each row's trigger is named after its person.
+            assert!(
+                html.contains("aria-label=\"Actions for Directory person\""),
+                "{html}"
+            );
+        }
         if !hours {
             assert!(html.contains("Hours not available"));
         }
@@ -2105,11 +2370,10 @@ mod server_fns {
     }
 
     pub async fn list_people(
-        activity: people_model::PeopleActivity,
         week: chrono::NaiveDate,
     ) -> Result<people_model::PeoplePage, ServerFnError> {
         let probe = use_context::<Probe>();
-        probe.people_queries.borrow_mut().push((activity, week));
+        probe.people_queries.borrow_mut().push(week);
         let reply = probe
             .people_replies
             .borrow_mut()
