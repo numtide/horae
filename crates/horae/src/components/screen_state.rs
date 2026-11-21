@@ -27,12 +27,9 @@ pub fn is_refusal(error: &ServerFnError) -> bool {
 /// about what is behind it; the screen around it keeps only its header.
 #[component]
 pub fn NoAccess(#[props(default)] inset: bool) -> Element {
+    let tr = crate::i18n::use_tr();
     rsx! {
-        ErrorState {
-            title: "Access unavailable",
-            body: "Your account cannot open this. Ask an administrator of this workspace if you need it.",
-            inset,
-        }
+        ErrorState { title: tr.no_access_title(), body: tr.no_access_body(), inset }
     }
 }
 
@@ -175,11 +172,12 @@ pub fn LoadError(
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
     const NOT_FOUND: u16 = 404;
+    let tr = crate::i18n::use_tr();
     match &error {
         ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
         } => rsx! {
-            ErrorState { title: "Could not load {what}", body: "Your session has ended. Sign in again to continue.", inset }
+            ErrorState { title: "Could not load {what}", body: tr.common_session_ended(), inset }
         },
         ServerFnError::ServerError {
             code: FORBIDDEN, ..

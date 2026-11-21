@@ -24,6 +24,9 @@ const EXPIRIES: [(&str, &str); 5] = [
 
 #[component]
 pub fn SettingsApiTokens() -> Element {
+    let tr = crate::i18n::use_tr();
+    let intro = tr.api_tokens_intro();
+    let (intro_before, intro_link, intro_after) = crate::i18n::split_tag(&intro, "link");
     let mut tokens = use_resource(server_fns::list_api_tokens);
     let retry = use_callback(move |_| tokens.restart());
     let mut name = use_signal(String::new);
@@ -76,14 +79,13 @@ pub fn SettingsApiTokens() -> Element {
         .collect();
 
     rsx! {
-        PageHeader { title: "API tokens", title_id: "api-tokens-title" }
+        PageHeader { title: tr.api_tokens_title(), title_id: "api-tokens-title" }
         p { class: "text-secondary mb-4",
-            "A token lets a script or another app use Horae as you, with your access. Treat it like a password. "
-            "The API is described in "
-            a { id: "api-openapi-link", href: "/api/v1/openapi.json", "its OpenAPI document" }
-            "."
+            "{intro_before}"
+            a { id: "api-openapi-link", href: "/api/v1/openapi.json", "{intro_link}" }
+            "{intro_after}"
         }
-        section { class: "card", aria_label: "Your tokens",
+        section { class: "card", aria_label: tr.api_tokens_list_label(),
             HarvestAccount {}
             if let Some(token) = created() {
                 div { class: "alert alert-success mb-4", role: "status", id: "api-token-created",

@@ -86,6 +86,7 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
 fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
+    let tr = crate::i18n::use_tr();
     let session = use_session();
     let Session {
         me,
@@ -127,7 +128,7 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                     div { class: "sidebar-menu-list",
                         Link { to: Route::SettingsProfile {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                             span { class: "menu-item-icon", NavIcon { name: "users" } }
-                            "My settings"
+                            {tr.nav_my_settings()}
                         }
                         // The admin shell's own sub-navigation reaches the other sections.
                         if let Some(to) = admin_route {

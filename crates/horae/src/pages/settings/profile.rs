@@ -12,6 +12,7 @@ use crate::server_fns;
 /// change here shown beside them. Their access has a page of its own.
 #[component]
 pub fn SettingsProfile() -> Element {
+    let tr = crate::i18n::use_tr();
     let session = use_session();
     let options = use_resource(server_fns::get_profile_options);
     let retry = use_callback(move |_| session.refresh());
@@ -19,8 +20,8 @@ pub fn SettingsProfile() -> Element {
     // the previous value, so the form stays mounted.
     let me = session.me.read();
     rsx! {
-        PageHeader { title: "Profile" }
-        section { class: "card", aria_label: "Profile",
+        PageHeader { title: tr.settings_profile_title() }
+        section { class: "card", aria_label: tr.settings_profile_title(),
             match &*me {
                 None => rsx! { Loading { label: "Loading your profile…" } },
                 Some(Err(_)) => rsx! {

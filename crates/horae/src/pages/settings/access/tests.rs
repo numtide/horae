@@ -1,8 +1,8 @@
 use super::*;
 use dioxus::history::{History, MemoryHistory};
 use dioxus::router::components::HistoryProvider;
-use std::rc::Rc;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+use std::rc::Rc;
 use uuid::Uuid;
 
 fn member() -> OwnPermissions {
@@ -39,16 +39,14 @@ enum Host {
 fn Content() -> Element {
     let response = use_context::<Response>();
     let retry = use_callback(|_| {});
-    access_content(&response, retry)
+    access_content(Tr::default(), &response, retry)
 }
 
 fn render(response: Response) -> String {
     let mut dom = VirtualDom::new_with_props(
         |response: Response| {
             use_context_provider(|| response);
-            let history = use_callback(|_| {
-                Rc::new(MemoryHistory::default()) as Rc<dyn History>
-            });
+            let history = use_callback(|_| Rc::new(MemoryHistory::default()) as Rc<dyn History>);
             rsx! {
                 HistoryProvider { history, Router::<Host> {} }
             }
@@ -59,10 +57,10 @@ fn render(response: Response) -> String {
     dioxus::ssr::render(&dom)
 }
 
-fn row(grants: &[Permission], area: &str) -> [Cell; 3] {
+fn row(grants: &[Permission], area: Area) -> [Cell; 3] {
     access_rows(grants)
         .into_iter()
-        .find(|(name, _)| *name == area)
+        .find(|(row, _)| *row == area)
         .map(|(_, cells)| cells)
         .unwrap()
 }
@@ -86,11 +84,14 @@ fn a_cell_shows_the_widest_scope_granted() {
     let grants = member().grants;
     use Scope::*;
     assert_eq!(
-        row(&grants, "Time"),
+        row(&grants, Area::Time),
         [Some(Some(Managed)), Some(Some(Own)), Some(Some(Managed))]
     );
-    assert_eq!(row(&grants, "Clients"), [Some(Some(All)), Some(None), None]);
-    assert_eq!(row(&grants, "Invoices"), [Some(None), Some(None), None]);
+    assert_eq!(
+        row(&grants, Area::Clients),
+        [Some(Some(All)), Some(None), None]
+    );
+    assert_eq!(row(&grants, Area::Invoices), [Some(None), Some(None), None]);
 }
 
 #[test]
@@ -114,7 +115,10 @@ fn an_administrator_sees_one_sentence_and_no_table() {
     own.is_administrator = true;
     let html = render(Some(Ok(own)));
     assert!(!html.contains("<table"), "{html}");
-    assert!(html.contains("You can see and change everything here"), "{html}");
+    assert!(
+        html.contains("You can see and change everything here"),
+        "{html}"
+    );
     assert!(html.contains("href=\"/admin/users\""), "{html}");
     assert!(html.contains("href=\"/admin/audit\""), "{html}");
     assert!(html.contains("See changes to your access"), "{html}");

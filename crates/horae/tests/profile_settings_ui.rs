@@ -256,7 +256,11 @@ async fn profile_shows_identity_and_the_permission_profile_read_only() {
 async fn the_profile_does_not_repeat_the_persons_access() {
     let html = html(&mount(profile_app, &Probe::new()));
     assert!(!html.contains("profile-access"), "{html}");
-    for access in ["value=\"Member\"", "Individual configuration", "permissions"] {
+    for access in [
+        "value=\"Member\"",
+        "Individual configuration",
+        "permissions",
+    ] {
         assert!(!html.contains(access), "{access}: {html}");
     }
 }

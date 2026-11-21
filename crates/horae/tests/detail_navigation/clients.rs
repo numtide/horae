@@ -122,7 +122,12 @@ async fn denied_list_is_neither_empty_nor_populated() {
     let dom = mount(&probe);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Access unavailable"), "{html}");
-    for hidden in ["Client-1", "No clients yet", "Active clients", "clients-search"] {
+    for hidden in [
+        "Client-1",
+        "No clients yet",
+        "Active clients",
+        "clients-search",
+    ] {
         assert!(!html.contains(hidden), "shown {hidden}: {html}");
     }
     assert!(!has_list_actions(&html), "{html}");

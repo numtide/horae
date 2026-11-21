@@ -212,7 +212,12 @@ async fn pending_denied_and_read_only_catalogs_do_not_offer_mutations_or_hidden_
     assert!(html.contains("Access unavailable"));
     assert!(!html.contains("private SQL detail"));
     // Only the header and the state: no filter, refresh or pager around it.
-    for control in ["tasks-activity", "tasks-refresh", "tasks-previous", "tasks-next"] {
+    for control in [
+        "tasks-activity",
+        "tasks-refresh",
+        "tasks-previous",
+        "tasks-next",
+    ] {
         assert!(!html.contains(control), "{control}: {html}");
     }
 }

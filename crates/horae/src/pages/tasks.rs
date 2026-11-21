@@ -33,6 +33,7 @@ const UNAUTHORIZED: u16 = 401;
 
 #[component]
 pub fn TaskCatalog() -> Element {
+    let tr = crate::i18n::use_tr();
     let mut activity = use_signal(|| TaskActivity::Active);
     let mut cursors = use_signal(|| vec![None::<TaskCursor>]);
     let mut requester = use_signal(|| None::<PermissionRequester>);
@@ -125,7 +126,7 @@ pub fn TaskCatalog() -> Element {
                 if refused {
                     NoAccess {}
                 } else if is_unauthorized(error) {
-                    ErrorState { title: "Could not load tasks", body: "Your session has ended. Sign in again to continue." }
+                    ErrorState { title: "Could not load tasks", body: tr.common_session_ended() }
                 } else {
                     ErrorState {
                         title: "Could not load tasks",

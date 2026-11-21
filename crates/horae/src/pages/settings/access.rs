@@ -11,52 +11,61 @@ use crate::components::permission_description::permission_description;
 use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::components::session::use_session;
 use crate::components::table::DataTable;
+use crate::i18n::{Tr, split_tag};
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
 
 #[component]
 pub fn SettingsAccess() -> Element {
+    let tr = crate::i18n::use_tr();
     let session = use_session();
     let retry = use_callback(move |_| session.refresh());
     let own = session.permissions.read();
-    let badge = own.as_ref().and_then(|result| result.as_ref().ok()).map(|own| {
-        if own.is_administrator {
-            ("badge badge-info badge-sm", "Administrator".to_string())
-        } else {
-            (
-                "badge badge-neutral badge-sm",
-                own.profile
-                    .clone()
-                    .unwrap_or_else(|| "Individual configuration".into()),
-            )
-        }
-    });
+    let badge = own
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .map(|own| {
+            if own.is_administrator {
+                (
+                    "badge badge-info badge-sm",
+                    tr.settings_access_administrator_badge(),
+                )
+            } else {
+                (
+                    "badge badge-neutral badge-sm",
+                    own.profile
+                        .clone()
+                        .unwrap_or_else(|| tr.settings_access_individual_badge()),
+                )
+            }
+        });
     rsx! {
-        PageHeader { title: "Your access",
+        PageHeader { title: tr.settings_access_title(),
             meta: rsx! {
                 if let Some((class, label)) = badge { span { class, "{label}" } }
             },
         }
-        {access_content(&own, retry)}
+        {access_content(tr, &own, retry)}
     }
 }
 
 /// The page body for the session's permission read. Only the first load shows
 /// `Loading`: a session refresh keeps the last answer on screen.
 fn access_content(
+    tr: Tr,
     response: &Option<Result<OwnPermissions, ServerFnError>>,
     retry: Callback<()>,
 ) -> Element {
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
     let own = match response {
-        None => return rsx! { Loading { label: "Loading your access…" } },
+        None => return rsx! { Loading { label: tr.settings_access_loading() } },
         Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
         Some(Err(ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
         })) => {
             return rsx! {
-                ErrorState { title: "Could not load your access", body: "Your session has ended. Sign in again to continue." }
+                ErrorState { title: tr.settings_access_failed(), body: tr.common_session_ended() }
             };
         }
         // No stored permission state: only an administrator can repair it.
@@ -64,12 +73,12 @@ fn access_content(
             code: FORBIDDEN, ..
         })) => {
             return rsx! {
-                ErrorState { title: "Could not load your access", body: "Ask an administrator of this workspace to check your access." }
+                ErrorState { title: tr.settings_access_failed(), body: tr.settings_access_repair() }
             };
         }
         Some(_) => {
             return rsx! {
-                ErrorState { title: "Could not load your access", body: LOAD_FAILED, onretry: retry }
+                ErrorState { title: tr.settings_access_failed(), body: LOAD_FAILED, onretry: retry }
             };
         }
     };
@@ -79,49 +88,50 @@ fn access_content(
         .copied()
         .filter(|grant| own.grants.contains(grant))
         .collect();
+    let administrator = tr.settings_access_administrator();
+    let (people_before, people_link, people_after) = split_tag(&administrator, "link");
     rsx! {
         div { class: "flex flex-col gap-5 wrap-anywhere",
             p { class: "text-secondary",
-                "What you can see and do in this workspace. "
+                {tr.settings_access_intro()}
                 // Only administrators may read the audit log, and it has no
                 // filter by person yet.
                 if own.is_administrator {
-                    Link { id: "access-history", to: Route::PermissionAudit {}, "See changes to your access" }
+                    {" "}
+                    Link { id: "access-history", to: Route::PermissionAudit {}, {tr.settings_access_history()} }
                 }
             }
             if own.is_administrator {
                 p { class: "card",
-                    "You can see and change everything here, including other people's access in "
-                    Link { to: Route::AdminUsers {}, "People" }
-                    "."
+                    "{people_before}"
+                    Link { to: Route::AdminUsers {}, "{people_link}" }
+                    "{people_after}"
                 }
             } else {
                 DataTable {
-                    table { aria_label: "Your access by area",
+                    table { aria_label: tr.settings_access_table_label(),
                         thead { tr {
-                            th { scope: "col", "Area" }
-                            th { scope: "col", "View" }
-                            th { scope: "col", "Edit" }
-                            th { scope: "col", "Approve" }
+                            th { scope: "col", {tr.settings_access_column_area()} }
+                            th { scope: "col", {tr.settings_access_column_view()} }
+                            th { scope: "col", {tr.settings_access_column_edit()} }
+                            th { scope: "col", {tr.settings_access_column_approve()} }
                         } }
                         tbody {
-                            for (name, cells) in rows {
-                                tr { key: "{name}",
-                                    th { scope: "row", class: "font-semibold", "{name}" }
+                            for (area, cells) in rows {
+                                tr { key: "{area:?}",
+                                    th { scope: "row", class: "font-semibold", {area.label(tr)} }
                                     for (column, cell) in cells.into_iter().enumerate() {
-                                        td { key: "{column}", {scope_cell(cell)} }
+                                        td { key: "{column}", {scope_cell(tr, cell)} }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                p { class: "text-xs text-muted",
-                    "All: everyone's. Managed: the people and projects you manage. Own: only yours."
-                }
+                p { class: "text-xs text-muted", {tr.settings_access_legend()} }
                 if !others.is_empty() {
                     section { class: "card", aria_labelledby: "access-other-title",
-                        h2 { id: "access-other-title", class: "card-title", "You can also" }
+                        h2 { id: "access-other-title", class: "card-title", {tr.settings_access_other_title()} }
                         div { class: "text-sm",
                             for (index, grant) in others.into_iter().enumerate() {
                                 div { key: "{grant:?}", class: if index == 0 { "py-2" } else { "py-2 border-t" },
@@ -131,11 +141,11 @@ fn access_content(
                         }
                     }
                 }
-                p { class: "text-secondary", "To change your access, ask an administrator of this workspace." }
+                p { class: "text-secondary", {tr.settings_access_change()} }
             }
             div { class: "grid md:grid-cols-2 gap-3",
-                MetricCard { label: "People you manage", value: own.managed_person_ids.len().to_string() }
-                MetricCard { label: "Projects you manage", value: own.managed_project_ids.len().to_string() }
+                MetricCard { label: tr.settings_access_people_managed(), value: own.managed_person_ids.len().to_string() }
+                MetricCard { label: tr.settings_access_projects_managed(), value: own.managed_project_ids.len().to_string() }
             }
         }
     }
@@ -149,6 +159,42 @@ enum Scope {
     All,
 }
 
+/// A row of the table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Area {
+    Time,
+    Expenses,
+    Projects,
+    Clients,
+    Tasks,
+    People,
+    BillableRates,
+    CostRates,
+    Invoices,
+    Estimates,
+    WorkspaceSettings,
+    AccountBilling,
+}
+
+impl Area {
+    fn label(self, tr: Tr) -> String {
+        match self {
+            Area::Time => tr.settings_access_area_time(),
+            Area::Expenses => tr.settings_access_area_expenses(),
+            Area::Projects => tr.settings_access_area_projects(),
+            Area::Clients => tr.settings_access_area_clients(),
+            Area::Tasks => tr.settings_access_area_tasks(),
+            Area::People => tr.settings_access_area_people(),
+            Area::BillableRates => tr.settings_access_area_billable_rates(),
+            Area::CostRates => tr.settings_access_area_cost_rates(),
+            Area::Invoices => tr.settings_access_area_invoices(),
+            Area::Estimates => tr.settings_access_area_estimates(),
+            Area::WorkspaceSettings => tr.settings_access_area_workspace_settings(),
+            Area::AccountBilling => tr.settings_access_area_account_billing(),
+        }
+    }
+}
+
 /// A cell of the table: `None` when the column does not apply to the area,
 /// `Some(None)` when no grant opens it.
 type Cell = Option<Option<Scope>>;
@@ -157,12 +203,12 @@ type Grants = &'static [(Permission, Scope)];
 
 /// The table's areas, with the grants behind View, Edit and Approve, each
 /// listed widest first. An empty list means the column does not apply.
-const AREAS: [(&str, Grants, Grants, Grants); 12] = {
+const AREAS: [(Area, Grants, Grants, Grants); 12] = {
     use Permission::*;
     use Scope::*;
     [
         (
-            "Time",
+            Area::Time,
             &[
                 (TimeReadAll, All),
                 (TimeReadManaged, Managed),
@@ -176,7 +222,7 @@ const AREAS: [(&str, Grants, Grants, Grants); 12] = {
             &[(TimeApproveAll, All), (TimeApproveManaged, Managed)],
         ),
         (
-            "Expenses",
+            Area::Expenses,
             &[
                 (ExpenseReadAll, All),
                 (ExpenseReadManaged, Managed),
@@ -190,21 +236,31 @@ const AREAS: [(&str, Grants, Grants, Grants); 12] = {
             &[],
         ),
         (
-            "Projects",
+            Area::Projects,
             &[(ProjectReadAll, All), (ProjectReadManaged, Managed)],
             &[(ProjectWriteAll, All), (ProjectWriteManaged, Managed)],
             &[],
         ),
-        ("Clients", &[(ClientReadAll, All)], &[(ClientWriteAll, All)], &[]),
-        ("Tasks", &[(TaskReadAll, All)], &[(TaskWriteAll, All)], &[]),
         (
-            "People",
+            Area::Clients,
+            &[(ClientReadAll, All)],
+            &[(ClientWriteAll, All)],
+            &[],
+        ),
+        (
+            Area::Tasks,
+            &[(TaskReadAll, All)],
+            &[(TaskWriteAll, All)],
+            &[],
+        ),
+        (
+            Area::People,
             &[(PeopleReadAll, All), (PeopleReadManaged, Managed)],
             &[(PeopleWriteAll, All), (PeopleWriteManaged, Managed)],
             &[],
         ),
         (
-            "Billable rates",
+            Area::BillableRates,
             &[
                 (BillableRateReadAll, All),
                 (BillableRateReadManaged, Managed),
@@ -216,31 +272,31 @@ const AREAS: [(&str, Grants, Grants, Grants); 12] = {
             &[],
         ),
         (
-            "Cost rates",
+            Area::CostRates,
             &[(CostRateReadAll, All)],
             &[(CostRateWriteAll, All)],
             &[],
         ),
         (
-            "Invoices",
+            Area::Invoices,
             &[(InvoiceReadAll, All), (InvoiceReadManaged, Managed)],
             &[(InvoiceWriteAll, All), (InvoiceWriteManaged, Managed)],
             &[],
         ),
         (
-            "Estimates",
+            Area::Estimates,
             &[(EstimateReadAll, All)],
             &[(EstimateWriteAll, All)],
             &[],
         ),
         (
-            "Workspace settings",
+            Area::WorkspaceSettings,
             &[(CompanyRead, All)],
             &[(CompanyWrite, All)],
             &[],
         ),
         (
-            "Account billing",
+            Area::AccountBilling,
             &[(BillingRead, All)],
             &[(BillingWrite, All)],
             &[],
@@ -263,7 +319,7 @@ const OTHER: [Permission; 8] = {
     ]
 };
 
-fn access_rows(grants: &[Permission]) -> Vec<(&'static str, [Cell; 3])> {
+fn access_rows(grants: &[Permission]) -> Vec<(Area, [Cell; 3])> {
     let cell = |column: Grants| -> Cell {
         (!column.is_empty()).then(|| {
             column
@@ -274,17 +330,25 @@ fn access_rows(grants: &[Permission]) -> Vec<(&'static str, [Cell; 3])> {
     };
     AREAS
         .iter()
-        .map(|&(name, view, edit, approve)| (name, [cell(view), cell(edit), cell(approve)]))
+        .map(|&(area, view, edit, approve)| (area, [cell(view), cell(edit), cell(approve)]))
         .collect()
 }
 
-fn scope_cell(cell: Cell) -> Element {
+fn scope_cell(tr: Tr, cell: Cell) -> Element {
     match cell {
-        None => rsx! { span { class: "text-muted", aria_label: "Does not apply", "—" } },
-        Some(None) => rsx! { span { class: "text-muted", "No" } },
-        Some(Some(Scope::All)) => rsx! { span { class: "badge badge-success badge-sm", "All" } },
-        Some(Some(Scope::Managed)) => rsx! { span { class: "badge badge-info badge-sm", "Managed" } },
-        Some(Some(Scope::Own)) => rsx! { span { class: "badge badge-neutral badge-sm", "Own" } },
+        None => {
+            rsx! { span { class: "text-muted", aria_label: tr.settings_access_not_applicable_label(), "—" } }
+        }
+        Some(None) => rsx! { span { class: "text-muted", {tr.settings_access_scope_none()} } },
+        Some(Some(Scope::All)) => {
+            rsx! { span { class: "badge badge-success badge-sm", {tr.settings_access_scope_all()} } }
+        }
+        Some(Some(Scope::Managed)) => {
+            rsx! { span { class: "badge badge-info badge-sm", {tr.settings_access_scope_managed()} } }
+        }
+        Some(Some(Scope::Own)) => {
+            rsx! { span { class: "badge badge-neutral badge-sm", {tr.settings_access_scope_own()} } }
+        }
     }
 }
 

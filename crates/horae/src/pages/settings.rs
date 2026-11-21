@@ -23,6 +23,7 @@ pub use profile::SettingsProfile;
 /// and the open subpage.
 #[component]
 pub fn SettingsShell() -> Element {
+    let tr = crate::i18n::use_tr();
     let me = use_session().me;
     let name = match &*me.read() {
         Some(Ok(me)) => me.name.clone(),
@@ -35,15 +36,15 @@ pub fn SettingsShell() -> Element {
                     Avatar { initials: initials(&name) }
                     div { class: "min-w-0 text-sm font-semibold truncate", "{name}" }
                 }
-                div { class: "adm-group-label", "Settings" }
-                nav { class: "flex flex-col gap-1 mb-5", aria_label: "Settings",
-                    AdmLink { to: Route::SettingsProfile {}, label: "Profile" }
-                    AdmLink { to: Route::SettingsPreferences {}, label: "Preferences" }
-                    AdmLink { to: Route::SettingsApiTokens {}, label: "API tokens" }
+                div { class: "adm-group-label", {tr.settings_group_settings()} }
+                nav { class: "flex flex-col gap-1 mb-5", aria_label: tr.settings_group_settings(),
+                    AdmLink { to: Route::SettingsProfile {}, label: tr.settings_profile_title() }
+                    AdmLink { to: Route::SettingsPreferences {}, label: tr.settings_preferences_title() }
+                    AdmLink { to: Route::SettingsApiTokens {}, label: tr.api_tokens_title() }
                 }
-                div { class: "adm-group-label", "Account" }
-                nav { class: "flex flex-col gap-1 mb-5", aria_label: "Account",
-                    AdmLink { to: Route::SettingsAccess {}, label: "Your access" }
+                div { class: "adm-group-label", {tr.settings_group_account()} }
+                nav { class: "flex flex-col gap-1 mb-5", aria_label: tr.settings_group_account(),
+                    AdmLink { to: Route::SettingsAccess {}, label: tr.settings_access_title() }
                 }
             }
             div { class: "adm-main flex-1 min-w-0",
@@ -56,6 +57,7 @@ pub fn SettingsShell() -> Element {
 /// Settings that apply at once and only for this person: for now, the theme.
 #[component]
 pub fn SettingsPreferences() -> Element {
+    let tr = crate::i18n::use_tr();
     let mut theme = use_signal(|| Theme::Dark);
 
     // The active theme lives in `<html data-theme>` / localStorage (set by
@@ -79,9 +81,9 @@ pub fn SettingsPreferences() -> Element {
         .collect();
 
     rsx! {
-        PageHeader { title: "Preferences" }
-        section { class: "card", aria_label: "Preferences",
-            FormGroup { label: "Theme", id: "theme", hint: "Choose how Horae looks on this device.",
+        PageHeader { title: tr.settings_preferences_title() }
+        section { class: "card", aria_label: tr.settings_preferences_title(),
+            FormGroup { label: tr.settings_theme_label(), id: "theme", hint: tr.settings_theme_hint(),
                 Select {
                     id: "theme",
                     options: theme_options,

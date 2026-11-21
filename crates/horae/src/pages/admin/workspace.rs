@@ -34,18 +34,19 @@ pub fn WorkspaceSettings() -> Element {
 /// them, so they are listed here and not in anyone's own settings.
 #[component]
 fn Plugins() -> Element {
+    let tr = crate::i18n::use_tr();
     let mut plugins = use_resource(server_fns::list_plugins);
     let retry = use_callback(move |_| plugins.restart());
     rsx! {
         section { class: "card mt-4", aria_labelledby: "plugins-title",
-            h2 { id: "plugins-title", tabindex: "-1", class: "card-title", "Plugins" }
+            h2 { id: "plugins-title", tabindex: "-1", class: "card-title", {tr.workspace_plugins_title()} }
             {loaded(&plugins.read(), Failure {
                 what: "plugins", retry, inset: true,
                 pending: plugins.state()() != UseResourceState::Ready, focus: Some("plugins-title"),
             }, |items| rsx! {
                 if items.is_empty() {
-                    EmptyState { icon: "plugin", title: "No plugins installed", inset: true,
-                        body: "Plugins add features to Horae. The person who runs your Horae server installs them.",
+                    EmptyState { icon: "plugin", title: tr.workspace_plugins_empty(), inset: true,
+                        body: tr.workspace_plugins_empty_hint(),
                     }
                 } else {
                     div { class: "text-sm",
@@ -53,9 +54,9 @@ fn Plugins() -> Element {
                             div { key: "{plugin.name}", class: if index == 0 { "py-3" } else { "py-3 border-t" },
                                 div { class: "flex items-center justify-between gap-2",
                                     strong { "{plugin.name}" }
-                                    span { class: "text-muted", "v{plugin.version}" }
+                                    span { class: "text-muted", {tr.workspace_plugin_version(plugin.version.clone())} }
                                 }
-                                p { class: "text-muted", "Hooks: {plugin.hooks}" }
+                                p { class: "text-muted", {tr.workspace_plugin_hooks(plugin.hooks.clone())} }
                             }
                         }
                     }

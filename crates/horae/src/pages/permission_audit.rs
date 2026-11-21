@@ -18,6 +18,7 @@ const OLDER_ID: &str = "audit-older";
 
 #[component]
 pub fn PermissionAudit() -> Element {
+    let tr = crate::i18n::use_tr();
     let mut after = use_signal(|| None::<AuditCursor>);
     let mut requester = use_signal(|| None::<PermissionRequester>);
     let mut history = use_resource(move || {
@@ -68,14 +69,14 @@ pub fn PermissionAudit() -> Element {
     // Without access the screen keeps only its header and the state.
     if failed.is_some_and(is_refusal) {
         return rsx! {
-            PageHeader { title: "Audit log", title_id: "audit-title" }
+            PageHeader { title: tr.audit_title(), title_id: "audit-title" }
             NoAccess {}
         };
     }
 
     rsx! {
         section { aria_labelledby: "audit-title", class: "min-w-0",
-            PageHeader { title: "Audit log", title_id: "audit-title",
+            PageHeader { title: tr.audit_title(), title_id: "audit-title",
                 actions: rsx! {
                     button { id: REFRESH_ID, r#type: "button", class: "btn btn-secondary", disabled: pending,
                         onclick: move |_| {
@@ -90,7 +91,7 @@ pub fn PermissionAudit() -> Element {
             }
             if let Some(error) = failed {
                 if matches!(error, ServerFnError::ServerError { code: UNAUTHORIZED, .. }) {
-                    ErrorState { title: "Could not load permission history", body: "Your session has ended. Sign in again to continue." }
+                    ErrorState { title: "Could not load permission history", body: tr.common_session_ended() }
                 } else {
                     ErrorState {
                         title: "Could not load permission history",
