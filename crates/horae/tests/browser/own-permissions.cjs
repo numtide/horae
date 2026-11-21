@@ -45,9 +45,9 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
 
-    // My settings opens on Profile, and its side menu reaches every subpage.
+    // Old /settings links open Profile, and the side menu reaches every subpage.
     await page.goto(`${base}/settings`);
-    await page.waitForURL(`${base}/settings/profile`);
+    await expect(page.getByRole('heading', { name: 'Profile', level: 1 })).toBeVisible();
     for (const [name, path] of [['Preferences', 'preferences'], ['API tokens', 'api-tokens'], ['Your access', 'access'], ['Profile', 'profile']]) {
       await page.locator('.adm-nav').getByRole('link', { name, exact: true }).click();
       await page.waitForURL(`${base}/settings/${path}`);
