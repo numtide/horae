@@ -38,6 +38,7 @@ pub(super) fn TemplateEditor(
     on_cancel: EventHandler<()>,
     on_reload: EventHandler<()>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let initial = intent.clone();
     let preview = use_resource(move || {
         let initial = initial.clone();
@@ -189,11 +190,11 @@ pub(super) fn TemplateEditor(
         // The name shows only with a preview that matches it.
         let leave = if finished { reload } else { back };
         return rsx! {
-            p { class: "text-sm text-secondary m-0", "Deleting a custom profile. Confirm or go back in the dialog." }
+            p { class: "text-sm text-secondary m-0", {tr.permissions_profile_delete_pending()} }
             ConfirmDialog { id: "permission-template-delete-dialog", labelledby: "permission-template-delete-title",
                 open: true, busy: busy(),
                 tone: if finished { ConfirmTone::Neutral } else { ConfirmTone::Danger },
-                title: "Delete this custom profile?",
+                title: tr.permissions_profile_delete_title(),
                 confirm_label: if finished { "Reload and discard unsaved person changes" } else { label },
                 confirm_disabled: !finished && (preview_pending || (!ready_to_save && pending.read().is_none())),
                 cancel_label: "Back to person permissions",
@@ -216,7 +217,7 @@ pub(super) fn TemplateEditor(
                         }
                     }
                 }
-                p { "This does not save the person's draft. Reloading discards unsaved person changes." }
+                p { {tr.permissions_profile_delete_hint()} }
             }
         };
     }

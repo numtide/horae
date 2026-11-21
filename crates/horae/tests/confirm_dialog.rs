@@ -10,6 +10,9 @@ use dioxus::prelude::*;
 mod button;
 #[path = "../src/components/confirm_dialog.rs"]
 mod confirm_dialog;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 mod icons;
 #[allow(dead_code)]

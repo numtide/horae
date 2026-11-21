@@ -53,6 +53,7 @@ nav-my-settings = My settings
 
 no-access-title = Access unavailable
 no-access-body = Your account cannot open this. Ask an administrator of this workspace if you need it.
+confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 
 ## Settings
 
@@ -134,10 +135,16 @@ api-tokens-intro = A token lets a script or another app use { -brand } as you, w
 api-tokens-list-label = Your tokens
 api-tokens-empty = No tokens yet
 api-tokens-empty-hint = Create a token to let a script or another app use { -brand } on your behalf.
+api-tokens-revoke-title = Revoke “{ $name }”?
+api-tokens-revoke-body = Anything that uses this token loses access at once. A revoked token cannot be restored.
 
 ## Tasks
 
 tasks-load-failed = Could not load tasks
+tasks-archive-title = Archive this task?
+tasks-archive-body = It is archived in every project. Existing time is kept. Stop running timers using this task first.
+tasks-restore-title = Restore this task?
+tasks-restore-body = It returns to the catalog. To use it again in an existing project, restore it separately in that project's editor.
 
 ## Clients
 
@@ -145,9 +152,20 @@ tasks-load-failed = Could not load tasks
 
 ## Importers: connection
 
+harvest-client-remove-title = Remove the OAuth app?
+harvest-client-remove-confirm = Remove and disconnect
+harvest-client-change-title = Change the client ID?
+harvest-client-change-confirm = Save and disconnect
+
 ## Importers: runs
 
 ## People and permissions
+
+permissions-discard-title = Discard unsaved permission changes?
+permissions-discard-body = The changes in this form are lost. Saved permissions stay as they are.
+permissions-profile-delete-title = Delete this custom profile?
+permissions-profile-delete-pending = Deleting a custom profile. Confirm or go back in the dialog.
+permissions-profile-delete-hint = This does not save the person's draft. Reloading discards unsaved person changes.
 
 ## Audit log
 
@@ -163,5 +181,10 @@ audit-title = Audit log
 
 projects-title = Projects
 projects-load-failed = Could not load projects
+projects-archive-failed = Could not archive the project. Try again, or refresh the page.
 
 ## Timesheet
+
+timesheet-delete-entry-title = Delete this time entry?
+timesheet-delete-entry-confirm = Delete entry
+timesheet-delete-entry-body = The entry is removed from this timesheet and from reports. This cannot be undone.

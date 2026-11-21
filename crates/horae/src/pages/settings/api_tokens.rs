@@ -200,6 +200,7 @@ pub(crate) fn TokenTable(
     focus_fallback: &'static str,
     on_revoke: Callback<Uuid>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     // The token whose revocation is being confirmed, with its name.
     let mut revoking = use_signal(|| None::<(Uuid, String)>);
     let on_ask = use_callback(move |token: (Uuid, String)| revoking.set(Some(token)));
@@ -221,9 +222,9 @@ pub(crate) fn TokenTable(
         .unwrap_or_default();
     rsx! {
         ConfirmDialog { id: "api-token-revoke-dialog", labelledby: "api-token-revoke-title",
-            open: revoking.read().is_some(), title: "Revoke “{name}”?", confirm_label: "Revoke",
+            open: revoking.read().is_some(), title: tr.api_tokens_revoke_title(name), confirm_label: "Revoke",
             on_confirm: revoke, on_dismiss: keep,
-            p { "Anything that uses this token loses access at once. A revoked token cannot be restored." }
+            p { {tr.api_tokens_revoke_body()} }
         }
         div { class: "table-container overflow-x-auto",
             table { class: "table",

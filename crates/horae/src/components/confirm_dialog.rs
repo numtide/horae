@@ -45,6 +45,7 @@ pub fn ConfirmDialog(
     on_dismiss: EventHandler<()>,
     children: Element,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut typed = use_signal(String::new);
     // Each opening starts with an empty confirmation word.
     use_effect(use_reactive!(|open| {
@@ -64,6 +65,11 @@ pub fn ConfirmDialog(
         ConfirmTone::Neutral => "confirm-icon confirm-icon-neutral",
     };
     let word_id = format!("{id}-word");
+    let word_label = confirm_word.as_deref().map(|word| {
+        let text = tr.confirm_dialog_type_word(word);
+        let (before, word, after) = crate::i18n::split_tag(&text, "word");
+        (before.to_owned(), word.to_owned(), after.to_owned())
+    });
     let ready = !busy && !confirm_disabled && word_matches;
     let confirm = use_callback(move |()| {
         if ready {
@@ -89,10 +95,10 @@ pub fn ConfirmDialog(
                         div { class: "min-w-0 flex-1 wrap-anywhere",
                             h2 { id: labelledby, class: "text-xl font-semibold", "{title}" }
                             div { id: body_id, class: "confirm-body", {children} }
-                            if let Some(word) = &confirm_word {
+                            if let Some((before, word, after)) = &word_label {
                                 div { class: "mt-4",
                                     label { r#for: "{word_id}", class: "form-label",
-                                        "Type " span { class: "text-mono", "{word}" } " to confirm"
+                                        "{before}" span { class: "text-mono", "{word}" } "{after}"
                                     }
                                     input { id: "{word_id}", class: "form-input text-mono", value: "{typed}",
                                         autocomplete: "off", disabled: busy,

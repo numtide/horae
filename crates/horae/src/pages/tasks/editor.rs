@@ -47,6 +47,7 @@ fn TaskForm(
     on_saved: EventHandler<String>,
     on_denied: EventHandler<()>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut name = use_signal(|| {
         selection
             .task
@@ -115,13 +116,12 @@ fn TaskForm(
         if task_id.is_some() {
         ConfirmDialog { id: "task-activity-dialog", labelledby: "task-activity-title",
             open: confirm_activity(), busy: busy(), tone: ConfirmTone::Neutral,
-            title: if active { "Archive this task?" } else { "Restore this task?" },
+            title: if active { tr.tasks_archive_title() } else { tr.tasks_restore_title() },
             confirm_label: if active { "Confirm archive" } else { "Confirm restore" },
             cancel_label: "Keep current status",
             on_confirm: change_activity, on_dismiss: keep_status,
             p {
-                if active { "It is archived in every project. Existing time is kept. Stop running timers using this task first." }
-                else { "It returns to the catalog. To use it again in an existing project, restore it separately in that project's editor." }
+                if active { {tr.tasks_archive_body()} } else { {tr.tasks_restore_body()} }
             }
         }
         }
