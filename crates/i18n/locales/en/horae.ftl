@@ -37,6 +37,10 @@
 ## Glossary
 
 -brand = Horae
+-people = { $case ->
+    [lower] people
+   *[upper] People
+}
 
 ## Shared actions
 
@@ -49,21 +53,112 @@ action-restoring = Restoring…
 
 ## Common words
 
+common-session-ended = Your session has ended. Sign in again to continue.
+
 ## Navigation and shell
+
+nav-my-settings = My settings
 
 ## Components
 
+period-nav-previous-week = Previous week
+period-nav-previous-day = Previous day
+period-nav-next-week = Next week
+period-nav-next-day = Next day
+period-nav-today = Today
+period-nav-this-week = This week
+period-nav-week = Week
+
+no-access-title = Access unavailable
+no-access-body = Your account cannot open this. Ask an administrator of this workspace if you need it.
 confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 
 ## Settings
 
+settings-group-settings = Settings
+settings-group-account = Account
+settings-profile-title = Profile
+settings-profile-loading = Loading your profile…
+settings-profile-failed = Could not load your profile
+settings-profile-name-label = Name
+settings-profile-email-label = Work email
+settings-profile-email-hint = Managed by your sign-in provider.
+settings-profile-sign-in-label = Signed in with
+settings-profile-dev-sign-in = Development sign-in
+settings-profile-sign-in-unavailable = Unavailable
+settings-profile-sign-in-loading = Loading…
+settings-profile-zone-label = Time zone
+settings-profile-zone-hint = Decides which day is today on your timesheet and when you start a timer.
+# Completes "Choose …" and "Search …" in the picker's accessible names.
+settings-profile-zone-choice = time zone
+settings-profile-zone-default = Workspace default ({ $zone })
+settings-profile-saved = Profile saved.
+settings-profile-save-failed = Could not save your profile. Try again.
+settings-profile-cancel = Cancel
+settings-profile-save = Save
+settings-profile-saving = Saving…
+settings-preferences-title = Preferences
+settings-theme-label = Theme
+settings-theme-hint = Choose how { -brand } looks on this device.
+
+settings-access-title = Your access
+settings-access-intro = What you can see and do in this workspace.
+settings-access-history = See changes to your access
+settings-access-loading = Loading your access…
+settings-access-failed = Could not load your access
+settings-access-repair = Ask an administrator of this workspace to check your access.
+settings-access-administrator = You can see and change everything here, including other people's access in <link>{ -people }</link>.
+settings-access-change = To change your access, ask an administrator of this workspace.
+settings-access-table-label = Your access by area
+settings-access-column-area = Area
+settings-access-column-view = View
+settings-access-column-edit = Edit
+settings-access-column-approve = Approve
+settings-access-area-time = Time
+settings-access-area-expenses = Expenses
+settings-access-area-projects = Projects
+settings-access-area-clients = Clients
+settings-access-area-tasks = Tasks
+settings-access-area-people = { -people }
+settings-access-area-billable-rates = Billable rates
+settings-access-area-cost-rates = Cost rates
+settings-access-area-invoices = Invoices
+settings-access-area-estimates = Estimates
+settings-access-area-workspace-settings = Workspace settings
+settings-access-area-account-billing = Account billing
+settings-access-scope-all = All
+settings-access-scope-managed = Managed
+settings-access-scope-own = Own
+settings-access-scope-none = No
+settings-access-not-applicable-label = Does not apply
+settings-access-legend = All: everyone's. Managed: the people and projects you manage. Own: only yours.
+settings-access-other-title = You can also
+settings-access-people-managed = People you manage
+settings-access-projects-managed = Projects you manage
+settings-access-administrator-badge = Administrator
+settings-access-individual-badge = Individual configuration
+
+## Workspace settings
+
+workspace-plugins-title = Plugins
+workspace-plugins-empty = No plugins installed
+workspace-plugins-empty-hint = Plugins add features to { -brand }. The person who runs your { -brand } server installs them.
+workspace-plugin-version = v{ $version }
+workspace-plugin-hooks = Hooks: { $hooks }
+
 ## API tokens
 
+api-tokens-title = API tokens
+api-tokens-intro = A token lets a script or another app use { -brand } as you, with your access. Treat it like a password. The API is described in <link>its OpenAPI document</link>.
+api-tokens-list-label = Your tokens
+api-tokens-empty = No tokens yet
+api-tokens-empty-hint = Create a token to let a script or another app use { -brand } on your behalf.
 api-tokens-revoke-title = Revoke “{ $name }”?
 api-tokens-revoke-body = Anything that uses this token loses access at once. A revoked token cannot be restored.
 
 ## Tasks
 
+tasks-load-failed = Could not load tasks
 tasks-archive-title = Archive this task?
 tasks-archive-body = It is archived in every project. Existing time is kept. Stop running timers using this task first.
 tasks-restore-title = Restore this task?
@@ -89,8 +184,6 @@ clients-restoring = Restoring client…
 
 invoices-new = New invoice
 invoices-new-title = New invoice
-invoices-new-unavailable-title = Access unavailable
-invoices-new-unavailable-body = Preparing invoices needs invoice access. Ask an Administrator if you need it.
 invoices-edit-values = Edit invoice values
 invoices-void-ellipsis = Void…
 invoices-void-title = Void invoice { $number }?
@@ -112,6 +205,77 @@ harvest-client-change-confirm = Save and disconnect
 
 ## People and permissions
 
+people-title = { -people }
+people-loading = Loading { -people(case: "lower") }…
+# What LoadError names in "Could not load …".
+people-load-subject = { -people(case: "lower") }
+people-session-changed = Your session changed. Reload this page before selecting a person.
+people-access-check-failed = Could not verify your access
+people-access-check-failed-hint = Try again, or sign in again if it keeps failing.
+people-add = Add person
+people-go-this-week = This week
+people-summary-label = Week summary
+people-total-hours = Total hours
+people-billable = Billable
+people-non-billable = Non-billable
+people-billable-share = Billable { $percent }%
+people-non-billable-share = Non-billable { $percent }%
+people-share = { $percent }%
+people-any-profile = Any profile
+people-status-active = Active ({ $count })
+people-status-archived = Archived ({ $count })
+people-status-all = All ({ $count })
+people-search-label = Search by name or email
+people-none-archived = No archived { -people(case: "lower") }
+people-none-match-filters = No { -people(case: "lower") } match these filters
+people-none-match-filters-hint = Change the filters to see more { -people(case: "lower") }.
+people-clear-filters = Clear filters
+people-none-match-search = No one matches “{ $query }”
+people-search-hint-active = Search looks at names and emails among active { -people(case: "lower") }.
+people-search-hint-archived = Search looks at names and emails among archived { -people(case: "lower") }.
+people-search-hint-all = Search looks at names and emails among everyone.
+people-clear-search = Clear search
+people-column-person = Person
+people-column-hours = Hours
+people-column-billable-share = Billable %
+people-actions = Actions
+people-actions-for = Actions for { $name }
+people-archived = Archived
+people-hours-unavailable-label = Hours not available
+people-billable-unavailable-label = Billable hours not available
+people-share-unavailable-label = Billable share not available
+people-view-timesheet = View timesheet
+people-permissions = Permissions…
+people-rates = Rates…
+people-permission-history = Permission history
+people-archive = Archive
+people-restore = Restore
+people-undo = Undo
+people-added = Person added
+people-archived-toast = Person archived
+people-restored = Person restored
+people-permissions-saved = Permissions saved
+people-permissions-unchanged = Permissions are unchanged
+people-add-title = Add person
+people-adding = Adding person…
+people-add-name = Name
+people-add-email = Email
+people-add-email-hint = They sign in with this address.
+people-add-profile = Profile
+people-profile-member = Member
+people-profile-member-hint = Tracks their own time.
+people-profile-project-manager = Project Manager
+people-profile-project-manager-hint = Also manages the projects you assign.
+people-profile-accounting = Accounting
+people-profile-accounting-hint = Also sees everyone's time, rates and invoices.
+people-profile-people-admin = People Admin
+people-profile-people-admin-hint = Also manages { -people(case: "lower") } and everyone's time.
+people-profile-executive-manager = Executive Manager
+people-profile-executive-manager-hint = Also manages projects, { -people(case: "lower") } and invoicing.
+people-profile-administrator = Administrator
+# A person whose grants were chosen one by one rather than from a profile.
+people-profile-individual = Custom
+
 permissions-discard-title = Discard unsaved permission changes?
 permissions-discard-body = The changes in this form are lost. Saved permissions stay as they are.
 permissions-profile-delete-title = Delete this custom profile?
@@ -119,6 +283,8 @@ permissions-profile-delete-pending = Deleting a custom profile. Confirm or go ba
 permissions-profile-delete-hint = This does not save the person's draft. Reloading discards unsaved person changes.
 
 ## Audit log
+
+audit-title = Audit log
 
 ## Reports
 
@@ -134,6 +300,8 @@ approvals-awaiting = { $count ->
 
 ## Projects
 
+projects-title = Projects
+projects-load-failed = Could not load projects
 projects-archive-failed = Could not archive the project. Try again, or refresh the page.
 
 ## Timesheet

@@ -11,7 +11,7 @@ use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LoadError, Loading};
+use crate::components::screen_state::{EmptyState, LoadError, Loading, NoAccess};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
 use crate::components::today::today;
@@ -218,10 +218,7 @@ pub fn Approvals(week: String) -> Element {
             if me.read().is_none() || access.is_none() {
                 Loading {}
             } else if access == Some(false) {
-                ErrorState {
-                    title: "Approval access is unavailable",
-                    body: "Reviewing timesheets needs approval access. Ask an Administrator to grant it.",
-                }
+                NoAccess {}
             } else {
                 match (&*first_day.read(), selected()) {
                     (None, _) => rsx! {

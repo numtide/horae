@@ -1,5 +1,4 @@
 use super::*;
-use crate::models::people::PeopleActivity;
 use crate::models::permission_editor::{PermissionRequester, ProfileAction, ProfileCommand};
 use crate::ops::OpError;
 use crate::ops::permissions::profiles;
@@ -33,8 +32,7 @@ async fn init_creates_an_administrator_who_administers(pool: PgPool) {
     let page = crate::ops::people::directory::page(
         &mut read.tx,
         &read.actor,
-        PeopleActivity::Active,
-        None,
+        chrono::NaiveDate::default(),
     )
     .await;
     let page = read.finish(page).await.unwrap();

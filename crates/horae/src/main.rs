@@ -308,6 +308,12 @@ fn main() -> anyhow::Result<()> {
                             )
                         }),
                     )
+                    // People left the admin area; old bookmarks land on it with its
+                    // own address. The router's redirect covers in-app navigation.
+                    .route(
+                        "/admin/users",
+                        get(|| async { axum::response::Redirect::permanent("/people") }),
+                    )
                     .merge(horae_api::router(horae_api::RouterOptions {
                         dev_login: cfg.dev_login,
                         login_assets: horae_api::LoginAssets {

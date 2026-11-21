@@ -13,7 +13,7 @@ use crate::components::back_link::BackLink;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, Loading, Skeleton};
+use crate::components::screen_state::{EmptyState, Loading, NoAccess, Skeleton};
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
@@ -117,7 +117,7 @@ fn NewInvoiceContent(client_context: Option<String>) -> Element {
             if session.permissions.read().is_none() {
                 Loading {}
             } else if !prepares {
-                ErrorState { title: tr.invoices_new_unavailable_title(), body: tr.invoices_new_unavailable_body() }
+                NoAccess {}
             } else if storage.ready() {
                 if clients.state()() != UseResourceState::Ready && !matches!(&*clients.read(), Some(Err(_))) {
                     Loading { label: "Loading clients…" }

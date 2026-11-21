@@ -91,7 +91,7 @@ fn app(probe: Probe) -> Element {
     } else if probe.api_tokens {
         "/admin/api-tokens"
     } else {
-        "/admin/users"
+        "/admin/workspace"
     };
     use_context_provider(|| probe);
     // AppLayout provides the session above every admin route.
@@ -175,11 +175,14 @@ async fn failed_user_does_not_mount_admin_content() {
 }
 
 #[tokio::test]
-async fn people_without_a_people_grant_never_mount_admin_content() {
+async fn people_without_the_company_grant_never_mount_settings() {
     for access in [
         Access::new(false, &[]),
         Access::new(false, &[Permission::TaskReadAll]),
-        // The Administrator identity is not a People grant.
+        // People is a main screen now: its grants open no admin section.
+        Access::new(false, &[Permission::PeopleReadAll]),
+        Access::new(false, &[Permission::PeopleReadManaged]),
+        // The Administrator identity is not the company grant.
         Access::new(true, &[]),
     ] {
         let probe = Probe::default();
@@ -196,19 +199,19 @@ async fn people_without_a_people_grant_never_mount_admin_content() {
             "expected access notice: {html}"
         );
         // A no-permission state names who can grant access instead of a way out.
-        assert!(html.contains("Ask an Administrator"), "{html}");
+        assert!(html.contains("Ask an administrator"), "{html}");
         assert!(!html.contains("Back to Timesheet"), "{html}");
     }
 }
 
 #[tokio::test]
-async fn resolved_people_reader_mounts_the_workspace_and_outlet() {
+async fn resolved_company_writer_mounts_the_workspace_and_outlet() {
     let probe = Probe::default();
     let response = probe.request();
     let mut dom = start(&probe);
     assert_panel_hidden(&dom, &probe);
     response
-        .send(Ok(Access::new(false, &[Permission::PeopleReadAll])))
+        .send(Ok(Access::new(false, &[Permission::CompanyWrite])))
         .unwrap_or_else(|_| panic!("auth request was dropped"));
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -263,7 +266,7 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
     );
 
     response
-        .send(Ok(Access::new(false, &[Permission::PeopleReadAll])))
+        .send(Ok(Access::new(false, &[Permission::CompanyWrite])))
         .unwrap_or_else(|_| panic!("retry request was dropped"));
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -348,13 +351,6 @@ mod server_fns {
 // Only route argument shapes are needed by the shell; timesheet behavior is
 // outside this access-gate test.
 mod pages {
-    pub mod admin {
-        use dioxus::prelude::*;
-        #[component]
-        pub fn PermissionRecovery(on_saved: EventHandler<bool>) -> Element {
-            rsx! { "Recovery available" }
-        }
-    }
     pub mod timesheet {
         pub type Anchor = String;
         pub type CalSpan = String;
@@ -395,8 +391,6 @@ mod route {
             user: String,
         },
         #[layout(AdminShell)]
-        #[route("/admin/users")]
-        AdminUsers {},
         #[route("/admin/workspace")]
         WorkspaceSettings {},
         #[route("/admin/importers")]
@@ -417,7 +411,7 @@ mod route {
     }
 
     #[component]
-    fn AdminUsers() -> Element {
+    fn WorkspaceSettings() -> Element {
         use_hook(|| {
             let probe = consume_context::<Probe>();
             probe.panel_mounts.set(probe.panel_mounts.get() + 1);
@@ -440,11 +434,6 @@ mod route {
             )));
         });
         rsx! { "Importer panel" }
-    }
-
-    #[component]
-    fn WorkspaceSettings() -> Element {
-        rsx! { "Workspace settings panel" }
     }
 
     #[component]
@@ -520,22 +509,6 @@ async fn audit_gate_hides_internal_authentication_failures() {
 }
 
 #[tokio::test]
-async fn people_opens_with_either_people_read_grant() {
-    for (administrator, grant) in [
-        (true, Permission::PeopleReadAll),
-        (false, Permission::PeopleReadManaged),
-    ] {
-        let probe = Probe {
-            canonical: Some((administrator, vec![grant])),
-            ..Probe::default()
-        };
-        let dom = start(&probe);
-        assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
-        assert_eq!(probe.panel_mounts.get(), 1);
-    }
-}
-
-#[tokio::test]
 async fn importers_follow_the_administrator_identity() {
     for allowed in [false, true] {
         let probe = Probe {
@@ -570,19 +543,18 @@ async fn importers_close_when_the_permissions_cannot_be_read() {
 }
 
 #[tokio::test]
-async fn failed_or_future_people_projection_keeps_only_recovery() {
+async fn failed_or_future_projection_hides_the_panel() {
     for future_catalog in [false, true] {
         let probe = Probe {
             own_error: !future_catalog,
             future_catalog,
-            canonical: Some((true, vec![Permission::PeopleReadAll])),
+            canonical: Some((true, vec![Permission::CompanyWrite])),
             ..Probe::default()
         };
         let dom = start(&probe);
         assert_panel_hidden(&dom, &probe);
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains("Could not verify workspace access"));
-        assert!(html.contains("Recovery available"));
         assert!(!html.contains("private projection error"));
     }
 }
@@ -594,7 +566,7 @@ fn people_and_tasks_admin() -> (Probe, VirtualDom) {
     reply
         .send(Ok(Access::new(
             true,
-            &[Permission::PeopleReadAll, Permission::TaskReadAll],
+            &[Permission::CompanyWrite, Permission::TaskReadAll],
         )))
         .unwrap_or_else(|_| panic!("permission read dropped"));
     settle(&mut dom);
@@ -610,7 +582,7 @@ async fn switching_sections_keeps_the_workspace_and_reads_the_session_once() {
     let (probe, mut dom) = people_and_tasks_admin();
     for (to, panel) in [
         (route::Route::ImporterIndex {}, "Importer panel"),
-        (route::Route::AdminUsers {}, "Administrative panel"),
+        (route::Route::WorkspaceSettings {}, "Administrative panel"),
     ] {
         // Navigate from whichever panel is open; the previous one has unmounted.
         let (navigator, scope, _) = probe.panel.get().expect("a panel is mounted");
@@ -632,7 +604,7 @@ async fn switching_sections_keeps_the_workspace_and_reads_the_session_once() {
 #[tokio::test]
 async fn a_session_refresh_keeps_the_open_panel_until_the_answer_arrives() {
     let (probe, mut dom) = people_and_tasks_admin();
-    let (_, scope, session) = probe.panel.get().expect("the People panel mounted");
+    let (_, scope, session) = probe.panel.get().expect("the Settings panel mounted");
     let reply = probe.request();
     dom.in_scope(scope, || session.refresh());
     settle(&mut dom);
@@ -642,7 +614,7 @@ async fn a_session_refresh_keeps_the_open_panel_until_the_answer_arrives() {
     reply
         .send(Ok(Access::new(
             true,
-            &[Permission::PeopleReadAll, Permission::TaskReadAll],
+            &[Permission::CompanyWrite, Permission::TaskReadAll],
         )))
         .unwrap_or_else(|_| panic!("refresh request dropped"));
     settle(&mut dom);

@@ -15,12 +15,12 @@ use crate::components::badge::Badge;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::controls::Segmented;
-use crate::components::date_picker::DatePicker;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
 use crate::components::page_header::PageHeader;
+use crate::components::period_nav::PeriodNav;
 use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
@@ -560,7 +560,6 @@ fn TimesheetContent(
     });
 
     let ws = *week_start.read();
-    let week_end = ws + Duration::days(6);
 
     // Entries for the visible week, grouped by weekday, with per-day totals.
     let week_entries = use_memo(move || -> Vec<VisibleTimeEntry> {
@@ -899,7 +898,6 @@ fn TimesheetContent(
     let mut pending_rows = use_signal(Vec::<(Uuid, Uuid)>::new);
     let mut removing_row = use_signal(|| false);
     let mut addrow_open = use_signal(|| false);
-    let mut picker_open = use_signal(|| false);
     let mut addrow_project = use_signal(String::new);
     let mut addrow_task = use_signal(String::new);
     // Keep keystrokes outside the refreshable grid: another cell's save may
@@ -952,9 +950,6 @@ fn TimesheetContent(
         }
         if *addrow_open.peek() {
             addrow_open.set(false);
-        }
-        if *picker_open.peek() {
-            picker_open.set(false);
         }
         if add_open.peek().is_some() {
             add_open.set(None);
@@ -1213,8 +1208,8 @@ fn TimesheetContent(
         let delta = Duration::days(if forward { days } else { -days });
         go.call((current_mode, date.0 + delta, span));
     });
+    let pick = use_callback(move |picked: NaiveDate| go.call((current_mode, picked, span)));
     let is_this_week = today_offset(today, ws).is_some();
-    let range_label = format!("{} – {}", ws.format("%d %b"), week_end.format("%d %b %Y"));
 
     // Harvest-style single primary: with no duration on today's column it
     // starts a running timer; once a duration is typed (or on a past day /
@@ -1467,73 +1462,14 @@ fn TimesheetContent(
                 if nothing_to_track {
                     NoTrackingHint { id: "ts-add-empty", assignee: assignee.clone(), can_manage: session.can_create_projects() }
                 }
-                // The pager's own label is the date picker's trigger. The popover
-                // is a sibling of .ts-pager, which clips its children to keep the
-                // arrows inside its rounded border.
-                div { class: "menu-anchor",
-                    div { class: "ts-pager",
-                        button {
-                            class: "ts-pager-btn prev",
-                            "aria-label": if day_paged { "Previous day" } else { "Previous week" },
-                            onclick: move |_| step.call(false),
-                            "←"
-                        }
-                        button {
-                            r#type: "button",
-                            class: "ts-pager-label",
-                            "aria-haspopup": "dialog",
-                            "aria-expanded": "{picker_open}",
-                            onclick: move |_| {
-                                let next = !picker_open();
-                                picker_open.set(next);
-                            },
-                            // Both labels share one grid cell and the other view's is only
-                            // hidden, so the pager is as wide in Day view as in Week, never
-                            // narrower than its picker, and holds still as the weekday changes.
-                            span { class: "ts-pager-faces",
-                                span { class: if day_paged { "ts-pager-face" } else { "ts-pager-face reserve" },
-                                    span { class: "text-faint", "▦" }
-                                    {
-                                        let d = ws + Duration::days((*selected_day_offset.read()).clamp(0, 6));
-                                        rsx! {
-                                            span { class: "cur", if d == today { "Today" } else { "{d.format(\"%A\")}" } }
-                                            span { class: "ts-pager-range", "{d.format(\"%d %b %Y\")}" }
-                                        }
-                                    }
-                                }
-                                span { class: if day_paged { "ts-pager-face reserve" } else { "ts-pager-face" },
-                                    span { class: "text-faint", "▦" }
-                                    // "Week" keeps the room "This week" takes, so leaving the current
-                                    // week does not narrow the pager either.
-                                    span { class: "cur ts-pager-faces",
-                                        span { class: if is_this_week { "ts-pager-face" } else { "ts-pager-face reserve" }, "This week" }
-                                        span { class: if is_this_week { "ts-pager-face reserve" } else { "ts-pager-face" }, "Week" }
-                                    }
-                                    span { class: "ts-pager-range", "{range_label}" }
-                                }
-                            }
-                        }
-                        button {
-                            class: "ts-pager-btn next",
-                            "aria-label": if day_paged { "Next day" } else { "Next week" },
-                            onclick: move |_| step.call(true),
-                            "→"
-                        }
-                    }
-                    if picker_open() {
-                        div { class: "menu-overlay", onclick: move |_| picker_open.set(false) }
-                        div { class: "dp-pop",
-                            DatePicker {
-                                first_day: ws.weekday(),
-                                selected: date.0,
-                                week: !day_paged,
-                                onpick: move |d| {
-                                    picker_open.set(false);
-                                    go.call((current_mode, d, span));
-                                },
-                            }
-                        }
-                    }
+                PeriodNav {
+                    id: "ts-pager",
+                    week_start: ws,
+                    day: ws + Duration::days((*selected_day_offset.read()).clamp(0, 6)),
+                    today,
+                    day_paged,
+                    on_step: step,
+                    on_pick: pick,
                 }
                 // Calendar-only: day-range dropdown beside the pager (Harvest-style).
                 // Picking a span pushes it to the URL so it's shareable.

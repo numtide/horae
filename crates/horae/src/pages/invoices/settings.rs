@@ -8,13 +8,11 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use crate::components::back_link::BackLink;
 use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, LoadError, Loading};
+use crate::components::screen_state::{LoadError, Loading};
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::{OrgBranding, branding_value_error};
 use crate::route::Route;
 use crate::server_fns;
-
-const FORBIDDEN: u16 = 403;
 
 /// Whether to offer the settings action: the grant `update_org_branding`
 /// requires, from a catalog this build understands.
@@ -180,12 +178,7 @@ pub fn InvoiceSettings() -> Element {
             match &*branding.read() {
                 None => rsx! { Loading { label: "Loading invoice settings…" } },
                 Some(Ok(initial)) => rsx! { SettingsForm { initial: initial.clone() } },
-                Some(Err(ServerFnError::ServerError { code: FORBIDDEN, .. })) => rsx! {
-                    ErrorState {
-                        title: "Invoice settings are unavailable",
-                        body: "Invoice settings are available to people who manage all invoices. Ask an Administrator if you need access.",
-                    }
-                },
+                // A refusal shows `NoAccess`, as on every screen.
                 Some(Err(error)) => rsx! {
                     LoadError { error: error.clone(), what: "invoice settings", retry }
                 },
@@ -471,6 +464,7 @@ mod tests {
 
     #[test]
     fn a_refused_save_shows_the_server_message_alone() {
+        const FORBIDDEN: u16 = 403;
         let refused = ServerFnError::ServerError {
             message: "Manager access required".into(),
             code: FORBIDDEN,

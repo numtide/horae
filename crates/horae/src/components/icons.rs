@@ -77,6 +77,10 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
             line { x1: "8", y1: "13", x2: "8", y2: "5" }
             line { x1: "12", y1: "13", x2: "12", y2: "7" }
         },
+        "search" => rsx! {
+            circle { cx: "7", cy: "7", r: "4.5" }
+            path { d: "M10.4 10.4 L14 14" }
+        },
         "users" => rsx! {
             circle { cx: "8", cy: "5.5", r: "2.5" }
             path { d: "M3.6 13 A4.4 4.4 0 0 1 12.4 13" }
@@ -91,6 +95,13 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
             circle { cx: "6", cy: "5", r: "1.6" }
             line { x1: "3", y1: "11", x2: "13", y2: "11" }
             circle { cx: "10", cy: "11", r: "1.6" }
+        },
+        "key" => rsx! {
+            circle { cx: "5", cy: "11", r: "2.6" }
+            path { d: "M6.9 9.1 L13 3 M10.5 5.5 L12 7 M12 4 L13.5 5.5" }
+        },
+        "plugin" => rsx! {
+            path { d: "M3 6 H6 V4.8 A1.4 1.4 0 0 1 8.8 4.8 V6 H12 V9 H10.8 A1.4 1.4 0 0 0 10.8 11.8 H12 V14 H3 Z" }
         },
         "import" => rsx! {
             line { x1: "8", y1: "2", x2: "8", y2: "9" }

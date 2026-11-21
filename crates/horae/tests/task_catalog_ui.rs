@@ -293,17 +293,31 @@ async fn pending_denied_and_read_only_catalogs_do_not_offer_mutations_or_hidden_
     let reply = probe.reply();
     ui.click("tasks-refresh");
     assert!(!ui.html().contains("A private task"));
-    reply
-        .send(Err(ServerFnError::ServerError {
-            code: 403,
-            message: "private SQL detail".into(),
-            details: None,
-        }))
-        .unwrap();
-    ui.settle();
+    // The pinned read and the unpinned one are both refused: a real refusal.
+    let unpinned = probe.reply();
+    for reply in [reply, unpinned] {
+        reply
+            .send(Err(ServerFnError::ServerError {
+                code: 403,
+                message: "private SQL detail".into(),
+                details: None,
+            }))
+            .unwrap();
+        ui.settle();
+    }
+    assert_eq!(probe.requests.borrow().last().unwrap().2, None);
     let html = ui.html();
-    assert!(html.contains("Task access is unavailable"));
+    assert!(html.contains("Access unavailable"));
     assert!(!html.contains("private SQL detail"));
+    // Only the header and the state: no filter, refresh or pager around it.
+    for control in [
+        "tasks-activity",
+        "tasks-refresh",
+        "tasks-previous",
+        "tasks-next",
+    ] {
+        assert!(!html.contains(control), "{control}: {html}");
+    }
 }
 
 #[tokio::test]
@@ -429,26 +443,53 @@ async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revo
 }
 
 #[tokio::test]
-async fn refresh_discards_new_form_and_rejects_another_accounts_catalog() {
+async fn refresh_discards_new_form_and_re_pins_another_account() {
     let probe = Probe::default();
     let reply = probe.reply();
     let mut ui = Harness::new(&probe);
-    reply.send(Ok(catalog(true, true))).unwrap();
+    let first = catalog(true, true);
+    reply.send(Ok(first.clone())).unwrap();
     ui.settle();
     ui.click("tasks-new");
     ui.form_event("task-name", "input", "Unsaved task");
     let reload = probe.reply();
     ui.click("tasks-refresh");
     assert!(!ui.html().contains("task-name"));
-    reload.send(Ok(catalog(true, true))).unwrap();
+    // Another account answers: the page reads again unpinned and keeps the
+    // new account's catalog, not a refusal.
+    let unpinned = probe.reply();
+    let other = catalog(true, true);
+    reload.send(Ok(other.clone())).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Task access is unavailable"));
-    assert!(!ui.html().contains("tasks-new"));
+    assert!(!ui.html().contains("A private task"), "{}", ui.html());
+    unpinned.send(Ok(other.clone())).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(!html.contains("Access unavailable"), "{html}");
+    assert!(
+        html.contains("A private task") && html.contains("tasks-new"),
+        "{html}"
+    );
+    assert!(!html.contains("task-name"), "{html}");
     assert!(probe.creations.borrow().is_empty());
+    let requests = probe.requests.borrow();
+    assert_eq!(requests[1].2, Some(first.requester));
+    assert_eq!(requests[2].2, None);
+    drop(requests);
+
+    // Later reads are pinned to the new account.
+    let reply = probe.reply();
+    ui.click("tasks-refresh");
+    assert_eq!(
+        probe.requests.borrow().last().unwrap().2,
+        Some(other.requester)
+    );
+    reply.send(Ok(other)).unwrap();
+    ui.settle();
 }
 
 #[tokio::test]
-async fn refresh_binds_requester_discards_editor_and_rejects_account_switch() {
+async fn a_refused_pin_reloads_as_the_account_now_signed_in() {
     let probe = Probe::default();
     let reply = probe.reply();
     let mut ui = Harness::new(&probe);
@@ -463,10 +504,29 @@ async fn refresh_binds_requester_discards_editor_and_rejects_account_switch() {
     ui.click("tasks-refresh");
     assert!(!ui.html().contains("task-name") && !ui.html().contains("A private task"));
     assert_eq!(probe.requests.borrow().last().unwrap().2, Some(requester));
-    reply.send(Ok(catalog(true, true))).unwrap();
+    // The server refuses the old pin (the requester changed); the unpinned
+    // read admits the new account.
+    let unpinned = probe.reply();
+    reply
+        .send(Err(ServerFnError::ServerError {
+            code: 403,
+            message: "Project requester has changed".into(),
+            details: None,
+        }))
+        .unwrap();
     ui.settle();
-    assert!(ui.html().contains("Task access is unavailable"));
-    assert!(!ui.html().contains("A private task"));
+    assert_eq!(probe.requests.borrow().last().unwrap().2, None);
+    let mut other = catalog(false, false);
+    other.tasks[0].name = "Task of the other account".into();
+    unpinned.send(Ok(other)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(!html.contains("Access unavailable"), "{html}");
+    assert!(html.contains("Task of the other account"), "{html}");
+    assert!(
+        !html.contains("task-name") && !html.contains("tasks-new"),
+        "{html}"
+    );
 }
 
 #[tokio::test]

@@ -55,6 +55,15 @@ pub fn Chip(
     }
 }
 
+/// Up to two leading initials of a name, uppercased.
+pub fn initials(name: &str) -> String {
+    name.split_whitespace()
+        .filter_map(|word| word.chars().next())
+        .take(2)
+        .collect::<String>()
+        .to_uppercase()
+}
+
 /// The first character of `name`, uppercased — a default avatar fallback.
 pub fn first_initial(name: &str) -> String {
     name.chars()

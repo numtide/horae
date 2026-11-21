@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, Loading};
+use crate::components::screen_state::{ErrorState, Loading, NoAccess};
 use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -10,7 +10,6 @@ use crate::server_fns;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
-    People,
     Settings,
     Audit,
     Importers,
@@ -21,7 +20,6 @@ impl Section {
     /// The section page's own title, for the header of its no-access state.
     fn title(self) -> &'static str {
         match self {
-            Section::People => "People",
             Section::Settings => "Workspace settings",
             Section::Audit => "Audit log",
             Section::Importers => "Importers",
@@ -32,7 +30,6 @@ impl Section {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct WorkspaceAccess {
-    people: bool,
     /// `CompanyWrite`, which `set_workspace_timezone` requires.
     settings: bool,
     audit: bool,
@@ -43,7 +40,6 @@ struct WorkspaceAccess {
 impl WorkspaceAccess {
     fn allows(self, section: Section) -> bool {
         match section {
-            Section::People => self.people,
             Section::Settings => self.settings,
             Section::Audit => self.audit,
             Section::Importers => self.importers,
@@ -60,8 +56,6 @@ fn workspace_access(
 ) -> Option<Result<WorkspaceAccess, ()>> {
     Some(match own? {
         Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION => Ok(WorkspaceAccess {
-            people: own.grants.contains(&Permission::PeopleReadAll)
-                || own.grants.contains(&Permission::PeopleReadManaged),
             settings: own.grants.contains(&Permission::CompanyWrite),
             audit: own.is_administrator,
             importers: own.is_administrator,
@@ -79,7 +73,6 @@ pub(crate) fn first_admin_route(
 ) -> Option<Route> {
     let access = workspace_access(own)?.ok()?;
     [
-        (access.people, Route::AdminUsers {}),
         (access.settings, Route::WorkspaceSettings {}),
         (access.importers, Route::ImporterIndex {}),
         (access.audit, Route::PermissionAudit {}),
@@ -94,14 +87,13 @@ pub(crate) fn first_admin_route(
 /// so the main rail stays put and this owns only the content panel (per the
 /// design's admin settings shell). Each section has its own access boundary.
 ///
-/// Only sections with a real destination are listed — Team, Importers
-/// (Harvest), and the permission audit log. Tasks has its own page in the main
-/// rail, as in Harvest. Other sections are deferred
+/// Only sections with a real destination are listed — Settings, API tokens,
+/// Importers (Harvest), and the permission audit log. People and Tasks have
+/// their own pages in the main rail, as in Harvest. Other sections are deferred
 /// until they have a backend.
 #[component]
 pub fn AdminShell() -> Element {
     let section = match use_route::<Route>() {
-        Route::AdminUsers {} => Section::People,
         Route::WorkspaceSettings {} => Section::Settings,
         Route::PermissionAudit {} => Section::Audit,
         Route::AdminApiTokens {} => Section::ApiTokens,
@@ -124,11 +116,7 @@ pub fn AdminShell() -> Element {
         // Non-disclosing: it names who can grant access, not what the section holds.
         Some(Ok(_)) => rsx! {
             PageHeader { title: section.title() }
-            ErrorState {
-                title: "Access unavailable",
-                body: "Your account cannot view this workspace section. Ask an Administrator if you need it.",
-            }
-            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| session.refresh() } }
+            NoAccess {}
         },
         Some(Err(())) => rsx! {
             ErrorState {
@@ -136,7 +124,6 @@ pub fn AdminShell() -> Element {
                 body: "Try again, or sign in again if it keeps failing.",
                 onretry: retry,
             }
-            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| session.refresh() } }
         },
         None => rsx! {
             Loading {}
@@ -171,10 +158,9 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                         }
                     }
 
-                    if access.people || access.settings || access.api_tokens {
+                    if access.settings || access.api_tokens {
                         div { class: "adm-group-label", "Workspace" }
                         nav { class: "flex flex-col gap-1 mb-5",
-                            if access.people { AdmLink { to: Route::AdminUsers {}, label: "Team" } }
                             if access.settings { AdmLink { to: Route::WorkspaceSettings {}, label: "Settings" } }
                             if access.api_tokens { AdmLink { to: Route::AdminApiTokens {}, label: "API tokens" } }
                         }
@@ -199,7 +185,7 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
 /// One sub-nav row: a client-side `Link` that marks itself active for its route
 /// variant (matching the rail's `SideLink` behaviour).
 #[component]
-fn AdmLink(to: Route, label: String) -> Element {
+pub(crate) fn AdmLink(to: Route, label: String) -> Element {
     let active = crate::route::route_is_active(&to);
     rsx! {
         Link { to, class: if active { "adm-link active" } else { "adm-link" }, "{label}" }
@@ -228,9 +214,8 @@ mod tests {
     }
 
     /// Access without workspace settings, which only `CompanyWrite` opens.
-    fn access(people: bool, audit: bool, importers: bool) -> WorkspaceAccess {
+    fn access(audit: bool, importers: bool) -> WorkspaceAccess {
         WorkspaceAccess {
-            people,
             settings: false,
             audit,
             importers,
@@ -253,8 +238,9 @@ mod tests {
         );
         assert_eq!(
             workspace_access(Some(&administrator)),
-            Some(Ok(access(true, true, true)))
+            Some(Ok(access(true, true)))
         );
+        // People is a main screen, so reading people opens no admin section.
         let people = canonical(
             vec![Permission::PeopleReadAll],
             false,
@@ -262,7 +248,7 @@ mod tests {
         );
         assert_eq!(
             workspace_access(Some(&people)),
-            Some(Ok(access(true, false, false)))
+            Some(Ok(access(false, false)))
         );
     }
 
@@ -324,10 +310,12 @@ mod tests {
         };
         let path = |p: &str| Some(p.to_string());
         let people = canonical(vec![Permission::PeopleReadAll], true, version);
-        assert_eq!(first(&people), path("/admin/users"));
-        // Tasks is in the main rail, so the task grant alone opens no admin section.
-        let tasks = canonical(vec![Permission::TaskReadAll], false, version);
-        assert_eq!(first(&tasks), None);
+        assert_eq!(first(&people), path("/admin/importers"));
+        // People and Tasks are in the main rail, so their grants alone open no
+        // admin section.
+        for grant in [Permission::PeopleReadAll, Permission::TaskReadAll] {
+            assert_eq!(first(&canonical(vec![grant], false, version)), None);
+        }
         let floor = canonical(Vec::new(), false, version);
         assert_eq!(first(&floor), None);
         let company = canonical(vec![Permission::CompanyWrite], false, version);

@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH wk AS (\n             SELECT user_id, SUM(minutes)::bigint AS total,\n                    COALESCE(SUM(minutes) FILTER (WHERE billable), 0)::bigint AS billable\n               FROM time_entries\n              WHERE org_id=$1 AND spent_date BETWEEN $4 AND $5\n              GROUP BY user_id)\n           SELECT u.id, u.name, u.email, u.active,\n                  COALESCE(p.is_administrator, false) AS \"administrator!\", d.managed AS \"managed!\",\n                  p.source AS \"source?\", p.built_in_profile AS \"built_in_profile?\",\n                  t.name AS \"template?\",\n                  ($6::bool OR ($7::bool AND d.managed) OR ($8::bool AND u.id=$2)) AS \"hours_visible!\",\n                  wk.total AS \"total?\", wk.billable AS \"billable?\"\n             FROM users u\n             CROSS JOIN LATERAL (SELECT EXISTS (\n               SELECT 1 FROM person_management_assignments m\n               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id) AS managed) d\n             LEFT JOIN person_permission_states p ON p.org_id=u.org_id AND p.user_id=u.id\n             LEFT JOIN permission_templates t ON t.org_id=p.org_id AND t.id=p.template_id\n             LEFT JOIN wk ON wk.user_id=u.id\n            WHERE u.org_id=$1\n              AND ($3::bool OR d.managed)\n            ORDER BY u.name,u.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "administrator!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "managed!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "source?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "built_in_profile?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "template?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "hours_visible!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "total?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "billable?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Date",
+        "Date",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      true,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8a1272139d6248edc2d3dfc50e1cca4884031f695be59eb302cd9413b60f7247"
+}

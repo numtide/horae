@@ -3,12 +3,13 @@ use horae_core::permissions::catalog::{Permission, profile_label};
 
 use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{
+    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal, load_pinned,
+};
 use crate::models::permission_audit::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
 
-const FORBIDDEN: u16 = 403;
 const UNAUTHORIZED: u16 = 401;
 const REFRESH_ID: &str = "audit-refresh";
 const NEWEST_ID: &str = "audit-newest";
@@ -16,27 +17,24 @@ const OLDER_ID: &str = "audit-older";
 
 #[component]
 pub fn PermissionAudit() -> Element {
+    let tr = crate::i18n::use_tr();
     let mut after = use_signal(|| None::<AuditCursor>);
     let mut requester = use_signal(|| None::<PermissionRequester>);
     let mut history = use_resource(move || {
         let cursor = after();
-        let expected = *requester.peek();
+        let pinned = *requester.peek();
         async move {
-            let result = server_fns::list_permission_audit(cursor, expected)
-                .await
-                .and_then(|page| {
-                    if expected.is_some_and(|identity| identity != page.requester) {
-                        return Err(ServerFnError::ServerError {
-                            code: FORBIDDEN,
-                            message: "The active account changed.".into(),
-                            details: None,
-                        });
-                    }
-                    if expected.is_none() {
-                        requester.set(Some(page.requester));
-                    }
-                    Ok(page)
-                });
+            let (result, _) = load_pinned(
+                pinned,
+                |pin| server_fns::list_permission_audit(cursor, pin),
+                |page: &AuditPage| page.requester,
+            )
+            .await;
+            if let Ok(page) = &result
+                && *requester.peek() != Some(page.requester)
+            {
+                requester.set(Some(page.requester));
+            }
             (cursor, result)
         }
     });
@@ -63,10 +61,17 @@ pub fn PermissionAudit() -> Element {
         .as_ref()
         .filter(|(cursor, _)| *cursor == after())
         .and_then(|(_, result)| result.as_ref().err());
+    // Without access the screen keeps only its header and the state.
+    if failed.is_some_and(is_refusal) {
+        return rsx! {
+            PageHeader { title: tr.audit_title(), title_id: "audit-title" }
+            NoAccess {}
+        };
+    }
 
     rsx! {
         section { aria_labelledby: "audit-title", class: "min-w-0",
-            PageHeader { title: "Audit log", title_id: "audit-title",
+            PageHeader { title: tr.audit_title(), title_id: "audit-title",
                 actions: rsx! {
                     button { id: REFRESH_ID, r#type: "button", class: "btn btn-secondary", disabled: pending,
                         onclick: move |_| {
@@ -80,8 +85,8 @@ pub fn PermissionAudit() -> Element {
                 "Permission changes, newest first. Expand an event to see its recorded details. Times are shown in UTC."
             }
             if let Some(error) = failed {
-                if let Some(body) = refusal(error) {
-                    ErrorState { title: "Could not load permission history", body }
+                if matches!(error, ServerFnError::ServerError { code: UNAUTHORIZED, .. }) {
+                    ErrorState { title: "Could not load permission history", body: tr.common_session_ended() }
                 } else {
                     ErrorState {
                         title: "Could not load permission history",
@@ -153,22 +158,6 @@ pub fn PermissionAudit() -> Element {
                 }
             }
         }
-    }
-}
-
-/// Why the history was refused, when a retry cannot help; `None` for a
-/// failure worth repeating.
-fn refusal(error: &ServerFnError) -> Option<&'static str> {
-    match error {
-        ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => Some("Sign in again to view permission history."),
-        ServerFnError::ServerError {
-            code: FORBIDDEN, ..
-        } => Some(
-            "Administrator access is required for permission history. If you changed accounts, reopen this page.",
-        ),
-        _ => None,
     }
 }
 

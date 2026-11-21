@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
 use crate::pages::{
-    admin::{AdminApiTokens, AdminUsers, WorkspaceSettings},
+    admin::{AdminApiTokens, WorkspaceSettings},
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
@@ -14,10 +14,13 @@ use crate::pages::{
     },
     invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoice, NewInvoiceForClient},
     new_project::{EditProject, NewProject, NewProjectForClient},
+    people::People,
     permission_audit::PermissionAudit,
     projects::{ProjectDetail, ProjectList, ProjectsForClient},
     reports::Reports,
-    settings::Settings,
+    settings::{
+        SettingsAccess, SettingsApiTokens, SettingsPreferences, SettingsProfile, SettingsShell,
+    },
     tasks::TaskCatalog,
     timesheet::{Anchor, CalSpan, Timesheet, ViewMode},
 };
@@ -78,6 +81,10 @@ pub enum Route {
     ProjectDetail { id: Uuid },
     #[route("/tasks")]
     TaskCatalog {},
+    // People was an admin section; keep its old links working.
+    #[redirect("/admin/users", || Route::People {})]
+    #[route("/people")]
+    People {},
     #[route("/approvals?:week")]
     Approvals { week: String },
     #[route("/reports")]
@@ -93,8 +100,6 @@ pub enum Route {
     #[route("/invoices/:id")]
     InvoiceDetail { id: Uuid },
     #[layout(AdminShell)]
-    #[route("/admin/users")]
-    AdminUsers {},
     #[route("/admin/workspace")]
     WorkspaceSettings {},
     #[route("/admin/importers")]
@@ -115,8 +120,18 @@ pub enum Route {
     #[route("/admin/api-tokens")]
     AdminApiTokens {},
     #[end_layout]
-    #[route("/settings")]
-    Settings {},
+    // My settings opens on its first subpage, which old links also reach.
+    #[redirect("/settings", || Route::SettingsProfile {})]
+    #[layout(SettingsShell)]
+    #[route("/settings/profile")]
+    SettingsProfile {},
+    #[route("/settings/preferences")]
+    SettingsPreferences {},
+    #[route("/settings/api-tokens")]
+    SettingsApiTokens {},
+    #[route("/settings/access")]
+    SettingsAccess {},
+    #[end_layout]
     #[route("/components")]
     Gallery {},
     #[end_layout]
@@ -178,6 +193,13 @@ mod tests {
     }
 
     #[test]
+    fn the_old_admin_people_address_leads_to_people() {
+        let route: Route = "/admin/users".parse().unwrap();
+        assert!(matches!(route, Route::People {}));
+        assert_eq!(route.to_string(), "/people");
+    }
+
+    #[test]
     fn invalid_timesheet_person_is_not_silently_removed_from_the_route() {
         let url = "/timesheet/week/2026-09-07?span=week&user=invalid-person";
         assert_eq!(url.parse::<Route>().unwrap().to_string(), url);
@@ -218,6 +240,28 @@ mod tests {
         assert!(route == Route::InvoiceSettings {});
         assert_eq!(route.to_string(), "/invoices/settings");
         assert!(matches_navigation(&Route::InvoiceList {}, &route));
+    }
+
+    #[test]
+    fn my_settings_subpages_round_trip_and_highlight_only_themselves() {
+        let subpages = [
+            ("/settings/profile", Route::SettingsProfile {}),
+            ("/settings/preferences", Route::SettingsPreferences {}),
+            ("/settings/api-tokens", Route::SettingsApiTokens {}),
+            ("/settings/access", Route::SettingsAccess {}),
+        ];
+        for (path, route) in &subpages {
+            assert!(path.parse::<Route>().unwrap() == *route, "{path}");
+            assert_eq!(route.to_string(), *path);
+            for (other, other_route) in &subpages {
+                assert_eq!(matches_navigation(other_route, route), path == other);
+            }
+        }
+    }
+
+    #[test]
+    fn bare_settings_opens_the_profile() {
+        assert!("/settings".parse::<Route>().unwrap() == Route::SettingsProfile {});
     }
 
     #[test]

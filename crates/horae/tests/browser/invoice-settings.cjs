@@ -120,7 +120,7 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await invoices();
     await expect(settingsLink).toHaveCount(0);
     await page.goto(`${base}/invoices/settings`);
-    await expect(main.getByRole('alert')).toContainText('people who manage all invoices');
+    await expect(main.getByRole('alert')).toContainText('Access unavailable');
     await expect(page.getByLabel('Company name', { exact: true })).toHaveCount(0);
     await expect(main).not.toContainText('Acme Studio');
     console.log('PASS: invoice readers are not offered invoice settings and a direct link shows no values');
