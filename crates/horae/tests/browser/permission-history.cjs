@@ -38,8 +38,9 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
   let releaseRead;
   let actor, project, initialRevision, fixtureStarted = false, restoreSeededStates, restoreEarlierDelegation;
   page.on('pageerror', error => errors.push(error.stack || error.message));
-  const history = page.getByRole('table', { name: 'Permission change history', exact: true });
-  const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();
+  const history = page.getByRole('region', { name: 'Permission changes', exact: true });
+  const rows = history.locator('details.audit-row');
+  const receiptIds = () => history.locator('details .text-mono').filter({ hasText: /^Receipt / }).allTextContents();
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
@@ -66,8 +67,11 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
         ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','project_read_managed','project_write_managed','project_read_all','project_write_all'], true, 'individual')`);
     fixtureStarted = true;
     await page.goto(`${base}/admin/audit`);
-    await expect(page.getByRole('heading', { name: 'No permission events recorded yet', exact: true })).toBeVisible();
-    await expect(page.locator('#audit-older')).toBeDisabled();
+    // The empty log has its own icon, offers People and no paging.
+    await expect(page.getByRole('heading', { name: 'No permission changes yet', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Go to People', exact: true })).toHaveAttribute('href', '/people');
+    await expect(page.locator('#audit-load-more')).toHaveCount(0);
+    for (const gone of ['Refresh history', 'Newest events', 'Older events']) await expect(page.getByText(gone)).toHaveCount(0);
 
     let revision = Number(initialRevision);
     assert.ok(Number.isSafeInteger(revision));
@@ -95,22 +99,34 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     }
     const ids = sql(`SELECT id FROM permission_change_receipts WHERE org_id='${actor.org_id}' ORDER BY created_at DESC, id DESC`).split('\n');
     assert.equal(ids.length, 28);
-    await page.locator('#audit-refresh').click();
-    await expect(history.locator('tbody tr')).toHaveCount(25);
-    assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt: ${id}`));
-    await expect(history.locator('summary').first()).toHaveText('No project manager change');
-    const summary = history.locator('summary').nth(1);
+    const projectName = sql(`SELECT name FROM projects WHERE id='${project}'`);
+    await page.reload();
+    await expect(rows).toHaveCount(25);
+    assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt ${id}`));
+    // Each row is a sentence; the newest is the no-op, then the last addition.
+    await expect(rows.nth(0).locator('summary')).toContainText(`saved the managers of ${projectName} without changes`);
+    await expect(rows.nth(1).locator('summary')).toContainText(`made ${actor.name} a manager of ${projectName}`);
+    await expect(rows.nth(2).locator('summary')).toContainText(`removed ${actor.name} as a manager of ${projectName}`);
+    await expect(rows.nth(1).locator('summary')).toContainText('Managers');
+    await expect(rows.nth(1).locator('summary')).toContainText('+1');
+    // Times are local and grouped under a day heading.
+    await expect(history.locator('h2.audit-day').first()).toHaveText('Today');
+    await expect(page.getByText(/Times in your time zone \(UTC\)\./)).toBeVisible();
+    // Names link: the person to the log filtered to them, the project to its page.
+    await expect(rows.nth(1).getByRole('link', { name: projectName, exact: true })).toHaveAttribute('href', `/projects/${project}`);
+    await expect(rows.nth(1).getByRole('link', { name: actor.name, exact: true }).first()).toHaveAttribute('href', `/admin/audit?person=${actor.id}`);
+    const summary = rows.nth(1).locator('summary');
     await summary.focus();
     await page.keyboard.press('Enter');
-    await expect(history.locator('details').nth(1)).toHaveAttribute('open', '');
-    await expect(history.getByText(`Project: ${project}`, { exact: true }).nth(1)).toBeVisible();
-    await expect(history.locator('details').nth(1)).toContainText(`Added manager: ${actor.id}`);
+    await expect(rows.nth(1)).toHaveAttribute('open', '');
+    await expect(rows.nth(1)).toContainText(`${actor.name} became a manager`);
+    await expect(rows.nth(1)).toContainText(`Receipt ${ids[1]}`);
 
     for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
       await page.setViewportSize({ width, height });
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'history must not widen the viewport');
-      for (const id of ['audit-refresh', 'audit-newest', 'audit-older']) {
+      for (const id of ['audit-kind-menu-trigger', 'audit-person-menu-trigger', 'audit-period-menu-trigger', 'audit-load-more']) {
         const box = await page.locator(`#${id}`).boundingBox();
         assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, `${id} must remain within the viewport`);
       }
@@ -120,50 +136,62 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
       }
     }
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.locator('#audit-older').focus();
+    // "Load more" appends the rest and then goes away.
+    await page.locator('#audit-load-more').focus();
     await page.keyboard.press('Enter');
-    await expect(history.locator('tbody tr')).toHaveCount(3);
-    assert.deepEqual(await receiptIds(), ids.slice(25).map(id => `Receipt: ${id}`));
-    await expect(page.locator('#audit-older')).toBeDisabled();
-    await page.locator('#audit-newest').click();
-    await expect(history.locator('tbody tr')).toHaveCount(25);
+    await expect(rows).toHaveCount(28);
+    assert.deepEqual(await receiptIds(), ids.map(id => `Receipt ${id}`));
+    await expect(page.locator('#audit-load-more')).toHaveCount(0);
+
+    // Filters live in the address. One that matches nothing offers to clear it.
+    await page.goto(`${base}/admin/audit?kind=profile`);
+    await expect(page.getByRole('heading', { name: 'No changes match these filters', exact: true })).toBeVisible();
+    await expect(page.locator('#audit-kind-menu-trigger')).toContainText('Changes to a profile');
+    await page.locator('#audit-clear-filters').click();
+    // The router writes the empty query as a bare `?`.
+    await page.waitForURL(/\/admin\/audit\??$/);
+    await expect(rows).toHaveCount(25);
 
     let intercepted = false;
     const heldRead = new Promise(resolve => { releaseRead = resolve; });
     const holdRead = async route => { intercepted = true; await heldRead; await route.continue(); };
     await page.route('**/api/list_permission_audit*', holdRead);
     try {
-      await page.locator('#audit-refresh').click();
+      // A new filter keeps the rows on screen, dimmed, until its answer arrives.
+      await page.locator('#audit-kind-menu-trigger').click();
+      await page.getByRole('menuitem', { name: 'Changes to project managers', exact: true }).click();
       await expect.poll(() => intercepted).toBe(true);
-      await expect(page.getByRole('status')).toContainText('Loading permission history');
-      await expect(history).not.toBeVisible();
-      for (const id of ['audit-refresh', 'audit-newest', 'audit-older']) await expect(page.locator(`#${id}`)).toBeDisabled();
+      await expect(rows).toHaveCount(25);
+      await expect(page.locator('.audit-content')).toHaveAttribute('aria-busy', 'true');
     } finally {
       releaseRead();
     }
-    await expect(history.locator('tbody tr')).toHaveCount(25);
+    await page.waitForURL(`${base}/admin/audit?kind=managers`);
+    await expect(page.locator('.audit-content')).not.toHaveAttribute('aria-busy', 'true');
+    await expect(rows).toHaveCount(25);
     await page.unroute('**/api/list_permission_audit*', holdRead);
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${stateId}'`);
-    await page.locator('#audit-refresh').click();
+    await page.reload();
     // A refusal keeps only the header and the one no-access state.
     await expect(page.getByRole('alert')).toContainText('Access unavailable');
     await expect(history).not.toBeVisible();
-    for (const id of ['audit-refresh', 'audit-newest', 'audit-older']) await expect(page.locator(`#${id}`)).toHaveCount(0);
+    for (const id of ['audit-kind-menu-trigger', 'audit-load-more']) await expect(page.locator(`#${id}`)).toHaveCount(0);
     sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${stateId}'`);
-    await page.reload();
-    await expect(history.locator('tbody tr')).toHaveCount(25);
-    assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt: ${id}`));
+    await page.goto(`${base}/admin/audit`);
+    await expect(rows).toHaveCount(25);
+    assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt ${id}`));
 
     await page.goto(`${base}/settings/access`);
     await page.getByRole('link', { name: 'See changes to your access', exact: true }).click();
-    await page.waitForURL(`${base}/admin/audit`);
-    await expect(history.locator('tbody tr')).toHaveCount(25);
+    await page.waitForURL(`${base}/admin/audit?person=${actor.id}`);
+    await expect(rows).toHaveCount(25);
     sql(`UPDATE users SET active=false WHERE id='${actor.id}'`);
-    await page.locator('#audit-refresh').click();
+    await page.locator('#audit-period-menu-trigger').click();
+    await page.getByRole('menuitem', { name: 'Last 30 days', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('Sign in again');
     await expect(history).not.toBeVisible();
     assert.deepEqual(errors, []);
-    console.log(`PASS: permission history in Chromium ${browser.version()}: real writer receipts, empty/no-op states, exact paging, keyboard details, responsive themes, stale suppression, revocation, canonical admin navigation and deactivation`);
+    console.log(`PASS: permission history in Chromium ${browser.version()}: real writer receipts as sentences by day, empty and filtered-empty states, load more, keyboard details, filters in the URL, dimmed reloads, responsive themes, revocation, canonical admin navigation and deactivation`);
   } finally {
     releaseRead?.();
     await browser.close();

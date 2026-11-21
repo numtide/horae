@@ -364,3 +364,302 @@ async fn cancelling_history_page_releases_both_authority_gates(pool: PgPool) {
     .unwrap();
     assert_unlocked(&pool, &ids).await;
 }
+
+mod filters {
+    use super::*;
+    use crate::models::permission_audit::{AuditFilter, AuditKind, AuditPeriod};
+    use crate::server_fns::permissions::calls::audit::filtered;
+
+    /// Stores a receipt directly, `days_ago` days before now.
+    async fn receipt(
+        pool: &PgPool,
+        org: Uuid,
+        actor: Uuid,
+        audit: serde_json::Value,
+        days_ago: i32,
+    ) -> Uuid {
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO permission_change_receipts
+               (id, org_id, actor_user_id, request_id, format_version, intent, result, audit, created_at)
+             VALUES ($1, $2, $3, $4, 1, '{}', '{}', $5, now() - make_interval(days => $6))",
+            id,
+            org,
+            actor,
+            Uuid::now_v7(),
+            audit,
+            days_ago
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    fn person_change(user: Uuid) -> serde_json::Value {
+        let grants = json!(BuiltInProfile::Member.selection());
+        let snapshot = |revision| {
+            json!({"grants": grants, "is_administrator": false,
+                "source": {"kind": "individual"}, "revision": revision})
+        };
+        json!({"user_id": user, "previous_access_revision": 0, "access_revision": 1,
+            "change": {"catalog_version": 1, "before": snapshot(0), "after": snapshot(1),
+            "removed_projects": [], "removed_people": []}})
+    }
+
+    fn manager_added(project: Uuid, manager: Uuid) -> serde_json::Value {
+        json!({"project_id": project, "previous_access_revision": 0, "access_revision": 1,
+            "change": {"added": [{"id": Uuid::now_v7(), "manager_id": manager, "revision": 0}],
+            "removed": []}})
+    }
+
+    fn profile_created() -> serde_json::Value {
+        json!({"previous_access_revision": 0, "access_revision": 1, "before": null,
+            "after": {"id": Uuid::now_v7(), "name": "Readers", "catalog_version": 1,
+            "grants": BuiltInProfile::Member.selection(), "revision": 0},
+            "detached_people": []})
+    }
+
+    struct History {
+        ids: SeedIds,
+        other: Uuid,
+        /// Newest first: B acted on the admin (1 day ago), the admin changed B
+        /// (2 days), made B a manager (40 days), created a profile (100 days).
+        b_acted: Uuid,
+        b_changed: Uuid,
+        b_managed: Uuid,
+        profile: Uuid,
+    }
+
+    async fn history(pool: &PgPool) -> History {
+        let ids = fixture(pool, true).await;
+        let other = super::super::person(pool, ids.org_id, false, BuiltInProfile::Member).await;
+        let admin = ids.user_id;
+        let b_acted = receipt(pool, ids.org_id, other, person_change(admin), 1).await;
+        let b_changed = receipt(pool, ids.org_id, admin, person_change(other), 2).await;
+        let b_managed = receipt(
+            pool,
+            ids.org_id,
+            admin,
+            manager_added(ids.project_id, other),
+            40,
+        )
+        .await;
+        let profile = receipt(pool, ids.org_id, admin, profile_created(), 100).await;
+        // Another organization's history never shows.
+        let foreign = fixture(pool, true).await;
+        receipt(
+            pool,
+            foreign.org_id,
+            foreign.user_id,
+            person_change(other),
+            1,
+        )
+        .await;
+        History {
+            ids,
+            other,
+            b_acted,
+            b_changed,
+            b_managed,
+            profile,
+        }
+    }
+
+    async fn shown(pool: &PgPool, ids: &SeedIds, filter: AuditFilter) -> Vec<Uuid> {
+        filtered(pool, ids.org_id, ids.user_id, &filter, None, None)
+            .await
+            .unwrap()
+            .entries
+            .iter()
+            .map(|entry| entry.id)
+            .collect()
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn each_filter_narrows_the_history_and_they_combine(pool: PgPool) {
+        let h = history(&pool).await;
+        let kind = |kind| AuditFilter {
+            kind: Some(kind),
+            ..AuditFilter::default()
+        };
+        let period = |period| AuditFilter {
+            period: Some(period),
+            ..AuditFilter::default()
+        };
+        for (filter, expected) in [
+            (
+                AuditFilter::default(),
+                vec![h.b_acted, h.b_changed, h.b_managed, h.profile],
+            ),
+            (kind(AuditKind::Person), vec![h.b_acted, h.b_changed]),
+            (kind(AuditKind::Managers), vec![h.b_managed]),
+            (kind(AuditKind::Profile), vec![h.profile]),
+            // A person's history: what they did, what was done to them, and
+            // the projects they were made a manager of.
+            (
+                AuditFilter::person(h.other),
+                vec![h.b_acted, h.b_changed, h.b_managed],
+            ),
+            (
+                AuditFilter::person(h.ids.user_id),
+                vec![h.b_acted, h.b_changed, h.b_managed, h.profile],
+            ),
+            (AuditFilter::person(Uuid::now_v7()), vec![]),
+            (period(AuditPeriod::Days7), vec![h.b_acted, h.b_changed]),
+            (
+                period(AuditPeriod::Days90),
+                vec![h.b_acted, h.b_changed, h.b_managed],
+            ),
+            (
+                AuditFilter {
+                    kind: Some(AuditKind::Managers),
+                    person: Some(h.other),
+                    period: Some(AuditPeriod::Days90),
+                },
+                vec![h.b_managed],
+            ),
+            (
+                AuditFilter {
+                    kind: Some(AuditKind::Managers),
+                    person: Some(h.other),
+                    period: Some(AuditPeriod::Days30),
+                },
+                vec![],
+            ),
+        ] {
+            assert_eq!(shown(&pool, &h.ids, filter).await, expected, "{filter:?}");
+        }
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn a_page_names_the_people_projects_and_profiles_it_refers_to(pool: PgPool) {
+        let h = history(&pool).await;
+        let page = filtered(
+            &pool,
+            h.ids.org_id,
+            h.ids.user_id,
+            &AuditFilter::default(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(page.person_name(h.other), Some("Audit person"));
+        assert!(page.person_name(h.ids.user_id).is_some());
+        assert!(page.project_name(h.ids.project_id).is_some());
+        // Only this organization's people are offered by the person filter.
+        assert_eq!(page.people.len(), 2);
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn a_filtered_history_pages_with_its_cursor(pool: PgPool) {
+        let ids = fixture(&pool, true).await;
+        let other = super::super::person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
+        let mut expected = Vec::new();
+        for day in 0..27 {
+            expected.push(receipt(&pool, ids.org_id, ids.user_id, person_change(other), day).await);
+            // Receipts of another kind in between must not count toward a page.
+            receipt(&pool, ids.org_id, ids.user_id, profile_created(), day).await;
+        }
+        let filter = AuditFilter {
+            kind: Some(AuditKind::Person),
+            ..AuditFilter::default()
+        };
+        let first = filtered(&pool, ids.org_id, ids.user_id, &filter, None, None)
+            .await
+            .unwrap();
+        assert_eq!(first.entries.len(), 25);
+        let cursor = first.next_after.unwrap();
+        let second = filtered(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            &filter,
+            Some(&cursor),
+            Some(first.requester),
+        )
+        .await
+        .unwrap();
+        assert!(second.next_after.is_none());
+        let ids_shown: Vec<_> = first
+            .entries
+            .iter()
+            .chain(&second.entries)
+            .map(|entry| entry.id)
+            .collect();
+        assert_eq!(ids_shown, expected);
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn a_member_is_refused_whatever_the_filter(pool: PgPool) {
+        let ids = fixture(&pool, false).await;
+        receipt(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            person_change(ids.user_id),
+            1,
+        )
+        .await;
+        // Not even the history of their own access.
+        for filter in [AuditFilter::default(), AuditFilter::person(ids.user_id)] {
+            assert_eq!(
+                filtered(&pool, ids.org_id, ids.user_id, &filter, None, None)
+                    .await
+                    .unwrap_err(),
+                forbidden()
+            );
+        }
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn days_and_times_are_in_the_viewers_zone(pool: PgPool) {
+        let ids = fixture(&pool, true).await;
+        let id = receipt(&pool, ids.org_id, ids.user_id, profile_created(), 0).await;
+        sqlx::query!(
+            "UPDATE permission_change_receipts SET created_at='2026-09-07 23:30:00+00' WHERE id=$1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let local =
+            |page: &crate::models::permission_audit::AuditPage| page.entries[0].local.to_string();
+        // The person's own zone puts it on the next day.
+        sqlx::query!(
+            "UPDATE users SET timezone='Europe/Madrid' WHERE id=$1",
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let madrid = page(&pool, ids.org_id, ids.user_id, None, None)
+            .await
+            .unwrap();
+        assert_eq!(madrid.time_zone, "Europe/Madrid");
+        assert_eq!(local(&madrid), "2026-09-08 01:30:00");
+        // Without one, the organization's zone decides.
+        sqlx::query!("UPDATE users SET timezone=NULL WHERE id=$1", ids.user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE organizations SET timezone='America/New_York' WHERE id=$1",
+            ids.org_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let new_york = page(&pool, ids.org_id, ids.user_id, None, None)
+            .await
+            .unwrap();
+        assert_eq!(new_york.time_zone, "America/New_York");
+        assert_eq!(local(&new_york), "2026-09-07 19:30:00");
+    }
+}

@@ -14,6 +14,7 @@ use crate::components::screen_state::{ErrorState, NoAccess, Skeleton};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::today::today;
 use crate::i18n::use_tr;
+use crate::models::permission_audit::AuditFilter;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 
@@ -47,8 +48,10 @@ pub fn People() -> Element {
             user: user.to_string(),
         });
     });
-    let view_history = use_callback(move |()| {
-        navigator.push(Route::PermissionAudit {});
+    let view_history = use_callback(move |person: Uuid| {
+        navigator.push(Route::PermissionAudit {
+            filter: AuditFilter::person(person),
+        });
     });
     // shortcut: an unreadable first weekday falls back to Monday rather than
     // blocking the list; the Timesheet shows that error.

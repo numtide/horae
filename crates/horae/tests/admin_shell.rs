@@ -395,8 +395,10 @@ mod route {
         WorkspaceSettings {},
         #[route("/admin/importers")]
         ImporterIndex {},
-        #[route("/admin/audit")]
-        PermissionAudit {},
+        #[route("/admin/audit?:..filter")]
+        PermissionAudit {
+            filter: horae_types::permission_audit::AuditFilter,
+        },
         #[route("/admin/api-tokens")]
         AdminApiTokens {},
     }
@@ -437,7 +439,8 @@ mod route {
     }
 
     #[component]
-    fn PermissionAudit() -> Element {
+    fn PermissionAudit(filter: horae_types::permission_audit::AuditFilter) -> Element {
+        let _ = filter;
         rsx! { "Permission audit panel" }
     }
 
