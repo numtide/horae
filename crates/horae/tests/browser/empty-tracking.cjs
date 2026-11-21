@@ -2,6 +2,7 @@
 // HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/empty-tracking.cjs
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const assert = require('node:assert/strict');
+const { devLoginUser } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
 // Another person, presented by rewriting the admin's own sheet: whether the
@@ -21,10 +22,9 @@ const other = '019f2a00-0000-7000-8000-000000000001', otherName = 'Empty trackin
     await page.waitForURL(`${base}/`);
     // Nothing assigned to the viewer: both catalogs answer empty.
     await page.route(catalogs, route => route.fulfill({ json: [] }));
-    const me = page.waitForResponse(r => r.url().includes('/api/get_me') && r.status() === 200);
+    const { id } = devLoginUser();
     const ready = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
     await page.goto(`${base}/`);
-    const { id } = await (await me).json();
     await (await ready).finished();
     const sheet = page.url();
 

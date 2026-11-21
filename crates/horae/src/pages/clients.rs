@@ -122,7 +122,7 @@ pub fn ClientList() -> Element {
     // `can_manage` reflects `ClientWriteAll`; every write rechecks it.
     let can_manage = overview.is_some_and(|overview| overview.can_manage);
     // The Harvest importer is for administrators; it rechecks that itself.
-    let can_import = can_manage && super::is_administrator(&own);
+    let can_import = can_manage && super::is_administrator(&own.read());
     let denied = overview.is_some_and(|overview| !overview.can_read);
     let list = overview
         .filter(|overview| overview.can_read)

@@ -1,5 +1,6 @@
 use super::*;
 use dioxus::history::{History, MemoryHistory};
+use dioxus::prelude::dioxus_fullstack::Loader;
 use dioxus::router::components::HistoryProvider;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use std::rc::Rc;
@@ -25,7 +26,7 @@ fn member() -> OwnPermissions {
     }
 }
 
-type Response = Option<Result<OwnPermissions, ServerFnError>>;
+type Response = Result<OwnPermissions, ServerFnError>;
 
 /// A one-page router, so the content's `Link`s have a router without
 /// mounting the app shell and its session reads.
@@ -45,7 +46,7 @@ fn Content() -> Element {
 fn render(response: Response) -> String {
     let mut dom = VirtualDom::new_with_props(
         |response: Response| {
-            use_context_provider(|| response);
+            let _ = use_context_provider(|| response);
             let history = use_callback(|_| Rc::new(MemoryHistory::default()) as Rc<dyn History>);
             rsx! {
                 HistoryProvider { history, Router::<Host> {} }
@@ -96,7 +97,7 @@ fn a_cell_shows_the_widest_scope_granted() {
 
 #[test]
 fn a_member_sees_the_table_and_who_changes_it() {
-    let html = render(Some(Ok(member())));
+    let html = render(Ok(member()));
     assert!(html.contains("Your access by area"), "{html}");
     assert!(
         html.contains("ask an administrator of this workspace"),
@@ -113,7 +114,7 @@ fn a_member_sees_the_table_and_who_changes_it() {
 fn an_administrator_sees_one_sentence_and_no_table() {
     let mut own = member();
     own.is_administrator = true;
-    let html = render(Some(Ok(own)));
+    let html = render(Ok(own));
     assert!(!html.contains("<table"), "{html}");
     assert!(
         html.contains("You can see and change everything here"),
@@ -134,7 +135,7 @@ fn the_page_has_no_refresh_notice_or_internal_fields() {
         .chain(&own.managed_project_ids)
         .copied()
         .collect();
-    let html = render(Some(Ok(own)));
+    let html = render(Ok(own));
     for id in ids {
         assert!(!html.contains(&id.to_string()), "{html}");
     }
@@ -159,11 +160,11 @@ fn failures_name_what_to_do_without_private_details() {
         (403, "Ask an administrator"),
         (500, "Try again"),
     ] {
-        let html = render(Some(Err(ServerFnError::ServerError {
+        let html = render(Err(ServerFnError::ServerError {
             code,
             message: "private diagnostic".into(),
             details: None,
-        })));
+        }));
         assert!(html.contains("Could not load your access"), "{html}");
         assert!(html.contains(expected), "{html}");
         assert!(!html.contains("private diagnostic"), "{html}");
@@ -174,14 +175,9 @@ fn failures_name_what_to_do_without_private_details() {
 fn an_unknown_catalog_hides_grants_it_cannot_read() {
     let mut own = member();
     own.catalog_version += 1;
-    let html = render(Some(Ok(own)));
+    let html = render(Ok(own));
     assert!(html.contains("Could not load your access"), "{html}");
     assert!(!html.contains("<table"), "{html}");
-}
-
-#[test]
-fn only_the_first_load_shows_loading() {
-    assert!(render(None).contains("Loading your access"));
 }
 
 /// The badge beside the title: `PageHeader` puts it in `page-header-meta`.
@@ -194,14 +190,14 @@ fn badge(html: &str) -> Option<&str> {
 #[test]
 fn the_title_badge_names_the_profile() {
     let mut own = member();
-    assert_eq!(badge(&render(Some(Ok(own.clone())))), Some("Manager"));
+    assert_eq!(badge(&render(Ok(own.clone()))), Some("Manager"));
     own.profile = None;
     assert_eq!(
-        badge(&render(Some(Ok(own.clone())))),
+        badge(&render(Ok(own.clone()))),
         Some("Individual configuration")
     );
     own.is_administrator = true;
-    assert_eq!(badge(&render(Some(Ok(own)))), Some("Administrator"));
+    assert_eq!(badge(&render(Ok(own))), Some("Administrator"));
 }
 
 #[test]
@@ -209,16 +205,16 @@ fn no_badge_above_an_error_or_an_unknown_catalog() {
     let mut own = member();
     own.is_administrator = true;
     own.catalog_version += 1;
-    let html = render(Some(Ok(own)));
+    let html = render(Ok(own));
     assert!(html.contains("Could not load your access"), "{html}");
     assert_eq!(badge(&html), None, "{html}");
-    let html = render(Some(Err(ServerFnError::new("down"))));
+    let html = render(Err(ServerFnError::new("down")));
     assert_eq!(badge(&html), None, "{html}");
 }
 
 #[test]
 fn a_column_that_does_not_apply_is_read_as_words() {
-    let html = render(Some(Ok(member())));
+    let html = render(Ok(member()));
     assert!(
         html.contains(r#"<span class="text-muted" aria-hidden="true">—</span><span class="sr-only">Does not apply</span>"#),
         "{html}"
@@ -229,7 +225,7 @@ fn a_column_that_does_not_apply_is_read_as_words() {
 type Reply = Result<OwnPermissions, ServerFnError>;
 type Replies =
     Rc<std::cell::RefCell<std::collections::VecDeque<tokio::sync::oneshot::Receiver<Reply>>>>;
-type Handle = Rc<std::cell::Cell<Option<(ScopeId, Resource<Reply>)>>>;
+type Handle = Rc<std::cell::Cell<Option<(ScopeId, Loader<Reply>)>>>;
 
 #[derive(Routable, Clone, PartialEq)]
 enum LiveHost {
@@ -237,20 +233,25 @@ enum LiveHost {
     Live {},
 }
 
-/// The page over a resource the test answers and restarts, the way the
-/// session's permission read behaves.
+/// The page over a loader the test answers and restarts, as the session
+/// loads the permissions.
 #[component]
 fn Live() -> Element {
     let replies = use_context::<Replies>();
     let handle = use_context::<Handle>();
-    let mut access = use_resource(move || {
+    let mut pending = use_signal(|| false);
+    let mut access = use_loader(move || {
         let next = replies.borrow_mut().pop_front().expect("a queued reply");
-        async move { next.await.unwrap() }
-    });
+        async move {
+            pending.set(true);
+            let answer = next.await.unwrap();
+            pending.set(false);
+            Ok::<_, ServerFnError>(answer)
+        }
+    })?;
     handle.set(Some((dioxus::core::current_scope_id(), access)));
     let retry = use_callback(move |_| access.restart());
-    let pending = access.state()() != UseResourceState::Ready;
-    access_page(Tr::default(), &access.read(), retry, pending)
+    access_page(Tr::default(), &access.read(), retry, pending())
 }
 
 struct LiveHarness {
@@ -320,7 +321,6 @@ impl LiveHarness {
 #[tokio::test]
 async fn a_refresh_keeps_the_access_on_screen_and_a_failed_one_shows_the_error() {
     let (mut page, first) = LiveHarness::new();
-    assert!(page.html().contains("Loading your access"));
     first.send(Ok(member())).unwrap();
     page.settle();
     assert!(page.html().contains("Your access by area"));
@@ -328,7 +328,6 @@ async fn a_refresh_keeps_the_access_on_screen_and_a_failed_one_shows_the_error()
     let reply = page.refresh();
     let html = page.html();
     assert!(html.contains("Your access by area"), "{html}");
-    assert!(!html.contains("Loading your access"), "{html}");
 
     reply.send(Err(ServerFnError::new("down"))).unwrap();
     page.settle();

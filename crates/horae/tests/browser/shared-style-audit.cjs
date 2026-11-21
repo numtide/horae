@@ -26,8 +26,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     for (const [path, resource] of [
       ['/clients', 'client_overview'], ['/invoices', 'list_invoices'],
       ['/reports', 'report_time'], ['/admin/workspace', 'get_profile_options'],
-      ['/settings/profile', 'get_me'], ['/admin/importers', 'import/harvest/connection'],
-      ['/components', 'get_me'], [`/timesheet/week/${week}`, 'load_timesheet_page'],
+      ['/settings/profile', 'get_profile_options'], ['/admin/importers', 'import/harvest/connection'],
+      ['/components', 'get_current_timer'], [`/timesheet/week/${week}`, 'load_timesheet_page'],
     ]) {
       const ready = page.waitForResponse(r => r.url().includes(`/api/${resource}`) && r.status() === 200);
       await page.goto(`${base}${path}`);

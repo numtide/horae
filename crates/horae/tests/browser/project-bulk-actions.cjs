@@ -4,6 +4,7 @@ const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE |
 const expect = baseExpect.configure({ timeout: 15000 });
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
+const { devLoginUser } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const selectionOnly = process.argv.includes('--selection-only');
 const fixturesOnly = process.argv.includes('--fixtures-only');
@@ -235,9 +236,8 @@ if (!selectionOnly && !fixturesOnly) {
     let request;
     page.on('request', r => { if (r.url().includes('/api/set_projects_active')) request = r; });
     // Dev login can select another administrator created by a preceding suite.
-    const me = page.waitForResponse(r => r.url().includes('/api/get_me') && r.status() === 200);
+    const adminId = devLoginUser().id;
     await page.goto(`${base}/projects`);
-    const adminId = (await (await me).json()).id;
     await expect(page.locator('.proj-row')).toHaveCount(2);
     await all.click();
     await trigger.click();

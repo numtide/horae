@@ -3,7 +3,7 @@ const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE |
 const expect = baseExpect.configure({ timeout: 15000 });
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
-const { setAsideSeededStates } = require('./seeded-permissions.cjs');
+const { setAsideSeededStates, devLoginUser } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -62,9 +62,8 @@ let actor, org, owned = false, restoreSeededStates;
     const login = await context.request.post(`${base}/auth/dev-login`, { maxRedirects: 0 });
     assert.equal(login.status(), 303);
     // Dev login can select another admin created by a preceding suite.
-    const me = page.waitForResponse(r => r.url().includes('/api/get_me') && r.status() === 200);
+    actor = devLoginUser();
     await page.goto(`${base}/clients`);
-    actor = await (await me).json();
     org = actor.org_id;
     // Only this suite's rows are created and removed.
     restoreSeededStates = setAsideSeededStates(org);

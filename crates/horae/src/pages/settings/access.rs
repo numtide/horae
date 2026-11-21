@@ -8,7 +8,7 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use crate::components::card::MetricCard;
 use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED};
 use crate::components::session::use_session;
 use crate::components::table::DataTable;
 use crate::i18n::{Tr, split_tag};
@@ -20,7 +20,7 @@ pub fn SettingsAccess() -> Element {
     let tr = crate::i18n::use_tr();
     let session = use_session();
     let retry = use_callback(move |_| session.refresh());
-    let pending = session.permissions.state()() != UseResourceState::Ready;
+    let pending = (session.refreshing)();
     access_page(tr, &session.permissions.read(), retry, pending)
 }
 
@@ -28,14 +28,14 @@ pub fn SettingsAccess() -> Element {
 /// while a refresh runs, so "Try again" waits for it.
 fn access_page(
     tr: Tr,
-    response: &Option<Result<OwnPermissions, ServerFnError>>,
+    response: &Result<OwnPermissions, ServerFnError>,
     retry: Callback<()>,
     pending: bool,
 ) -> Element {
     // The badge shows only above the access it describes, not above an error.
     let badge = response
         .as_ref()
-        .and_then(|result| result.as_ref().ok())
+        .ok()
         .filter(|own| own.catalog_version == PERMISSION_CATALOG_VERSION)
         .map(|own| {
             if own.is_administrator {
@@ -62,35 +62,34 @@ fn access_page(
     }
 }
 
-/// The page body for the session's permission read. Only the first load shows
-/// `Loading`: a session refresh keeps the last answer on screen.
+/// The page body for the session's permission read. A session refresh keeps
+/// the last answer on screen until the new one arrives.
 fn access_content(
     tr: Tr,
-    response: &Option<Result<OwnPermissions, ServerFnError>>,
+    response: &Result<OwnPermissions, ServerFnError>,
     retry: Callback<()>,
     pending: bool,
 ) -> Element {
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
     let own = match response {
-        None => return rsx! { Loading { label: tr.settings_access_loading() } },
-        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
-        Some(Err(ServerFnError::ServerError {
+        Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
+        Err(ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
-        })) => {
+        }) => {
             return rsx! {
                 ErrorState { title: tr.settings_access_failed(), body: tr.common_session_ended() }
             };
         }
         // No stored permission state: only an administrator can repair it.
-        Some(Err(ServerFnError::ServerError {
+        Err(ServerFnError::ServerError {
             code: FORBIDDEN, ..
-        })) => {
+        }) => {
             return rsx! {
                 ErrorState { title: tr.settings_access_failed(), body: tr.settings_access_repair() }
             };
         }
-        Some(_) => {
+        _ => {
             return rsx! {
                 ErrorState { title: tr.settings_access_failed(), body: LOAD_FAILED, onretry: retry, retry_disabled: pending }
             };

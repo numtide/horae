@@ -11,7 +11,7 @@ use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, LoadError, Loading, NoAccess};
+use crate::components::screen_state::{EmptyState, NoAccess};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
 use crate::components::today::today;
@@ -106,21 +106,19 @@ fn spawn_action(
     });
 }
 
-/// Whether to ask for the list: `None` until the own-permissions read
-/// answers, `false` when the stored grants hold no approval access. When the
-/// read failed there are no grants to show, so the server decides.
-fn review_access(own: &Option<Result<OwnPermissions, ServerFnError>>) -> Option<bool> {
+/// Whether to ask for the list: `false` when the stored grants hold no
+/// approval access. When the read failed there are no grants to show, so the
+/// server decides.
+fn review_access(own: &Result<OwnPermissions, ServerFnError>) -> bool {
     match own {
-        None => None,
-        Some(Ok(own)) => Some(reviews_approvals(own)),
-        Some(Err(_)) => Some(true),
+        Ok(own) => reviews_approvals(own),
+        Err(_) => true,
     }
 }
 
 #[component]
 pub fn Approvals(week: String) -> Element {
     let session = use_session();
-    let me = session.me;
     let own = session.permissions;
     let first_day = use_week_start();
     let mut status_label = use_signal(|| "Pending".to_string());
@@ -130,11 +128,8 @@ pub fn Approvals(week: String) -> Element {
     // The bulk result, kept with the week it belongs to.
     let notice = use_signal(|| None::<(NaiveDate, String)>);
 
-    let selected = use_memo(use_reactive!(|(week,)| {
-        match &*first_day.read() {
-            Some(Ok(first)) => selected_week(&week, *first),
-            _ => None,
-        }
+    let selected = use_memo(use_reactive!(|(week, first_day)| {
+        selected_week(&week, first_day)
     }));
 
     // Each response carries the week it was requested for, so a slower answer
@@ -143,7 +138,7 @@ pub fn Approvals(week: String) -> Element {
         let f = status_arg(&status_label.read());
         let _tick = *refresh.read();
         let start = selected()
-            .filter(|_| me.read().is_some() && review_access(&own.read()) == Some(true))
+            .filter(|_| review_access(&own.read()))
             .map(|(start, _)| start);
         async move {
             let start = start?;
@@ -154,47 +149,30 @@ pub fn Approvals(week: String) -> Element {
         }
     });
     let retry_list = use_callback(move |_| approvals.restart());
-    let retry_session = use_callback(move |_| session.refresh());
 
     let access = review_access(&own.read());
     // Hide decisions the server would refuse; it re-checks every one.
-    let is_administrator = matches!(&*own.read(), Some(Ok(own)) if own.is_administrator);
-    let viewer = match &*me.read() {
-        Some(Ok(u)) => Some(u.id),
-        _ => None,
-    };
-    let may_decide =
-        move |owner| viewer.is_some_and(|id| may_decide_submission(id, is_administrator, owner));
-    let this_week = match &*first_day.read() {
-        Some(Ok(first)) => week_bounds(today(), *first).map(|(start, _)| start),
-        _ => None,
-    };
+    let is_administrator = matches!(&*own.read(), Ok(own) if own.is_administrator);
+    let viewer = session.me.read().id;
+    let may_decide = move |owner| may_decide_submission(viewer, is_administrator, owner);
+    let this_week = week_bounds(today(), first_day).map(|(start, _)| start);
 
     rsx! {
         div {
             PageHeader { title: "Approvals", title_id: "approvals-heading" }
 
-            // Until the session resolves, nobody is known to lack access.
-            if me.read().is_none() || access.is_none() {
-                Loading {}
-            } else if access == Some(false) {
+            if !access {
                 NoAccess {}
             } else {
-                match (&*first_day.read(), selected()) {
-                    (None, _) => rsx! {
-                        Loading {}
-                    },
-                    (Some(Err(e)), _) => rsx! {
-                        LoadError { error: e.clone(), what: "the week", retry: retry_session }
-                    },
-                    (Some(Ok(_)), None) => rsx! {
+                match selected() {
+                    None => rsx! {
                         div { class: "alert alert-danger mb-4", "This week is outside the supported date range." }
                         if let Some(current) = this_week {
                             Link { to: week_route(current), class: "btn btn-ghost btn-sm", "This week" }
                         }
                     },
-                    (Some(Ok(first)), Some((start, end))) => {
-                        let first = *first;
+                    Some((start, end)) => {
+                        let first = first_day;
                         let current = this_week == Some(start);
                         let shown = match &*approvals.read() {
                             Some(Some((loaded_start, rows))) if *loaded_start == start => Some(rows.clone()),

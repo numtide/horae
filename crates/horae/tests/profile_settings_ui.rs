@@ -105,13 +105,13 @@ impl Probe {
 
 fn profile_app(probe: Probe) -> Element {
     use_context_provider(|| probe);
-    session::use_session_provider();
+    session::use_session_provider()?;
     rsx! { profile::SettingsProfile {} }
 }
 
 fn workspace_app(probe: Probe) -> Element {
     use_context_provider(|| probe);
-    session::use_session_provider();
+    session::use_session_provider()?;
     rsx! { workspace::WorkspaceSettings {} }
 }
 
@@ -414,19 +414,23 @@ mod server_fns {
     }
 
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         probe.me_reads.set(probe.me_reads.get() + 1);
         Ok(probe.me.borrow().clone())
     }
 
     pub async fn get_my_permissions() -> Result<OwnPermissions, ServerFnError> {
-        use_context::<Probe>()
+        consume_context::<Probe>()
             .permissions
             .ok_or_else(|| ServerFnError::new("Permission state is unavailable"))
     }
 
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
-        panic!("settings do not read the week start")
+        Ok(chrono::Weekday::Mon)
+    }
+
+    pub async fn get_org_name() -> Result<String, ServerFnError> {
+        Ok("Test workspace".into())
     }
 
     pub struct PluginInfo {
@@ -441,7 +445,7 @@ mod server_fns {
 
     pub async fn get_profile_options() -> Result<ProfileOptions, ServerFnError> {
         Ok(ProfileOptions {
-            sign_in: use_context::<Probe>().sign_in,
+            sign_in: consume_context::<Probe>().sign_in,
             zones: ["Asia/Tokyo", "Europe/Madrid", "UTC"]
                 .map(String::from)
                 .to_vec(),
@@ -452,7 +456,7 @@ mod server_fns {
         name: String,
         timezone: Option<String>,
     ) -> Result<(), ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         probe
             .profile_saves
             .borrow_mut()
@@ -466,7 +470,7 @@ mod server_fns {
     }
 
     pub async fn set_workspace_timezone(timezone: String) -> Result<(), ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         probe.workspace_saves.borrow_mut().push(timezone.clone());
         refusal(&probe)?;
         probe.me.borrow_mut().workspace_timezone = timezone;

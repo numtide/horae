@@ -36,7 +36,7 @@ pub use settings::InvoiceSettings;
 fn holds(session: crate::components::session::Session, required: &[Permission]) -> bool {
     matches!(
         &*session.permissions.read(),
-        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION
+        Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION
             && invoices::holds(|grant| own.grants.contains(&grant), required)
     )
 }
@@ -99,7 +99,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
     let session = crate::components::session::use_session();
     let configures = matches!(
         &*session.permissions.read(),
-        Some(Ok(own)) if settings::edits_invoice_settings(own)
+        Ok(own) if settings::edits_invoice_settings(own)
     );
     let prepares = prepares_invoices(session);
 

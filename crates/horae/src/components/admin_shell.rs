@@ -2,11 +2,10 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, Loading, NoAccess};
+use crate::components::screen_state::{ErrorState, NoAccess};
 use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
-use crate::server_fns;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
@@ -49,12 +48,10 @@ impl WorkspaceAccess {
 }
 
 /// Which workspace sections to offer, from the session's stored permissions;
-/// `None` until they have loaded and `Err` when access cannot be determined.
-/// These are navigation hints; every reader/command authorizes afresh.
-fn workspace_access(
-    own: Option<&Result<OwnPermissions, ServerFnError>>,
-) -> Option<Result<WorkspaceAccess, ()>> {
-    Some(match own? {
+/// `Err` when access cannot be determined. These are navigation hints; every
+/// reader/command authorizes afresh.
+fn workspace_access(own: &Result<OwnPermissions, ServerFnError>) -> Result<WorkspaceAccess, ()> {
+    match own {
         Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION => Ok(WorkspaceAccess {
             settings: own.grants.contains(&Permission::CompanyWrite),
             audit: own.is_administrator,
@@ -62,16 +59,14 @@ fn workspace_access(
             api_tokens: own.is_administrator,
         }),
         _ => Err(()),
-    })
+    }
 }
 
 /// The first section the person may open, in sub-navigation order, so an entry
-/// into the admin area never lands on "Access unavailable". `None` while loading
-/// or when no section is open.
-pub(crate) fn first_admin_route(
-    own: Option<&Result<OwnPermissions, ServerFnError>>,
-) -> Option<Route> {
-    let access = workspace_access(own)?.ok()?;
+/// into the admin area never lands on "Access unavailable". `None` when no
+/// section is open.
+pub(crate) fn first_admin_route(own: &Result<OwnPermissions, ServerFnError>) -> Option<Route> {
+    let access = workspace_access(own).ok()?;
     [
         (access.settings, Route::WorkspaceSettings {}),
         (access.importers, Route::ImporterIndex {}),
@@ -101,32 +96,27 @@ pub fn AdminShell() -> Element {
     };
     let session = use_session();
     let retry = use_callback(move |_| session.refresh());
-    // Mount the workspace and its outlet once the session has loaded. A refresh
-    // keeps a resolved answer until the new one arrives, so switching sections
-    // or re-reading permissions never unmounts the open panel; server functions
-    // still independently enforce access to every operation. A retry after a
-    // failure shows as pending rather than repeating the old error.
-    let refreshing = session.permissions.state()() != UseResourceState::Ready;
-    let access = workspace_access(session.permissions.read().as_ref())
-        .filter(|access| access.is_ok() || !refreshing);
-    match access {
-        Some(Ok(access)) if access.allows(section) => {
+    // The session arrives with the page, so the shell decides at once. A
+    // refresh keeps the last answer until the new one arrives, so switching
+    // sections or re-reading permissions never unmounts the open panel; server
+    // functions still independently enforce access to every operation.
+    let pending = (session.refreshing)();
+    match workspace_access(&session.permissions.read()) {
+        Ok(access) if access.allows(section) => {
             rsx! { AdminWorkspace { access } }
         }
         // Non-disclosing: it names who can grant access, not what the section holds.
-        Some(Ok(_)) => rsx! {
+        Ok(_) => rsx! {
             PageHeader { title: section.title() }
             NoAccess {}
         },
-        Some(Err(())) => rsx! {
+        Err(()) => rsx! {
             ErrorState {
                 title: "Could not verify workspace access",
                 body: "Try again, or sign in again if it keeps failing.",
                 onretry: retry,
+                retry_disabled: pending,
             }
-        },
-        None => rsx! {
-            Loading {}
         },
     }
 }
@@ -135,11 +125,7 @@ pub fn AdminShell() -> Element {
 fn AdminWorkspace(access: WorkspaceAccess) -> Element {
     // The workspace's real name for the header chip (no slug — the schema has no
     // such field, so we show the name only rather than inventing a URL).
-    let org = use_resource(|| async move { server_fns::get_org_name().await });
-    let org_name = match &*org.read() {
-        Some(Ok(name)) => name.clone(),
-        _ => "Workspace".to_string(),
-    };
+    let org_name = use_session().org_name.cloned();
     let org_initial = org_name
         .chars()
         .next()
@@ -225,31 +211,20 @@ mod tests {
     }
 
     #[test]
-    fn waits_for_the_permissions_to_load() {
-        assert_eq!(workspace_access(None), None);
-    }
-
-    #[test]
     fn grants_and_the_administrator_identity_choose_the_sections() {
         let administrator = canonical(
             vec![Permission::PeopleReadManaged, Permission::TaskReadAll],
             true,
             PERMISSION_CATALOG_VERSION,
         );
-        assert_eq!(
-            workspace_access(Some(&administrator)),
-            Some(Ok(access(true, true)))
-        );
+        assert_eq!(workspace_access(&administrator), Ok(access(true, true)));
         // People is a main screen, so reading people opens no admin section.
         let people = canonical(
             vec![Permission::PeopleReadAll],
             false,
             PERMISSION_CATALOG_VERSION,
         );
-        assert_eq!(
-            workspace_access(Some(&people)),
-            Some(Ok(access(false, false)))
-        );
+        assert_eq!(workspace_access(&people), Ok(access(false, false)));
     }
 
     /// Importers and the audit log follow the stored identity, not the grants
@@ -257,7 +232,7 @@ mod tests {
     #[test]
     fn importers_need_the_administrator_identity() {
         let everything = canonical(Permission::ALL.to_vec(), false, PERMISSION_CATALOG_VERSION);
-        let access = workspace_access(Some(&everything)).unwrap().unwrap();
+        let access = workspace_access(&everything).unwrap();
         assert!(!access.allows(Section::Importers));
         assert!(!access.allows(Section::Audit));
         assert!(!access.allows(Section::ApiTokens));
@@ -272,7 +247,7 @@ mod tests {
         );
         let failed = Err(ServerFnError::new("unavailable"));
         for own in [&newer, &failed] {
-            assert_eq!(workspace_access(Some(own)), Some(Err(())));
+            assert_eq!(workspace_access(own), Err(()));
         }
     }
 
@@ -280,9 +255,7 @@ mod tests {
     fn workspace_settings_need_company_write() {
         let version = PERMISSION_CATALOG_VERSION;
         let allowed = |own: &Result<OwnPermissions, ServerFnError>| {
-            workspace_access(Some(own))
-                .and_then(Result::ok)
-                .is_some_and(|access| access.allows(Section::Settings))
+            workspace_access(own).is_ok_and(|access| access.allows(Section::Settings))
         };
         let company = canonical(vec![Permission::CompanyWrite], false, version);
         assert!(allowed(&company));
@@ -306,7 +279,7 @@ mod tests {
         let version = PERMISSION_CATALOG_VERSION;
         // `Route` has no `Debug`, so compare the paths it renders to.
         let first = |own: &Result<OwnPermissions, ServerFnError>| {
-            first_admin_route(Some(own)).map(|route| route.to_string())
+            first_admin_route(own).map(|route| route.to_string())
         };
         let path = |p: &str| Some(p.to_string());
         let people = canonical(vec![Permission::PeopleReadAll], true, version);
@@ -324,6 +297,5 @@ mod tests {
         assert_eq!(first(&administrator), path("/admin/importers"));
         let failed = Err(ServerFnError::new("unavailable"));
         assert_eq!(first(&failed), None);
-        assert!(first_admin_route(None).is_none(), "loading");
     }
 }

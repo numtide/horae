@@ -148,7 +148,7 @@ fn app(probe: Probe) -> Element {
         .unwrap_or_else(|| format!("/invoices/{}", Uuid::from_u128(1)));
     use_context_provider(|| probe);
     // AppLayout provides the session above every page.
-    session::use_session_provider();
+    session::use_session_provider()?;
     rsx! {
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path(initial_path.clone())) as Rc<dyn History>,
@@ -846,10 +846,8 @@ async fn pending_or_failed_project_assignments_never_show_previous_assignments()
 
 // Dependency doubles for page helpers and endpoints. The component, data
 // models, form/table components, router and resource implementation are real.
-fn is_administrator(
-    own: &Resource<Result<own_permissions::OwnPermissions, ServerFnError>>,
-) -> bool {
-    matches!(&*own.read(), Some(Ok(own)) if own.is_administrator)
+fn is_administrator(own: &Result<own_permissions::OwnPermissions, ServerFnError>) -> bool {
+    matches!(own, Ok(own) if own.is_administrator)
 }
 
 use screen_state::{Failure, loaded};
@@ -942,6 +940,10 @@ mod server_fns {
 
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
         Ok(chrono::Weekday::Mon)
+    }
+
+    pub async fn get_org_name() -> Result<String, ServerFnError> {
+        Ok("Test workspace".into())
     }
 
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {

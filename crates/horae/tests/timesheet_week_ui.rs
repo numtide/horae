@@ -81,8 +81,6 @@ mod components {
     /// The shell's week start and a viewer who cannot manage projects, without
     /// the rest of the session.
     pub mod session {
-        use dioxus::prelude::*;
-
         #[derive(Clone, Copy)]
         pub struct Session;
 
@@ -90,16 +88,14 @@ mod components {
             pub fn can_create_projects(&self) -> bool {
                 false
             }
-
-            pub fn refresh(self) {}
         }
 
         pub fn use_session() -> Session {
             Session
         }
 
-        pub fn use_week_start() -> Resource<Result<chrono::Weekday, ServerFnError>> {
-            use_resource(crate::server_fns::get_week_start)
+        pub fn use_week_start() -> chrono::Weekday {
+            chrono::Weekday::Mon
         }
     }
 
@@ -136,8 +132,6 @@ mod components {
 #[path = "../src/pages"]
 mod pages {
     pub mod timesheet;
-
-    pub(crate) use crate::screen_state::{Failure, loaded};
 }
 use pages::timesheet;
 
@@ -235,10 +229,6 @@ mod server_fns {
     use models::scoped_time::{
         TimesheetPeoplePage, TimesheetPeopleQuery, TimesheetQuery, TimesheetWriteContext,
     };
-
-    pub async fn get_week_start() -> Result<Weekday, ServerFnError> {
-        Ok(Weekday::Mon)
-    }
 
     pub async fn load_timesheet_page(
         query: TimesheetQuery,

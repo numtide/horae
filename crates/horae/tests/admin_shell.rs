@@ -69,6 +69,8 @@ struct Probe {
     future_catalog: bool,
     canonical_requests: Rc<Cell<usize>>,
     me_requests: Rc<Cell<usize>>,
+    /// `get_me` refuses, as for a session that has ended.
+    me_refused: bool,
     /// Answer `get_my_permissions` at once instead of waiting for a response.
     canonical: Option<(bool, Vec<Permission>)>,
     /// The People panel's router and scope, and the shared session it sees.
@@ -83,7 +85,20 @@ impl Probe {
     }
 }
 
+/// The app's own error boundary (`App`) around a stand-in for `AppLayout`.
 fn app(probe: Probe) -> Element {
+    use_context_provider(|| probe);
+    rsx! {
+        ErrorBoundary {
+            handle_error: |_: ErrorContext| rsx! { screen_state::PageFailed {} },
+            Layout {}
+        }
+    }
+}
+
+#[component]
+fn Layout() -> Element {
+    let probe = use_context::<Probe>();
     let path = if probe.importers {
         "/admin/importers"
     } else if probe.audit {
@@ -93,9 +108,8 @@ fn app(probe: Probe) -> Element {
     } else {
         "/admin/workspace"
     };
-    use_context_provider(|| probe);
     // AppLayout provides the session above every admin route.
-    session::use_session_provider();
+    session::use_session_provider()?;
     rsx! {
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path(path)) as Rc<dyn History>,
@@ -133,28 +147,58 @@ fn assert_panel_hidden(dom: &VirtualDom, probe: &Probe) {
         "admin outlet must stay hidden: {html}"
     );
     assert_eq!(
-        probe.org_requests.get(),
-        0,
-        "workspace must not load before authorization"
-    );
-    assert_eq!(
         probe.panel_mounts.get(),
         0,
         "admin panel must not mount before authorization"
     );
 }
 
+/// Until the session arrives the shell suspends: the server render waits for
+/// it, so no screen of its own says "Loading".
 #[tokio::test]
-async fn pending_user_does_not_mount_admin_content() {
+async fn a_pending_session_suspends_the_shell() {
     let probe = Probe::default();
     let _response = probe.request();
     let dom = start(&probe);
     assert_panel_hidden(&dom, &probe);
     let html = dioxus::ssr::render(&dom);
-    assert!(
-        html.contains("Loading"),
-        "expected a loading notice: {html}"
-    );
+    assert!(!html.contains("Loading"), "{html}");
+}
+
+/// What the server does: build, wait for every suspended read, render once.
+#[tokio::test]
+async fn the_server_render_has_the_workspace_and_its_panel() {
+    let probe = Probe {
+        canonical: Some((true, vec![Permission::CompanyWrite])),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    dom.wait_for_suspense().await;
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Test workspace"), "{html}");
+    assert!(html.contains("Administrator"), "{html}");
+    assert!(html.contains("Administrative panel"), "{html}");
+    assert!(html.contains("/admin/audit"), "{html}");
+    assert!(!html.contains("Loading"), "{html}");
+}
+
+#[tokio::test]
+async fn an_ended_session_shows_the_page_error_not_a_blank_page() {
+    let probe = Probe {
+        me_refused: true,
+        canonical: Some((true, vec![Permission::CompanyWrite])),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    dom.wait_for_suspense().await;
+    settle(&mut dom);
+    assert_panel_hidden(&dom, &probe);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Could not load this page"), "{html}");
+    assert!(html.contains("Try again"), "{html}");
+    assert!(!html.contains("Not authenticated"), "{html}");
 }
 
 #[tokio::test]
@@ -256,14 +300,9 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
     settle(&mut dom);
     assert_panel_hidden(&dom, &probe);
     let html = dioxus::ssr::render(&dom);
-    assert!(
-        html.contains("Loading"),
-        "retry must render a pending state: {html}"
-    );
-    assert!(
-        !html.contains("Session unavailable"),
-        "retry must not retain a stale error: {html}"
-    );
+    // The error stays, with its button disabled, until the new answer.
+    assert!(html.contains("is-disabled"), "{html}");
+    assert!(!html.contains("Session unavailable"), "{html}");
 
     response
         .send(Ok(Access::new(false, &[Permission::CompanyWrite])))
@@ -272,7 +311,8 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Test workspace"));
     assert!(html.contains("Administrative panel"));
-    assert_eq!(probe.org_requests.get(), 1);
+    // The retry re-reads the whole session, the workspace name included.
+    assert_eq!(probe.org_requests.get(), 2);
     assert_eq!(probe.panel_mounts.get(), 1);
 }
 
@@ -330,6 +370,13 @@ mod server_fns {
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
         let probe = consume_context::<Probe>();
         probe.me_requests.set(probe.me_requests.get() + 1);
+        if probe.me_refused {
+            return Err(ServerFnError::ServerError {
+                message: "Not authenticated — please sign in.".into(),
+                code: 401,
+                details: None,
+            });
+        }
         Ok(CurrentUser {
             id: uuid::Uuid::nil(),
             org_id: uuid::Uuid::nil(),
@@ -624,5 +671,5 @@ async fn a_session_refresh_keeps_the_open_panel_until_the_answer_arrives() {
     assert_eq!(probe.me_requests.get(), 2);
     assert_eq!(probe.canonical_requests.get(), 2);
     assert_eq!(probe.panel_mounts.get(), 1);
-    assert_eq!(probe.org_requests.get(), 1);
+    assert_eq!(probe.org_requests.get(), 2);
 }

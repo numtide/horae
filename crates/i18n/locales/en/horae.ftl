@@ -64,6 +64,8 @@ period-nav-week = Week
 
 no-access-title = Access unavailable
 no-access-body = Your account cannot open this. Ask an administrator of this workspace if you need it.
+page-failed = Could not load this page
+page-failed-hint = Reload the page. If it keeps failing, sign in again.
 confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 
 ## Settings
@@ -71,8 +73,6 @@ confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 settings-group-settings = Settings
 settings-group-account = Account
 settings-profile-title = Profile
-settings-profile-loading = Loading your profile…
-settings-profile-failed = Could not load your profile
 settings-profile-name-label = Name
 settings-profile-email-label = Work email
 settings-profile-email-hint = Managed by your sign-in provider.
@@ -97,7 +97,6 @@ settings-theme-hint = Choose how { -brand } looks on this device.
 settings-access-title = Your access
 settings-access-intro = What you can see and do in this workspace.
 settings-access-history = See changes to your access
-settings-access-loading = Loading your access…
 settings-access-failed = Could not load your access
 settings-access-repair = Ask an administrator of this workspace to check your access.
 settings-access-administrator = You can see and change everything here, including other people's access in <link>{ -people }</link>.

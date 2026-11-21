@@ -60,6 +60,20 @@ pub fn NoAccess(#[props(default)] inset: bool) -> Element {
     }
 }
 
+/// What an `ErrorBoundary` shows when a page cannot load what it needs to
+/// render at all (the session, read with `use_loader`). Reloading runs the
+/// reads again, and sends a person whose session ended to the sign-in page.
+#[component]
+pub fn PageFailed() -> Element {
+    let tr = crate::i18n::use_tr();
+    let reload = use_callback(|()| {
+        document::eval("window.location.reload()");
+    });
+    rsx! {
+        ErrorState { title: tr.page_failed(), body: tr.page_failed_hint(), onretry: reload }
+    }
+}
+
 /// The server's own message, for the request line of an `ErrorState`. A
 /// transport failure ("error sending request…") has none worth showing.
 pub fn error_line(error: &ServerFnError) -> Option<String> {

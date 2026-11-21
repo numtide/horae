@@ -1,7 +1,7 @@
 //! People: everyone in the workspace with their week's hours, a main screen
 //! like the Timesheet (`DESIGN.md`, *People*).
 
-use chrono::{NaiveDate, Weekday};
+use chrono::NaiveDate;
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{
     PERMISSION_CATALOG_VERSION,
@@ -10,7 +10,7 @@ use horae_core::permissions::catalog::{
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, NoAccess, Skeleton};
+use crate::components::screen_state::{ErrorState, NoAccess};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::today::today;
 use crate::i18n::use_tr;
@@ -50,25 +50,11 @@ pub fn People() -> Element {
     let view_history = use_callback(move |()| {
         navigator.push(Route::PermissionAudit {});
     });
-    // shortcut: an unreadable first weekday falls back to Monday rather than
-    // blocking the list; the Timesheet shows that error.
-    let first_day = match &*week_start.read() {
-        Some(Ok(day)) => Some(*day),
-        Some(Err(_)) => Some(Weekday::Mon),
-        None => None,
-    };
     // The permissions are shared with the rail, which refreshes them when its
-    // account menu opens; keep a resolved answer meanwhile so the directory does
-    // not remount and lose its filters and week.
-    let resolved = matches!(&*own.read(), Some(Ok(_)));
-    if (!resolved && own.state()() != UseResourceState::Ready) || first_day.is_none() {
-        return rsx! {
-            PageHeader { title: tr.people_title() }
-            Skeleton { columns: 5, label: tr.people_loading() }
-        };
-    }
+    // account menu opens; the last answer stays meanwhile, so the directory
+    // does not remount and lose its filters and week.
     match &*own.read() {
-        Some(Ok(access))
+        Ok(access)
             if access.catalog_version == PERMISSION_CATALOG_VERSION
                 && (access.grants.contains(&PeopleReadAll)
                     || access.grants.contains(&PeopleReadManaged)) =>
@@ -77,7 +63,7 @@ pub fn People() -> Element {
                 directory::PeopleDirectory {
                     can_edit_permissions: access.is_administrator,
                     can_manage_people: access.grants.contains(&PeopleWriteAll),
-                    first_day: first_day.unwrap_or(Weekday::Mon),
+                    first_day: week_start,
                     today: today(),
                     on_saved,
                     on_view_timesheet: view_timesheet,
@@ -86,7 +72,7 @@ pub fn People() -> Element {
                 }
             }
         }
-        Some(Ok(_)) => rsx! {
+        Ok(_) => rsx! {
             PageHeader { title: tr.people_title() }
             NoAccess {}
             super::admin::PermissionRecovery { on_saved }
