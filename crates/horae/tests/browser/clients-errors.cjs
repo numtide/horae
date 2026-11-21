@@ -76,7 +76,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.unroute('**/api/client_overview*');
     await overview({ can_read: false, can_manage: false });
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Client access is unavailable', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     await expect(page.getByText('No clients yet', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(0);
     await page.unroute('**/api/client_overview*');

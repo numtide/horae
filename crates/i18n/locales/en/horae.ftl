@@ -37,26 +37,110 @@
 ## Glossary
 
 -brand = Horae
+-people = People
 
 ## Shared actions
 
 ## Common words
 
+common-session-ended = Your session has ended. Sign in again to continue.
+
 ## Navigation and shell
+
+nav-my-settings = My settings
 
 ## Components
 
+no-access-title = Access unavailable
+no-access-body = Your account cannot open this. Ask an administrator of this workspace if you need it.
 confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 
 ## Settings
 
+settings-group-settings = Settings
+settings-group-account = Account
+settings-profile-title = Profile
+settings-profile-loading = Loading your profile…
+settings-profile-failed = Could not load your profile
+settings-profile-name-label = Name
+settings-profile-email-label = Work email
+settings-profile-email-hint = Managed by your sign-in provider.
+settings-profile-sign-in-label = Signed in with
+settings-profile-dev-sign-in = Development sign-in
+settings-profile-sign-in-unavailable = Unavailable
+settings-profile-sign-in-loading = Loading…
+settings-profile-zone-label = Time zone
+settings-profile-zone-hint = Decides which day is today on your timesheet and when you start a timer.
+# Completes "Choose …" and "Search …" in the picker's accessible names.
+settings-profile-zone-choice = time zone
+settings-profile-zone-default = Workspace default ({ $zone })
+settings-profile-saved = Profile saved.
+settings-profile-save-failed = Could not save your profile. Try again.
+settings-profile-cancel = Cancel
+settings-profile-save = Save
+settings-profile-saving = Saving…
+settings-preferences-title = Preferences
+settings-theme-label = Theme
+settings-theme-hint = Choose how { -brand } looks on this device.
+
+settings-access-title = Your access
+settings-access-intro = What you can see and do in this workspace.
+settings-access-history = See changes to your access
+settings-access-loading = Loading your access…
+settings-access-failed = Could not load your access
+settings-access-repair = Ask an administrator of this workspace to check your access.
+settings-access-administrator = You can see and change everything here, including other people's access in <link>{ -people }</link>.
+settings-access-change = To change your access, ask an administrator of this workspace.
+settings-access-table-label = Your access by area
+settings-access-column-area = Area
+settings-access-column-view = View
+settings-access-column-edit = Edit
+settings-access-column-approve = Approve
+settings-access-area-time = Time
+settings-access-area-expenses = Expenses
+settings-access-area-projects = Projects
+settings-access-area-clients = Clients
+settings-access-area-tasks = Tasks
+settings-access-area-people = { -people }
+settings-access-area-billable-rates = Billable rates
+settings-access-area-cost-rates = Cost rates
+settings-access-area-invoices = Invoices
+settings-access-area-estimates = Estimates
+settings-access-area-workspace-settings = Workspace settings
+settings-access-area-account-billing = Account billing
+settings-access-scope-all = All
+settings-access-scope-managed = Managed
+settings-access-scope-own = Own
+settings-access-scope-none = No
+settings-access-not-applicable-label = Does not apply
+settings-access-legend = All: everyone's. Managed: the people and projects you manage. Own: only yours.
+settings-access-other-title = You can also
+settings-access-people-managed = People you manage
+settings-access-projects-managed = Projects you manage
+settings-access-administrator-badge = Administrator
+settings-access-individual-badge = Individual configuration
+
+## Workspace settings
+
+workspace-plugins-title = Plugins
+workspace-plugins-empty = No plugins installed
+workspace-plugins-empty-hint = Plugins add features to { -brand }. The person who runs your { -brand } server installs them.
+workspace-plugin-version = v{ $version }
+workspace-plugin-hooks = Hooks: { $hooks }
+
 ## API tokens
 
+api-tokens-title = API tokens
+api-tokens-intro = A token lets a script or another app use { -brand } as you, with your access. Treat it like a password. The API is described in <link>its OpenAPI document</link>.
+api-tokens-list-label = Your tokens
+api-tokens-empty = No tokens yet
+api-tokens-empty-hint = Create a token to let a script or another app use { -brand } on your behalf.
 api-tokens-revoke-title = Revoke “{ $name }”?
 api-tokens-revoke-body = Anything that uses this token loses access at once. A revoked token cannot be restored.
 
 ## Tasks
 
+tasks-load-failed = Could not load tasks
 tasks-archive-title = Archive this task?
 tasks-archive-body = It is archived in every project. Existing time is kept. Stop running timers using this task first.
 tasks-restore-title = Restore this task?
@@ -85,6 +169,8 @@ permissions-profile-delete-hint = This does not save the person's draft. Reloadi
 
 ## Audit log
 
+audit-title = Audit log
+
 ## Reports
 
 ## New project
@@ -93,6 +179,8 @@ permissions-profile-delete-hint = This does not save the person's draft. Reloadi
 
 ## Projects
 
+projects-title = Projects
+projects-load-failed = Could not load projects
 projects-archive-failed = Could not archive the project. Try again, or refresh the page.
 
 ## Timesheet

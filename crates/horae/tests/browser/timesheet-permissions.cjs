@@ -378,7 +378,7 @@ function assignPerson() {
     sql(`BEGIN; UPDATE organizations SET access_revision=access_revision+1 WHERE id='${org}';
       DELETE FROM project_management_assignments WHERE id='${managerEdge}'; COMMIT;`);
     await page.goto(`${base}/timesheet/day/${day}?span=week&user=${person}`);
-    await expect(page.getByRole('alert')).toContainText('Could not load the complete timesheet');
+    await expect(page.getByRole('alert')).toContainText('Access unavailable');
     await settled();
     await expect(page.locator('.ts-day-entry')).toHaveCount(0);
     await expect(page.locator('#app-main')).not.toContainText('Delegated seed');

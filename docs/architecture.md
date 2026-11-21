@@ -44,11 +44,14 @@ The authenticated SPA is organized by route:
 | `/invoices`, `/invoices/:id` | Invoice list and detail with CSV / XLSX / PDF export |
 | `/invoices/settings` | The organization's issuer details, payment details and invoice defaults |
 | `/admin/users` | People and their permissions (with people permissions) |
-| `/admin/workspace` | Workspace settings, such as the time zone |
+| `/admin/workspace` | Workspace settings, such as the time zone, and the installed plugins |
 | `/admin/importers` | Importers, including the [Harvest importer](harvest.md#importer) and its runs |
 | `/admin/audit` | Audit log of permission changes |
 | `/admin/api-tokens` | Everyone's API tokens |
-| `/settings` | Organization and application settings |
+| `/settings/profile` | My settings: your name, email, sign-in and time zone (`/settings` opens it) |
+| `/settings/preferences` | My settings: the theme on this device |
+| `/settings/api-tokens` | My settings: your API tokens |
+| `/settings/access` | My settings: what your account can see and do |
 
 `/auth/*` is served by Axum, outside the SPA.
 

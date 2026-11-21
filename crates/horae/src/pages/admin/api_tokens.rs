@@ -39,7 +39,7 @@ pub fn AdminApiTokens() -> Element {
                 }
             },
             Some(Ok(rows)) if rows.is_empty() => rsx! {
-                EmptyState { icon: "settings", title: "No tokens yet",
+                EmptyState { icon: "key", title: "No tokens yet",
                     body: "Tokens people create in My settings appear here, where you can revoke them.",
                 }
             },

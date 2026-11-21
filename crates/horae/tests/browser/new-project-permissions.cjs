@@ -238,7 +238,7 @@ const name = 'Permission fixture project';
         assert.equal((await post('save_project_draft', foreignWrite)).status(), 404);
         assert.equal((await post('finalize_project_draft', foreignWrite)).status(), 404);
       } else {
-        await expect(page.getByRole('alert')).toContainText('Could not load project settings');
+        await expect(page.getByRole('alert')).toContainText('Access unavailable');
         await expect(screen).toHaveCount(0);
         for (const [method, data] of [['project_creation_options', optionsArgs], ['load_project_draft', {}], ['save_project_draft', ownPayload], ['finalize_project_draft', ownPayload]]) {
           assert.equal((await post(method, data)).status(), 403, `${scenario.label}: ${method}`);

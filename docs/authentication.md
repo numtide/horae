@@ -108,6 +108,6 @@ address is loopback. Never set it in production.
 ## Personal access tokens
 
 `/api/v1` and the Harvest-compatible API authenticate with personal access tokens, created under
-**Settings → API tokens**. A token acts with its owner's permissions. The [API guide](api.md)
+**My settings → API tokens**. A token acts with its owner's permissions. The [API guide](api.md)
 explains how to create, use and revoke them, and [Harvest](harvest.md#harvest-compatible-api) how
 Harvest clients send them.
