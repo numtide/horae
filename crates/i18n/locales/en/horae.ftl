@@ -58,17 +58,32 @@ period-nav-today = Today
 period-nav-this-week = This week
 period-nav-week = Week
 
+confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
+
 ## Settings
 
 ## API tokens
 
+api-tokens-revoke-title = Revoke “{ $name }”?
+api-tokens-revoke-body = Anything that uses this token loses access at once. A revoked token cannot be restored.
+
 ## Tasks
+
+tasks-archive-title = Archive this task?
+tasks-archive-body = It is archived in every project. Existing time is kept. Stop running timers using this task first.
+tasks-restore-title = Restore this task?
+tasks-restore-body = It returns to the catalog. To use it again in an existing project, restore it separately in that project's editor.
 
 ## Clients
 
 ## Invoices
 
 ## Importers: connection
+
+harvest-client-remove-title = Remove the OAuth app?
+harvest-client-remove-confirm = Remove and disconnect
+harvest-client-change-title = Change the client ID?
+harvest-client-change-confirm = Save and disconnect
 
 ## Importers: runs
 
@@ -143,6 +158,12 @@ people-profile-people-admin-hint = Also manages { -people(case: "lower") } and e
 people-profile-executive-manager = Executive Manager
 people-profile-executive-manager-hint = Also manages projects, { -people(case: "lower") } and invoicing.
 
+permissions-discard-title = Discard unsaved permission changes?
+permissions-discard-body = The changes in this form are lost. Saved permissions stay as they are.
+permissions-profile-delete-title = Delete this custom profile?
+permissions-profile-delete-pending = Deleting a custom profile. Confirm or go back in the dialog.
+permissions-profile-delete-hint = This does not save the person's draft. Reloading discards unsaved person changes.
+
 ## Audit log
 
 ## Reports
@@ -153,4 +174,10 @@ people-profile-executive-manager-hint = Also manages projects, { -people(case: "
 
 ## Projects
 
+projects-archive-failed = Could not archive the project. Try again, or refresh the page.
+
 ## Timesheet
+
+timesheet-delete-entry-title = Delete this time entry?
+timesheet-delete-entry-confirm = Delete entry
+timesheet-delete-entry-body = The entry is removed from this timesheet and from reports. This cannot be undone.

@@ -52,6 +52,7 @@ pub(crate) fn PermissionEditorDialog(
     mut person: Signal<Option<(Uuid, PermissionRequester)>>,
     on_saved: EventHandler<bool>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut locked = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut confirming_discard = use_signal(|| false);
@@ -257,10 +258,10 @@ pub(crate) fn PermissionEditorDialog(
             } }
         }
         ConfirmDialog { id: "permission-discard-dialog", labelledby: "permission-discard-title",
-            open: confirming_discard(), title: "Discard unsaved permission changes?",
+            open: confirming_discard(), title: tr.permissions_discard_title(),
             confirm_label: "Discard changes", cancel_label: "Keep editing",
             on_confirm: discard, on_dismiss: keep_changes,
-            p { "The changes in this form are lost. Saved permissions stay as they are." }
+            p { {tr.permissions_discard_body()} }
         }
     }
 }
