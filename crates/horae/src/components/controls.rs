@@ -88,22 +88,33 @@ pub fn Checkbox(
     }
 }
 
-/// A radio option with a label. Controlled via `selected`.
+/// A radio option with a label and an optional line of help under it.
+/// Controlled via `selected`.
 #[component]
 pub fn Radio(
     selected: bool,
     label: String,
+    #[props(into)] id: Option<String>,
+    #[props(default)] hint: String,
     #[props(default)] onclick: EventHandler<MouseEvent>,
 ) -> Element {
     rsx! {
         button {
+            id,
             r#type: "button",
             class: if selected { "choice checked" } else { "choice" },
             role: "radio",
             "aria-checked": "{selected}",
             onclick: move |e| onclick.call(e),
             span { class: "choice-box radio" }
-            span { "{label}" }
+            if hint.is_empty() {
+                span { "{label}" }
+            } else {
+                span { class: "flex flex-col items-start text-left",
+                    span { "{label}" }
+                    span { class: "text-xs text-secondary", "{hint}" }
+                }
+            }
         }
     }
 }

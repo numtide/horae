@@ -43,8 +43,15 @@ let restoreSeededStates = () => {};
     await page.waitForURL(`${base}/`);
 
     // The Administrator profile edits both rates.
-    await page.goto(`${base}/admin/users`);
-    const open = page.getByRole('button', { name: 'Rates for Rates Person', exact: true });
+    await page.goto(`${base}/people`);
+    // Rates… sits in the row's Actions menu, which keeps focus when the dialog closes.
+    const actions = page.locator('tbody tr').filter({ hasText: 'Rates Person' }).getByRole('button', { name: /^Actions/ });
+    const open = {
+      click: async () => {
+        await actions.click();
+        await page.getByRole('menuitem', { name: 'Rates…', exact: true }).click();
+      },
+    };
     const dialog = page.getByRole('dialog', { name: 'Rates for Rates Person', exact: true });
     const billable = dialog.getByLabel('Default billable rate (EUR)', { exact: true });
     const cost = dialog.getByLabel('Cost rate (EUR)', { exact: true });
@@ -61,7 +68,7 @@ let restoreSeededStates = () => {};
     await dialog.getByRole('button', { name: 'Save rates', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Rates saved.' })).toBeVisible();
-    await expect(open).toBeFocused();
+    await expect(actions).toBeFocused();
     assert.equal(stored(), '9550/4000');
 
     // An emptied field removes the rate; the other stays as it was.
@@ -88,8 +95,8 @@ let restoreSeededStates = () => {};
         VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, 'people_read_managed', 'people_read_all','billable_rate_read_managed', 'billable_rate_read_all'])},false,'individual');
       COMMIT;`);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${base}/admin/users`);
-    await page.getByRole('button', { name: 'Rates for Rates Person', exact: true }).click();
+    await page.goto(`${base}/people`);
+    await open.click();
     await expect(dialog.locator('#person-billable-rate')).toHaveText('120.00');
     await expect(dialog.getByText('Cost rate', { exact: false })).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Save rates', exact: true })).toHaveCount(0);

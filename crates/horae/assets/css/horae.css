@@ -1586,7 +1586,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* The last loaded sheet or project list stays on screen while it reloads; dim it only
    if the load is slow enough to notice, and restore it at once. */
 .ts-content[aria-busy="true"],
-.proj-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
+.proj-content[aria-busy="true"],
+.ppl-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
 .ts-add {
   width: 46px; height: 46px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -2109,6 +2110,24 @@ tbody tr:hover { background: var(--color-row-hover); }
 .client-table :is(th, td):first-child { min-width: var(--width-client-name); }
 .name-table :is(th, td):first-child { min-width: var(--width-name-column); }
 .client-search::placeholder { color: var(--color-text-secondary); }
+/* SearchField: the magnifier sits inside the input's left padding. */
+.search-field { position: relative; }
+.search-field-icon {
+  position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%);
+  color: var(--color-text-muted); pointer-events: none;
+}
+.search-field .form-input { padding-left: var(--space-10); }
+/* Billable then non-billable time; the SVG's own attributes size the parts. */
+.hours-bar { display: block; width: 100%; height: var(--size-progress); border-radius: var(--radius-full); overflow: hidden; }
+.hours-bar-track { fill: var(--color-bg-tertiary); }
+.hours-bar-billable { fill: var(--color-primary); }
+.hours-bar-other { fill: var(--color-border-strong); }
+.ppl-bar { width: calc(2 * var(--space-12)); flex-shrink: 0; }
+.ppl-summary {
+  display: grid; gap: var(--space-6); padding: var(--space-5) var(--space-6);
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr);
+}
+@media (max-width: 768px) { .ppl-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ppl-summary > :last-child { grid-column: 1 / -1; } }
 /* Stack when the available content width or enlarged text needs more room. */
 .client-detail { container: client-detail / inline-size; }
 .client-detail-grid { grid-template-columns: minmax(0, 1fr); }

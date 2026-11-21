@@ -23,7 +23,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.reload();
     await (await ready).finished();
     const sidebar = page.locator('.app-sidebar');
-    // Harvest's sections and order. The seeded Administrator sees Team,
+    // Harvest's sections and order. The seeded Administrator sees People,
     // Clients and Tasks (task-catalog.cjs covers the catalog).
     const sections = () => sidebar.evaluate(el => [...el.querySelectorAll('.sidebar-section')].map(section => [
       section.textContent,
@@ -31,21 +31,24 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     ]));
     await expect.poll(sections).toEqual([
       ['Track', ['Timesheet']],
-      ['Organize', ['Team', 'Clients', 'Projects', 'Tasks']],
+      ['Organize', ['People', 'Clients', 'Projects', 'Tasks']],
       ['Bill', ['Invoices']],
       ['Review', ['Approvals', 'Reports']],
     ]);
     await sidebar.locator('.sidebar-footer').click();
     const menu = sidebar.locator('.sidebar-menu');
     await expect(menu.locator('.sidebar-menu-list .menu-item, .sidebar-menu-foot .menu-item')).toHaveText(['Settings', 'Administration', 'Sign out']);
-    await expect(menu.getByRole('link', { name: 'Administration', exact: true })).toHaveAttribute('href', '/admin/users');
+    await expect(menu.getByRole('link', { name: 'Administration', exact: true })).toHaveAttribute('href', '/admin/workspace');
     await expect(menu.locator('.menu-group')).toHaveCount(0);
     if (process.env.HORAE_BROWSER_ARTIFACTS) await page.screenshot({ path: `${process.env.HORAE_BROWSER_ARTIFACTS}/account-menu-admin.png`, animations: 'disabled' });
     await sidebar.locator('.sidebar-footer').click();
     await expect(menu).toHaveCount(0);
-    await sidebar.getByRole('link', { name: 'Team', exact: true }).click();
-    await page.waitForURL(`${base}/admin/users`);
-    await expect(sidebar.locator('a.nav-item.active')).toHaveText('Team');
+    await sidebar.getByRole('link', { name: 'People', exact: true }).click();
+    await page.waitForURL(`${base}/people`);
+    await expect(sidebar.locator('a.nav-item.active')).toHaveText('People');
+    // The old admin address still leads to the screen.
+    await page.goto(`${base}/admin/users`);
+    await page.waitForURL(`${base}/people`);
     // Every row, the user footer included, fits a laptop-height screen without scrolling the rail.
     await page.setViewportSize({ width: 1440, height: 800 });
     const fits = await sidebar.evaluate(el => {
@@ -88,7 +91,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     }));
     assert.equal(glyphs.length, 8, JSON.stringify(glyphs));
     // With labels hidden, each row still has an accessible name and a tooltip.
-    for (const name of ['Timesheet', 'Team', 'Clients', 'Projects', 'Tasks', 'Invoices', 'Approvals', 'Reports']) {
+    for (const name of ['Timesheet', 'People', 'Clients', 'Projects', 'Tasks', 'Invoices', 'Approvals', 'Reports']) {
       const link = sidebar.getByRole('link', { name, exact: true });
       await expect(link).toBeVisible();
       await expect(link).toHaveAttribute('title', name);

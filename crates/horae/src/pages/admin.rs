@@ -1,91 +1,12 @@
 use dioxus::prelude::*;
 
-use crate::components::screen_state::{ErrorState, Loading};
-use crate::components::session::use_session;
-
-mod add_person;
 mod api_tokens;
-mod people;
-mod permission_editor;
-mod rates;
+pub(crate) mod permission_editor;
+pub(crate) mod rates;
 mod workspace;
 
 pub use api_tokens::AdminApiTokens;
 pub use workspace::WorkspaceSettings;
-
-#[component]
-pub fn AdminUsers() -> Element {
-    let session = use_session();
-    let own = session.permissions;
-    let retry = use_callback(move |_| session.refresh());
-    let mut notice = use_signal(|| None::<String>);
-    let on_saved = use_callback(move |changed: bool| {
-        notice.set(Some(
-            if changed {
-                "Permissions saved."
-            } else {
-                "Permissions are unchanged."
-            }
-            .into(),
-        ));
-        // The save may have changed the user's own access, which the rail and
-        // the admin navigation render from too.
-        session.refresh();
-    });
-    // The permissions are shared with the rail, which refreshes them when its
-    // account menu opens; keep a resolved answer meanwhile so the directory does
-    // not remount and lose its filter and page. A retry after a failure shows as
-    // pending rather than repeating the old error.
-    let resolved = matches!(&*own.read(), Some(Ok(_)));
-    if !resolved && own.state()() != UseResourceState::Ready {
-        return rsx! { Loading { label: "Loading people access…" } };
-    }
-    let content = match &*own.read() {
-        Some(Ok(access))
-            if access.catalog_version
-                == horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
-                && (access
-                    .grants
-                    .contains(&horae_core::permissions::catalog::Permission::PeopleReadAll)
-                    || access.grants.contains(
-                        &horae_core::permissions::catalog::Permission::PeopleReadManaged,
-                    )) =>
-        {
-            use horae_core::permissions::catalog::Permission::{
-                BillableRateReadAll, BillableRateReadManaged, CostRateReadAll, PeopleWriteAll,
-            };
-            // Per-person access is decided when the dialog loads; with a
-            // managed-only grant, other people's rows show a refusal there.
-            let can_view_rates = [
-                BillableRateReadManaged,
-                BillableRateReadAll,
-                CostRateReadAll,
-            ]
-            .iter()
-            .any(|grant| access.grants.contains(grant));
-            rsx! {
-                people::CanonicalPeople {
-                    can_edit_permissions: access.is_administrator,
-                    can_manage_people: access.grants.contains(&PeopleWriteAll),
-                    can_view_rates,
-                    on_saved,
-                }
-            }
-        }
-        _ => rsx! {
-            ErrorState {
-                title: "People access is unavailable",
-                body: "Try again, or sign in again if it keeps failing.",
-                onretry: retry,
-            }
-            PermissionRecovery { on_saved }
-        },
-    };
-    rsx! {
-        if let Some(message) = notice() { p { class: "text-sm text-secondary mb-4", role: "status", "{message}" } }
-        {content}
-    }
-}
 
 /// Retained requests remain recoverable without mounting a directory or selecting a person.
 #[component]
