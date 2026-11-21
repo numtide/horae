@@ -10,7 +10,7 @@ use horae_core::permissions::catalog::{
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, Skeleton};
+use crate::components::screen_state::{ErrorState, NoAccess, Skeleton};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::today::today;
 use crate::i18n::use_tr;
@@ -88,10 +88,7 @@ pub fn People() -> Element {
         }
         Some(Ok(_)) => rsx! {
             PageHeader { title: tr.people_title() }
-            ErrorState {
-                title: tr.people_access_unavailable(),
-                body: tr.people_access_unavailable_hint(),
-            }
+            NoAccess {}
             super::admin::PermissionRecovery { on_saved }
         },
         _ => rsx! {

@@ -971,7 +971,10 @@ async fn people_without_a_people_grant_never_mount_the_directory() {
         let ui = Ui::new(probe.clone());
         let html = ui.html();
         assert!(html.contains("Access unavailable"), "{html}");
-        assert!(html.contains("Ask an Administrator"), "{html}");
+        assert!(
+            html.contains("Ask an administrator of this workspace"),
+            "{html}"
+        );
         assert!(html.contains("id=\"permission-recovery\""), "{html}");
         assert!(!html.contains("people-week"), "{html}");
         assert!(probe.people_queries.borrow().is_empty());

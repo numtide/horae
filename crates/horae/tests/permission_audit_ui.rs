@@ -183,42 +183,77 @@ async fn pages_bind_requester_replace_history_and_hide_stale_content_during_refr
     let refresh = probe.reply();
     h.click("audit-newest");
     assert_eq!(probe.requests.borrow()[2], (None, Some(owner)));
-    refresh
-        .send(Err(ServerFnError::ServerError {
-            code: 403,
-            message: "private diagnostic".into(),
-            details: None,
-        }))
-        .unwrap();
-    h.settle();
+    // The pinned read and the unpinned one are both refused: a real refusal.
+    let unpinned = probe.reply();
+    for reply in [refresh, unpinned] {
+        reply
+            .send(Err(ServerFnError::ServerError {
+                code: 403,
+                message: "private diagnostic".into(),
+                details: None,
+            }))
+            .unwrap();
+        h.settle();
+    }
+    assert_eq!(probe.requests.borrow()[3], (None, None));
     assert!(!h.html().contains("private diagnostic"));
-    assert!(h.html().contains("Administrator access"));
-    let retry = probe.reply();
-    h.click("audit-refresh");
-    retry.send(Ok(history(owner, false))).unwrap();
-    h.settle();
-    assert!(h.html().contains("No more permission events"));
+    // Only the header and the state: no refresh or paging around it.
+    assert!(h.html().contains("Access unavailable"));
+    for control in ["audit-refresh", "audit-newest", "audit-older"] {
+        assert!(!h.html().contains(control), "{control}");
+    }
 }
 
 #[tokio::test]
-async fn different_requester_response_is_never_rendered_or_adopted() {
-    let probe = Probe::default();
-    let first = probe.reply();
-    let mut h = Harness::new(&probe);
-    let owner = requester();
-    first.send(Ok(history(owner, false))).unwrap();
-    h.settle();
-    let refresh = probe.reply();
-    h.click("audit-refresh");
-    let other = history(requester(), false);
-    let other_id = other.entries[0].id.to_string();
-    refresh.send(Ok(other)).unwrap();
-    h.settle();
-    assert!(!h.html().contains(&other_id));
-    assert!(h.html().contains("Administrator access"));
-    let _retry = probe.reply();
-    h.click("audit-refresh");
-    assert_eq!(probe.requests.borrow().last().unwrap().1, Some(owner));
+async fn a_changed_account_re_pins_and_reloads() {
+    for refused_pin in [false, true] {
+        let probe = Probe::default();
+        let first = probe.reply();
+        let mut h = Harness::new(&probe);
+        let owner = requester();
+        first.send(Ok(history(owner, false))).unwrap();
+        h.settle();
+        let refresh = probe.reply();
+        h.click("audit-refresh");
+        // The refresh went out bound to the first account.
+        assert_eq!(probe.requests.borrow()[1].1, Some(owner));
+        let unpinned = probe.reply();
+        let switched = requester();
+        let stale = history(switched, false);
+        let stale_id = stale.entries[0].id.to_string();
+        // The server either refuses the old pin or answers for the new account.
+        refresh
+            .send(if refused_pin {
+                Err(ServerFnError::ServerError {
+                    code: 403,
+                    message: "Sign in as the original requester before retrying".into(),
+                    details: None,
+                })
+            } else {
+                Ok(stale)
+            })
+            .unwrap();
+        h.settle();
+        assert!(!h.html().contains(&stale_id), "{refused_pin}");
+        assert_eq!(probe.requests.borrow()[2], (None, None), "{refused_pin}");
+        let fresh = history(switched, false);
+        let fresh_id = fresh.entries[0].id.to_string();
+        unpinned.send(Ok(fresh)).unwrap();
+        h.settle();
+        let html = h.html();
+        assert!(html.contains(&fresh_id), "{refused_pin}: {html}");
+        assert!(
+            !html.contains("Access unavailable"),
+            "{refused_pin}: {html}"
+        );
+
+        // Later reads are pinned to the account now signed in.
+        let next = probe.reply();
+        h.click("audit-refresh");
+        assert_eq!(probe.requests.borrow()[3].1, Some(switched));
+        next.send(Ok(history(switched, false))).unwrap();
+        h.settle();
+    }
 }
 
 mod server_fns {

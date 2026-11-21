@@ -23,11 +23,15 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
-  let releaseRead;
   let actor, fixtureStarted = false, restoreSeededStates;
   page.on('pageerror', error => errors.push(error.stack || error.message));
-  const section = page.getByRole('region', { name: 'Your permissions', exact: true });
-  const refresh = section.getByRole('button', { name: 'Refresh permissions', exact: true });
+  const main = page.locator('.adm-main');
+  const table = main.getByRole('table', { name: 'Your access by area', exact: true });
+  // Opening the account menu re-reads the session, as returning to the page does.
+  const reread = async () => {
+    await page.locator('.sidebar-footer').click();
+    await page.locator('.sidebar-footer').click();
+  };
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
@@ -40,26 +44,39 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
+
+    // Old /settings links open Profile, and the side menu reaches every subpage.
     await page.goto(`${base}/settings`);
-    // Without a stored state there is nothing to explain; an Administrator has to repair it.
-    await expect(section.getByRole('alert')).toContainText('Ask an Administrator to check your access');
-    await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Plugins', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Profile', level: 1 })).toBeVisible();
+    for (const [name, path] of [['Preferences', 'preferences'], ['API tokens', 'api-tokens'], ['Your access', 'access'], ['Profile', 'profile']]) {
+      await page.locator('.adm-nav').getByRole('link', { name, exact: true }).click();
+      await page.waitForURL(`${base}/settings/${path}`);
+      await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+      await expect(page.locator('.adm-nav').getByRole('link', { name, exact: true })).toHaveAttribute('aria-current', 'page');
+    }
+    await expect(page.getByRole('heading', { name: 'Plugins', exact: true })).toHaveCount(0);
+
+    // Without a stored state there is nothing to explain; an administrator has to repair it.
+    await page.goto(`${base}/settings/access`);
+    await expect(main.getByRole('alert')).toContainText('Ask an administrator of this workspace to check your access');
 
     sql(`INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
       VALUES ('${stateId}', '${actor.org_id}', '${actor.id}', 1, ${floor} || ARRAY['invoice_read_managed'], false, 'individual')`);
     fixtureStarted = true;
-    await refresh.focus();
-    await page.keyboard.press('Shift+Tab');
-    await page.keyboard.press('Tab');
-    await expect(refresh).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(section).toContainText('View invoices for managed projects');
-    await expect(section.getByRole('listitem')).toHaveCount(5);
-    await expect(section).not.toContainText('Administrator access');
-    assert.equal(await section.locator('input, select, a').count(), 0);
-    assert.ok(!(await section.innerText()).includes(actor.id));
+    await reread();
+    await expect(table).toBeVisible();
+    const invoices = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Invoices', exact: true }) });
+    await expect(invoices.getByRole('cell')).toHaveText(['Managed', 'No', '—Does not apply']);
+    // The dash is hidden from screen readers, which read the words instead.
+    await expect(invoices.getByRole('cell').nth(2).locator('[aria-hidden="true"]')).toHaveText('—');
+    const time = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Time', exact: true }) });
+    await expect(time.getByRole('cell')).toHaveText(['Own', 'Own', 'No']);
+    await expect(main).toContainText('To change your access, ask an administrator of this workspace.');
+    await expect(main.getByText('Individual configuration', { exact: true })).toBeVisible();
+    await expect(main.getByRole('link', { name: 'See changes to your access', exact: true })).toHaveCount(0);
+    for (const absent of ['Refresh permissions', 'Only an Administrator']) await expect(main).not.toContainText(absent);
+    assert.equal(await main.locator('input, select, button').count(), 0);
+    assert.ok(!(await main.innerText()).includes(actor.id));
 
     for (const theme of ['dark', 'light']) {
       for (const [width, height, zoom] of [[320, 900, 1], [390, 844, 1], [768, 900, 1], [1440, 900, 1], [1440, 360, 1], [768, 900, 2]]) {
@@ -68,10 +85,9 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.zoom = String(zoom);
         }, { theme, zoom });
-        await refresh.scrollIntoViewIfNeeded();
-        await expect(refresh).toBeVisible();
+        await table.scrollIntoViewIfNeeded();
+        await expect(table).toBeVisible();
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `${theme}/${width}/${zoom}: page overflow`);
-        assert.equal(await section.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${theme}/${width}/${zoom}: section overflow`);
         if (process.env.HORAE_BROWSER_ARTIFACTS && zoom === 1 && height > 400 && ((width === 1440 && theme === 'dark') || (width === 390 && theme === 'light'))) {
           mkdirSync(process.env.HORAE_BROWSER_ARTIFACTS, { recursive: true });
           await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `own-permissions-${width}-${theme}.png`), fullPage: true, animations: 'disabled' });
@@ -81,38 +97,28 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     await page.evaluate(() => { document.documentElement.style.zoom = ''; });
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    const heldRead = new Promise(resolve => { releaseRead = resolve; });
-    const holdRead = async route => { await heldRead; await route.continue(); };
-    await page.route('**/api/get_my_permissions*', holdRead);
-    try {
-      await refresh.click();
-      await expect(refresh).toBeDisabled();
-      await expect(section.getByRole('status')).toContainText('Loading your permissions');
-      await expect(section).not.toContainText('View invoices for managed projects');
-      sql(`UPDATE person_permission_states SET grants=${floor}, is_administrator=true WHERE id='${stateId}'`);
-    } finally {
-      releaseRead();
-    }
-    await expect(section).toContainText('Administrator access');
-    await expect(section.getByRole('listitem')).toHaveCount(4);
-    await page.unroute('**/api/get_my_permissions*', holdRead);
+    // An administrator sees one sentence instead of the table, and the history.
+    sql(`UPDATE person_permission_states SET grants=${floor}, is_administrator=true WHERE id='${stateId}'`);
+    await reread();
+    await expect(main).toContainText('You can see and change everything here');
+    await expect(table).toHaveCount(0);
+    await expect(main.getByText('Administrator', { exact: true })).toBeVisible();
+    await expect(main.getByRole('link', { name: 'See changes to your access', exact: true })).toHaveAttribute('href', '/admin/audit');
 
     sql(`UPDATE person_permission_states SET catalog_version=2 WHERE id='${stateId}'`);
-    await refresh.click();
-    await expect(section.getByRole('alert')).toContainText('Ask an Administrator to check your access');
-    await expect(section).not.toContainText('View your own time');
-    await expect(section).not.toContainText('person_permission_states');
-    sql(`UPDATE person_permission_states SET catalog_version=1 WHERE id='${stateId}'`);
-    await refresh.click();
-    await expect(section).toContainText('View your own time');
+    await reread();
+    await expect(main.getByRole('alert')).toContainText('Ask an administrator of this workspace to check your access');
+    await expect(main).not.toContainText('person_permission_states');
+    sql(`UPDATE person_permission_states SET catalog_version=1, is_administrator=false WHERE id='${stateId}'`);
+    await reread();
+    await expect(table).toBeVisible();
     sql(`UPDATE users SET active=false WHERE id='${actor.id}'`);
-    await refresh.click();
-    await expect(section.getByRole('alert')).toContainText('Sign in again');
-    await expect(section).not.toContainText('View your own time');
+    await reread();
+    await expect(main.getByRole('alert')).toContainText('Sign in again');
+    await expect(table).toHaveCount(0);
     assert.deepEqual(errors, []);
-    console.log(`PASS: own permissions in Chromium ${browser.version()}: real reads, missing and stored states, exact grants, independent admin identity, keyboard refresh, pending suppression, error recovery, deactivation, both themes and responsive/CSS-zoom layouts`);
+    console.log(`PASS: Your access in Chromium ${browser.version()}: My settings subpages, missing and stored states, member table, administrator sentence, error recovery, deactivation, both themes and responsive/CSS-zoom layouts`);
   } finally {
-    releaseRead?.();
     await browser.close();
     if (fixtureStarted) sql(`BEGIN;
       UPDATE users SET active=true WHERE id='${actor.id}';

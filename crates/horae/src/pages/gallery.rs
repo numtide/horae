@@ -11,7 +11,9 @@ use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::nav::NavItem;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading, Skeleton};
+use crate::components::screen_state::{
+    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, Skeleton,
+};
 use crate::components::table::DataTable;
 use crate::components::toast::Toast;
 
@@ -278,9 +280,7 @@ pub fn Gallery() -> Element {
                     ErrorState { title: "Could not load projects", body: LOAD_FAILED,
                         request: "list_projects · 503", onretry: noop,
                     }
-                    ErrorState { title: "Access unavailable",
-                        body: "Your account cannot view this section. Ask an Administrator if you need it.",
-                    }
+                    NoAccess {}
                 }
                 div { class: "flex flex-col gap-4 mt-4",
                     Loading { label: "Loading projects…" }

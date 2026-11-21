@@ -106,7 +106,7 @@ impl Probe {
 fn profile_app(probe: Probe) -> Element {
     use_context_provider(|| probe);
     session::use_session_provider();
-    rsx! { profile::ProfileSection {} }
+    rsx! { profile::SettingsProfile {} }
 }
 
 fn workspace_app(probe: Probe) -> Element {
@@ -244,35 +244,44 @@ async fn profile_shows_identity_and_the_permission_profile_read_only() {
         html.contains("value=\"Mia Member\" placeholder=\"\"/>"),
         "{html}"
     );
-    for value in ["mia@example.test", "sso.example.test", "Member"] {
+    for value in ["mia@example.test", "sso.example.test"] {
         assert!(read_only(&html, value), "{value} must be read-only: {html}");
     }
-    assert!(
-        html.contains("Only an Administrator can change your permissions."),
-        "{html}"
-    );
     assert!(html.contains("Workspace default (Europe/Madrid)"), "{html}");
     assert!(disabled(&html, "profile-save"), "{html}");
 }
 
+/// The person's access is shown once, on Your access.
 #[tokio::test]
-async fn individually_chosen_permissions_are_named_as_such() {
-    let mut probe = Probe::new();
-    if let Some(own) = probe.permissions.as_mut() {
-        own.profile = None;
+async fn the_profile_does_not_repeat_the_persons_access() {
+    let html = html(&mount(profile_app, &Probe::new()));
+    assert!(!html.contains("profile-access"), "{html}");
+    for access in [
+        "value=\"Member\"",
+        "Individual configuration",
+        "permissions",
+    ] {
+        assert!(!html.contains(access), "{access}: {html}");
     }
-    let html = html(&mount(profile_app, &probe));
-    assert!(read_only(&html, "Individual configuration"), "{html}");
 }
 
 #[tokio::test]
-async fn an_unreadable_permission_state_leaves_the_access_row_out() {
+async fn a_missing_sign_in_provider_is_named_as_development_sign_in() {
     let mut probe = Probe::new();
-    probe.permissions = None;
     probe.sign_in = None;
     let html = html(&mount(profile_app, &probe));
-    assert!(!html.contains("profile-access"), "{html}");
     assert!(read_only(&html, "Development sign-in"), "{html}");
+}
+
+#[tokio::test]
+async fn workspace_settings_list_plugins_with_an_empty_state_for_people() {
+    let html = html(&mount(workspace_app, &Probe::new()));
+    assert!(html.contains("Plugins"), "{html}");
+    assert!(html.contains("No plugins installed"), "{html}");
+    assert!(html.contains("Plugins add features to Horae."), "{html}");
+    for operator_copy in [".wasm", "plugins/", "HORAE_"] {
+        assert!(!html.contains(operator_copy), "{operator_copy}: {html}");
+    }
 }
 
 #[tokio::test]
@@ -418,6 +427,16 @@ mod server_fns {
 
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
         panic!("settings do not read the week start")
+    }
+
+    pub struct PluginInfo {
+        pub name: String,
+        pub version: String,
+        pub hooks: String,
+    }
+
+    pub async fn list_plugins() -> Result<Vec<PluginInfo>, ServerFnError> {
+        Ok(Vec::new())
     }
 
     pub async fn get_profile_options() -> Result<ProfileOptions, ServerFnError> {

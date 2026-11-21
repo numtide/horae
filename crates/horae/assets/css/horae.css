@@ -1049,12 +1049,14 @@ thead th {
   background: transparent;
   border-bottom: 1px solid var(--color-border);
 }
-tbody td {
+/* A row header (`th scope=row`) is laid out like the row's other cells. */
+tbody td, tbody th {
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border-light);
   color: var(--color-text);
+  text-align: left;
 }
-tbody tr:last-child td { border-bottom: none; }
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
 tbody tr:hover { background: var(--color-row-hover); }
 
 /* Badges */

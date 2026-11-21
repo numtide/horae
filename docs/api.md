@@ -10,7 +10,7 @@ its own.
 
 ## First call
 
-1. In Horae, open **Settings → API tokens**, name a token (for example "calendar sync") and
+1. In Horae, open **My settings → API tokens**, name a token (for example "calendar sync") and
    create it. Copy it right away: Horae stores only a digest and will not show it again.
 
 1. Call the API with it:

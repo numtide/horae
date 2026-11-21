@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, NoAccess};
 use crate::models::invoice::{InvoiceDefaults, InvoiceDraftSave, InvoiceGenerationRequest};
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -223,10 +223,7 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     if !loaded() && denied() {
         return rsx! {
             PageHeader { title: "Invoices" }
-            ErrorState {
-                title: "Access unavailable",
-                body: "Invoices require access to all invoices. Ask an Administrator if you need it.",
-            }
+            NoAccess {}
         };
     }
     // A failed check leaves the page usable without invoice actions, as before.

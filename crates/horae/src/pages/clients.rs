@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::components::badge::Badge;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, Loading};
+use crate::components::screen_state::{EmptyState, ErrorState, Loading, NoAccess};
 use crate::components::session::use_session;
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
@@ -178,7 +178,8 @@ pub fn ClientList() -> Element {
                     if can_import {
                         Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import" }
                     }
-                    input {
+                    // Without access the header keeps no controls.
+                    if !denied { input {
                         id: "clients-search",
                         class: "form-input client-search w-form-select max-w-full",
                         r#type: "search",
@@ -200,7 +201,7 @@ pub fn ClientList() -> Element {
                                 }
                             }
                         },
-                    }
+                    } }
                 },
             }
 
@@ -272,10 +273,7 @@ pub fn ClientList() -> Element {
                     onretry: retry,
                 }
             } else if denied {
-                ErrorState {
-                    title: "Client access is unavailable",
-                    body: "Your permissions do not include the client list. Ask an Administrator for access.",
-                }
+                NoAccess {}
             } else if let Some(list) = list {
                 if visible.is_empty() {
                     if list.is_empty() {
