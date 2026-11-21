@@ -60,6 +60,7 @@ fn restore_opener_focus(opener: &str, fallback: &str) {
 
 #[component]
 pub fn ClientList() -> Element {
+    let tr = crate::i18n::use_tr();
     // Management view: include inactive clients so managers can reactivate them.
     let mut query = use_signal(String::new);
     let mut scope = use_signal(ClientScope::default);
@@ -183,7 +184,7 @@ pub fn ClientList() -> Element {
             match result {
                 Ok(_) => {
                     action_error.set(None);
-                    saved.set(Some(format!("{name} restored")));
+                    saved.set(Some(tr.clients_restored_toast(&name)));
                     refocus.set(Some(actions_trigger(id)));
                     clients.restart();
                 }
@@ -273,7 +274,7 @@ pub fn ClientList() -> Element {
             status::ArchiveDialog { target: archiving, pending: archive_pending, focus_fallback: "clients-heading",
                 on_archived: move |client: status::ArchiveTarget| {
                     action_error.set(None);
-                    saved.set(Some(format!("{} archived", client.name)));
+                    saved.set(Some(tr.clients_archived_toast(&client.name)));
                     refocus.set(Some(actions_trigger(client.id)));
                     clients.restart();
                 },
@@ -419,7 +420,8 @@ fn ClientActions(
         }
     });
     rsx! {
-        Menu { id: "client-actions-{id}", label: tr.action_menu(), aria_label: tr.action_menu_for(&label), align_right: true,
+        Menu { id: "client-actions-{id}", aria_label: tr.action_menu_for(&label), align_right: true,
+            label: if restoring { tr.action_restoring() } else { tr.action_menu() }, busy: restoring,
             MenuItem { id: "client-edit-{id}", onclick: edit, {tr.action_edit()} }
             MenuDivider {}
             MenuItem { id: "client-activity-{id}", disabled: if active { archive_pending } else { restoring }, onclick: change,

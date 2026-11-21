@@ -192,7 +192,7 @@ pub fn Approvals(week: String) -> Element {
                     let approved = server_fns::approve_submissions(ids).await?;
                     notice.set(Some((
                         start,
-                        format!("Approved {approved} of {requested} timesheets"),
+                        tr.approvals_approved_notice(approved as i64, requested as i64),
                     )));
                     Ok(())
                 },
@@ -372,6 +372,7 @@ pub fn Approvals(week: String) -> Element {
                                                                                 button {
                                                                                     class: "btn btn-secondary btn-sm",
                                                                                     id: "approvals-reopen-{aid}",
+                                                                                    aria_label: tr.approvals_reopen_for(name),
                                                                                     disabled: busy(),
                                                                                     onclick: {
                                                                                         let aid = aid.clone();
@@ -386,6 +387,7 @@ pub fn Approvals(week: String) -> Element {
                                                                                     button {
                                                                                         class: "btn btn-secondary btn-sm",
                                                                                         id: "approvals-approve-{aid}",
+                                                                                        aria_label: tr.approvals_approve_for(name),
                                                                                         disabled: busy(),
                                                                                         onclick: {
                                                                                             let aid = aid.clone();

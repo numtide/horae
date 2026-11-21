@@ -320,6 +320,9 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await page.route('**/api/set_client_active*', async route => { await heldRestore; await route.continue(); });
     statusRequests = 0;
     await choose(committedId);
+    // The closed menu's trigger shows the pending restore.
+    await expect(actionsFor(committedId)).toHaveAttribute('aria-busy', 'true');
+    await expect(actionsFor(committedId)).toContainText('Restoring…');
     await expect(activityFor(committedId)).toHaveText('Restoring…');
     await expect(activityFor(committedId)).toBeDisabled();
     await forceChoose(committedId);
@@ -515,6 +518,8 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await page.route('**/api/set_client_active*', async route => { await heldDetail; await route.continue(); }, { times: 1 });
     await chooseStatus();
     await expect(status).toHaveText('Restoring client…');
+    await expect(headerActions).toHaveAttribute('aria-busy', 'true');
+    await expect(headerActions).toContainText('Restoring client…');
     await expect(status).toBeDisabled();
     releaseDetail();
     await expect(status).toHaveText('Archive client');

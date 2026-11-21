@@ -1559,7 +1559,7 @@ fn TimesheetContent(
                         WeekGrid { entries: week_entries, daily_totals, week_start: shown_ws, today, project_names, task_names, pending: pending_rows, actions: week_actions }
                     },
                     ViewMode::Day => rsx! {
-                        {render_day_view(&by_day.read(), &daily_totals.read(), shown_ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
+                        {render_day_view(&by_day.read(), &daily_totals.read(), shown_ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context(), tr)}
                     },
                     ViewMode::Calendar => rsx! {
                         calendar::CalendarView {
@@ -1864,6 +1864,7 @@ fn render_day_view(
     tracking: &[crate::models::scoped_time::TimesheetTrackingOption],
     busy: bool,
     context: Option<TimesheetWriteContext>,
+    tr: crate::i18n::Tr,
 ) -> Element {
     let offset = selected_offset.clamp(0, 6) as usize;
     let day_entries = &by_day[offset];
@@ -1907,6 +1908,8 @@ fn render_day_view(
                             let dur = format_hhmm(entry.minutes.into());
                             let e_start = entry.clone();
                             let e_edit = entry.clone();
+                            // One name per row, so a list of buttons tells the entries apart.
+                            let edit_label = tr.timesheet_edit_entry(&proj, &task);
                             let e_stop = entry.clone();
                             let can_edit = !busy && tracking::editable(context.is_some(), tracking, entry);
                             let can_start = !busy && tracking::eligible(tracking, entry.project_id, entry.task_id);
@@ -1935,7 +1938,7 @@ fn render_day_view(
                                             }
                                         }
                                         // `IconButton`'s markup: a row helper cannot hold the hook its handler needs.
-                                        button { r#type: "button", class: "btn btn-ghost btn-icon", aria_label: "Edit", disabled: !can_edit,
+                                        button { r#type: "button", class: "btn btn-ghost btn-icon", aria_label: "{edit_label}", title: "{edit_label}", disabled: !can_edit,
                                             onclick: move |_| open_edit.call(e_edit.clone()),
                                             NavIcon { name: "pencil" }
                                         }
@@ -2594,12 +2597,13 @@ mod tests {
                     },
                     subject_id: Uuid::nil(),
                 }),
+                crate::i18n::Tr::default(),
             )
         });
         dom.rebuild_in_place();
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains("1:00"));
-        for label in [">Start</button>", "aria-label=\"Edit\""] {
+        for label in [">Start</button>", "aria-label=\"Edit "] {
             let button = html
                 .split("<button")
                 .find(|part| part.contains(label))

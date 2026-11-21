@@ -100,6 +100,10 @@ type ProjectSpendResponse = Result<Vec<server_fns::ProjectSpend>, ServerFnError>
 #[derive(Clone, Default)]
 struct Probe {
     member: bool,
+    /// A member who reads invoices but may not prepare them.
+    invoice_reader: bool,
+    /// The own-permissions read fails.
+    permissions_fail: bool,
     /// Reads clients without managing them or their invoices.
     reader: bool,
     /// Opt-in for tests that refresh Clients through a status change; every
@@ -618,6 +622,51 @@ async fn invoice_detail_shows_saved_adjustments_and_payment_metadata() {
     }
 }
 
+/// `/invoices/new` typed directly, rendered once the session has answered.
+fn new_invoice_screen(probe: Probe) -> String {
+    let probe = Probe {
+        initial_path: Some("/invoices/new".into()),
+        ..probe
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    dioxus::ssr::render(&dom)
+}
+
+#[tokio::test]
+async fn new_invoice_visited_without_prepare_rights_shows_no_access() {
+    let html = new_invoice_screen(Probe {
+        member: true,
+        invoice_reader: true,
+        ..Probe::default()
+    });
+    assert!(
+        html.contains("New invoice") && html.contains("Access unavailable"),
+        "{html}"
+    );
+    for hidden in ["Generate draft", "Review invoice", "inv-client"] {
+        assert!(!html.contains(hidden), "shown {hidden}: {html}");
+    }
+}
+
+#[tokio::test]
+async fn new_invoice_with_a_failed_permissions_read_offers_a_retry_not_no_access() {
+    let html = new_invoice_screen(Probe {
+        permissions_fail: true,
+        ..Probe::default()
+    });
+    assert!(
+        html.contains("Could not check your invoice access"),
+        "{html}"
+    );
+    assert!(html.contains(">Try again<"), "{html}");
+    assert!(
+        !html.contains("Access unavailable") && !html.contains("Generate draft"),
+        "{html}"
+    );
+}
+
 #[tokio::test]
 async fn navigating_between_invoice_ids_loads_the_current_invoice() {
     let probe = Probe::default();
@@ -913,12 +962,18 @@ mod server_fns {
     /// Administrator identity, which offers the Harvest importer, varies.
     pub async fn get_my_permissions()
     -> Result<super::own_permissions::OwnPermissions, ServerFnError> {
-        let administrator = !consume_context::<Probe>().member;
+        let probe = consume_context::<Probe>();
+        if probe.permissions_fail {
+            return Err(ServerFnError::new("permissions unavailable"));
+        }
+        let administrator = !probe.member;
         Ok(super::own_permissions::OwnPermissions {
             catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
             // An Administrator's stored state holds every grant, as the server's does.
             grants: if administrator {
                 horae_core::permissions::catalog::Permission::ALL.to_vec()
+            } else if probe.invoice_reader {
+                horae_core::permissions::invoices::READ.to_vec()
             } else {
                 Vec::new()
             },

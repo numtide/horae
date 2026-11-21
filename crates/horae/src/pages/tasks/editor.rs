@@ -157,7 +157,7 @@ fn finish(
     match result {
         Ok(_) => on_saved.call(message.into()),
         Err(ServerFnError::ServerError { code: UNAUTHORIZED | FORBIDDEN, .. }) => on_denied.call(()),
-        Err(ServerFnError::ServerError { code: 400 | 409, message, .. }) => error.set(Some(message)),
+        Err(ServerFnError::ServerError { code: BAD_REQUEST | CONFLICT, message, .. }) => error.set(Some(message)),
         Err(_) => error.set(Some("Could not confirm the save. Your inputs are kept. Refresh tasks to check whether it was saved before retrying.".into())),
     }
 }

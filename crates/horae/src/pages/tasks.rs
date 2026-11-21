@@ -33,6 +33,9 @@ const TASK_GROUPS: [(bool, &str, &str, &str); 2] = [
 
 const FORBIDDEN: u16 = 403;
 const UNAUTHORIZED: u16 = 401;
+/// A rejected input or a conflicting change: the server's message says what to fix.
+const BAD_REQUEST: u16 = 400;
+const CONFLICT: u16 = 409;
 
 #[component]
 pub fn TaskCatalog() -> Element {

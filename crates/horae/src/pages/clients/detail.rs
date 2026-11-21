@@ -25,6 +25,7 @@ pub fn ClientDetail(id: Uuid) -> Element {
 
 #[component]
 fn ClientDetailContent(id: Uuid) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut show_editor = use_signal(|| false);
     let mut archiving = use_signal(|| None::<super::status::ArchiveTarget>);
     let archive_pending = use_signal(|| None::<Uuid>);
@@ -89,7 +90,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
             match result {
                 Ok(_) => {
                     status_error.set(None);
-                    saved.set(Some(format!("{name} restored")));
+                    saved.set(Some(tr.clients_restored_toast(&name)));
                     refocus.set(Some(ACTIONS_TRIGGER));
                     details.restart();
                 }
@@ -103,7 +104,6 @@ fn ClientDetailContent(id: Uuid) -> Element {
     // A reloading resource keeps its previous value, so require a settled one.
     let can_manage = ready && matches!(&*data, Some(Ok(view)) if view.can_manage);
     let can_read_invoices = ready && matches!(&*data, Some(Ok(view)) if view.can_read_invoices);
-    let tr = crate::i18n::use_tr();
 
     rsx! {
         div { class: "client-detail min-w-0",
@@ -128,7 +128,8 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                 Link { to: Route::NewInvoiceForClient { client: id.to_string() }, class: "btn btn-primary", "New invoice" }
                                 Link { to: Route::NewProjectForClient { client: id.to_string() }, class: "btn btn-secondary", "New project" }
                             }
-                            Menu { id: "client-actions", label: tr.action_menu(), align_right: true, trigger_class: "text-sm py-3 px-5",
+                            Menu { id: "client-actions", align_right: true, trigger_class: "text-sm py-3 px-5",
+                                label: if restoring() { tr.clients_restoring() } else { tr.action_menu() }, busy: restoring(),
                                 MenuItem { id: "client-edit", onclick: open_editor, {tr.clients_edit()} }
                                 MenuDivider {}
                                 if detail.client.active {
@@ -189,7 +190,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
             super::status::ArchiveDialog { target: archiving, pending: archive_pending, focus_fallback: "page-back",
                 on_archived: move |client: super::status::ArchiveTarget| {
                     status_error.set(None);
-                    saved.set(Some(format!("{} archived", client.name)));
+                    saved.set(Some(tr.clients_archived_toast(&client.name)));
                     refocus.set(Some(ACTIONS_TRIGGER));
                     details.restart();
                 },

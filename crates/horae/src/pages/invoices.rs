@@ -9,11 +9,23 @@ use super::{Failure, loaded};
 
 /// The Invoices title, where focus lands once a failed read loads again.
 const INVOICES_HEADING: &str = "invoices-heading";
+/// An invoice's title, where focus lands once voiding removes its menu.
+const INVOICE_HEADING: &str = "invoice-heading";
+
+/// Focus `id` after the next frame, once the render that shows it has landed.
+fn focus_soon(id: &str) {
+    let id = serde_json::json!(id);
+    document::eval(&format!(
+        "requestAnimationFrame(() => document.getElementById({id})?.focus());"
+    ));
+}
 use crate::components::back_link::BackLink;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, Loading, NoAccess, Skeleton};
+use crate::components::screen_state::{
+    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, Skeleton,
+};
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
@@ -95,6 +107,7 @@ fn NewInvoiceContent(client_context: Option<String>) -> Element {
     let navigator = use_navigator();
     let session = crate::components::session::use_session();
     let prepares = prepares_invoices(session);
+    let retry_session = use_callback(move |()| session.refresh());
 
     // Client picker options: the placeholder, then every active client.
     let client_opts: Vec<(String, String)> =
@@ -112,10 +125,14 @@ fn NewInvoiceContent(client_context: Option<String>) -> Element {
 
     rsx! {
         div {
-            BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
+            BackLink { to: Route::InvoiceList {}, label: tr.invoices_back() }
             PageHeader { title: tr.invoices_new_title(), title_id: INVOICES_HEADING }
             if session.permissions.read().is_none() {
                 Loading {}
+            } else if matches!(&*session.permissions.read(), Some(Err(_))) {
+                // A failed read says nothing about access, so it offers a retry.
+                ErrorState { title: tr.invoices_permissions_failed(), body: LOAD_FAILED, onretry: retry_session,
+                    focus_on_recovery: INVOICES_HEADING }
             } else if !prepares {
                 NoAccess {}
             } else if storage.ready() {
@@ -258,18 +275,62 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     let prepares = prepares_invoices(session);
     let tr = crate::i18n::use_tr();
 
+    // A failed void stays inside its confirmation, apart from the page's error.
+    let mut void_error = use_signal(|| None::<String>);
+    // Voiding removes the Actions menu that held it, so focus goes to the title
+    // once the reloaded invoice has rendered.
+    let mut focus_title = use_signal(|| false);
+    use_effect(move || {
+        if invoice_data.state()() == UseResourceState::Ready && *focus_title.peek() {
+            focus_title.set(false);
+            focus_soon(INVOICE_HEADING);
+        }
+    });
+    // Opening the values editor moves focus into it; closing it, saved or not,
+    // returns focus to the menu that opened it.
+    let mut was_editing = use_signal(|| false);
+    use_effect(move || {
+        let now = editing();
+        if now == *was_editing.peek() {
+            return;
+        }
+        was_editing.set(now);
+        if now {
+            // The editor loads the draft first, so wait for an enabled field,
+            // unless the person has already moved focus somewhere else.
+            document::eval(
+                "let tries = 0;
+                 (function first() {
+                     const active = document.activeElement;
+                     if (active && active !== document.body && active.id !== 'invoice-actions-trigger') return;
+                     const editor = document.querySelector('[data-editor-kind=\"invoice\"]');
+                     const field = editor?.querySelector('input:not(:disabled), select:not(:disabled), textarea:not(:disabled)');
+                     field?.focus();
+                     if (!editor?.contains(document.activeElement) && ++tries < 300) requestAnimationFrame(first);
+                 })();",
+            );
+        } else {
+            focus_soon("invoice-actions-trigger");
+        }
+    });
+
     let mut change_status = move |to: &'static str| {
         if busy() || editing() || !storage.ready() {
             return;
         }
         error.set(None);
+        void_error.set(None);
         busy.set(true);
         spawn(async move {
             match server_fns::update_invoice_status(id.to_string(), to.to_string()).await {
                 Ok(_) => {
+                    if to == "void" {
+                        focus_title.set(true);
+                    }
                     confirm_void.set(false);
                     invoice_data.restart();
                 }
+                Err(err) if to == "void" => void_error.set(Some(err.to_string())),
                 Err(err) => error.set(Some(err.to_string())),
             }
             busy.set(false);
@@ -278,6 +339,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     let void = use_callback(move |()| change_status("void"));
     let keep = use_callback(move |()| {
         if !busy() {
+            void_error.set(None);
             confirm_void.set(false);
         }
     });
@@ -286,7 +348,10 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
             editing.set(true);
         }
     });
-    let ask_void = use_callback(move |_: MouseEvent| confirm_void.set(true));
+    let ask_void = use_callback(move |_: MouseEvent| {
+        void_error.set(None);
+        confirm_void.set(true);
+    });
 
     // The one Primary moves the invoice on: sent, then paid.
     let status_btn = move |to: &'static str, label: &'static str| {
@@ -305,7 +370,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div {
-            BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
+            BackLink { to: Route::InvoiceList {}, label: tr.invoices_back() }
             // The number names the title once the invoice has loaded.
             if !matches!(&*invoice_data.read(), Some(Ok(_))) {
                 PageHeader { title: "Invoice" }
@@ -322,7 +387,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                 let voids = manages && open && storage.ready();
 
                 rsx! {
-                    PageHeader { title: format!("Invoice {}", inv.number),
+                    PageHeader { title: format!("Invoice {}", inv.number), title_id: INVOICE_HEADING,
                         actions: rsx! {
                             match inv.status {
                                 InvoiceStatus::Draft => status_btn("sent", "Mark Sent"),
@@ -349,12 +414,12 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                         },
                     }
                     ConfirmDialog { id: "invoice-void-dialog", labelledby: "invoice-void-title",
-                        open: confirm_void(), busy: busy(), focus_fallback: Some("invoice-actions-trigger"),
+                        open: confirm_void(), busy: busy(), focus_fallback: Some(INVOICE_HEADING),
                         title: tr.invoices_void_title(inv.number.clone()),
                         confirm_label: tr.invoices_void_confirm(),
                         on_confirm: void, on_dismiss: keep,
                         p { {tr.invoices_void_body()} }
-                        if let Some(err) = &*error.read() {
+                        if let Some(err) = &*void_error.read() {
                             p { class: "alert alert-danger", role: "alert", "{err}" }
                         }
                     }

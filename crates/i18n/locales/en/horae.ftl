@@ -179,11 +179,15 @@ clients-edit = Edit client
 clients-archive = Archive client
 clients-restore = Restore client
 clients-restoring = Restoring client…
+clients-archived-toast = { $name } archived
+clients-restored-toast = { $name } restored
 
 ## Invoices
 
 invoices-new = New invoice
 invoices-new-title = New invoice
+invoices-back = Back to Invoices
+invoices-permissions-failed = Could not check your invoice access
 invoices-edit-values = Edit invoice values
 invoices-void-ellipsis = Void…
 invoices-void-title = Void invoice { $number }?
@@ -297,6 +301,12 @@ approvals-awaiting = { $count ->
     [one] { $count } timesheet awaiting your approval
    *[other] { $count } timesheets awaiting your approval
 }
+approvals-approved-notice = { $requested ->
+    [one] Approved { $approved } of { $requested } timesheet
+   *[other] Approved { $approved } of { $requested } timesheets
+}
+approvals-approve-for = Approve { $name }'s week
+approvals-reopen-for = Reopen { $name }'s week
 
 ## Projects
 
@@ -309,6 +319,7 @@ projects-archive-failed = Could not archive the project. Try again, or refresh t
 timesheet-submit-week = Submit week
 timesheet-submitted = Submitted
 timesheet-add-entry = Add entry
+timesheet-edit-entry = Edit { $project }, { $task }
 
 timesheet-delete-entry-title = Delete this time entry?
 timesheet-delete-entry-confirm = Delete entry

@@ -260,8 +260,9 @@ async fn approval_names_render_from_rows_without_directory_and_escape_markup() {
     let (dom, _) = render(&probe);
     let html = html(&dom);
     assert_eq!(probe.directory_reads.get(), 0);
+    // Once per row as text; the row's Approve and Reopen names carry it too.
     assert_eq!(
-        html.matches("Álvaro &#60;script&#62; &#38; 王").count(),
+        html.matches(">Álvaro &#60;script&#62; &#38; 王<").count(),
         2,
         "{html}"
     );

@@ -37,7 +37,13 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page.locator('.btn-solid, .ts-submit, .ts-add')).toHaveCount(0);
     await page.goto(`${base}/timesheet/day/${week}`);
     const entry = page.locator('.ts-day-entry').first();
-    await expect(entry.getByRole('button', { name: 'Edit', exact: true })).toHaveClass(/btn-icon/);
+    // The pencil is named after its entry, and says so on hover too.
+    const edit = entry.getByRole('button', { name: /^Edit / });
+    await expect(edit).toHaveClass(/btn-icon/);
+    const project = (await entry.locator('.ts-day-entry-project').textContent()).trim();
+    const task = (await entry.locator('.ts-day-entry-task').textContent()).trim();
+    await expect(edit).toHaveAccessibleName(`Edit ${project}, ${task}`);
+    await expect(edit).toHaveAttribute('title', `Edit ${project}, ${task}`);
     await expect(entry.getByRole('button', { name: 'Start', exact: true })).toHaveClass(/btn-secondary/);
     await expect(submit).toBeVisible();
     await submit.click();
@@ -51,12 +57,13 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(approveAll).toHaveClass(/btn-primary/);
     await onePrimary();
     const row = page.getByRole('row').filter({ hasText: 'Admin User' });
-    for (const name of ['Approve', 'Reopen']) {
+    // Each decision names the person whose week it decides.
+    for (const name of ["Approve Admin User's week", "Reopen Admin User's week"]) {
       await expect(row.getByRole('button', { name, exact: true })).toHaveClass(/btn-secondary btn-sm/);
     }
     await expect(page.getByText(/^\d+ timesheets? awaiting your approval$/)).toBeVisible();
     await approveAll.click();
-    await expect(page.getByText(/^Approved (\d+) of \1 timesheets$/)).toBeVisible();
+    await expect(page.getByText(/^Approved (\d+) of \1 timesheets?$/)).toBeVisible();
     await expect(approveAll).toHaveCount(0);
     console.log('PASS: Approvals approves all from its header and keeps the row decisions inline');
 
@@ -108,6 +115,13 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(voidItem).toHaveClass(/danger/);
     await page.keyboard.press('Escape');
     await expect(actions).toBeFocused();
+    // "Edit invoice values" moves focus into the editor; cancelling returns it to the menu.
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: 'Edit invoice values', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-editor-kind="invoice"]'))).toBe(true);
+    await page.getByRole('button', { name: 'Cancel changes', exact: true }).first().click();
+    await expect(actions).toBeFocused();
     await actions.click();
     await voidItem.click();
     const confirm = page.getByRole('dialog', { name: `Void invoice ${number}?`, exact: true });
@@ -122,6 +136,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(confirm).toBeHidden();
     await expect(page.locator('main .badge').filter({ hasText: 'Void' })).toBeVisible();
     await expect(actions).toHaveCount(0);
+    // The menu that opened the dialog is gone, so focus lands on the title.
+    await expect(page.locator('#invoice-heading')).toBeFocused();
     await expect(header.getByRole('button', { name: 'Mark Sent', exact: true })).toHaveCount(0);
     assert.equal(sql(`SELECT status FROM invoices WHERE id = '${id}'`), 'void');
     console.log('PASS: invoice detail offers Mark Sent as its Primary, Edit and Void… in its Actions menu, and voids only after confirming');

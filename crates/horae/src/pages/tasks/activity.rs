@@ -78,7 +78,7 @@ pub(super) fn ActivityDialog(
                     on_denied.call(());
                 }
                 Err(ServerFnError::ServerError {
-                    code: 400 | 409,
+                    code: BAD_REQUEST | CONFLICT,
                     message,
                     ..
                 }) => error.set(Some(message)),
