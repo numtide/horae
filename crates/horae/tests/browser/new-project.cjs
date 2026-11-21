@@ -306,7 +306,11 @@ const sql = query => require('node:child_process').execFileSync('psql',
     const clientEditor = await context.newPage();
     await clientEditor.goto(`${base}/clients`);
     const clientRow = clientEditor.getByRole('row').filter({ hasText: 'New project browser client' });
-    await clientRow.getByRole('button', { name: 'Edit', exact: true }).click();
+    const editClient = async () => {
+      await clientRow.getByRole('button', { name: 'Actions for New project browser client', exact: true }).click();
+      await clientRow.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    };
+    await editClient();
     await clientEditor.getByLabel('Client name', { exact: true }).fill('Rejected currency rename');
     await clientEditor.getByLabel('Currency', { exact: true }).selectOption('USD');
     await clientEditor.getByLabel('Billing address', { exact: true }).fill('Retained address');
@@ -324,7 +328,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(clientEditor.getByRole('dialog')).toBeHidden();
     await clientEditor.reload();
     await expect(clientRow).toContainText('EUR');
-    await clientRow.getByRole('button', { name: 'Edit', exact: true }).click();
+    await editClient();
     await expect(clientEditor.getByLabel('Billing address', { exact: true })).toHaveValue('Retained address');
     await expect(clientEditor.getByLabel('Default rate', { exact: true })).toHaveValue('0.00');
     await clientEditor.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -1323,7 +1327,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await readsFinished(page);
     console.log('PASS: a new tagged project reaches reports and both exports; pending/error filters never show stale rows');
     await page.goto(`${base}/invoices`);
-    await page.getByRole('button', { name: 'New Invoice', exact: true }).click();
+    await page.getByRole('link', { name: 'New invoice', exact: true }).click();
     await page.getByLabel('Client', { exact: true }).selectOption({ label: 'New project browser client' });
     await page.getByLabel('Period from', { exact: true }).fill(entryDate);
     await page.getByLabel('Period to', { exact: true }).fill(entryDate);

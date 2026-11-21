@@ -7,6 +7,8 @@ use std::{any::Any, cell::RefCell, collections::VecDeque, rc::Rc};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[allow(dead_code)]
 #[path = "../src/components/button.rs"]
 pub mod button;
@@ -21,6 +23,8 @@ pub mod form;
 mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
+#[path = "../src/components/menu.rs"]
+pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 #[path = "../src/components/page_header.rs"]
@@ -29,7 +33,9 @@ pub mod page_header;
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 mod components {
-    pub use super::{confirm_dialog, controls, form, icons, modal, page_header, screen_state};
+    pub use super::{
+        badge, confirm_dialog, controls, form, icons, menu, modal, page_header, screen_state,
+    };
 }
 pub use horae_types::{permission_editor, task};
 mod models {
@@ -183,6 +189,93 @@ fn catalog(edit: bool, rates: bool) -> TaskCatalogPage {
     }
 }
 
+/// The opening tag and text of the element with this `id`.
+fn element<'a>(html: &'a str, id: &str) -> &'a str {
+    let start = html
+        .find(&format!("id=\"{id}\""))
+        .unwrap_or_else(|| panic!("missing {id}: {html}"));
+    let start = html[..start].rfind('<').unwrap();
+    let end = start + html[start..].find("</").unwrap();
+    &html[start..end]
+}
+
+#[tokio::test]
+async fn an_editor_gets_one_actions_menu_per_row_with_edit_then_archive() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let page = catalog(true, false);
+    let id = page.tasks[0].id;
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    let trigger = element(&html, &format!("task-actions-{id}-trigger"));
+    assert!(
+        trigger.contains("aria-label=\"Actions for A private task\"")
+            && trigger.contains("aria-haspopup=\"menu\""),
+        "{trigger}"
+    );
+    let edit = element(&html, &format!("tasks-edit-{id}"));
+    let archive = element(&html, &format!("task-activity-{id}"));
+    assert!(
+        edit.contains("role=\"menuitem\"") && edit.ends_with(">Edit"),
+        "{edit}"
+    );
+    assert!(
+        archive.contains("role=\"menuitem\"") && archive.ends_with(">Archive"),
+        "{archive}"
+    );
+    assert!(html.find(edit).unwrap() < html.find(archive).unwrap());
+    // Status is a badge, not plain text.
+    assert!(
+        html.contains("class=\"badge badge-success\">Active</span>"),
+        "{html}"
+    );
+}
+
+#[tokio::test]
+async fn an_archived_task_offers_restore_and_shows_an_archived_badge() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let mut page = catalog(true, false);
+    page.tasks[0].active = false;
+    let id = page.tasks[0].id;
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(
+        element(&html, &format!("task-activity-{id}")).ends_with(">Restore"),
+        "{html}"
+    );
+    assert!(
+        html.contains("class=\"badge badge-neutral\">Archived</span>"),
+        "{html}"
+    );
+    ui.click(&format!("task-activity-{id}"));
+    assert!(ui.html().contains("Restore this task?"));
+    assert!(
+        probe.activity.borrow().is_empty(),
+        "restoring still asks first"
+    );
+}
+
+#[tokio::test]
+async fn a_reader_gets_no_row_menu() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let page = catalog(false, false);
+    let id = page.tasks[0].id;
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    assert!(
+        !ui.html().contains(&format!("task-actions-{id}")),
+        "{}",
+        ui.html()
+    );
+}
+
 #[tokio::test]
 async fn pending_denied_and_read_only_catalogs_do_not_offer_mutations_or_hidden_rates() {
     let probe = Probe::default();
@@ -229,7 +322,7 @@ async fn creation_without_rates_keeps_validation_input_and_refreshes_after_succe
     ui.settle();
     ui.click("tasks-new");
     assert!(ui.html().contains("New task"));
-    assert!(!ui.html().contains("task-rate") && !ui.html().contains("task-activity"));
+    assert!(!ui.html().contains("task-rate") && !ui.html().contains(">Archive<"));
     ui.form_event("task-edit-form", "submit", "");
     assert!(probe.creations.borrow().is_empty());
     assert!(ui.html().contains("Enter a task name"));
@@ -386,9 +479,10 @@ async fn archive_requires_confirmation_uses_loaded_identity_and_invalidates_deni
     let id = page.tasks[0].id;
     reply.send(Ok(page)).unwrap();
     ui.settle();
+    // The row's menu archives; the editor no longer does.
     ui.click(&format!("tasks-edit-{id}"));
-    assert!(!ui.html().contains("task-rate-action"));
-    ui.click("task-activity");
+    assert!(!ui.html().contains("task-rate-action") && !ui.html().contains("Archive task"));
+    ui.click(&format!("task-activity-{id}"));
     assert!(probe.activity.borrow().is_empty());
     assert!(ui.html().contains("every project"));
     *probe.mutation_error.borrow_mut() = Some(ServerFnError::ServerError {

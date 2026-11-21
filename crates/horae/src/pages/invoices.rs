@@ -10,8 +10,10 @@ use super::{Failure, loaded};
 /// The Invoices title, where focus lands once a failed read loads again.
 const INVOICES_HEADING: &str = "invoices-heading";
 use crate::components::back_link::BackLink;
+use crate::components::confirm_dialog::ConfirmDialog;
+use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, Loading, Skeleton};
+use crate::components::screen_state::{EmptyState, ErrorState, Loading, Skeleton};
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
@@ -61,23 +63,38 @@ pub(super) fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
     }
 }
 
+/// The status as a word that starts with a capital ("Draft"), for badges.
+pub(super) fn invoice_status_label(tr: crate::i18n::Tr, status: InvoiceStatus) -> String {
+    match status {
+        InvoiceStatus::Draft => tr.invoices_status_draft(),
+        InvoiceStatus::Sent => tr.invoices_status_sent(),
+        InvoiceStatus::Paid => tr.invoices_status_paid(),
+        InvoiceStatus::Void => tr.invoices_status_void(),
+    }
+}
+
+#[component]
+pub fn NewInvoice() -> Element {
+    rsx! { recovery::RecoveryGate { NewInvoiceContent { client_context: None } } }
+}
+
 #[component]
 pub fn NewInvoiceForClient(client: String) -> Element {
-    rsx! { for client in [client] { InvoiceList { key: "{client}", client_context: Some(client.clone()) } } }
+    rsx! { for client in [client] { recovery::RecoveryGate { key: "{client}", NewInvoiceContent { client_context: Some(client.clone()) } } } }
 }
 
+/// Preparing a new invoice, its own screen under Invoices: "Generate draft"
+/// is its one Primary, and the back link leaves it.
 #[component]
-pub fn InvoiceList(#[props(default)] client_context: Option<String>) -> Element {
-    rsx! { recovery::RecoveryGate { InvoiceListContent { client_context } } }
-}
-
-#[component]
-fn InvoiceListContent(client_context: Option<String>) -> Element {
+fn NewInvoiceContent(client_context: Option<String>) -> Element {
+    let tr = crate::i18n::use_tr();
     let storage = use_context::<recovery::RecoveryStorage>();
-    let mut invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
     let mut clients = use_resource(|| async move { server_fns::list_clients(false).await });
-    let retry_invoices = use_callback(move |_| invoices.restart());
     let retry_clients = use_callback(move |_| clients.restart());
+    let busy = use_signal(|| false);
+    let navigator = use_navigator();
+    let session = crate::components::session::use_session();
+    let prepares = prepares_invoices(session);
 
     // Client picker options: the placeholder, then every active client.
     let client_opts: Vec<(String, String)> =
@@ -93,9 +110,49 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
             )
             .collect();
 
-    let mut show_form = use_signal(|| client_context.is_some());
-    let busy = use_signal(|| false);
-    let navigator = use_navigator();
+    rsx! {
+        div {
+            BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
+            PageHeader { title: tr.invoices_new_title(), title_id: INVOICES_HEADING }
+            if session.permissions.read().is_none() {
+                Loading {}
+            } else if !prepares {
+                ErrorState { title: tr.invoices_new_unavailable_title(), body: tr.invoices_new_unavailable_body() }
+            } else if storage.ready() {
+                if clients.state()() != UseResourceState::Ready && !matches!(&*clients.read(), Some(Err(_))) {
+                    Loading { label: "Loading clients…" }
+                } else {
+                {loaded(&*clients.read(), Failure {
+                    what: "clients for invoicing", retry: retry_clients, inset: false,
+                    pending: clients.state()() != UseResourceState::Ready, focus: Some(INVOICES_HEADING),
+                }, |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
+                    Ok(initial_client) => rsx! {
+                        preparation::PrepareInvoice { client_opts: client_opts.clone(), initial_client, busy,
+                            oncreated: move |id| { navigator.push(Route::InvoiceDetail { id }); }
+                        }
+                    },
+                    Err(message) => rsx! {
+                        div { class: "alert alert-danger", role: "alert", "{message}" }
+                        button { class: "btn btn-secondary", onclick: move |_| clients.restart(), "Try again" }
+                    }
+                })}
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn InvoiceList() -> Element {
+    rsx! { recovery::RecoveryGate { InvoiceListContent {} } }
+}
+
+#[component]
+fn InvoiceListContent() -> Element {
+    let tr = crate::i18n::use_tr();
+    let storage = use_context::<recovery::RecoveryStorage>();
+    let mut invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
+    let retry_invoices = use_callback(move |_| invoices.restart());
     let session = crate::components::session::use_session();
     let configures = matches!(
         &*session.permissions.read(),
@@ -111,40 +168,9 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                         Link { to: Route::InvoiceSettings {}, class: "btn btn-secondary", "Settings" }
                     }
                     if prepares && storage.ready() {
-                    button {
-                        class: "btn btn-primary",
-                        disabled: busy(),
-                        onclick: move |_| {
-                            if !busy() && storage.ready() { show_form.toggle(); }
-                        },
-                        if show_form() { "Cancel" } else { "New Invoice" }
-                    }
+                        Link { id: "invoices-new", to: Route::NewInvoice {}, class: "btn btn-primary", {tr.invoices_new()} }
                     }
                 },
-            }
-
-            if prepares && storage.ready() && show_form() {
-                if clients.state()() != UseResourceState::Ready && !matches!(&*clients.read(), Some(Err(_))) {
-                    Loading { label: "Loading clients…" }
-                } else {
-                {loaded(&*clients.read(), Failure {
-                    what: "clients for invoicing", retry: retry_clients, inset: false,
-                    pending: clients.state()() != UseResourceState::Ready, focus: Some(INVOICES_HEADING),
-                }, |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
-                    Ok(initial_client) => rsx! {
-                        preparation::PrepareInvoice { client_opts: client_opts.clone(), initial_client, busy,
-                            oncreated: move |id| {
-                                show_form.set(false);
-                                navigator.push(Route::InvoiceDetail { id });
-                            }
-                        }
-                    },
-                    Err(message) => rsx! {
-                        div { class: "alert alert-danger", role: "alert", "{message}" }
-                        button { class: "btn btn-secondary", onclick: move |_| clients.restart(), "Try again" }
-                    }
-                })}
-                }
             }
 
             if invoices.read().is_none() {
@@ -172,7 +198,6 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                                         th { "Issued" }
                                         th { "Due" }
                                         th { class: "text-right", "Total" }
-                                        th { "Actions" }
                                     }
                                 }
                                 tbody {
@@ -180,25 +205,21 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                                         {
                                             let inv = item.invoice.clone();
                                             rsx! {
-                                                tr { key: "{inv.id}",
-                                                    td { class: "text-mono", "{inv.number}" }
+                                                // The number's link covers the whole row.
+                                                tr { key: "{inv.id}", class: "row-link",
+                                                    td { class: "text-mono",
+                                                        Link { to: Route::InvoiceDetail { id: inv.id }, class: "font-semibold text-strong", "{inv.number}" }
+                                                    }
                                                     td {
                                                         "{item.client_name}"
                                                     }
                                                     td {
-                                                        span { class: invoice_badge_class(inv.status), "{inv.status}" }
+                                                        span { class: invoice_badge_class(inv.status), {invoice_status_label(tr, inv.status)} }
                                                     }
                                                     td { class: "text-mono", "{inv.issued_on}" }
                                                     td { class: "text-mono", "{inv.due_on}" }
                                                     td { class: "text-mono text-right",
                                                         { format!("{} {}", inv.currency.trim(), format_cents_plain(inv.total_cents)) }
-                                                    }
-                                                    td {
-                                                        Link {
-                                                            to: Route::InvoiceDetail { id: inv.id },
-                                                            class: "btn btn-secondary btn-sm",
-                                                            "View"
-                                                        }
                                                     }
                                                 }
                                             }
@@ -229,34 +250,54 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
         use_resource(move || async move { server_fns::get_invoice(id.to_string()).await });
     let retry_invoice = use_callback(move |_| invoice_data.restart());
     let mut error = use_signal(|| None::<String>);
-    let editing = use_signal(|| false);
+    let mut editing = use_signal(|| false);
     let mut busy = use_signal(|| false);
+    let mut confirm_void = use_signal(|| false);
     let session = crate::components::session::use_session();
     let manages = manages_invoices(session);
     let prepares = prepares_invoices(session);
+    let tr = crate::i18n::use_tr();
 
-    // One button per status transition; the four share everything but the
-    // target status, label, and emphasis.
-    let status_btn = move |to: &'static str, label: &'static str, primary: bool| {
+    let mut change_status = move |to: &'static str| {
+        if busy() || editing() || !storage.ready() {
+            return;
+        }
+        error.set(None);
+        busy.set(true);
+        spawn(async move {
+            match server_fns::update_invoice_status(id.to_string(), to.to_string()).await {
+                Ok(_) => {
+                    confirm_void.set(false);
+                    invoice_data.restart();
+                }
+                Err(err) => error.set(Some(err.to_string())),
+            }
+            busy.set(false);
+        });
+    };
+    let void = use_callback(move |()| change_status("void"));
+    let keep = use_callback(move |()| {
+        if !busy() {
+            confirm_void.set(false);
+        }
+    });
+    let edit_values = use_callback(move |_: MouseEvent| {
+        if storage.ready() && !busy() {
+            editing.set(true);
+        }
+    });
+    let ask_void = use_callback(move |_: MouseEvent| confirm_void.set(true));
+
+    // The one Primary moves the invoice on: sent, then paid.
+    let status_btn = move |to: &'static str, label: &'static str| {
         if !manages || !storage.ready() {
             return rsx! {};
         }
         rsx! {
             button {
-                class: if primary { "btn btn-primary" } else { "btn btn-secondary" },
+                class: "btn btn-primary",
                 disabled: busy() || editing(),
-                onclick: move |_| {
-                    if busy() || editing() || !storage.ready() { return; }
-                    error.set(None);
-                    busy.set(true);
-                    spawn(async move {
-                        match server_fns::update_invoice_status(id.to_string(), to.to_string()).await {
-                            Ok(_) => invoice_data.restart(),
-                            Err(err) => error.set(Some(err.to_string())),
-                        }
-                        busy.set(false);
-                    });
-                },
+                onclick: move |_| change_status(to),
                 {label}
             }
         }
@@ -276,19 +317,16 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                 let inv = data.invoice.clone();
                 let lines = data.lines.clone();
                 let cname = &data.client_name;
+                let open = matches!(inv.status, InvoiceStatus::Draft | InvoiceStatus::Sent);
+                let edits = prepares && inv.status == InvoiceStatus::Draft && storage.ready();
+                let voids = manages && open && storage.ready();
 
                 rsx! {
                     PageHeader { title: format!("Invoice {}", inv.number),
                         actions: rsx! {
                             match inv.status {
-                                InvoiceStatus::Draft => rsx! {
-                                    {status_btn("sent", "Mark Sent", true)}
-                                    {status_btn("void", "Void", false)}
-                                },
-                                InvoiceStatus::Sent => rsx! {
-                                    {status_btn("paid", "Mark Paid", true)}
-                                    {status_btn("void", "Void", false)}
-                                },
+                                InvoiceStatus::Draft => status_btn("sent", "Mark Sent"),
+                                InvoiceStatus::Sent => status_btn("paid", "Mark Paid"),
                                 _ => rsx! {},
                             }
                             a {
@@ -297,7 +335,28 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                 target: "_blank",
                                 "Download PDF"
                             }
+                            if edits || voids {
+                                Menu { id: "invoice-actions", label: tr.action_menu(), align_right: true, trigger_class: "text-sm py-3 px-5",
+                                    if edits {
+                                        MenuItem { id: "invoice-edit-values", disabled: busy() || editing(), onclick: edit_values, {tr.invoices_edit_values()} }
+                                    }
+                                    if edits && voids { MenuDivider {} }
+                                    if voids {
+                                        MenuItem { id: "invoice-void", danger: true, disabled: busy() || editing(), onclick: ask_void, {tr.invoices_void_ellipsis()} }
+                                    }
+                                }
+                            }
                         },
+                    }
+                    ConfirmDialog { id: "invoice-void-dialog", labelledby: "invoice-void-title",
+                        open: confirm_void(), busy: busy(), focus_fallback: Some("invoice-actions-trigger"),
+                        title: tr.invoices_void_title(inv.number.clone()),
+                        confirm_label: tr.invoices_void_confirm(),
+                        on_confirm: void, on_dismiss: keep,
+                        p { {tr.invoices_void_body()} }
+                        if let Some(err) = &*error.read() {
+                            p { class: "alert alert-danger", role: "alert", "{err}" }
+                        }
                     }
 
                     if let Some(err) = &*error.read() {
@@ -313,7 +372,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                 }
                                 div {
                                     div { class: "text-sm text-muted", "Status" }
-                                    span { class: invoice_badge_class(inv.status), "{inv.status}" }
+                                    span { class: invoice_badge_class(inv.status), {invoice_status_label(tr, inv.status)} }
                                 }
                                 div {
                                     div { class: "text-sm text-muted", "Issued" }

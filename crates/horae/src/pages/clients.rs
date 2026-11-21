@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use uuid::Uuid;
 
 use crate::components::badge::Badge;
-use crate::components::menu::{Menu, MenuItem};
+use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::session::use_session;
@@ -162,6 +162,35 @@ pub fn ClientList() -> Element {
         editing_id.set(None);
         show_form.set(false);
     };
+    let on_edit = use_callback(move |id: Uuid| {
+        editing_id.set(Some(id));
+        show_form.set(true);
+    });
+    // One archive request at a time, even after its confirmation was closed by
+    // a failed reload.
+    let on_archive = use_callback(move |target: status::ArchiveTarget| {
+        if archive_pending.peek().is_none() {
+            archiving.set(Some(target));
+        }
+    });
+    let on_restore = use_callback(move |(id, name): (Uuid, String)| {
+        if !restoring.write().insert(id) {
+            return;
+        }
+        spawn(async move {
+            let result = server_fns::set_client_active(id.to_string(), true).await;
+            restoring.write().remove(&id);
+            match result {
+                Ok(_) => {
+                    action_error.set(None);
+                    saved.set(Some(format!("{name} restored")));
+                    refocus.set(Some(actions_trigger(id)));
+                    clients.restart();
+                }
+                Err(error) => action_error.set(Some(error.to_string())),
+            }
+        });
+    });
 
     rsx! {
         div {
@@ -232,7 +261,7 @@ pub fn ClientList() -> Element {
                 on_dismiss: move |_| reset_form(),
                 on_saved: move |_| {
                     refocus.set(Some(match *editing_id.peek() {
-                        Some(id) => format!("client-edit-{id}"),
+                        Some(id) => actions_trigger(id),
                         None => "clients-new".to_owned(),
                     }));
                     reset_form();
@@ -244,7 +273,7 @@ pub fn ClientList() -> Element {
                 on_archived: move |client: status::ArchiveTarget| {
                     action_error.set(None);
                     saved.set(Some(format!("{} archived", client.name)));
-                    refocus.set(Some(format!("client-activity-{}", client.id)));
+                    refocus.set(Some(actions_trigger(client.id)));
                     clients.restart();
                 },
             }
@@ -340,68 +369,11 @@ pub fn ClientList() -> Element {
                                                     }
                                                 }
                                                 if can_manage {
-                                                    td {
-                                                        div { class: "flex items-center gap-2",
-                                                        button {
-                                                            id: "client-edit-{c.id}",
-                                                            class: "btn btn-secondary btn-sm",
-                                                            onclick: {
-                                                                let c = c.clone();
-                                                                move |_| {
-                                                                    editing_id.set(Some(c.id));
-                                                                    show_form.set(true);
-                                                                }
-                                                            },
-                                                            "Edit"
-                                                        }
-                                                        if c.active {
-                                                            button {
-                                                                id: "client-activity-{c.id}",
-                                                                r#type: "button",
-                                                                class: "btn btn-secondary btn-sm",
-                                                                // One archive request at a time, even after its
-                                                                // confirmation was closed by a failed reload.
-                                                                disabled: archive_pending().is_some(),
-                                                                onclick: {
-                                                                    let target = status::ArchiveTarget { id: c.id, name: c.name.clone() };
-                                                                    move |_| {
-                                                                        if archive_pending().is_none() {
-                                                                            archiving.set(Some(target.clone()));
-                                                                        }
-                                                                    }
-                                                                },
-                                                                "Archive"
-                                                            }
-                                                        } else {
-                                                            button {
-                                                                id: "client-activity-{c.id}",
-                                                                r#type: "button",
-                                                                class: "btn btn-secondary btn-sm",
-                                                                disabled: restoring.read().contains(&c.id),
-                                                                aria_busy: restoring.read().contains(&c.id),
-                                                                onclick: {
-                                                                    let (id, name) = (c.id, c.name.clone());
-                                                                    move |_| {
-                                                                        if !restoring.write().insert(id) { return; }
-                                                                        let name = name.clone();
-                                                                        spawn(async move {
-                                                                            let result = server_fns::set_client_active(id.to_string(), true).await;
-                                                                            restoring.write().remove(&id);
-                                                                            match result {
-                                                                                Ok(_) => {
-                                                                                    action_error.set(None);
-                                                                                    saved.set(Some(format!("{name} restored")));
-                                                                                    refocus.set(Some(format!("client-activity-{id}")));
-                                                                                    clients.restart();
-                                                                                }
-                                                                                Err(error) => action_error.set(Some(error.to_string())),
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                },
-                                                                if restoring.read().contains(&c.id) { "Restoring…" } else { "Restore" }
-                                                            }
-                                                        }
+                                                    td { class: "text-right",
+                                                        ClientActions { id: c.id, name: c.name.clone(), active: c.active,
+                                                            restoring: restoring.read().contains(&c.id),
+                                                            archive_pending: archive_pending().is_some(),
+                                                            on_edit, on_archive, on_restore,
                                                         }
                                                     }
                                                 }
@@ -413,6 +385,49 @@ pub fn ClientList() -> Element {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// The id of a row's "Actions" trigger, where focus returns after a change.
+fn actions_trigger(id: Uuid) -> String {
+    format!("client-actions-{id}-trigger")
+}
+
+/// One client's "Actions" menu: Edit, then Archive or Restore.
+#[component]
+fn ClientActions(
+    id: Uuid,
+    name: String,
+    active: bool,
+    restoring: bool,
+    archive_pending: bool,
+    on_edit: Callback<Uuid>,
+    on_archive: Callback<status::ArchiveTarget>,
+    on_restore: Callback<(Uuid, String)>,
+) -> Element {
+    let tr = crate::i18n::use_tr();
+    let edit = use_callback(move |_: MouseEvent| on_edit.call(id));
+    let label = name.clone();
+    let change = use_callback(move |_: MouseEvent| {
+        if active {
+            on_archive.call(status::ArchiveTarget {
+                id,
+                name: name.clone(),
+            });
+        } else {
+            on_restore.call((id, name.clone()));
+        }
+    });
+    rsx! {
+        Menu { id: "client-actions-{id}", label: tr.action_menu(), aria_label: tr.action_menu_for(&label), align_right: true,
+            MenuItem { id: "client-edit-{id}", onclick: edit, {tr.action_edit()} }
+            MenuDivider {}
+            MenuItem { id: "client-activity-{id}", disabled: if active { archive_pending } else { restoring }, onclick: change,
+                if !active && restoring { {tr.action_restoring()} }
+                else if active { {tr.action_archive()} }
+                else { {tr.action_restore()} }
             }
         }
     }

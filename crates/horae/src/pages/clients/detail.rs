@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::components::{
     back_link::BackLink,
     badge::Badge,
+    menu::{Menu, MenuDivider, MenuItem},
     page_header::PageHeader,
     screen_state::{EmptyState, LoadError, Loading},
     toast::{Toast, ToastContainer},
@@ -12,6 +13,9 @@ use crate::components::{
 use crate::models::client::ClientDetailView;
 use crate::route::Route;
 use crate::server_fns;
+
+/// The header's "Actions" trigger, where focus returns after a change.
+const ACTIONS_TRIGGER: &str = "client-actions-trigger";
 
 #[component]
 pub fn ClientDetail(id: Uuid) -> Element {
@@ -60,12 +64,46 @@ fn ClientDetailContent(id: Uuid) -> Element {
     });
     let mut restoring = use_signal(|| false);
     let mut status_error = use_signal(|| None::<String>);
+    // The loaded client's name, for the archive dialog and the restore toast.
+    let name = move || match &*details.peek() {
+        Some(Ok(view)) => view.details.client.name.clone(),
+        _ => String::new(),
+    };
+    let open_editor = use_callback(move |_: MouseEvent| show_editor.set(true));
+    // One archive request at a time, even after its confirmation was closed by
+    // a failed reload.
+    let ask_archive = use_callback(move |_: MouseEvent| {
+        if archive_pending.peek().is_none() {
+            archiving.set(Some(super::status::ArchiveTarget { id, name: name() }));
+        }
+    });
+    let restore = use_callback(move |_: MouseEvent| {
+        if restoring() {
+            return;
+        }
+        restoring.set(true);
+        let name = name();
+        spawn(async move {
+            let result = server_fns::set_client_active(id.to_string(), true).await;
+            restoring.set(false);
+            match result {
+                Ok(_) => {
+                    status_error.set(None);
+                    saved.set(Some(format!("{name} restored")));
+                    refocus.set(Some(ACTIONS_TRIGGER));
+                    details.restart();
+                }
+                Err(error) => status_error.set(Some(error.to_string())),
+            }
+        });
+    });
     let ready = details.state()() == UseResourceState::Ready;
     let data = details.read();
     // Billing visibility is a separate grant and never implies management.
     // A reloading resource keeps its previous value, so require a settled one.
     let can_manage = ready && matches!(&*data, Some(Ok(view)) if view.can_manage);
     let can_read_invoices = ready && matches!(&*data, Some(Ok(view)) if view.can_read_invoices);
+    let tr = crate::i18n::use_tr();
 
     rsx! {
         div { class: "client-detail min-w-0",
@@ -87,50 +125,20 @@ fn ClientDetailContent(id: Uuid) -> Element {
                         },
                         actions: can_manage.then(|| rsx! {
                             if detail.client.active {
-                                Link { to: Route::NewProjectForClient { client: id.to_string() }, class: "btn btn-secondary", "New project" }
                                 Link { to: Route::NewInvoiceForClient { client: id.to_string() }, class: "btn btn-primary", "New invoice" }
+                                Link { to: Route::NewProjectForClient { client: id.to_string() }, class: "btn btn-secondary", "New project" }
                             }
-                            button { id: "client-edit", r#type: "button", class: "btn btn-secondary", onclick: move |_| show_editor.set(true), "Edit client" }
-                            if detail.client.active {
-                                button { id: "client-status", r#type: "button", class: "btn btn-secondary",
-                                    // One archive request at a time, even after its
-                                    // confirmation was closed by a failed reload.
-                                    disabled: archive_pending().is_some(),
-                                    onclick: {
-                                        let target = super::status::ArchiveTarget { id, name: detail.client.name.clone() };
-                                        move |_| {
-                                            if archive_pending().is_none() {
-                                                archiving.set(Some(target.clone()));
-                                            }
-                                        }
-                                    },
-                                    "Archive client"
-                                }
-                            } else {
-                                button { id: "client-status", r#type: "button", class: "btn btn-secondary",
-                                    disabled: restoring(), aria_busy: restoring(),
-                                    onclick: {
-                                        let name = detail.client.name.clone();
-                                        move |_| {
-                                            if restoring() { return; }
-                                            restoring.set(true);
-                                            let name = name.clone();
-                                            spawn(async move {
-                                                let result = server_fns::set_client_active(id.to_string(), true).await;
-                                                restoring.set(false);
-                                                match result {
-                                                    Ok(_) => {
-                                                        status_error.set(None);
-                                                        saved.set(Some(format!("{name} restored")));
-                                                        refocus.set(Some("client-status"));
-                                                        details.restart();
-                                                    }
-                                                    Err(error) => status_error.set(Some(error.to_string())),
-                                                }
-                                            });
-                                        }
-                                    },
-                                    if restoring() { "Restoring client…" } else { "Restore client" }
+                            Menu { id: "client-actions", label: tr.action_menu(), align_right: true, trigger_class: "text-sm py-3 px-5",
+                                MenuItem { id: "client-edit", onclick: open_editor, {tr.clients_edit()} }
+                                MenuDivider {}
+                                if detail.client.active {
+                                    MenuItem { id: "client-status", disabled: archive_pending().is_some(), onclick: ask_archive,
+                                        {tr.clients_archive()}
+                                    }
+                                } else {
+                                    MenuItem { id: "client-status", disabled: restoring(), onclick: restore,
+                                        if restoring() { {tr.clients_restoring()} } else { {tr.clients_restore()} }
+                                    }
                                 }
                             }
                         }),
@@ -173,7 +181,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
             super::form::ClientEditor { open: show_editor() && can_manage, client_id: Some(id), focus_fallback: "page-back",
                 on_dismiss: move |_| show_editor.set(false),
                 on_saved: move |_| {
-                    refocus.set(Some("client-edit"));
+                    refocus.set(Some(ACTIONS_TRIGGER));
                     show_editor.set(false);
                     details.restart();
                 },
@@ -182,7 +190,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                 on_archived: move |client: super::status::ArchiveTarget| {
                     status_error.set(None);
                     saved.set(Some(format!("{} archived", client.name)));
-                    refocus.set(Some("client-status"));
+                    refocus.set(Some(ACTIONS_TRIGGER));
                     details.restart();
                 },
             }
@@ -290,6 +298,7 @@ fn ClientInvoices(client_id: Uuid) -> Element {
     let retry = use_callback(move |_| invoices.restart());
     let ready = invoices.state()() == UseResourceState::Ready;
     let data = invoices.read();
+    let tr = crate::i18n::use_tr();
     rsx! {
         section { class: "border rounded-xl bg-secondary p-5 min-w-0", aria_labelledby: "client-invoices-title",
             h2 { id: "client-invoices-title", tabindex: "-1", class: "text-lg font-semibold m-0 mb-3", "Invoices" }
@@ -306,7 +315,9 @@ fn ClientInvoices(client_id: Uuid) -> Element {
                             li { key: "{invoice.id}", class: "flex flex-wrap items-center justify-between gap-2 text-sm",
                                 Link { to: Route::InvoiceDetail { id: invoice.id }, class: "font-semibold wrap-anywhere", "{invoice.number}" }
                                 span { class: "font-mono text-secondary wrap-anywhere", "{format_cents(invoice.total_cents, invoice.currency.trim())}" }
-                                span { class: super::super::invoices::invoice_badge_class(invoice.status), "{invoice.status}" }
+                                span { class: super::super::invoices::invoice_badge_class(invoice.status),
+                                    {super::super::invoices::invoice_status_label(tr, invoice.status)}
+                                }
                             }
                         }
                     }

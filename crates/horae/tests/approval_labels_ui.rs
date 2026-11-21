@@ -162,6 +162,48 @@ fn click(dom: &mut VirtualDom, listener: dioxus::core::ElementId) {
     settle(dom);
 }
 
+/// The mounted control with this `id`, including static IDs kept only in
+/// templates.
+fn by_id(dom: &VirtualDom, name: &str) -> dioxus::core::ElementId {
+    fn find(dom: &VirtualDom, vnode: &VNode, name: &str) -> Option<dioxus::core::ElementId> {
+        use dioxus::core::{AttributeValue, DynamicNode, TemplateAttribute, TemplateNode};
+        for (index, path) in vnode.template.attr_paths.iter().enumerate() {
+            let mut node = &vnode.template.roots[usize::from(path[0])];
+            for child in &path[1..] {
+                let TemplateNode::Element { children, .. } = node else {
+                    return None;
+                };
+                node = &children[usize::from(*child)];
+            }
+            let static_id = matches!(node, TemplateNode::Element { attrs, .. }
+                if attrs.iter().any(|attr| matches!(attr, TemplateAttribute::Static { name: "id", value, .. } if *value == name)));
+            let dynamic_id = vnode.dynamic_attrs[index].iter().any(|attr| {
+                attr.name == "id"
+                    && matches!(&attr.value, AttributeValue::Text(value) if value == name)
+            });
+            if static_id || dynamic_id {
+                return vnode.mounted_dynamic_attribute(index, dom);
+            }
+        }
+        for (index, node) in vnode.dynamic_nodes.iter().enumerate() {
+            let found = match node {
+                DynamicNode::Component(component) => component
+                    .mounted_scope(index, vnode, dom)
+                    .and_then(|scope| scope.try_root_node())
+                    .and_then(|node| find(dom, node, name)),
+                DynamicNode::Fragment(nodes) => nodes.iter().find_map(|node| find(dom, node, name)),
+                _ => None,
+            };
+            if found.is_some() {
+                return found;
+            }
+        }
+        None
+    }
+    find(dom, dom.base_scope().root_node(), name)
+        .unwrap_or_else(|| panic!("missing {name}: {}", html(dom)))
+}
+
 fn click_listeners(edits: Vec<Mutation>) -> Vec<dioxus::core::ElementId> {
     edits
         .into_iter()
@@ -334,11 +376,14 @@ async fn single_approval_action_keeps_the_record_id_not_the_person_label() {
     dioxus::html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
     let probe = approver(vec![row("Same name")]);
     let (mut dom, edits) = render(&probe);
-    let clicks = click_listeners(edits);
-    // Three pager links and three status filters, then the row's
-    // Reopen/Approve and the bulk Approve.
-    assert_eq!(clicks.len(), 9);
-    click(&mut dom, clicks[7]);
+    // Three pager links and three status filters, the header's "Approve all",
+    // then the row's Reopen and Approve.
+    assert_eq!(click_listeners(edits).len(), 9);
+    let approve = by_id(
+        &dom,
+        &format!("approvals-approve-{}", probe.rows[0].approval.id),
+    );
+    click(&mut dom, approve);
     assert_eq!(
         *probe.actions.borrow(),
         vec![vec![probe.rows[0].approval.id.to_string()]]
@@ -473,8 +518,8 @@ async fn approve_visible_submits_exactly_the_shown_pending_approvals() {
         summary("B", "2026-09-21", "2026-09-27", 60, "approved"),
         summary("C", "2026-09-21", "2026-09-27", 60, "submitted"),
     ]);
-    let (mut dom, edits) = render(&probe);
-    let bulk = *click_listeners(edits).last().unwrap();
+    let (mut dom, _) = render(&probe);
+    let bulk = by_id(&dom, "approvals-approve-all");
     click(&mut dom, bulk);
     let expected = vec![
         probe.rows[0].approval.id.to_string(),
@@ -491,16 +536,17 @@ async fn a_non_administrator_is_offered_no_decision_on_their_own_week() {
         me_id: Some(probe.rows[0].approval.user_id),
         ..probe
     };
-    let (mut dom, edits) = render(&probe);
+    let (mut dom, _) = render(&probe);
     let html = html(&dom);
     assert_eq!(html.matches(">Approve<").count(), 1, "{html}");
     assert_eq!(html.matches(">Reopen<").count(), 1, "{html}");
     assert!(
-        html.contains("1 timesheet(s) awaiting your approval"),
+        html.contains("1 timesheet awaiting your approval"),
         "{html}"
     );
 
-    click(&mut dom, *click_listeners(edits).last().unwrap());
+    let bulk = by_id(&dom, "approvals-approve-all");
+    click(&mut dom, bulk);
     assert_eq!(
         *probe.actions.borrow(),
         vec![vec![probe.rows[1].approval.id.to_string()]]
@@ -544,8 +590,8 @@ async fn every_action_is_disabled_while_one_is_in_flight() {
         action_pending: true,
         ..approver(vec![row("A"), row("B")])
     };
-    let (mut dom, edits) = render(&probe);
-    let bulk = *click_listeners(edits).last().unwrap();
+    let (mut dom, _) = render(&probe);
+    let bulk = by_id(&dom, "approvals-approve-all");
     click(&mut dom, bulk);
     let html = html(&dom);
     let buttons: Vec<&str> = html
@@ -626,8 +672,8 @@ async fn bulk_approval_reports_the_servers_count_for_its_week_only() {
         approved: Some(2),
         ..approver(vec![row("A"), row("B"), row("C")])
     };
-    let (mut dom, edits) = render(&probe);
-    let bulk = *click_listeners(edits).last().unwrap();
+    let (mut dom, _) = render(&probe);
+    let bulk = by_id(&dom, "approvals-approve-all");
     click(&mut dom, bulk);
     assert!(html(&dom).contains("Approved 2 of 3 timesheets"));
     go_to(&mut dom, &probe, "2026-09-28");

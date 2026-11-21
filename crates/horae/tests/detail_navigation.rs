@@ -161,7 +161,7 @@ mod route {
     pub use super::edit_return::EditReturn;
     use super::*;
     use clients::{ClientDetail, ClientList};
-    use invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoiceForClient};
+    use invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoice, NewInvoiceForClient};
     use projects::{ProjectDetail, ProjectList, ProjectsForClient};
 
     #[derive(Clone, PartialEq, Routable)]
@@ -173,6 +173,8 @@ mod route {
         ClientDetail { id: Uuid },
         #[route("/invoices")]
         InvoiceList {},
+        #[route("/invoices/new")]
+        NewInvoice {},
         #[route("/invoices/new/client/:client")]
         NewInvoiceForClient { client: String },
         #[route("/invoices/settings")]

@@ -33,8 +33,8 @@ sql(`INSERT INTO clients (id, org_id, name, currency, active)
       action: async () => {
         await page.locator('#client-scope-menu-trigger').click();
         await page.getByRole('menuitem', { name: /^Archived clients/ }).click();
-        await page.getByRole('row').filter({ hasText: ARCHIVED_CLIENT })
-          .getByRole('button', { name: 'Restore', exact: true }).click();
+        await page.getByRole('button', { name: `Actions for ${ARCHIVED_CLIENT}`, exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Restore', exact: true }).click();
         await page.locator('#client-scope-menu-trigger').click();
         await page.getByRole('menuitem', { name: /^Active clients/ }).click();
       },
@@ -127,14 +127,16 @@ sql(`INSERT INTO clients (id, org_id, name, currency, active)
           await page.getByRole('menuitem', { name: /^All clients/ }).click();
           await page.unroute(pattern);
           const changed = page.waitForResponse(r => r.url().includes('/api/set_client_active'));
-          await row.getByRole('button', { name: 'Archive', exact: true }).click();
+          await row.getByRole('button', { name: `Actions for ${name}`, exact: true }).click();
+          await row.getByRole('menuitem', { name: 'Archive', exact: true }).click();
           await page.getByRole('dialog', { name: `Archive ${name}?` })
             .getByRole('button', { name: 'Archive client', exact: true }).click();
           assert.equal((await changed).status(), 200);
           await expect(row.getByText('Archived', { exact: true })).toBeVisible();
           await expect(page.getByRole('alert')).toHaveCount(0);
           const restored = page.waitForResponse(r => r.url().includes('/api/set_client_active'));
-          await row.getByRole('button', { name: 'Restore', exact: true }).click();
+          await row.getByRole('button', { name: `Actions for ${name}`, exact: true }).click();
+          await row.getByRole('menuitem', { name: 'Restore', exact: true }).click();
           assert.equal((await restored).status(), 200);
           await expect(row.getByText('Active', { exact: true })).toBeVisible();
           console.log('PASS: successful form save preserves action error; real status retry clears it and refreshes the row');

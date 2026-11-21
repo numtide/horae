@@ -11,10 +11,12 @@ use super::{Failure, loaded};
 
 /// The Timesheet title, where focus lands once a failed week loads again.
 const TIMESHEET_HEADING: &str = "timesheet-heading";
-use crate::components::button::ButtonVariant;
+use crate::components::badge::Badge;
+use crate::components::button::{Button, ButtonVariant};
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
+use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
@@ -1381,6 +1383,32 @@ fn TimesheetContent(
     });
     let add_row_primary =
         ModalAction::click("Add row", add_row).disabled(busy() || tracking.read().is_empty());
+    // Only the person's own open week can be submitted.
+    let submittable = !week_entries.read().is_empty()
+        && has_open
+        && context()
+            .is_some_and(|context| context.subject_id == context.expected_requester.user_id);
+    let submit_week = use_callback(move |_: MouseEvent| {
+        if busy() {
+            return;
+        }
+        let Some(command_context) = context() else {
+            return;
+        };
+        pending_action.set(true);
+        let ws_str = ws.to_string();
+        let mut timer = running_timer;
+        let mut submit_status = submit_status;
+        spawn(async move {
+            match server_fns::submit_week(ws_str, command_context).await {
+                Ok(_) => submit_status.set(None),
+                Err(e) => submit_status.set(Some(format!("{e}"))),
+            }
+            sheet.restart();
+            timer.refresh();
+            pending_action.set(false);
+        });
+    });
 
     rsx! {
         div {
@@ -1391,8 +1419,14 @@ fn TimesheetContent(
                 PageHeader { title: "Timesheet", title_id: TIMESHEET_HEADING,
                     meta: (held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_)))).then(|| rsx! {
                         span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
+                        if all_submitted_or_approved {
+                            Badge { variant: "success", {tr.timesheet_submitted()} }
+                        }
                     }),
                     actions: rsx! {
+                        if submittable {
+                            Button { id: "ts-submit-week", label: tr.timesheet_submit_week(), disabled: busy(), onclick: submit_week }
+                        }
                         Segmented {
                             items: vec!["Day".to_string(), "Week".to_string(), "Calendar".to_string()],
                             active: match current_mode {
@@ -1417,8 +1451,9 @@ fn TimesheetContent(
             // Toolbar: add entry + week pager
             div { class: "ts-toolbar",
                 button {
-                    class: "ts-add",
-                    "aria-label": "Add entry",
+                    id: "ts-add",
+                    r#type: "button",
+                    class: "btn btn-secondary",
                     title: if nothing_to_track { "{empty_message}" },
                     "aria-describedby": if nothing_to_track { "ts-add-empty" },
                     // Not `disabled` while held: that would drop the focus a
@@ -1426,7 +1461,8 @@ fn TimesheetContent(
                     "aria-disabled": if held().is_some() { "true" },
                     disabled: busy() || !can_add,
                     onclick: move |_| open_add.call(add_default_date),
-                    "+"
+                    span { class: "text-primary", "aria-hidden": "true", "+" }
+                    {tr.timesheet_add_entry()}
                 }
                 if nothing_to_track {
                     NoTrackingHint { id: "ts-add-empty", assignee: assignee.clone(), can_manage: session.can_create_projects() }
@@ -1554,6 +1590,9 @@ fn TimesheetContent(
             if let Some(msg) = grid_error() {
                 div { class: "alert alert-danger", role: "alert", "{msg}" }
             }
+            if let Some(err) = &*submit_status.read() {
+                div { class: "alert alert-danger", role: "alert", "{err}" }
+            }
             if let Some(msg) = stop_notice() {
                 div { class: "alert alert-warning", role: "status", "{msg}" }
             }
@@ -1582,44 +1621,6 @@ fn TimesheetContent(
                     match current_mode {
                     ViewMode::Week => rsx! {
                         WeekGrid { entries: week_entries, daily_totals, week_start: shown_ws, today, project_names, task_names, pending: pending_rows, actions: week_actions }
-                        div { class: "ts-submit-bar",
-                            if all_submitted_or_approved {
-                                span { class: "badge badge-success", "Submitted" }
-                            } else if !week_entries.is_empty() && has_open && context().is_some_and(|context| context.subject_id == context.expected_requester.user_id) {
-                                div { class: "ts-submit",
-                                    button {
-                                        class: "ts-submit-main",
-                                        disabled: busy(),
-                                        onclick: move |_| {
-                                            if busy() { return; }
-                                            let Some(command_context) = context() else { return; };
-                                            pending_action.set(true);
-                                            let ws_str = ws.to_string();
-                                            let mut timer = running_timer;
-                                            let mut submit_status = submit_status;
-                                            spawn(async move {
-                                                match server_fns::submit_week(ws_str, command_context).await {
-                                                    Ok(_) => {
-                                                        submit_status.set(None);
-                                                    }
-                                                    Err(e) => submit_status.set(Some(format!("{e}"))),
-                                                }
-                                                sheet.restart();
-                                                timer.refresh();
-                                                pending_action.set(false);
-                                            });
-                                        },
-                                        "Submit week for approval"
-                                    }
-                                    button { class: "ts-submit-caret", "aria-label": "More", "▾" }
-                                }
-                            }
-                            if let Some(err) = &*submit_status.read() {
-                                span { class: "text-danger text-sm ml-3",
-                                    "{err}"
-                                }
-                            }
-                        }
                     },
                     ViewMode::Day => rsx! {
                         {render_day_view(&by_day.read(), &daily_totals.read(), shown_ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
@@ -1986,21 +1987,21 @@ fn render_day_view(
                                     div { class: "ts-day-entry-side",
                                         if running {
                                             span { class: "badge badge-success", "Running" }
-                                            button { class: "ts-day-action primary", disabled: !can_stop, onclick: move |_| stop_entry.call(e_stop.clone()), "Stop" }
+                                            button { r#type: "button", class: "btn btn-secondary btn-sm", disabled: !can_stop, onclick: move |_| stop_entry.call(e_stop.clone()), "Stop" }
                                         } else {
                                             span { class: "ts-day-entry-dur text-mono", "{dur}" }
                                             button {
-                                                class: "ts-day-action primary",
+                                                r#type: "button",
+                                                class: "btn btn-secondary btn-sm",
                                                 disabled: !can_start,
                                                 onclick: move |_| start_entry.call(e_start.clone()),
                                                 "Start"
                                             }
                                         }
-                                        button {
-                                            class: "ts-day-action",
-                                            disabled: !can_edit,
+                                        // `IconButton`'s markup: a row helper cannot hold the hook its handler needs.
+                                        button { r#type: "button", class: "btn btn-ghost btn-icon", aria_label: "Edit", disabled: !can_edit,
                                             onclick: move |_| open_edit.call(e_edit.clone()),
-                                            "Edit"
+                                            NavIcon { name: "pencil" }
                                         }
                                     }
                                 }
@@ -2662,10 +2663,10 @@ mod tests {
         dom.rebuild_in_place();
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains("1:00"));
-        for label in ["Start", "Edit"] {
+        for label in [">Start</button>", "aria-label=\"Edit\""] {
             let button = html
                 .split("<button")
-                .find(|part| part.contains(&format!(">{label}</button>")))
+                .find(|part| part.contains(label))
                 .unwrap();
             assert!(
                 button.split('>').next().unwrap().contains("disabled"),

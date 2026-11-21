@@ -43,7 +43,7 @@ sql(`BEGIN;
       await page.reload();
       await expect(page.locator('main').getByText(name, { exact: true })).toBeVisible();
       await page.goto(`${base}/invoices`);
-      await page.getByRole('button', { name: 'New Invoice', exact: true }).click();
+      await page.getByRole('link', { name: 'New invoice', exact: true }).click();
       const picker = page.getByLabel('Client', { exact: true });
       await expect(picker).toBeVisible();
       await expect(picker.locator(`option[value="${clientId}"]`)).toHaveCount(active ? 1 : 0);
