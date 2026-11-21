@@ -61,10 +61,6 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     console.log('PASS: Approvals approves all from its header and keeps the row decisions inline');
 
     // Invoices: "New invoice" opens its own screen, whose one Primary is "Generate draft".
-    const client = sql(`SELECT p.client_id FROM time_entries e JOIN projects p ON p.id = e.project_id
-      WHERE e.spent_date BETWEEN '${week}'::date AND '${week}'::date + 6 AND e.billable AND e.invoice_id IS NULL
-      GROUP BY p.client_id ORDER BY count(*) DESC LIMIT 1`);
-    const clientName = sql(`SELECT name FROM clients WHERE id = '${client}'`);
     await page.goto(`${base}/invoices`);
     const create = header.getByRole('link', { name: 'New invoice', exact: true });
     await expect(create).toHaveClass(/btn-primary/);
@@ -72,17 +68,32 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page).toHaveURL(`${base}/invoices/new`);
     await expect(page.getByRole('heading', { name: 'New invoice', exact: true })).toBeVisible();
     await expect(header.getByRole('button')).toHaveCount(0);
-    await page.getByLabel('Client', { exact: true }).selectOption({ label: clientName });
-    await page.getByLabel('Period from', { exact: true }).fill(week);
-    await page.getByLabel('Period to', { exact: true }).fill(sql(`SELECT ('${week}'::date + 6)::text`));
-    await page.getByRole('button', { name: 'Review invoice', exact: true }).click();
-    const generate = page.getByRole('button', { name: 'Generate draft', exact: true });
-    await expect(generate).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Generate draft', exact: true })).toHaveClass(/btn-primary/);
     await expect(page.locator('main .btn-primary:visible')).toHaveCount(1);
-    await generate.click();
-    await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}$/);
-    const id = page.url().split('/').pop();
+    // The detail checks need a draft. The invoice suites before this one leave
+    // several; on a fresh database, prepare one from the seeded week.
+    let id = sql(`SELECT i.id FROM invoices i JOIN clients c ON c.id = i.client_id
+      WHERE i.status = 'draft' AND c.active ORDER BY i.created_at DESC LIMIT 1`);
+    if (id) {
+      await page.goto(`${base}/invoices/${id}`);
+    } else {
+      const seeded = sql(`SELECT c.name FROM time_entries e JOIN projects p ON p.id = e.project_id
+        JOIN clients c ON c.id = p.client_id
+        WHERE e.spent_date BETWEEN '${week}'::date AND '${week}'::date + 6 AND e.billable
+        GROUP BY c.name ORDER BY count(*) DESC LIMIT 1`);
+      await page.getByLabel('Client', { exact: true }).selectOption({ label: seeded });
+      await page.getByLabel('Period from', { exact: true }).fill(week);
+      await page.getByLabel('Period to', { exact: true }).fill(sql(`SELECT ('${week}'::date + 6)::text`));
+      await page.getByRole('button', { name: 'Review invoice', exact: true }).click();
+      const generate = page.getByRole('button', { name: 'Generate draft', exact: true });
+      await expect(generate).toBeEnabled();
+      await generate.click();
+      await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}$/);
+      id = page.url().split('/').pop();
+    }
     const number = sql(`SELECT number FROM invoices WHERE id = '${id}'`);
+    const client = sql(`SELECT client_id FROM invoices WHERE id = '${id}'`);
+    const clientName = sql(`SELECT name FROM clients WHERE id = '${client}'`);
 
     // Invoice detail: Mark Sent is the Primary; Edit and Void sit in "Actions", Void last.
     await expect(header.getByRole('button', { name: 'Mark Sent', exact: true })).toHaveClass(/btn-primary/);
