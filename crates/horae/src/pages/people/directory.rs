@@ -369,7 +369,9 @@ fn Listing(
                             th { scope: "col", {tr.people_column_hours()} }
                             th { scope: "col", class: "text-right", {tr.people_billable()} }
                             th { scope: "col", class: "text-right", {tr.people_column_billable_share()} }
-                            if actions { th { scope: "col", span { class: "sr-only", {tr.people_actions()} } } }
+                            // Named without text: an absolutely placed `.sr-only` would
+                            // escape the table's scroll container on narrow screens.
+                            if actions { th { scope: "col", aria_label: tr.people_actions() } }
                         } }
                         tbody {
                             for entry in visible {

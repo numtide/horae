@@ -45,7 +45,7 @@ let restoreSeededStates = () => {};
     // The Administrator profile edits both rates.
     await page.goto(`${base}/people`);
     // Rates… sits in the row's Actions menu, which keeps focus when the dialog closes.
-    const actions = page.locator('tbody tr').filter({ hasText: 'Rates Person' }).getByRole('button', { name: 'Actions', exact: true });
+    const actions = page.locator('tbody tr').filter({ hasText: 'Rates Person' }).getByRole('button', { name: /^Actions/ });
     const open = {
       click: async () => {
         await actions.click();

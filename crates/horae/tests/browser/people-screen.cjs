@@ -19,6 +19,9 @@ assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
 const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id,name FROM users WHERE email='admin@example.com' AND active) u"));
 const state = '019f4500-0000-7000-8000-000000000002';
+// A teammate with time this week, so the list has someone besides the viewer.
+const teammate = '019f4500-0000-7000-8000-000000000003';
+const teammateEntry = '019f4500-0000-7000-8000-000000000004';
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 let restoreSeededStates = () => {};
@@ -38,6 +41,12 @@ let restoreSeededStates = () => {};
   const summary = page.getByRole('region', { name: 'Week summary', exact: true });
   const content = page.locator('.ppl-content');
   try {
+    sql(`BEGIN;
+      INSERT INTO users (id,org_id,email,name) VALUES ('${teammate}','${actor.org_id}','people-screen@example.com','Screen Teammate');
+      INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable)
+        SELECT '${teammateEntry}', org_id, '${teammate}', project_id, task_id, spent_date, 90, false
+        FROM time_entries WHERE user_id='${actor.id}' ORDER BY spent_date LIMIT 1;
+      COMMIT;`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -68,7 +77,7 @@ let restoreSeededStates = () => {};
     console.log('PASS: changing the week keeps the rows dimmed until the new hours arrive');
 
     // The row menu of an administrator offers every action, Archive last.
-    await row(actor.name).getByRole('button', { name: 'Actions', exact: true }).click();
+    await row(actor.name).getByRole('button', { name: /^Actions/ }).click();
     const items = page.locator('.menu-popover:popover-open [role="menuitem"]');
     await expect(items).toHaveText(['View timesheet', 'Permissions…', 'Rates…', 'Permission history', 'Archive']);
     await shot('row-menu');
@@ -107,15 +116,15 @@ let restoreSeededStates = () => {};
     // Someone who may read people but not manage them, nor read their time.
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-      VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, 'people_read_all'])},false,'individual')`);
+      VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, 'people_read_managed', 'people_read_all'])},false,'individual')`);
     await page.reload();
     await expect(row(actor.name)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add person', exact: true })).toHaveCount(0);
     // Their own time is theirs to read; nobody else's is.
     const others = page.locator('tbody tr').filter({ hasNot: page.getByText(actor.name, { exact: true }) });
     await expect(others.first().getByLabel('Hours not available', { exact: true })).toBeVisible();
-    await expect(others.first().getByRole('button', { name: 'Actions', exact: true })).toHaveCount(0);
-    await row(actor.name).getByRole('button', { name: 'Actions', exact: true }).click();
+    await expect(others.first().getByRole('button', { name: /^Actions/ })).toHaveCount(0);
+    await row(actor.name).getByRole('button', { name: /^Actions/ }).click();
     await expect(items).toHaveText(['View timesheet']);
     await page.keyboard.press('Escape');
     await shot('read-only');
@@ -125,5 +134,7 @@ let restoreSeededStates = () => {};
     await browser.close();
     sql(`DELETE FROM person_permission_states WHERE id='${state}'`);
     restoreSeededStates();
+    sql(`BEGIN; DELETE FROM time_entries WHERE id='${teammateEntry}';
+      DELETE FROM users WHERE id='${teammate}'; COMMIT;`);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

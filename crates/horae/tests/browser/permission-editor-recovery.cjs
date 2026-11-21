@@ -66,7 +66,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
   const recovery = page.getByRole('dialog', { name: 'Recover permission request', exact: true });
   // Each person's actions are in their row's Actions menu.
   const row = name => page.locator('tbody tr').filter({ has: page.getByText(name, { exact: true }) });
-  const actions = name => row(name).getByRole('button', { name: 'Actions', exact: true });
+  const actions = name => row(name).getByRole('button', { name: /^Actions/ });
   const openEditor = async (name = personName) => {
     await actions(name).click();
     await page.getByRole('menuitem', { name: 'Permissions…', exact: true }).click();
@@ -152,7 +152,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await readsFinished();
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_users|list_tasks)/.test(path)));
     const railTeam = page.locator('.app-sidebar').getByRole('link', { name: 'People', exact: true });
-    const permissionItems = page.locator('[id^="person-permissions-"]');
+    const permissionItems = page.locator('[role="menuitem"][id^="person-permissions-"]');
     const userMenu = page.locator('.sidebar-menu');
     // Settings and Sign out are always offered. Administration appears only when
     // an admin section is open, and lands on the first one (`landing`).
@@ -478,7 +478,9 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     }
     const historyIds = sql(`SELECT id FROM permission_change_receipts WHERE org_id='${actor.org_id}' ORDER BY created_at DESC, id DESC`).split('\n');
     assert.equal(historyIds.length, 29);
-    await page.getByRole('link', { name: 'Audit log', exact: true }).click();
+    // People has no admin subnavigation; a row's Permission history opens the log.
+    await actions(personName).click();
+    await page.getByRole('menuitem', { name: 'Permission history', exact: true }).click();
     await page.waitForURL(`${base}/admin/audit`);
     const history = page.getByRole('table', { name: 'Permission change history', exact: true });
     const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();

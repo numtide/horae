@@ -31,7 +31,7 @@ let restoreSeededStates = () => {};
   const row = name => page.locator('tbody tr').filter({ hasText: name });
   // The row's actions live in its Actions menu; `null` when the menu lacks the item.
   const menuItems = async name => {
-    const trigger = row(name).getByRole('button', { name: 'Actions', exact: true });
+    const trigger = row(name).getByRole('button', { name: /^Actions/ });
     if (await trigger.count() === 0) return [];
     await trigger.click();
     const items = await page.locator('.menu-popover:popover-open [role="menuitem"]').allTextContents();
@@ -39,7 +39,7 @@ let restoreSeededStates = () => {};
     return items;
   };
   const rowAction = async (name, item) => {
-    await row(name).getByRole('button', { name: 'Actions', exact: true }).click();
+    await row(name).getByRole('button', { name: /^Actions/ }).click();
     await page.getByRole('menuitem', { name: item, exact: true }).click();
   };
   const status = async label => {
