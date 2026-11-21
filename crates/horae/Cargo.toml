@@ -29,6 +29,7 @@ web = ["dioxus/web", "dep:gloo-timers"]
 [dependencies]
 horae-core = { path = "../core", features = [] }
 horae-types = { path = "../types" }
+horae-i18n = { path = "../i18n" }
 dioxus = { version = "0.7", features = ["fullstack", "router"] }
 clap = { version = "4", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }

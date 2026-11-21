@@ -25,6 +25,9 @@ pub mod avatar;
 pub mod badge;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/page_header.rs"]

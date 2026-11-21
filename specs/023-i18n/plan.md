@@ -48,7 +48,7 @@ for the screens tested inside the crate
 **Performance Goals**: the catalog is parsed once per process (a `LazyLock` per language); a
 message costs one lookup and one `String`. No render-time fetch (FR-004)
 
-**Constraints**: no visible change (FR-011, SC-002); at most +60 KB brotli on the served WASM over
+**Constraints**: no visible change (FR-011, SC-002); at most +75 KB brotli on the served WASM over
 master (SC-005); `horae-core` and `horae-types` do not depend on the catalog (FR-003); the
 infrastructure lands after PR-4 and the `Button` API (C-9); no PR rewrites a file an open design
 PR is rewriting (FR-013)
@@ -209,7 +209,9 @@ the states it can render with its mocks, and the PR says which states it covers.
 
 Measured as research R-9 says: `dx build --release --locked` on base and head, size of
 `horae_bg-*.wasm.br`, at I-1, I-2 and I-13. The expected total is about 42 KB for the engine plus
-about 15 KB for the English text. Past 50 KB before I-13, the work stops for a decision.
+about 15 KB for the English text. Past 75 KB before I-13, the work stops for a decision. The
+threshold was 50 KB until I-1's review measured the engine alone at 42.9 KB (+42,965 B brotli
+when the first message is used); the maintainer raised it to keep Fluent in the browser.
 
 ### Later increments: where the language will come from
 

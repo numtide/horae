@@ -27,6 +27,9 @@ mod models {
 pub mod controls;
 #[path = "../src/components/date_picker.rs"]
 pub mod date_picker;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/menu.rs"]
 mod real_menu;
 /// The real menu, counting its renders. It takes children, so it renders

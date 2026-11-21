@@ -78,6 +78,7 @@ http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, wh
 ```sh
 cargo test -p horae-core                        # pure domain unit tests (no DB, no features)
 cargo test -p horae-types                       # serde contracts of the UI↔server types (no DB)
+cargo test -p horae-i18n                        # the catalog's build checks and the unused-message test (no DB)
 cargo kani -p horae-core                        # bounded proofs behind cfg(kani); setup in crates/core/src/permissions/proofs.rs
 DATABASE_URL=… cargo test -p horae-server               # backend tests: ops, jobs, importers, … (need Postgres with CREATEDB)
 DATABASE_URL=… cargo test -p horae-api                  # HTTP routes: /api/v1, exports, import error downloads, /auth/*
@@ -149,6 +150,8 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 **The `types` crate (`horae-types`) holds the types that travel between the UI and the server**: server-function arguments and results, and the DTOs the pages render. It is a lib that builds for the server and for WASM, depends only on serde, serde_json, uuid, chrono and `horae-core`, and has no `server` feature or `cfg`. Rules belong in `core`; the wire shape of what they produce belongs in `types`. `crates/horae/src/main.rs` imports it as `models` (`use horae_types as models;`), so the app names these types `crate::models::…`. The UI tests in `crates/horae/tests/` reach them through `horae_types` instead of including the source with `#[path]`. Server-only types stay in `ops/`, and the server's logic over shared types goes in free functions there, because Rust forbids inherent `impl` blocks on another crate's types.
 
+**The `i18n` crate (`horae-i18n`, `crates/i18n/`) is the interface's text catalog**: Fluent files under `locales/<lang>/horae.ftl`, English the source. Its `build.rs` checks the catalogs (`build/checks.rs`, shared with `tests/build_checks.rs`) and generates `Lang` and one method per English message on `Tr`, with the message's variables as parameters and its English text as the doc comment, so a missing message or argument does not compile. It builds for the server and for WASM, depends on `fluent-bundle` and `unic-langid` only, and `horae-core` and `horae-types` must not depend on it. The app reaches it through `crates/horae/src/i18n.rs`: `App` calls `use_tr_provider()` and components call `use_tr()`. The UI tests that include sources with `#[path]` include that module too. `tests/unused_messages.rs` fails on a message no code calls.
+
 **The server layers custom Axum routes on top of the Dioxus fullstack router** (`Commands::Serve` in `main.rs`): it calls `.serve_dioxus_application()`, then `.merge`s `horae_api::router()` (`/api/v1`, `/health`, the exports, `/auth/*`) and the Harvest-compatible API (`horae_harvest_api::mount(cfg.harvest_api, …)`, `/harvest/v2/*` and `/v2/*`; the `horae-harvest-api` crate, `crates/harvest-api/`, mounted only with `HORAE_HARVEST_API=1` and an empty 404 otherwise), all under a Postgres-backed session layer. Both APIs share one per-token rate limiter. The surfaces:
 
 - Dioxus `#[server]` functions in `server_fns.rs` — session-authenticated; the SPA uses these for all mutations.
@@ -201,6 +204,7 @@ A `speckit-*` suite (`specify`, `plan`, `tasks`, `implement`, `analyze`, `checkl
 
 Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come from code review — follow them so the same notes don't recur:
 
+- **Interface text goes in the catalog.** New or moved text of the web app goes in `crates/i18n/locales/en/horae.ftl`, under its area's section and following the conventions in the file's header, and the screen calls `tr.<id>()`. `dioxus/literal-text` counts loose text in `rsx!` per file and fails when a count rises; the `dioxus-best-practices` skill's "Interface text" section has the rules.
 - **Named status codes, not integer literals.** When building `ServerFnError::ServerError { code, .. }` in `server_fns.rs`, use named constants (e.g. `NOT_FOUND`, `FORBIDDEN`) rather than bare `404`/`403`, so error paths read at a glance.
 - **Avoid `Option<bool>` parameters.** `Some(false)` is ambiguous at the call site. For a two-state flag on a server function, prefer a plainly named `bool` with an obvious default, or a small purpose-named enum.
 - **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `plugin/mod.rs` predates this rule; convert it opportunistically, not in an unrelated PR.

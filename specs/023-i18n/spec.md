@@ -391,7 +391,7 @@ ______________________________________________________________________
 - **SC-003**: PR-10, applied after the first increment, changes only catalog files and tests.
 - **SC-004**: Adding a language changes catalog files and the list of languages, and no screen
   file (checked with a test language in the second increment).
-- **SC-005**: The first increment adds no more than 60 KB brotli to the served WASM bundle over
+- **SC-005**: The first increment adds no more than 75 KB brotli to the served WASM bundle over
   master: the 42 KB of C-1 plus the English catalog's text (about 15 KB brotli in the study's
   estimate).
 - **SC-006**: With a second language set, no page shows text in another language during load or
