@@ -46,6 +46,7 @@ const SYSTEM_ADDS_MEMBERS: &str = "Automatic sign-up adds members only";
 const TOKEN_ADDS_NO_ONE: &str = "People can't be added with an API token";
 const ADMINISTRATOR_TARGET: &str = "Only an administrator can archive or restore an administrator";
 const LAST_ADMINISTRATOR: &str = "The organization must keep at least one active administrator.";
+const ARCHIVE_SELF: &str = "You can't archive your own account";
 
 /// Emails are unique across organizations, so an email can belong to an
 /// account the actor may not know about. The refusal never says that an
@@ -343,7 +344,8 @@ pub async fn add(
 }
 
 /// Archives (`active = false`) or restores a person. Their time and history
-/// stay. The organization keeps at least one active administrator.
+/// stay. Nobody archives their own account, and the organization keeps at
+/// least one active administrator.
 pub async fn set_active(
     tx: &mut Tx,
     actor: &Actor,
@@ -354,6 +356,10 @@ pub async fn set_active(
     let write_managed = actor.has(Permission::PeopleWriteManaged);
     if !write_all && !write_managed {
         return Err(OpError::forbidden(WRITE_REQUIRED));
+    }
+    // An archived account can't sign in, so it could never restore itself.
+    if !active && user_id == actor.id() {
+        return Err(OpError::forbidden(ARCHIVE_SELF));
     }
     let org_id = actor.org_id();
     // The target is locked before the other administrators are, so two

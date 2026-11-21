@@ -77,7 +77,7 @@ pub async fn page(tx: &mut Tx, actor: &Actor, week: NaiveDate) -> Result<PeopleP
     let people = rows
         .into_iter()
         .map(|row| PersonSummary {
-            // Archiving yourself would end the session the Undo needs.
+            // `set_active` refuses archiving yourself.
             can_change_active: row.id != actor.id()
                 && may_change_active(
                     write_all,

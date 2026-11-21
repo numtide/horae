@@ -309,7 +309,7 @@ async fn rates_are_offered_only_on_rows_whose_rates_the_viewer_may_read(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_administrator_may_not_archive_their_own_row(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    // Another administrator, so archiving oneself would otherwise be allowed.
+    // Another administrator, so the last-administrator rule is not the reason.
     let other = add_person(&pool, &ids, BuiltInProfile::Administrator)
         .await
         .user_id;

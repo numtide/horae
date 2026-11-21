@@ -1064,7 +1064,7 @@ async fn directory_filters_loaded_people_without_asking_again() {
     );
     // Profiles are labelled from the catalog, in the badge and the filter.
     assert!(html.contains("Project Manager"), "{html}");
-    assert!(html.contains("Individual"), "the profile filter: {html}");
+    assert!(html.contains("Custom"), "the profile filter: {html}");
 
     ui.click("people-status-archived");
     assert!(ui.html().contains("Archived person"));

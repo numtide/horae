@@ -160,7 +160,7 @@ people-profile-executive-manager = Executive Manager
 people-profile-executive-manager-hint = Also manages projects, { -people(case: "lower") } and invoicing.
 people-profile-administrator = Administrator
 # A person whose grants were chosen one by one rather than from a profile.
-people-profile-individual = Individual
+people-profile-individual = Custom
 
 permissions-discard-title = Discard unsaved permission changes?
 permissions-discard-body = The changes in this form are lost. Saved permissions stay as they are.
