@@ -59,6 +59,25 @@ no-access-body = Your account cannot open this. Ask an administrator of this wor
 settings-group-settings = Settings
 settings-group-account = Account
 settings-profile-title = Profile
+settings-profile-loading = Loading your profile…
+settings-profile-failed = Could not load your profile
+settings-profile-name-label = Name
+settings-profile-email-label = Work email
+settings-profile-email-hint = Managed by your sign-in provider.
+settings-profile-sign-in-label = Signed in with
+settings-profile-dev-sign-in = Development sign-in
+settings-profile-sign-in-unavailable = Unavailable
+settings-profile-sign-in-loading = Loading…
+settings-profile-zone-label = Time zone
+settings-profile-zone-hint = Decides which day is today on your timesheet and when you start a timer.
+# Completes "Choose …" and "Search …" in the picker's accessible names.
+settings-profile-zone-choice = time zone
+settings-profile-zone-default = Workspace default ({ $zone })
+settings-profile-saved = Profile saved.
+settings-profile-save-failed = Could not save your profile. Try again.
+settings-profile-cancel = Cancel
+settings-profile-save = Save
+settings-profile-saving = Saving…
 settings-preferences-title = Preferences
 settings-theme-label = Theme
 settings-theme-hint = Choose how { -brand } looks on this device.
@@ -113,8 +132,12 @@ workspace-plugin-hooks = Hooks: { $hooks }
 api-tokens-title = API tokens
 api-tokens-intro = A token lets a script or another app use { -brand } as you, with your access. Treat it like a password. The API is described in <link>its OpenAPI document</link>.
 api-tokens-list-label = Your tokens
+api-tokens-empty = No tokens yet
+api-tokens-empty-hint = Create a token to let a script or another app use { -brand } on your behalf.
 
 ## Tasks
+
+tasks-load-failed = Could not load tasks
 
 ## Clients
 
@@ -137,5 +160,8 @@ audit-title = Audit log
 ## Approvals
 
 ## Projects
+
+projects-title = Projects
+projects-load-failed = Could not load projects
 
 ## Timesheet

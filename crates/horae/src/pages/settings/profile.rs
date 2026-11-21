@@ -23,9 +23,9 @@ pub fn SettingsProfile() -> Element {
         PageHeader { title: tr.settings_profile_title() }
         section { class: "card", aria_label: tr.settings_profile_title(),
             match &*me {
-                None => rsx! { Loading { label: "Loading your profile…" } },
+                None => rsx! { Loading { label: tr.settings_profile_loading() } },
                 Some(Err(_)) => rsx! {
-                    ErrorState { title: "Could not load your profile", body: LOAD_FAILED, inset: true, onretry: retry }
+                    ErrorState { title: tr.settings_profile_failed(), body: LOAD_FAILED, inset: true, onretry: retry }
                 },
                 Some(Ok(me)) => rsx! { ProfileForm { key: "{me.id}", me: me.clone(), options } },
             }
@@ -38,6 +38,7 @@ fn ProfileForm(
     me: CurrentUser,
     options: Resource<Result<ProfileOptions, ServerFnError>>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut session_me = use_session().me;
     let saved_zone = me.timezone.clone().unwrap_or_default();
     let mut name = use_signal(|| me.name.clone());
@@ -58,16 +59,16 @@ fn ProfileForm(
             options
                 .sign_in
                 .clone()
-                .unwrap_or_else(|| "Development sign-in".into()),
+                .unwrap_or_else(|| tr.settings_profile_dev_sign_in()),
             options.zones.clone(),
         ),
-        Some(Err(_)) => ("Unavailable".into(), Vec::new()),
-        None => ("Loading…".into(), Vec::new()),
+        Some(Err(_)) => (tr.settings_profile_sign_in_unavailable(), Vec::new()),
+        None => (tr.settings_profile_sign_in_loading(), Vec::new()),
     };
     let pending = options.read().is_none();
     let zone_options: Vec<(String, String)> = std::iter::once((
         String::new(),
-        format!("Workspace default ({})", me.workspace_timezone),
+        tr.settings_profile_zone_default(me.workspace_timezone.as_str()),
     ))
     .chain(zones.into_iter().map(|zone| (zone.clone(), zone)))
     .collect();
@@ -111,7 +112,7 @@ fn ProfileForm(
                     }));
                     error.set(Some(message));
                 }
-                Err(_) => error.set(Some("Could not save your profile. Try again.".into())),
+                Err(_) => error.set(Some(tr.settings_profile_save_failed())),
             }
             saving.set(false);
         });
@@ -127,21 +128,21 @@ fn ProfileForm(
     };
 
     rsx! {
-        FormGroup { label: "Name", id: "profile-name",
+        FormGroup { label: tr.settings_profile_name_label(), id: "profile-name",
             Input { id: "profile-name", value: name(), disabled: saving(),
                 error_id: error_for("profile-name"),
                 oninput: edit_name,
             }
         }
-        FormGroup { label: "Work email", id: "profile-email", hint: "Managed by your sign-in provider.",
+        FormGroup { label: tr.settings_profile_email_label(), id: "profile-email", hint: tr.settings_profile_email_hint(),
             Input { id: "profile-email", value: me.email.clone(), readonly: true }
         }
-        FormGroup { label: "Signed in with", id: "profile-sign-in",
+        FormGroup { label: tr.settings_profile_sign_in_label(), id: "profile-sign-in",
             Input { id: "profile-sign-in", value: sign_in, readonly: true }
         }
-        FormGroup { label: "Time zone", id: "profile-timezone",
-            hint: "Decides which day is today on your timesheet and when you start a timer.",
-            SelectField { id: "profile-timezone", label: "time zone", options: zone_options,
+        FormGroup { label: tr.settings_profile_zone_label(), id: "profile-timezone",
+            hint: tr.settings_profile_zone_hint(),
+            SelectField { id: "profile-timezone", label: tr.settings_profile_zone_choice(), options: zone_options,
                 selected: zone(), query, pending, onselect: pick_zone,
                 error_id: error_for("profile-timezone"),
             }
@@ -151,13 +152,13 @@ fn ProfileForm(
         }
         div { class: "flex flex-wrap items-center justify-end gap-2",
             if saved() && !changed {
-                span { class: "text-sm text-success", role: "status", "Profile saved." }
+                span { class: "text-sm text-success", role: "status", {tr.settings_profile_saved()} }
             }
             button { id: "profile-cancel", r#type: "button", class: "btn btn-secondary", disabled: !changed || saving(),
-                onclick: reset, "Cancel"
+                onclick: reset, {tr.settings_profile_cancel()}
             }
             button { id: "profile-save", r#type: "button", class: "btn btn-primary", disabled: !changed || saving(),
-                onclick: save, if saving() { "Saving…" } else { "Save" }
+                onclick: save, if saving() { {tr.settings_profile_saving()} } else { {tr.settings_profile_save()} }
             }
         }
     }

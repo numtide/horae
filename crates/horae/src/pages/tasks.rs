@@ -3,10 +3,10 @@ use horae_core::money::format_cents;
 
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{
-    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal,
+    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal, load_pinned,
 };
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::task::{TaskActivity, TaskCursor};
+use crate::models::task::{TaskActivity, TaskCatalogPage, TaskCursor};
 use crate::server_fns;
 
 #[path = "tasks/editor.rs"]
@@ -42,23 +42,24 @@ pub fn TaskCatalog() -> Element {
     let mut catalog = use_resource(move || {
         let filter = activity();
         let cursor = cursors.read().last().cloned().flatten();
-        let expected = *requester.peek();
+        let pinned = *requester.peek();
         async move {
-            let result = server_fns::load_task_catalog(filter, cursor.clone(), expected)
-                .await
-                .and_then(|page| {
-                    if expected.is_some_and(|identity| identity != page.requester) {
-                        return Err(ServerFnError::ServerError {
-                            code: FORBIDDEN,
-                            message: "The active account changed".into(),
-                            details: None,
-                        });
-                    }
-                    if expected.is_none() {
-                        requester.set(Some(page.requester));
-                    }
-                    Ok(page)
-                });
+            let (result, changed) = load_pinned(
+                pinned,
+                |pin| server_fns::load_task_catalog(filter, cursor.clone(), pin),
+                |page: &TaskCatalogPage| page.requester,
+            )
+            .await;
+            if changed {
+                // The editor and its notice belong to the old account.
+                selected.set(None);
+                notice.set(None);
+            }
+            if let Ok(page) = &result
+                && *requester.peek() != Some(page.requester)
+            {
+                requester.set(Some(page.requester));
+            }
             ((filter, cursor), result)
         }
     });
@@ -126,10 +127,10 @@ pub fn TaskCatalog() -> Element {
                 if refused {
                     NoAccess {}
                 } else if is_unauthorized(error) {
-                    ErrorState { title: "Could not load tasks", body: tr.common_session_ended() }
+                    ErrorState { title: tr.tasks_load_failed(), body: tr.common_session_ended() }
                 } else {
                     ErrorState {
-                        title: "Could not load tasks",
+                        title: tr.tasks_load_failed(),
                         body: LOAD_FAILED,
                         onretry: retry,
                         retry_disabled: pending,

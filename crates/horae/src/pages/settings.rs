@@ -25,6 +25,14 @@ pub use profile::SettingsProfile;
 pub fn SettingsShell() -> Element {
     let tr = crate::i18n::use_tr();
     let me = use_session().me;
+    // The router renders Profile in place at `/settings`; give the address
+    // bar the subpage's own URL, so a copied link names it.
+    use_effect(|| {
+        let profile = Route::SettingsProfile {}.to_string();
+        document::eval(&format!(
+            "if (/^\\/settings\\/?$/.test(location.pathname)) history.replaceState(history.state, '', {profile:?});"
+        ));
+    });
     let name = match &*me.read() {
         Some(Ok(me)) => me.name.clone(),
         _ => String::new(),

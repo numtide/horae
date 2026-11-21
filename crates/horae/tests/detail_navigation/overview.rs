@@ -229,7 +229,7 @@ async fn pending_or_denied_overview_starts_no_auxiliary_reads_or_actions() {
 }
 
 #[tokio::test]
-async fn overview_refresh_rejects_changed_account_or_organization_without_old_rows() {
+async fn overview_refresh_re_pins_a_changed_account_or_organization_without_old_rows() {
     for change in ["user", "organization"] {
         let probe = Probe {
             initial_path: Some("/projects".into()),
@@ -275,17 +275,24 @@ async fn overview_refresh_rejects_changed_account_or_organization_without_old_ro
             _ => changed.requester.org_id = Uuid::now_v7(),
         }
         changed.projects[0].project.name = "Other account project".into();
-        send.send(Ok(changed)).unwrap();
+        // The answer for another account is not shown as is: the page reads
+        // again unpinned and binds to the account now signed in.
+        *probe.overview.borrow_mut() = Some(changed.clone());
+        send.send(Ok(changed.clone())).unwrap();
         settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
-        assert!(html.contains("Could not load projects"), "{change}: {html}");
         assert!(
-            !html.contains("Other account project") && !html.contains("Visible project"),
+            html.contains("Other account project") && !html.contains("Visible project"),
             "{change}: {html}"
+        );
+        assert!(!html.contains("Access unavailable"), "{change}: {html}");
+        assert_eq!(
+            *probe.overview_requests.borrow(),
+            [None, Some(initial.requester), None]
         );
         assert_eq!(
             *probe.auxiliary_requesters.borrow(),
-            vec![Some(initial.requester); 3]
+            [[Some(initial.requester); 3], [Some(changed.requester); 3]].concat()
         );
     }
 }
@@ -486,54 +493,58 @@ async fn denied_or_changed_reloads_drop_the_list_with_its_filters_and_selection(
 
         let reload = hold_overview(&probe);
         press(&mut dom, By::Text("Archive"), false);
-        let mut changed = probe.overview.borrow().clone().unwrap();
-        reload
-            .send(match change {
-                "denied" => Err(ServerFnError::ServerError {
-                    code: 403,
-                    message: "requester changed".into(),
-                    details: None,
-                }),
-                _ => {
-                    changed.requester.user_id = Uuid::now_v7();
-                    Ok(changed)
-                }
+        let refused = || {
+            Err(ServerFnError::ServerError {
+                code: 403,
+                message: "requester changed".into(),
+                details: None,
             })
-            .unwrap();
-        settle(&mut dom);
-        let html = dioxus::ssr::render(&dom);
-        assert!(
-            !html.contains("Alpha") && !html.contains("value=\"alpha\""),
-            "{change}: {html}"
-        );
-        // A refusal is the one no-access state, with nothing to retry.
+        };
+        let original = managed_overview().requester;
         if change == "denied" {
+            // The pinned read is refused, then so is the unpinned one: the
+            // account itself has no access.
+            reload.send(refused()).unwrap();
+            let unpinned = hold_overview(&probe);
+            settle(&mut dom);
+            unpinned.send(refused()).unwrap();
+            settle(&mut dom);
+            let html = dioxus::ssr::render(&dom);
+            assert!(
+                !html.contains("Alpha") && !html.contains("value=\"alpha\""),
+                "{html}"
+            );
+            // A refusal is the one no-access state, with nothing to retry.
             assert!(html.contains("Access unavailable"), "{html}");
             assert!(!html.contains("projects-retry-access"), "{html}");
+            let requests = probe.overview_requests.borrow();
+            assert_eq!(requests[requests.len() - 2..], [Some(original), None]);
             continue;
         }
-        assert!(html.contains("Could not load projects"), "{html}");
 
-        // Retry access reloads under the original binding and mounts a new list.
-        click(&mut dom, "projects-retry-access");
+        // Another account answers: the list re-pins to it and mounts afresh,
+        // without the old filters or selection.
+        let mut changed = managed_overview();
+        changed.requester.user_id = Uuid::now_v7();
+        *probe.overview.borrow_mut() = Some(changed.clone());
+        reload.send(Ok(changed.clone())).unwrap();
+        settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
+        assert!(!html.contains("Access unavailable"), "{html}");
         assert!(
             html.contains("value=\"\"") && html.contains("All clients<span"),
-            "{change}: {html}"
+            "{html}"
         );
         assert!(
             html.contains("Alpha four") && !checked(&html, "Alpha two"),
-            "{change}: {html}"
+            "{html}"
         );
+        let requests = probe.overview_requests.borrow();
+        assert_eq!(requests[requests.len() - 2..], [Some(original), None]);
         assert_eq!(
-            probe.overview_requests.borrow().last(),
-            Some(&Some(managed_overview().requester)),
-            "{change}"
-        );
-        assert_eq!(
-            probe.auxiliary_requesters.borrow().len(),
-            6,
-            "{change}: one remount"
+            probe.auxiliary_requesters.borrow()[3..],
+            [Some(changed.requester); 3],
+            "one remount, bound to the new account"
         );
     }
 }

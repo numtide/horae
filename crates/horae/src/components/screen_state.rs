@@ -22,6 +22,33 @@ pub fn is_refusal(error: &ServerFnError) -> bool {
     )
 }
 
+/// Runs a read pinned to the account that first loaded the screen. When the
+/// server refuses the pin (403) or answers for another account, the signed-in
+/// account changed: the read runs once more unpinned, so the screen re-pins to
+/// the account now signed in, and only a refusal of that read is a real one.
+/// The flag says the account changed, so the screen drops what it held for
+/// the old one.
+pub async fn load_pinned<T, R, Fut>(
+    pinned: Option<R>,
+    load: impl Fn(Option<R>) -> Fut,
+    requester: impl Fn(&T) -> R,
+) -> (Result<T, ServerFnError>, bool)
+where
+    R: Copy + PartialEq,
+    Fut: Future<Output = Result<T, ServerFnError>>,
+{
+    let result = load(pinned).await;
+    let changed = pinned.is_some_and(|pinned| match &result {
+        Ok(page) => requester(page) != pinned,
+        Err(error) => is_refusal(error),
+    });
+    if changed {
+        (load(None).await, true)
+    } else {
+        (result, false)
+    }
+}
+
 /// The one state for a screen or region the person may not open (`DESIGN.md`,
 /// *Screen States → No permission*). It names who grants access and nothing
 /// about what is behind it; the screen around it keeps only its header.

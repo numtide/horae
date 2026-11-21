@@ -4,13 +4,12 @@ use horae_core::permissions::catalog::{Permission, profile_label};
 use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
 use crate::components::screen_state::{
-    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal,
+    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal, load_pinned,
 };
 use crate::models::permission_audit::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
 
-const FORBIDDEN: u16 = 403;
 const UNAUTHORIZED: u16 = 401;
 const REFRESH_ID: &str = "audit-refresh";
 const NEWEST_ID: &str = "audit-newest";
@@ -23,23 +22,19 @@ pub fn PermissionAudit() -> Element {
     let mut requester = use_signal(|| None::<PermissionRequester>);
     let mut history = use_resource(move || {
         let cursor = after();
-        let expected = *requester.peek();
+        let pinned = *requester.peek();
         async move {
-            let result = server_fns::list_permission_audit(cursor, expected)
-                .await
-                .and_then(|page| {
-                    if expected.is_some_and(|identity| identity != page.requester) {
-                        return Err(ServerFnError::ServerError {
-                            code: FORBIDDEN,
-                            message: "The active account changed.".into(),
-                            details: None,
-                        });
-                    }
-                    if expected.is_none() {
-                        requester.set(Some(page.requester));
-                    }
-                    Ok(page)
-                });
+            let (result, _) = load_pinned(
+                pinned,
+                |pin| server_fns::list_permission_audit(cursor, pin),
+                |page: &AuditPage| page.requester,
+            )
+            .await;
+            if let Ok(page) = &result
+                && *requester.peek() != Some(page.requester)
+            {
+                requester.set(Some(page.requester));
+            }
             (cursor, result)
         }
     });

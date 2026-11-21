@@ -135,8 +135,8 @@ pub fn SettingsApiTokens() -> Element {
                     }
                 },
                 Some(Ok(rows)) if rows.is_empty() => rsx! {
-                    EmptyState { icon: "key", title: "No tokens yet", inset: true,
-                        body: "Create a token to let a script or another app use Horae on your behalf.",
+                    EmptyState { icon: "key", title: tr.api_tokens_empty(), inset: true,
+                        body: tr.api_tokens_empty_hint(),
                     }
                 },
                 Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, focus_fallback: "api-tokens-title", on_revoke } },

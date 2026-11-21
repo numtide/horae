@@ -20,10 +20,23 @@ pub fn SettingsAccess() -> Element {
     let tr = crate::i18n::use_tr();
     let session = use_session();
     let retry = use_callback(move |_| session.refresh());
-    let own = session.permissions.read();
-    let badge = own
+    let pending = session.permissions.state()() != UseResourceState::Ready;
+    access_page(tr, &session.permissions.read(), retry, pending)
+}
+
+/// The header and body for the session's permission read. `pending` is true
+/// while a refresh runs, so "Try again" waits for it.
+fn access_page(
+    tr: Tr,
+    response: &Option<Result<OwnPermissions, ServerFnError>>,
+    retry: Callback<()>,
+    pending: bool,
+) -> Element {
+    // The badge shows only above the access it describes, not above an error.
+    let badge = response
         .as_ref()
         .and_then(|result| result.as_ref().ok())
+        .filter(|own| own.catalog_version == PERMISSION_CATALOG_VERSION)
         .map(|own| {
             if own.is_administrator {
                 (
@@ -45,7 +58,7 @@ pub fn SettingsAccess() -> Element {
                 if let Some((class, label)) = badge { span { class, "{label}" } }
             },
         }
-        {access_content(tr, &own, retry)}
+        {access_content(tr, response, retry, pending)}
     }
 }
 
@@ -55,6 +68,7 @@ fn access_content(
     tr: Tr,
     response: &Option<Result<OwnPermissions, ServerFnError>>,
     retry: Callback<()>,
+    pending: bool,
 ) -> Element {
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
@@ -78,7 +92,7 @@ fn access_content(
         }
         Some(_) => {
             return rsx! {
-                ErrorState { title: tr.settings_access_failed(), body: LOAD_FAILED, onretry: retry }
+                ErrorState { title: tr.settings_access_failed(), body: LOAD_FAILED, onretry: retry, retry_disabled: pending }
             };
         }
     };
@@ -120,7 +134,7 @@ fn access_content(
                             for (area, cells) in rows {
                                 tr { key: "{area:?}",
                                     th { scope: "row", class: "font-semibold", {area.label(tr)} }
-                                    for (column, cell) in cells.into_iter().enumerate() {
+                                    for (column, cell) in ["view", "edit", "approve"].into_iter().zip(cells) {
                                         td { key: "{column}", {scope_cell(tr, cell)} }
                                     }
                                 }
@@ -337,7 +351,12 @@ fn access_rows(grants: &[Permission]) -> Vec<(Area, [Cell; 3])> {
 fn scope_cell(tr: Tr, cell: Cell) -> Element {
     match cell {
         None => {
-            rsx! { span { class: "text-muted", aria_label: tr.settings_access_not_applicable_label(), "—" } }
+            // `aria-label` on a plain span is ignored, so the dash is hidden
+            // and the words are read instead.
+            rsx! {
+                span { class: "text-muted", aria_hidden: "true", "—" }
+                span { class: "sr-only", {tr.settings_access_not_applicable_label()} }
+            }
         }
         Some(None) => rsx! { span { class: "text-muted", {tr.settings_access_scope_none()} } },
         Some(Some(Scope::All)) => {

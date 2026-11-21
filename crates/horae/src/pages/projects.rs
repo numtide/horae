@@ -14,7 +14,7 @@ use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{
-    EmptyState, ErrorState, LOAD_FAILED, LoadError, Loading, NoAccess, is_refusal,
+    EmptyState, ErrorState, LOAD_FAILED, LoadError, Loading, NoAccess, is_refusal, load_pinned,
 };
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
@@ -511,13 +511,19 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     let mut binding = use_signal(|| None::<PermissionRequester>);
     // The last overview admitted under `binding`. It stays on screen while a
     // reload runs or after one fails, so the content below keeps its filters
-    // and selection. A denied or changed requester drops it, and the content
-    // remounts with fresh auxiliary reads once access is admitted again.
+    // and selection. A denied read drops it. When the account changes, the
+    // list re-pins to the new account and remounts (its key is the
+    // requester), so filters, selection and auxiliary reads start afresh.
     let mut admitted = use_signal(|| None::<ProjectOverview>);
     let bulk_success = use_signal(|| None::<String>);
     let mut projects = use_resource(move || async move {
-        let expected = *binding.peek();
-        let response = match server_fns::get_project_overview(expected).await {
+        let (result, _) = load_pinned(
+            *binding.peek(),
+            server_fns::get_project_overview,
+            |overview: &ProjectOverview| overview.requester,
+        )
+        .await;
+        let response = match result {
             Ok(response) => response,
             Err(error) => {
                 if access_denied(&error) {
@@ -526,39 +532,43 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
                 return Err(error);
             }
         };
-        let current = response.requester;
-        if expected.is_some_and(|expected| expected != current) {
-            admitted.set(None);
-            return Err(ServerFnError::new(
-                "Your session changed. Reload this page to continue.",
-            ));
-        }
-        binding.set(Some(current));
+        binding.set(Some(response.requester));
         admitted.set(Some(response));
         Ok(())
     });
     let retry_access = use_callback(move |_| projects.restart());
+    let tr = crate::i18n::use_tr();
     if let Some(overview) = admitted() {
+        let account = overview.requester;
         return rsx! {
-            ProjectListContent { overview, projects, admitted, bulk_success, initial_client }
+            for overview in [overview] {
+                ProjectListContent {
+                    key: "{account.org_id}-{account.user_id}",
+                    overview,
+                    projects,
+                    admitted,
+                    bulk_success,
+                    initial_client,
+                }
+            }
         };
     }
     // Nothing is admitted: the first load, an access refresh or a refused read.
     match (&*projects.read(), projects.state()()) {
         (Some(Err(error)), _) if is_refusal(error) => rsx! {
-            PageHeader { title: "Projects", title_id: "project-list-heading" }
+            PageHeader { title: tr.projects_title(), title_id: "project-list-heading" }
             NoAccess {}
         },
         // A failed read stays up, disabled, while its retry runs.
         (Some(Err(_)), state) => rsx! {
-            PageHeader { title: "Projects" }
+            PageHeader { title: tr.projects_title() }
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
             }
             div { onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
                 ErrorState {
-                    title: "Could not load projects",
-                    body: "Try again, or sign in again if your account changed.",
+                    title: tr.projects_load_failed(),
+                    body: LOAD_FAILED,
                     retry_id: "projects-retry-access",
                     retry_disabled: state != UseResourceState::Ready,
                     focus_on_recovery: "project-list-heading",
@@ -568,7 +578,7 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
         },
         _ => rsx! {
             div { onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
-                PageHeader { title: "Projects", title_id: "project-list-heading" }
+                PageHeader { title: tr.projects_title(), title_id: "project-list-heading" }
             }
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
