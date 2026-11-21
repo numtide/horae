@@ -190,8 +190,16 @@ assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A
       await expect(row.locator('.ts-day-entry-dur')).toHaveText('2:00');
       await edit.click();
       await page.setViewportSize({ width: 320, height: 320 });
+      // Deleting is irreversible: it asks first, focused on Cancel.
+      const confirmDelete = page.getByRole('dialog', { name: 'Delete this time entry?', exact: true });
+      await editing.getByRole('button', { name: 'Delete…', exact: true }).click();
+      await expect(confirmDelete.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(confirmDelete).toBeHidden();
+      await expect(editing).toBeVisible();
+      await editing.getByRole('button', { name: 'Delete…', exact: true }).click();
       const deleted = page.waitForResponse(r => r.url().includes('/api/load_timesheet_page') && r.status() === 200);
-      await editing.getByRole('button', { name: 'Delete', exact: true }).click();
+      await confirmDelete.getByRole('button', { name: 'Delete entry', exact: true }).click();
       await expect(editing).toBeHidden();
       const afterDelete = await (await deleted).json();
       assert.equal(afterDelete.next_after, null);

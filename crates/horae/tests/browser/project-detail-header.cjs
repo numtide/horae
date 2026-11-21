@@ -47,6 +47,11 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     await page.locator('#project-detail-actions').getByRole('menuitem', { name: item, exact: true }).click();
     await expect(dialog).toBeVisible();
   };
+  // Archiving asks nothing: the menu item writes at once and the toast offers Undo.
+  const archiveNow = async () => {
+    await trigger.click();
+    await page.locator('#project-detail-actions').getByRole('menuitem', { name: 'Archive', exact: true }).click();
+  };
   // Compare rectangles from one coordinate space, so CSS zoom cannot hide overflow.
   const overflowing = () => page.evaluate(() => {
     const root = document.documentElement, frame = root.getBoundingClientRect();
@@ -197,6 +202,11 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     await expect(title).toBeVisible();
     console.log('PASS: detail-origin Cancel, Back and Discard return to this project; dirty guards and Save are unchanged; forged and plain edit URLs return to Projects');
 
+    // Only reactivating still asks for confirmation, so the dialog checks run on
+    // an archived project.
+    sql(`UPDATE projects SET active = false WHERE id = '${project}'`);
+    await page.reload();
+    await expect(title).toBeVisible();
     const titleColors = {};
     for (const theme of ['dark', 'light']) {
       // CSS zoom scales the whole page; a 200% root font size enlarges text and rem-based spacing, not px.
@@ -224,14 +234,14 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
             assert.ok(Math.abs(box.height - 44) <= 1, `${label}: control height ${box.height}`);
           }
         }
-        await open('Archive');
+        await open('Reactivate');
         assert.equal(await dialog.locator('.modal').evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${label}: dialog overflow`);
         if (zoom === 1 && !fontSize && height === 900 && [320, 1440].includes(width)) {
           const padding = await dialog.locator('.modal-body').evaluate(el => { const s = getComputedStyle(el); return [s.paddingLeft, s.paddingRight]; });
           const expected = width === 320 ? '12px' : '24px';
           assert.deepEqual(padding, [expected, expected], `${label}: dialog body padding`);
         }
-        for (const name of ['Archive project', 'Cancel']) {
+        for (const name of ['Reactivate project', 'Cancel']) {
           const action = dialog.getByRole('button', { name, exact: true });
           await action.scrollIntoViewIfNeeded();
           await expect(action).toBeInViewport({ ratio: 1 });
@@ -246,7 +256,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
       document.documentElement.dataset.theme = 'dark';
     });
     await page.setViewportSize({ width: 1440, height: 900 });
-    assert.equal(active(), 't');
+    assert.equal(active(), 'f');
     assert.equal(statusRequests.length, 0);
     console.log('PASS: header and confirmation fit at 320–1440px, a short viewport, 200% zoom and 200% text in both themes');
 
@@ -256,19 +266,19 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     }
     await expect(trigger).toBeFocused();
     await page.keyboard.press('ArrowDown');
-    await expect(page.locator('#project-detail-actions').getByRole('menuitem', { name: 'Archive', exact: true })).toBeFocused();
+    await expect(page.locator('#project-detail-actions').getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(dialog.getByRole('heading', { name: 'Archive this project?', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Reactivate this project?', exact: true })).toBeVisible();
     await page.keyboard.press('Tab');
     await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
-    await open('Archive');
+    await open('Reactivate');
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
-    assert.equal(active(), 't');
+    assert.equal(active(), 'f');
     assert.equal(statusRequests.length, 0);
     const information = header.locator('details');
     await expect(header.getByText('header-tag', { exact: true })).toBeHidden();
@@ -280,6 +290,9 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
       await expect(information.getByText(saved)).toBeVisible();
     }
     console.log('PASS: keyboard reaches Actions and Project information; cancel and Escape leave the project unchanged and return focus');
+    sql(`UPDATE projects SET active = true WHERE id = '${project}'`);
+    await page.reload();
+    await expect(title).toBeVisible();
 
     await page.goto(`${base}/projects/${uncoded}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Uncoded header project', exact: true })).toBeVisible();
@@ -299,12 +312,12 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     console.log('PASS: back, edit and client navigation use the existing routes');
 
     await page.route('**/api/set_project_active*', route => route.abort(), { times: 1 });
-    await open('Archive');
     const aborted = page.waitForEvent('requestfailed', r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
-    await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+    await archiveNow();
     await aborted;
-    await expect(dialog.getByRole('alert')).toContainText('Could not update project status');
-    await expect(dialog).toBeVisible();
+    const archiveFailure = page.getByRole('alert').filter({ hasText: 'Could not archive the project' });
+    await expect(archiveFailure).toBeVisible();
+    await expect(dialog).toBeHidden();
     await expect(title).toBeVisible();
     assert.equal(active(), 't');
 
@@ -313,15 +326,10 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     await page.route('**/api/set_project_active*', async route => { await held; await route.continue(); }, { times: 1 });
     const before = statusRequests.length;
     const archived = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
-    await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
-    const pending = dialog.getByRole('button', { name: 'Updating project…', exact: true });
-    await expect(pending).toBeDisabled();
-    await expect(dialog.getByRole('alert')).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
-    await pending.click({ force: true });
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeVisible();
-    assert.equal(statusRequests.length, before + 1, 'A pending confirmation sends one request');
+    await archiveNow();
+    await expect(trigger).toBeDisabled();
+    await expect(archiveFailure).toHaveCount(0);
+    assert.equal(statusRequests.length, before + 1, 'A pending archive sends one request');
     release();
     assert.equal((await archived).status(), 200);
     await expect(dialog).toBeHidden();
@@ -391,9 +399,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
       sql(`UPDATE projects SET active = true WHERE id = '${project}'`);
       await page.reload();
       await expect(title).toBeVisible();
-      await open('Archive');
-      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
-      await expect(dialog).toBeHidden();
+      await archiveNow();
       await expect(undo).toBeVisible();
       sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
       const undone = page.waitForResponse(isStatusWrite);
@@ -418,9 +424,7 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
       sql(`UPDATE projects SET active = true WHERE id = '${project}'`);
       await page.reload();
       await expect(title).toBeVisible();
-      await open('Archive');
-      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
-      await expect(dialog).toBeHidden();
+      await archiveNow();
       await expect(undo).toBeVisible();
       sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
       let releaseUndo;
@@ -487,9 +491,8 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     assert.equal(active(), 't');
     await retry();
     await expect(header).not.toContainText('Archived');
-    await open('Archive');
     const rearchived = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
-    await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+    await archiveNow();
     assert.equal((await rearchived).status(), 200);
     await expect(header.getByText('Archived', { exact: true })).toBeVisible();
     assert.equal(active(), 'f');
@@ -528,9 +531,17 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     assert.deepEqual(await overflowing(), [], '320px/200% reactivation overflow');
     assert.equal(active(), 't');
     // A new action replaces the previous result rather than showing beside it.
-    await open('Archive');
-    await expect(page.locator('.toast')).toHaveCount(0);
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const archivedAgain = page.waitForResponse(isStatusWrite);
+    await archiveNow();
+    assert.equal((await archivedAgain).status(), 200);
+    await expect(page.getByRole('status').filter({ hasText: 'Project reactivated.' })).toHaveCount(0);
+    await expect(page.locator('.toast')).toHaveCount(1);
+    await expect(page.getByRole('status').filter({ hasText: 'Project archived.' })).toBeVisible();
+    const restored = page.waitForResponse(isStatusWrite);
+    await undo.click();
+    assert.equal((await restored).status(), 200);
+    await expect(header).not.toContainText('Archived');
+    assert.equal(active(), 't');
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.setViewportSize({ width: 1440, height: 900 });
     console.log('PASS: a changed requester or revoked grants fail closed and hide the project; Retry recovers the bound view; reactivation persists');
@@ -547,9 +558,8 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
     const failure = page.getByText('Could not confirm restore. Retry Undo.', { exact: true });
     const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const archive = async () => {
-      await open('Archive');
       const done = page.waitForResponse(isStatusWrite);
-      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+      await archiveNow();
       assert.equal((await done).status(), 200);
       await expect(dialog).toBeHidden();
       await expect(header.getByText('Archived', { exact: true })).toBeVisible();

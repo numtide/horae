@@ -19,12 +19,19 @@ use uuid::Uuid;
 pub mod back_link;
 #[path = "../src/components/badge.rs"]
 pub mod badge;
+#[path = "../src/components/button.rs"]
+pub mod button;
 #[path = "../src/components/combobox.rs"]
 pub mod combobox;
+#[path = "../src/components/confirm_dialog.rs"]
+pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/menu.rs"]
@@ -44,8 +51,8 @@ pub mod table;
 pub mod toast;
 mod components {
     pub use super::{
-        back_link, badge, combobox, controls, form, icons, menu, modal, page_header, screen_state,
-        session, table, toast,
+        back_link, badge, combobox, confirm_dialog, controls, form, icons, menu, modal,
+        page_header, screen_state, session, table, toast,
     };
 }
 #[path = "../src/pages/clients.rs"]

@@ -7,10 +7,18 @@ use std::{any::Any, cell::RefCell, collections::VecDeque, rc::Rc};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+#[path = "../src/components/button.rs"]
+pub mod button;
+#[path = "../src/components/confirm_dialog.rs"]
+pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/modal.rs"]
@@ -21,7 +29,7 @@ pub mod page_header;
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 mod components {
-    pub use super::{controls, form, icons, modal, page_header, screen_state};
+    pub use super::{confirm_dialog, controls, form, icons, modal, page_header, screen_state};
 }
 pub use horae_types::{permission_editor, task};
 mod models {
@@ -389,7 +397,7 @@ async fn archive_requires_confirmation_uses_loaded_identity_and_invalidates_deni
         details: None,
     });
     let reload = probe.reply();
-    ui.click("task-activity-confirm");
+    ui.click("task-activity-dialog-confirm");
     assert_eq!(
         &*probe.activity.borrow(),
         &[(id.to_string(), false, requester)]

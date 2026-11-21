@@ -88,7 +88,7 @@ async fn overview_uses_workflow_client_labels_and_binds_auxiliary_reads() {
     };
     let response = overview();
     *probe.overview.borrow_mut() = Some(response.clone());
-    let dom = mount(&probe);
+    let mut dom = mount(&probe);
     let html = dioxus::ssr::render(&dom);
     assert!(
         html.contains("Visible client") && html.contains("Visible project"),
@@ -96,6 +96,9 @@ async fn overview_uses_workflow_client_labels_and_binds_auxiliary_reads() {
     );
     assert_eq!(*probe.client_catalog_reads.borrow(), 0);
     assert_eq!(*probe.overview_requests.borrow(), [None]);
+    // The export link is the dialog's primary action, drawn while it is open.
+    click(&mut dom, "projects-export");
+    let html = dioxus::ssr::render(&dom);
     assert!(
         html.contains(&format!("expected_org_id={}", response.requester.org_id)),
         "{html}"

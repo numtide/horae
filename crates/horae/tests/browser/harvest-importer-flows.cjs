@@ -134,17 +134,17 @@ const longId = 'fixture'.repeat(40);
       await page.getByTestId('change-account').click();
       const release = hold();
       try {
-        await page.getByTestId('confirm-change-account').click();
-        await expect(page.getByTestId('confirm-change-account')).toBeDisabled();
-        await expect(page.getByTestId('confirm-change-account')).toHaveText('Changing account…');
-        await expect(page.getByTestId('cancel-change-account')).toBeDisabled();
+        await page.locator('#harvest-change-account-confirm').click();
+        await expect(page.locator('#harvest-change-account-confirm')).toBeDisabled();
+        await expect(page.locator('#harvest-change-account-confirm')).toHaveText('Changing account…');
+        await expect(page.locator('#harvest-change-account-cancel')).toBeDisabled();
         await page.keyboard.press('Escape');
         await expect(dialog).toBeVisible();
       } finally { release(); }
       await expect(dialog.getByRole('alert')).toBeVisible();
-      await expect(page.getByTestId('cancel-change-account')).toBeEnabled();
+      await expect(page.locator('#harvest-change-account-cancel')).toBeEnabled();
       assert.equal(changes, 1, 'One click sends one change');
-      await page.getByTestId('cancel-change-account').click();
+      await page.locator('#harvest-change-account-cancel').click();
       await expect(dialog).toBeHidden();
     });
 
@@ -158,9 +158,9 @@ const longId = 'fixture'.repeat(40);
       await keepsFocusInside(dialog);
       const release = hold();
       try {
-        await page.getByTestId('confirm-disconnect').click();
-        await expect(page.getByTestId('confirm-disconnect')).toHaveText('Disconnecting…');
-        await expect(page.getByTestId('cancel-disconnect')).toBeDisabled();
+        await page.locator('#harvest-disconnect-confirm').click();
+        await expect(page.locator('#harvest-disconnect-confirm')).toHaveText('Disconnecting…');
+        await expect(page.locator('#harvest-disconnect-cancel')).toBeDisabled();
         await page.keyboard.press('Escape');
         await expect(dialog).toBeVisible();
       } finally { release(); }

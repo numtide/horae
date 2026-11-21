@@ -23,6 +23,8 @@ perSystem.self.default.overrideAttrs (old: {
     cargo nextest run -p horae-core --test-threads "$NIX_BUILD_CORES"
     # horae-types: the UI↔server types' serde contracts — no database required.
     cargo nextest run -p horae-types --test-threads "$NIX_BUILD_CORES"
+    # horae-i18n: the catalog generator, its checks and the unused-message test — no database.
+    cargo nextest run -p horae-i18n --test-threads "$NIX_BUILD_CORES"
     # horae-harvest: Harvest's v2 types and client against loopback fixtures.
     cargo nextest run -p horae-harvest --test-threads "$NIX_BUILD_CORES"
 

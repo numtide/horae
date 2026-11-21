@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input, Select, Textarea};
-use crate::components::modal::Modal;
+use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
     CreationClient, CreationOptions, CreationSearch, ProjectEditorContext, ProjectFieldAccess,
@@ -359,23 +359,25 @@ fn NewClientDialog(
     }));
     rsx! {
         Modal { id: "np-client-dialog", labelledby: "np-client-title", open, busy: busy(), on_dismiss,
-            div { class: "modal-body px-3 sm:px-6",
-                h2 { id: "np-client-title", class: "modal-title", "New client" }
-                if let Some(message) = error() { div { class: "alert alert-danger", role: "alert", "{message}" } }
-                form { onsubmit: move |event| {
-                    event.prevent_default();
-                    if busy() { return; }
-                    busy.set(true);
-                    error.set(None);
-                    spawn(async move {
-                        let result = server_fns::create_project_client(name(), selected_currency(), rate()).await;
-                        busy.set(false);
-                        match result {
-                            Ok(client) => on_created.call(client),
-                            Err(problem) => error.set(Some(problem.to_string())),
-                        }
-                    });
-                },
+            primary: ModalAction::submit(if busy() { "Creating…" } else { "Create client" }, "np-client-form")
+                .disabled(busy() || name.read().trim().is_empty()),
+            ModalHeader { id: "np-client-title", title: "New client" }
+            form { id: "np-client-form", onsubmit: move |event| {
+                event.prevent_default();
+                if busy() { return; }
+                busy.set(true);
+                error.set(None);
+                spawn(async move {
+                    let result = server_fns::create_project_client(name(), selected_currency(), rate()).await;
+                    busy.set(false);
+                    match result {
+                        Ok(client) => on_created.call(client),
+                        Err(problem) => error.set(Some(problem.to_string())),
+                    }
+                });
+            },
+                ModalBody {
+                    if let Some(message) = error() { div { class: "alert alert-danger", role: "alert", "{message}" } }
                     FormGroup { label: "Client name", id: "np-new-client-name",
                         Input { id: "np-new-client-name", value: name(), disabled: busy(), oninput: move |event: FormEvent| name.set(event.value()) }
                     }
@@ -386,10 +388,6 @@ fn NewClientDialog(
                         Input { id: "np-new-client-rate", value: rate(), disabled: busy(), oninput: move |event: FormEvent| rate.set(event.value()) }
                     }
                     p { class: "text-sm text-subtle", "Creates a client immediately, even if you later discard this project draft." }
-                    div { class: "modal-actions flex-wrap",
-                        button { class: "btn btn-primary", r#type: "submit", disabled: busy() || name.read().trim().is_empty(), if busy() { "Creating…" } else { "Create client" } }
-                        button { class: "btn btn-secondary", r#type: "button", disabled: busy(), onclick: move |_| on_dismiss.call(()), "Cancel" }
-                    }
                 }
             }
         }

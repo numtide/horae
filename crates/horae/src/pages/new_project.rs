@@ -4,8 +4,8 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 use crate::components::back_link::BackLink;
+use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::icons::NavIcon;
-use crate::components::modal::Modal;
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{LoadError, Loading};
 use crate::models::project_creation::{
@@ -629,6 +629,16 @@ fn ProjectEditor(
         });
 
     let discard_to = exit.clone();
+    let discard = use_callback(move |_| {
+        discard_open.set(false);
+        if editing {
+            spawn(leave_project_editor(navigator, discard_to.clone()));
+        } else {
+            request_intent.call(Intent::Discard);
+        }
+    });
+    let keep_draft = use_callback(move |_| discard_open.set(false));
+    let keep_edits = use_callback(move |_| reload_open.set(false));
     rsx! {
         div { class: "np-page flex flex-col h-full",
             "data-project-edit-state": if locked || unresolved_request || (!editing && (busy() || dirty)) { "pending" } else if dirty { "dirty" } else { "clean" },
@@ -755,44 +765,23 @@ fn ProjectEditor(
                 p { class: "text-xs text-subtle m-0", if editing { "Changes are saved only when you save." } else { "Cancel keeps your draft." } }
             }
         }
-        Modal {
+        ConfirmDialog {
             id: "np-discard-dialog",
             labelledby: "np-discard-title",
             open: discard_open(),
-            on_dismiss: move |_| discard_open.set(false),
-            div { class: "modal-body px-3 sm:px-6",
-                h2 { id: "np-discard-title", class: "modal-title", if editing { "Discard changes?" } else { "Discard this draft?" } }
-                p { if editing { "Your unsaved changes will be lost. The saved project will not be changed." } else { "The draft will be removed. Clients you created will remain available." } }
-                div { class: "modal-actions flex-wrap",
-                    button {
-                        class: "btn btn-danger",
-                        onclick: move |_| {
-                            discard_open.set(false);
-                            if editing {
-                                spawn(leave_project_editor(navigator, discard_to.clone()));
-                            } else { request_intent.call(Intent::Discard); }
-                        },
-                        if editing { "Discard changes" } else { "Discard draft" }
-                    }
-                    button {
-                        class: "btn btn-secondary",
-                        onclick: move |_| discard_open.set(false),
-                        "Keep editing"
-                    }
-                }
-            }
+            title: if editing { "Discard changes?" } else { "Discard this draft?" },
+            confirm_label: if editing { "Discard changes" } else { "Discard draft" },
+            cancel_label: "Keep editing",
+            on_confirm: discard,
+            on_dismiss: keep_draft,
+            p { if editing { "Your unsaved changes will be lost. The saved project will not be changed." } else { "The draft will be removed. Clients you created will remain available." } }
         }
-        Modal {
+        ConfirmDialog {
             id: "np-reload-dialog", labelledby: "np-reload-title", open: reload_open(),
-            on_dismiss: move |_| reload_open.set(false),
-            div { class: "modal-body px-3 sm:px-6",
-                h2 { id: "np-reload-title", class: "modal-title", "Reload project?" }
-                p { "Your local edits will be discarded and replaced with the current saved project." }
-                div { class: "modal-actions flex-wrap",
-                    button { class: "btn btn-danger", onclick: move |_| on_reload.call(()), "Reload project" }
-                    button { class: "btn btn-secondary", onclick: move |_| reload_open.set(false), "Keep editing" }
-                }
-            }
+            title: "Reload project?", confirm_label: "Reload project", cancel_label: "Keep editing",
+            on_confirm: on_reload,
+            on_dismiss: keep_edits,
+            p { "Your local edits will be discarded and replaced with the current saved project." }
         }
     }
 }

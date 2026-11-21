@@ -6,6 +6,7 @@ use chrono::{DateTime, Duration, Utc};
 use dioxus::prelude::*;
 use uuid::Uuid;
 
+use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::form::{FormGroup, Input, Select};
 use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::models::api_tokens::{ApiTokenRow, CreatedApiToken};
@@ -135,7 +136,7 @@ pub(super) fn ApiTokensSection() -> Element {
                         body: "Create a token to let a script or another app use Horae on your behalf.",
                     }
                 },
-                Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, on_revoke } },
+                Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, focus_fallback: "api-tokens-title", on_revoke } },
             }
         }
     }
@@ -192,9 +193,36 @@ fn RevealedToken(token: String) -> Element {
 pub(crate) fn TokenTable(
     rows: Vec<ApiTokenRow>,
     show_owner: bool,
+    /// Where focus goes after a revoke, since the row's Revoke button goes away.
+    focus_fallback: &'static str,
     on_revoke: Callback<Uuid>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
+    // The token whose revocation is being confirmed, with its name.
+    let mut revoking = use_signal(|| None::<(Uuid, String)>);
+    let on_ask = use_callback(move |token: (Uuid, String)| revoking.set(Some(token)));
+    let revoke = use_callback(move |_| {
+        if let Some((id, _)) = revoking.take() {
+            on_revoke.call(id);
+            // After the dialog has closed and returned focus to the doomed button.
+            let target = serde_json::json!(focus_fallback);
+            document::eval(&format!(
+                "requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById({target})?.focus()));"
+            ));
+        }
+    });
+    let keep = use_callback(move |_| revoking.set(None));
+    let name = revoking
+        .read()
+        .as_ref()
+        .map(|(_, name)| name.clone())
+        .unwrap_or_default();
     rsx! {
+        ConfirmDialog { id: "api-token-revoke-dialog", labelledby: "api-token-revoke-title",
+            open: revoking.read().is_some(), title: tr.api_tokens_revoke_title(name), confirm_label: "Revoke",
+            on_confirm: revoke, on_dismiss: keep,
+            p { {tr.api_tokens_revoke_body()} }
+        }
         div { class: "table-container overflow-x-auto",
             table { class: "table",
                 thead {
@@ -211,7 +239,7 @@ pub(crate) fn TokenTable(
                 }
                 tbody {
                     for row in rows {
-                        TokenRow { key: "{row.id}", row, show_owner, on_revoke }
+                        TokenRow { key: "{row.id}", row, show_owner, on_ask }
                     }
                 }
             }
@@ -220,8 +248,7 @@ pub(crate) fn TokenTable(
 }
 
 #[component]
-fn TokenRow(row: ApiTokenRow, show_owner: bool, on_revoke: Callback<Uuid>) -> Element {
-    let mut confirming = use_signal(|| false);
+fn TokenRow(row: ApiTokenRow, show_owner: bool, on_ask: Callback<(Uuid, String)>) -> Element {
     let status = status(&row, Utc::now());
     let id = row.id;
     rsx! {
@@ -237,23 +264,13 @@ fn TokenRow(row: ApiTokenRow, show_owner: bool, on_revoke: Callback<Uuid>) -> El
             }
             td { class: "text-right whitespace-nowrap",
                 if status == "Active" {
-                    if confirming() {
-                        span { class: "text-sm text-secondary mr-2", "Revoke “{row.name}”?" }
-                        button { id: "api-token-cancel-{id}", r#type: "button", class: "btn btn-secondary btn-sm mr-2",
-                            onclick: move |_| confirming.set(false), "Cancel"
-                        }
-                        button { id: "api-token-confirm-{id}", r#type: "button", class: "btn btn-danger btn-sm",
-                            onclick: move |_| {
-                                confirming.set(false);
-                                on_revoke.call(id);
-                            },
-                            "Revoke"
-                        }
-                    } else {
-                        button { id: "api-token-revoke-{id}", r#type: "button", class: "btn btn-danger btn-sm",
-                            aria_label: "Revoke {row.name}",
-                            onclick: move |_| confirming.set(true), "Revoke"
-                        }
+                    button { id: "api-token-revoke-{id}", r#type: "button", class: "btn btn-danger btn-sm",
+                        aria_label: "Revoke {row.name}",
+                        onclick: {
+                            let name = row.name.clone();
+                            move |_| on_ask.call((id, name.clone()))
+                        },
+                        "Revoke"
                     }
                 }
             }

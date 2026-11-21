@@ -15,6 +15,10 @@ use uuid::Uuid;
 pub mod avatar;
 #[path = "../src/components/back_link.rs"]
 pub mod back_link;
+#[path = "../src/components/button.rs"]
+pub mod button;
+#[path = "../src/components/confirm_dialog.rs"]
+pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/date_picker.rs"]
@@ -23,6 +27,9 @@ pub mod date_picker;
 pub mod debounce;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/modal.rs"]
@@ -38,8 +45,8 @@ pub mod select_field;
 pub mod today;
 mod components {
     pub use super::{
-        avatar, back_link, controls, date_picker, debounce, form, icons, modal, page_header,
-        screen_state, select_field, today,
+        avatar, back_link, confirm_dialog, controls, date_picker, debounce, form, icons, modal,
+        page_header, screen_state, select_field, today,
     };
 }
 pub use horae_types::{
