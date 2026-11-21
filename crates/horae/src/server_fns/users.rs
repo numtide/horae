@@ -1,7 +1,7 @@
 //! User server functions: session adapters over `ops::people`.
 
 use super::*;
-use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
+use crate::models::people::{PeopleActivity, PeoplePage};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 #[cfg(feature = "server")]
 use crate::ops::permissions::provisioning;
@@ -15,16 +15,17 @@ pub use rates::{load_person_rates, update_person_rates};
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
-/// Read a bounded people-directory page under current canonical permissions.
-/// This is not a report/approval identity resolver or project assignment picker.
+/// Read the people directory under current canonical permissions, with the
+/// hours of the week starting on `week`. This is not a report/approval identity
+/// resolver or project assignment picker.
 #[server]
 pub async fn list_people(
     activity: PeopleActivity,
-    after: Option<PeopleCursor>,
+    week: chrono::NaiveDate,
 ) -> Result<PeoplePage, ServerFnError> {
     let caller = session_caller_or("People directory is unavailable").await?;
     let state = crate::state::global_state().await;
-    people_page(&state.db, caller, activity, after.as_ref())
+    people_page(&state.db, caller, activity, week)
         .await
         .map_err(op_error)
 }
@@ -34,10 +35,10 @@ pub(crate) async fn people_page(
     db: &sqlx::PgPool,
     caller: Caller,
     activity: PeopleActivity,
-    after: Option<&PeopleCursor>,
+    week: chrono::NaiveDate,
 ) -> Result<PeoplePage, ops::OpError> {
     let mut read = ops::begin_read(db, caller).await?;
-    let result = ops::people::directory::page(&mut read.tx, &read.actor, activity, after).await;
+    let result = ops::people::directory::page(&mut read.tx, &read.actor, activity, week).await;
     read.finish(result).await
 }
 

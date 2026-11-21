@@ -22,7 +22,8 @@ pub struct PeopleCursor {
     pub id: Uuid,
 }
 
-/// Basic identity only: no access roles, financial or authentication metadata.
+/// Identity, the profile's name and one week's time: no grants, financial or
+/// authentication metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PersonSummary {
@@ -30,15 +31,28 @@ pub struct PersonSummary {
     pub name: String,
     pub email: String,
     pub active: bool,
+    /// The built-in or custom profile's name, "Individual" for grants chosen
+    /// one by one, `None` without stored permissions.
+    pub profile: Option<String>,
+    /// The requested week's time, `None` when the requester may not read this
+    /// person's time.
+    pub week: Option<WeekMinutes>,
     /// Whether the requester may archive or restore this person now.
     pub can_change_active: bool,
 }
 
-/// Every page independently authorizes its current requester and records.
+/// Minutes tracked in one week: all of them, and the billable ones.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeekMinutes {
+    pub total: i64,
+    pub billable: i64,
+}
+
+/// The whole directory under the requester's grants, ordered by name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PeoplePage {
     pub requester: PermissionRequester,
     pub people: Vec<PersonSummary>,
-    pub next_after: Option<PeopleCursor>,
 }

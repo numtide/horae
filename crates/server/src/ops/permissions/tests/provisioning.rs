@@ -34,7 +34,7 @@ async fn init_creates_an_administrator_who_administers(pool: PgPool) {
         &mut read.tx,
         &read.actor,
         PeopleActivity::Active,
-        None,
+        chrono::NaiveDate::default(),
     )
     .await;
     let page = read.finish(page).await.unwrap();

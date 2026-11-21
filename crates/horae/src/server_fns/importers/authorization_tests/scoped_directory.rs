@@ -9,7 +9,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
-    let request = json!({"activity":"all","after":null});
+    let request = json!({"activity":"all","week":"2026-09-07"});
     assert_eq!(
         api.call("list_people", request.clone(), None, false)
             .await
@@ -50,8 +50,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .unwrap();
     let expected = json!({
         "requester":{"org_id":ids.org_id,"user_id":ids.user_id},
-        "people":[{"id":target,"name":"Test User","email":format!("{target}@test.com"),"active":true,"can_change_active":false}],
-        "next_after":null
+        "people":[{"id":target,"name":"Test User","email":format!("{target}@test.com"),"active":true,"profile":null,"week":null,"can_change_active":false}]
     });
     assert_eq!(
         api.json("list_people", request.clone(), &cookie).await,
@@ -61,7 +60,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.json(
             "list_people",
-            json!({"activity":"all","after":null,
+            json!({"activity":"all","week":"2026-09-07",
         "org_id":foreign.org_id,"user_id":foreign.user_id,"is_administrator":true}),
             &cookie
         )
@@ -71,7 +70,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.call(
             "list_people",
-            json!({"activity":"all","after":{"name":"bad\0name","id":target}}),
+            json!({"activity":"all","week":"not a date"}),
             Some(&cookie),
             false
         )
@@ -86,7 +85,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let archived = api
         .json(
             "list_people",
-            json!({"activity":"archived","after":null}),
+            json!({"activity":"archived","week":"2026-09-07"}),
             &cookie,
         )
         .await;
@@ -95,7 +94,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.json(
             "list_people",
-            json!({"activity":"active","after":null}),
+            json!({"activity":"active","week":"2026-09-07"}),
             &cookie
         )
         .await["people"],

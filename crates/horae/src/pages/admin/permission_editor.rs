@@ -48,7 +48,7 @@ const CANCEL_BUTTON: &str = "permission-editor-cancel";
 const RELOAD_BUTTON: &str = "permission-editor-reload";
 
 #[component]
-pub(super) fn PermissionEditorDialog(
+pub(crate) fn PermissionEditorDialog(
     mut person: Signal<Option<(Uuid, PermissionRequester)>>,
     on_saved: EventHandler<bool>,
 ) -> Element {

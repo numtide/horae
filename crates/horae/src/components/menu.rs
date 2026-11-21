@@ -55,6 +55,7 @@ pub fn Menu(
 /// One selectable row inside a [`Menu`].
 #[component]
 pub fn MenuItem(
+    #[props(into)] id: Option<String>,
     #[props(default)] onclick: EventHandler<MouseEvent>,
     #[props(default)] selected: bool,
     #[props(default)] danger: bool,
@@ -73,6 +74,7 @@ pub fn MenuItem(
     }
     rsx! {
         button {
+            id,
             r#type: "button",
             role: "menuitem",
             tabindex: "-1",

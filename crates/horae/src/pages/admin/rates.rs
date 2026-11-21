@@ -14,14 +14,14 @@ use crate::server_fns;
 
 /// The person whose rates the dialog shows, and who asked.
 #[derive(Clone, PartialEq)]
-pub(super) struct RatesTarget {
+pub(crate) struct RatesTarget {
     pub id: Uuid,
     pub name: String,
     pub requester: PermissionRequester,
 }
 
 #[component]
-pub(super) fn PersonRatesDialog(
+pub(crate) fn PersonRatesDialog(
     mut target: Signal<Option<RatesTarget>>,
     on_saved: EventHandler<String>,
 ) -> Element {

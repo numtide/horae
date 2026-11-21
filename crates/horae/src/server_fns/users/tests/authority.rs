@@ -724,7 +724,7 @@ async fn the_directory_offers_archiving_where_the_operation_allows_it(pool: PgPo
             &pool,
             Caller::session(ids.org_id, actor),
             PeopleActivity::All,
-            None,
+            chrono::NaiveDate::default(),
         )
         .await
         .unwrap();

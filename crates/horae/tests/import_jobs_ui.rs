@@ -91,16 +91,16 @@ mod route {
     }
 
     #[component]
-    fn AdminUsers() -> Element {
-        rsx! { "team" }
+    fn People() -> Element {
+        rsx! { "people" }
     }
 
     #[derive(Routable, Clone, PartialEq)]
     pub enum Route {
         #[route("/projects")]
         ProjectList {},
-        #[route("/admin/users")]
-        AdminUsers {},
+        #[route("/people")]
+        People {},
         #[route("/admin/importers")]
         ImporterIndex {},
         #[route("/admin/importers/harvest?:..outcome")]
