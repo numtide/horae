@@ -342,7 +342,7 @@ pub fn ClientList() -> Element {
                                     th { scope: "col", class: "text-right text-secondary", "Currency" }
                                     th { scope: "col", class: "text-right text-secondary", "Projects" }
                                     th { scope: "col", class: "text-secondary", "Status" }
-                                    if can_manage { th { scope: "col", class: "text-secondary", "Actions" } }
+                                    if can_manage { th { scope: "col", class: "text-right text-secondary", "Actions" } }
                                 }
                             }
                             tbody {

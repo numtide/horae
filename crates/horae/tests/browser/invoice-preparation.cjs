@@ -293,6 +293,7 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     page.once('dialog', dialog => dialog.accept());
     await page.getByRole('link', { name: 'Back to Invoices', exact: true }).click();
     await expect(page).toHaveURL(`${base}/invoices`);
+    await readsFinished();
     await page.goto(`${base}/invoices/${result.invoice.id}`);
     await editValues(page);
     const feeAmount = page.getByLabel('Fee amount (EUR)', { exact: true });

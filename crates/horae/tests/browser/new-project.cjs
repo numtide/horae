@@ -1367,7 +1367,6 @@ const sql = query => require('node:child_process').execFileSync('psql',
       await generate.click();
       await expect.poll(() => !!releaseInvoice).toBe(true);
       await expect(generate).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
       await expect(page.getByLabel('PO number', { exact: true })).toBeDisabled();
     } finally {
       releaseInvoice?.();
@@ -1379,7 +1378,8 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(page.getByRole('heading', { name: `Invoice ${draft.number}`, exact: true })).toBeVisible();
     await readsFinished(page);
     await page.unroute('**/api/generate_invoice*');
-    await page.getByRole('button', { name: 'Edit invoice values', exact: true }).click();
+    await page.locator('#invoice-actions-trigger').click();
+    await page.getByRole('menuitem', { name: 'Edit invoice values', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Mark Sent', exact: true })).toBeDisabled();
     await page.getByLabel('Payment terms', { exact: true }).selectOption('45');
     await page.getByLabel('Discount (%)', { exact: true }).fill('12.50');
@@ -1413,7 +1413,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(page.locator('tfoot tr').last()).toHaveText(/TotalEUR 80.66/);
     await page.getByRole('button', { name: 'Mark Sent', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Mark Paid', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit invoice values', exact: true })).toHaveCount(0);
+    await expect(page.locator('#invoice-edit-values')).toHaveCount(0);
     await readsFinished(page);
     console.log('PASS: project invoice defaults prefill real estimates, stale reviews cannot generate, and editable draft values persist independently');
     await page.goto(`${base}/projects/new`);

@@ -35,7 +35,7 @@ sql(`BEGIN;
       await page.goto(`${base}/invoices`);
       const row = page.getByRole('row').filter({ hasText: 'LABEL-REGRESSION' });
       await expect(row.locator('td').nth(1)).toHaveText(name);
-      await row.getByRole('link', { name: 'View', exact: true }).click();
+      await row.getByRole('link', { name: 'LABEL-REGRESSION', exact: true }).click();
       await expect(page).toHaveURL(`${base}/invoices/${invoiceId}`);
       await expect(page.locator('main').getByText(name, { exact: true })).toBeVisible();
       await expect(page.locator('main').getByText(clientId, { exact: true })).toHaveCount(0);

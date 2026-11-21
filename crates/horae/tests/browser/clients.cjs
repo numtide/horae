@@ -74,8 +74,13 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await page.getByRole('link', { name, exact: true }).click();
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Billing', exact: true })).toContainText('EUR 0.00 / h');
-    const edit = page.getByRole('button', { name: 'Edit client', exact: true });
-    await edit.click();
+    // Edit client is in the header's "Actions" menu; focus returns to its trigger.
+    const edit = page.locator('#client-actions-trigger');
+    const openEditor = async () => {
+      await edit.click();
+      await page.getByRole('menuitem', { name: 'Edit client', exact: true }).click();
+    };
+    await openEditor();
     await expect(field('Default rate')).toHaveValue('0.00');
     await expect(field('Billing address')).toHaveValue('Test street\nFloor 2');
     await field('Billing address').fill('Must not be saved');
@@ -84,7 +89,7 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await expect(edit).toBeFocused();
     await page.reload();
     await expect(page.getByRole('region', { name: 'Billing', exact: true })).toContainText('Test street');
-    await edit.click();
+    await openEditor();
     await dialog.getByRole('combobox', { name: 'Currency', exact: true }).selectOption('USD');
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText('Confirm the default rate');

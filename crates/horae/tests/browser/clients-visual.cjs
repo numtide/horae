@@ -92,7 +92,8 @@ if (output) fs.mkdirSync(output, { recursive: true });
         await expect(page.getByRole('status')).toHaveCount(0);
         await capture(`${label}-detail`);
         // Edit client is the first item of the header's "Actions" menu.
-        await page.locator('#client-actions-trigger').focus();
+        const edit = page.locator('#client-actions-trigger');
+        await edit.focus();
         await page.keyboard.press('ArrowDown');
         await expect(page.getByRole('menuitem', { name: 'Edit client', exact: true })).toBeFocused();
         await page.keyboard.press('Enter');

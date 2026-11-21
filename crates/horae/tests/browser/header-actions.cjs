@@ -120,7 +120,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toHaveCount(0);
     const listed = page.getByRole('row').filter({ has: page.getByRole('link', { name: number, exact: true }) });
     await expect(listed.locator('.badge')).toHaveText('Void');
-    await listed.getByRole('cell', { name: clientName, exact: true }).click();
+    // The number's link covers the row, so it, not the cell, takes this click.
+    await listed.getByRole('cell', { name: clientName, exact: true }).click({ force: true });
     await expect(page).toHaveURL(`${base}/invoices/${id}`);
     console.log('PASS: an invoice row opens its invoice from anywhere in the row');
 

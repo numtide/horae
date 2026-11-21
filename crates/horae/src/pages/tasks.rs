@@ -188,7 +188,7 @@ pub fn TaskCatalog() -> Element {
                                 th { scope: "col", "Billable by default" }
                                 if page.can_read_rates { th { scope: "col", "Default hourly rate" } }
                                 th { scope: "col", "Status" }
-                                if page.can_edit { th { scope: "col", "Actions" } }
+                                if page.can_edit { th { scope: "col", class: "text-right", "Actions" } }
                             } }
                             tbody { for task in page.tasks.iter().filter(|task| task.is_default == common) {
                                 tr { key: "{task.id}",
