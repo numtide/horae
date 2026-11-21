@@ -218,7 +218,7 @@ async fn pending_or_denied_overview_starts_no_auxiliary_reads_or_actions() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains("Project access is unavailable") && html.contains("Try again"),
+        html.contains("Access unavailable") && !html.contains("Try again"),
         "{html}"
     );
     assert!(
@@ -278,10 +278,7 @@ async fn overview_refresh_rejects_changed_account_or_organization_without_old_ro
         send.send(Ok(changed)).unwrap();
         settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
-        assert!(
-            html.contains("Project access is unavailable"),
-            "{change}: {html}"
-        );
+        assert!(html.contains("Could not load projects"), "{change}: {html}");
         assert!(
             !html.contains("Other account project") && !html.contains("Visible project"),
             "{change}: {html}"
@@ -455,7 +452,7 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
         html.contains("Could not load projects") && filtered(&html),
         "{html}"
     );
-    assert!(!html.contains("Project access is unavailable"), "{html}");
+    assert!(!html.contains("Access unavailable"), "{html}");
     assert!(
         html.contains("1 project selected") && bulk_disabled(&html),
         "hidden rows take no bulk action: {html}"
@@ -506,13 +503,16 @@ async fn denied_or_changed_reloads_drop_the_list_with_its_filters_and_selection(
         settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
         assert!(
-            html.contains("Project access is unavailable"),
-            "{change}: {html}"
-        );
-        assert!(
             !html.contains("Alpha") && !html.contains("value=\"alpha\""),
             "{change}: {html}"
         );
+        // A refusal is the one no-access state, with nothing to retry.
+        if change == "denied" {
+            assert!(html.contains("Access unavailable"), "{html}");
+            assert!(!html.contains("projects-retry-access"), "{html}");
+            continue;
+        }
+        assert!(html.contains("Could not load projects"), "{html}");
 
         // Retry access reloads under the original binding and mounts a new list.
         click(&mut dom, "projects-retry-access");

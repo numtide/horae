@@ -10,6 +10,32 @@ use crate::components::icons::NavIcon;
 pub const LOAD_FAILED: &str =
     "The request did not complete. Try again, or reload the page if it keeps failing.";
 
+/// Whether a failed read was refused (403), so the region shows `NoAccess`.
+pub fn is_refusal(error: &ServerFnError) -> bool {
+    const FORBIDDEN: u16 = 403;
+    matches!(
+        error,
+        ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        }
+    )
+}
+
+/// The one state for a screen or region the person may not open (`DESIGN.md`,
+/// *Screen States → No permission*). It names who grants access and nothing
+/// about what is behind it; the screen around it keeps only its header.
+#[component]
+pub fn NoAccess(#[props(default)] inset: bool) -> Element {
+    rsx! {
+        ErrorState {
+            title: "Access unavailable",
+            body: "Your account cannot open this. Ask an administrator of this workspace if you need it.",
+            inset,
+        }
+    }
+}
+
 /// The server's own message, for the request line of an `ErrorState`. A
 /// transport failure ("error sending request…") has none worth showing.
 pub fn error_line(error: &ServerFnError) -> Option<String> {
@@ -158,11 +184,7 @@ pub fn LoadError(
         ServerFnError::ServerError {
             code: FORBIDDEN, ..
         } => rsx! {
-            ErrorState {
-                title: "Could not load {what}",
-                body: "Your account cannot view this. Ask an Administrator if you need access.",
-                inset,
-            }
+            NoAccess { inset }
         },
         ServerFnError::ServerError {
             code: NOT_FOUND,
@@ -299,7 +321,7 @@ mod tests {
     fn refusals_and_missing_records_offer_no_retry() {
         for (error, expected) in [
             (server(401, "Sign in"), "Sign in again"),
-            (server(403, "Forbidden"), "Ask an Administrator"),
+            (server(403, "Forbidden"), "Access unavailable"),
             (server(404, "Invoice not found"), "Invoice not found"),
         ] {
             let html = render(error);

@@ -2,7 +2,9 @@ use dioxus::prelude::*;
 use horae_core::money::format_cents;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{
+    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal,
+};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::task::{TaskActivity, TaskCursor};
 use crate::server_fns;
@@ -81,11 +83,13 @@ pub fn TaskCatalog() -> Element {
     let next = current
         .and_then(|result| result.as_ref().ok())
         .and_then(|page| page.next_after.clone());
+    // Without access the screen keeps only its header and the state.
+    let refused = failed.is_some_and(is_refusal);
 
     rsx! {
         section { aria_labelledby: "tasks-title", class: "min-w-0",
             PageHeader { title: "Tasks", title_id: "tasks-title",
-                actions: rsx! {
+                actions: rsx! { if !refused {
                     if let Some(Ok(page)) = current && page.can_edit {
                         button { id: "tasks-new", r#type: "button", class: "btn btn-primary",
                             onclick: {
@@ -98,9 +102,9 @@ pub fn TaskCatalog() -> Element {
                     button { id: "tasks-refresh", r#type: "button", class: "btn btn-secondary", disabled: pending,
                         onclick: move |_| { selected.set(None); notice.set(None); catalog.restart(); }, "Refresh tasks"
                     }
-                },
+                } },
             }
-            div { class: "flex flex-wrap items-center gap-3 mb-4",
+            if !refused { div { class: "flex flex-wrap items-center gap-3 mb-4",
                 label { r#for: "tasks-activity", class: "form-label", "Show" }
                 select { id: "tasks-activity", class: "form-select", disabled: pending,
                     value: match activity() { TaskActivity::Active => "active", TaskActivity::Archived => "archived", TaskActivity::All => "all" },
@@ -115,11 +119,13 @@ pub fn TaskCatalog() -> Element {
                     option { value: "archived", "Archived tasks" }
                     option { value: "all", "All tasks" }
                 }
-            }
+            } }
             if let Some(message) = notice() { p { class: "text-sm text-secondary mb-3", role: "status", "{message}" } }
             if let Some(error) = failed {
-                if let Some(body) = refusal(error) {
-                    ErrorState { title: "Could not load tasks", body }
+                if refused {
+                    NoAccess {}
+                } else if is_unauthorized(error) {
+                    ErrorState { title: "Could not load tasks", body: "Your session has ended. Sign in again to continue." }
                 } else {
                     ErrorState {
                         title: "Could not load tasks",
@@ -177,14 +183,14 @@ pub fn TaskCatalog() -> Element {
                     }
                 }
             }
-            nav { class: "flex flex-wrap gap-3 mt-4", aria_label: "Task pages",
+            if !refused { nav { class: "flex flex-wrap gap-3 mt-4", aria_label: "Task pages",
                 button { id: "tasks-previous", r#type: "button", class: "btn btn-secondary btn-sm", disabled: pending || cursors.read().len() <= 1,
                     onclick: move |_| { selected.set(None); if cursors.read().len() > 1 { cursors.write().pop(); } }, "Previous"
                 }
                 button { id: "tasks-next", r#type: "button", class: "btn btn-secondary btn-sm", disabled: pending || next.is_none(),
                     onclick: move |_| { selected.set(None); if let Some(cursor) = next.clone() { cursors.write().push(Some(cursor)); } }, "Next"
                 }
-            }
+            } }
             editor::TaskEditor { selected,
                 on_saved: move |message| {
                     let created = selected.peek().as_ref().is_some_and(|selection| selection.task.is_none());
@@ -205,16 +211,12 @@ fn rate_label(cents: Option<i64>, currency: Option<&str>) -> String {
     }
 }
 
-/// Why the catalog was refused, when a retry cannot help; `None` for a
-/// failure worth repeating.
-fn refusal(error: &ServerFnError) -> Option<&'static str> {
-    match error {
+fn is_unauthorized(error: &ServerFnError) -> bool {
+    matches!(
+        error,
         ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => Some("Sign in again to view tasks."),
-        ServerFnError::ServerError {
-            code: FORBIDDEN, ..
-        } => Some("Task access is unavailable. If you changed accounts, reopen this page."),
-        _ => None,
-    }
+            code: UNAUTHORIZED,
+            ..
+        }
+    )
 }

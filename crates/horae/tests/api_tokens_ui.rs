@@ -25,11 +25,13 @@ pub mod form;
 pub mod icons;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/page_header.rs"]
+pub mod page_header;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 mod components {
-    pub use super::{confirm_dialog, form, icons, screen_state};
+    pub use super::{confirm_dialog, form, icons, page_header, screen_state};
 }
 mod models {
     pub use horae_types::api_tokens;
@@ -71,7 +73,7 @@ fn row(name: &str) -> ApiTokenRow {
 
 fn app(probe: Probe) -> Element {
     use_context_provider(|| probe);
-    rsx! { api_tokens::ApiTokensSection {} }
+    rsx! { api_tokens::SettingsApiTokens {} }
 }
 
 fn mount(probe: &Probe) -> VirtualDom {

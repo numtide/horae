@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
-use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 use crate::components::form::{FormGroup, Input};
+use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
@@ -9,32 +9,24 @@ use crate::models::user::{CurrentUser, ProfileOptions, profile_name_is_valid};
 use crate::server_fns;
 
 /// The signed-in person's name and time zone, with the identity they cannot
-/// change here shown beside them.
+/// change here shown beside them. Their access has a page of its own.
 #[component]
-pub(super) fn ProfileSection() -> Element {
+pub fn SettingsProfile() -> Element {
     let session = use_session();
     let options = use_resource(server_fns::get_profile_options);
     let retry = use_callback(move |_| session.refresh());
-    let access = match &*session.permissions.read() {
-        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => Some(
-            own.profile
-                .clone()
-                .unwrap_or_else(|| "Individual configuration".into()),
-        ),
-        _ => None,
-    };
     // Only the first load is gated: re-reading the session after a save keeps
     // the previous value, so the form stays mounted.
     let me = session.me.read();
     rsx! {
-        section { class: "card mb-4", aria_labelledby: "profile-title",
-            h2 { id: "profile-title", class: "card-title", "Profile" }
+        PageHeader { title: "Profile" }
+        section { class: "card", aria_label: "Profile",
             match &*me {
                 None => rsx! { Loading { label: "Loading your profile…" } },
                 Some(Err(_)) => rsx! {
                     ErrorState { title: "Could not load your profile", body: LOAD_FAILED, inset: true, onretry: retry }
                 },
-                Some(Ok(me)) => rsx! { ProfileForm { key: "{me.id}", me: me.clone(), options, access: access.clone() } },
+                Some(Ok(me)) => rsx! { ProfileForm { key: "{me.id}", me: me.clone(), options } },
             }
         }
     }
@@ -44,8 +36,6 @@ pub(super) fn ProfileSection() -> Element {
 fn ProfileForm(
     me: CurrentUser,
     options: Resource<Result<ProfileOptions, ServerFnError>>,
-    /// The profile or template the person's permissions come from, once known.
-    access: Option<String>,
 ) -> Element {
     let mut session_me = use_session().me;
     let saved_zone = me.timezone.clone().unwrap_or_default();
@@ -147,11 +137,6 @@ fn ProfileForm(
         }
         FormGroup { label: "Signed in with", id: "profile-sign-in",
             Input { id: "profile-sign-in", value: sign_in, readonly: true }
-        }
-        if let Some(access) = access {
-            FormGroup { label: "Permissions", id: "profile-access", hint: "Only an Administrator can change your permissions.",
-                Input { id: "profile-access", value: access, readonly: true }
-            }
         }
         FormGroup { label: "Time zone", id: "profile-timezone",
             hint: "Decides which day is today on your timesheet and when you start a timer.",

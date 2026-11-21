@@ -191,7 +191,7 @@ let actor, org, owned = false, restoreSeededStates;
       'billable_rate_read_managed', 'billable_rate_read_all', 'report_profitability_read']);
     overview = await success(await loadList());
     assert.deepEqual([overview.can_read, overview.can_manage, overview.clients], [false, false, []]);
-    await expect(page.getByRole('heading', { name: 'Client access is unavailable', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     await expect(page.getByText('No clients yet', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(0);
     await expect(sidebarClients).toHaveCount(0);

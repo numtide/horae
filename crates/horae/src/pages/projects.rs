@@ -13,7 +13,9 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, LoadError, Loading};
+use crate::components::screen_state::{
+    EmptyState, ErrorState, LOAD_FAILED, LoadError, Loading, NoAccess, is_refusal,
+};
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
@@ -543,7 +545,11 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     }
     // Nothing is admitted: the first load, an access refresh or a refused read.
     match (&*projects.read(), projects.state()()) {
-        // A refused read stays up, disabled, while its retry runs.
+        (Some(Err(error)), _) if is_refusal(error) => rsx! {
+            PageHeader { title: "Projects", title_id: "project-list-heading" }
+            NoAccess {}
+        },
+        // A failed read stays up, disabled, while its retry runs.
         (Some(Err(_)), state) => rsx! {
             PageHeader { title: "Projects" }
             if let Some(message) = bulk_success() {
@@ -551,7 +557,7 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
             }
             div { onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
                 ErrorState {
-                    title: "Project access is unavailable",
+                    title: "Could not load projects",
                     body: "Try again, or sign in again if your account changed.",
                     retry_id: "projects-retry-access",
                     retry_disabled: state != UseResourceState::Ready,

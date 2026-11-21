@@ -189,12 +189,11 @@ async fn pages_bind_requester_replace_history_and_hide_stale_content_during_refr
         .unwrap();
     h.settle();
     assert!(!h.html().contains("private diagnostic"));
-    assert!(h.html().contains("Administrator access"));
-    let retry = probe.reply();
-    h.click("audit-refresh");
-    retry.send(Ok(history(owner, false))).unwrap();
-    h.settle();
-    assert!(h.html().contains("No more permission events"));
+    // Only the header and the state: no refresh or paging around it.
+    assert!(h.html().contains("Access unavailable"));
+    for control in ["audit-refresh", "audit-newest", "audit-older"] {
+        assert!(!h.html().contains(control), "{control}");
+    }
 }
 
 #[tokio::test]
@@ -212,9 +211,8 @@ async fn different_requester_response_is_never_rendered_or_adopted() {
     refresh.send(Ok(other)).unwrap();
     h.settle();
     assert!(!h.html().contains(&other_id));
-    assert!(h.html().contains("Administrator access"));
-    let _retry = probe.reply();
-    h.click("audit-refresh");
+    assert!(h.html().contains("Access unavailable"));
+    // The refresh went out bound to the first account.
     assert_eq!(probe.requests.borrow().last().unwrap().1, Some(owner));
 }
 

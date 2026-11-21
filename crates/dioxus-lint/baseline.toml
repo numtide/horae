@@ -48,10 +48,6 @@ reason = "Predates the check; each needs its own first-load gate and aria-busy f
 "crates/horae/src/pages/projects.rs" = 1
 "crates/horae/src/pages/reports.rs" = 1
 
-["dioxus/internal-href"]
-reason = "settings/own_permissions.rs permission_content links to /admin/audit; a Link needs a router, and its unit tests render it with bare ssr::render_element, so the fix comes with a test harness change."
-"crates/horae/src/pages/settings/own_permissions.rs" = 1
-
 ["dioxus/render-helper"]
 reason = "timesheet.rs render_day_view and render_week_view; split each into a component as CalendarView was (#329)."
 "crates/horae/src/pages/timesheet.rs" = 2

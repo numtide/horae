@@ -121,8 +121,8 @@ async fn denied_list_is_neither_empty_nor_populated() {
     respond(&probe.client_overview_response, Ok(denied));
     let dom = mount(&probe);
     let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("Client access is unavailable"), "{html}");
-    for hidden in ["Client-1", "No clients yet", "Active clients"] {
+    assert!(html.contains("Access unavailable"), "{html}");
+    for hidden in ["Client-1", "No clients yet", "Active clients", "clients-search"] {
         assert!(!html.contains(hidden), "shown {hidden}: {html}");
     }
     assert!(!has_list_actions(&html), "{html}");
@@ -140,7 +140,7 @@ async fn readable_empty_list_is_a_genuine_empty_state() {
     let dom = mount(&probe);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("No clients yet"), "{html}");
-    assert!(!html.contains("Client access is unavailable"), "{html}");
+    assert!(!html.contains("Access unavailable"), "{html}");
     assert!(!has_list_actions(&html), "{html}");
 }
 
@@ -158,7 +158,7 @@ async fn list_loading_and_errors_never_claim_empty_or_denied() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Could not load clients"), "{html}");
-    for hidden in ["No clients yet", "Client access is unavailable", "Client-1"] {
+    for hidden in ["No clients yet", "Access unavailable", "Client-1"] {
         assert!(!html.contains(hidden), "shown {hidden}: {html}");
     }
     assert!(!has_list_actions(&html), "{html}");

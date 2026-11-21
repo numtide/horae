@@ -193,7 +193,7 @@ async fn people_without_a_people_grant_never_mount_admin_content() {
             "expected access notice: {html}"
         );
         // A no-permission state names who can grant access instead of a way out.
-        assert!(html.contains("Ask an Administrator"), "{html}");
+        assert!(html.contains("Ask an administrator"), "{html}");
         assert!(!html.contains("Back to Timesheet"), "{html}");
     }
 }

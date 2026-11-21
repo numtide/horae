@@ -145,15 +145,17 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     await page.unroute('**/api/list_permission_audit*', holdRead);
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${stateId}'`);
     await page.locator('#audit-refresh').click();
-    await expect(page.getByRole('alert')).toContainText('Administrator access is required');
+    // A refusal keeps only the header and the one no-access state.
+    await expect(page.getByRole('alert')).toContainText('Access unavailable');
     await expect(history).not.toBeVisible();
+    for (const id of ['audit-refresh', 'audit-newest', 'audit-older']) await expect(page.locator(`#${id}`)).toHaveCount(0);
     sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${stateId}'`);
-    await page.locator('#audit-refresh').click();
+    await page.reload();
     await expect(history.locator('tbody tr')).toHaveCount(25);
     assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt: ${id}`));
 
-    await page.goto(`${base}/settings`);
-    await page.getByRole('link', { name: 'View permission audit log', exact: true }).click();
+    await page.goto(`${base}/settings/access`);
+    await page.getByRole('link', { name: 'See changes to your access', exact: true }).click();
     await page.waitForURL(`${base}/admin/audit`);
     await expect(history.locator('tbody tr')).toHaveCount(25);
     sql(`UPDATE users SET active=false WHERE id='${actor.id}'`);

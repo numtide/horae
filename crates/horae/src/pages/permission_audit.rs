@@ -3,7 +3,9 @@ use horae_core::permissions::catalog::{Permission, profile_label};
 
 use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
-use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{
+    EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal,
+};
 use crate::models::permission_audit::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
@@ -63,6 +65,13 @@ pub fn PermissionAudit() -> Element {
         .as_ref()
         .filter(|(cursor, _)| *cursor == after())
         .and_then(|(_, result)| result.as_ref().err());
+    // Without access the screen keeps only its header and the state.
+    if failed.is_some_and(is_refusal) {
+        return rsx! {
+            PageHeader { title: "Audit log", title_id: "audit-title" }
+            NoAccess {}
+        };
+    }
 
     rsx! {
         section { aria_labelledby: "audit-title", class: "min-w-0",
@@ -80,8 +89,8 @@ pub fn PermissionAudit() -> Element {
                 "Permission changes, newest first. Expand an event to see its recorded details. Times are shown in UTC."
             }
             if let Some(error) = failed {
-                if let Some(body) = refusal(error) {
-                    ErrorState { title: "Could not load permission history", body }
+                if matches!(error, ServerFnError::ServerError { code: UNAUTHORIZED, .. }) {
+                    ErrorState { title: "Could not load permission history", body: "Your session has ended. Sign in again to continue." }
                 } else {
                     ErrorState {
                         title: "Could not load permission history",
@@ -153,22 +162,6 @@ pub fn PermissionAudit() -> Element {
                 }
             }
         }
-    }
-}
-
-/// Why the history was refused, when a retry cannot help; `None` for a
-/// failure worth repeating.
-fn refusal(error: &ServerFnError) -> Option<&'static str> {
-    match error {
-        ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => Some("Sign in again to view permission history."),
-        ServerFnError::ServerError {
-            code: FORBIDDEN, ..
-        } => Some(
-            "Administrator access is required for permission history. If you changed accounts, reopen this page.",
-        ),
-        _ => None,
     }
 }
 

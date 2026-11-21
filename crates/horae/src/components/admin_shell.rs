@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, Loading};
+use crate::components::screen_state::{ErrorState, Loading, NoAccess};
 use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -124,10 +124,7 @@ pub fn AdminShell() -> Element {
         // Non-disclosing: it names who can grant access, not what the section holds.
         Some(Ok(_)) => rsx! {
             PageHeader { title: section.title() }
-            ErrorState {
-                title: "Access unavailable",
-                body: "Your account cannot view this workspace section. Ask an Administrator if you need it.",
-            }
+            NoAccess {}
             if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| session.refresh() } }
         },
         Some(Err(())) => rsx! {
@@ -199,7 +196,7 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
 /// One sub-nav row: a client-side `Link` that marks itself active for its route
 /// variant (matching the rail's `SideLink` behaviour).
 #[component]
-fn AdmLink(to: Route, label: String) -> Element {
+pub(crate) fn AdmLink(to: Route, label: String) -> Element {
     let active = crate::route::route_is_active(&to);
     rsx! {
         Link { to, class: if active { "adm-link active" } else { "adm-link" }, "{label}" }

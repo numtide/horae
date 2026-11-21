@@ -310,7 +310,7 @@ async fn approval_loading_error_empty_and_denied_states_need_no_directory() {
             "Approvals unavailable",
         ),
         (false, None, true, "Nothing to approve"),
-        (false, None, false, "Approval access is unavailable"),
+        (false, None, false, "Access unavailable"),
     ] {
         let probe = Probe {
             pending,
@@ -567,7 +567,7 @@ async fn no_list_is_requested_without_approval_access_or_a_week_start() {
         ..approver(vec![])
     };
     let (dom, _) = render(&member);
-    assert!(html(&dom).contains("Approval access is unavailable"));
+    assert!(html(&dom).contains("Access unavailable"));
     assert!(member.requests.borrow().is_empty());
 
     let unconfigured = Probe {

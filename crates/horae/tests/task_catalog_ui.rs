@@ -206,8 +206,12 @@ async fn pending_denied_and_read_only_catalogs_do_not_offer_mutations_or_hidden_
         .unwrap();
     ui.settle();
     let html = ui.html();
-    assert!(html.contains("Task access is unavailable"));
+    assert!(html.contains("Access unavailable"));
     assert!(!html.contains("private SQL detail"));
+    // Only the header and the state: no filter, refresh or pager around it.
+    for control in ["tasks-activity", "tasks-refresh", "tasks-previous", "tasks-next"] {
+        assert!(!html.contains(control), "{control}: {html}");
+    }
 }
 
 #[tokio::test]
@@ -346,7 +350,7 @@ async fn refresh_discards_new_form_and_rejects_another_accounts_catalog() {
     assert!(!ui.html().contains("task-name"));
     reload.send(Ok(catalog(true, true))).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Task access is unavailable"));
+    assert!(ui.html().contains("Access unavailable"));
     assert!(!ui.html().contains("tasks-new"));
     assert!(probe.creations.borrow().is_empty());
 }
@@ -369,7 +373,7 @@ async fn refresh_binds_requester_discards_editor_and_rejects_account_switch() {
     assert_eq!(probe.requests.borrow().last().unwrap().2, Some(requester));
     reply.send(Ok(catalog(true, true))).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Task access is unavailable"));
+    assert!(ui.html().contains("Access unavailable"));
     assert!(!ui.html().contains("A private task"));
 }
 

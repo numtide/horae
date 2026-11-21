@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::form::FormGroup;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::Loading;
+use crate::components::screen_state::{EmptyState, Failure, Loading, loaded};
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
 use crate::server_fns;
@@ -25,6 +25,42 @@ pub fn WorkspaceSettings() -> Element {
                 None => rsx! { Loading {} },
                 Some(saved) => rsx! { TimezoneForm { key: "{saved}", saved, zones } },
             }
+        }
+        Plugins {}
+    }
+}
+
+/// The plugins this server loaded at startup. The server installation chooses
+/// them, so they are listed here and not in anyone's own settings.
+#[component]
+fn Plugins() -> Element {
+    let mut plugins = use_resource(server_fns::list_plugins);
+    let retry = use_callback(move |_| plugins.restart());
+    rsx! {
+        section { class: "card mt-4", aria_labelledby: "plugins-title",
+            h2 { id: "plugins-title", tabindex: "-1", class: "card-title", "Plugins" }
+            {loaded(&plugins.read(), Failure {
+                what: "plugins", retry, inset: true,
+                pending: plugins.state()() != UseResourceState::Ready, focus: Some("plugins-title"),
+            }, |items| rsx! {
+                if items.is_empty() {
+                    EmptyState { icon: "plugin", title: "No plugins installed", inset: true,
+                        body: "Plugins add features to Horae. The person who runs your Horae server installs them.",
+                    }
+                } else {
+                    div { class: "text-sm",
+                        for (index, plugin) in items.iter().enumerate() {
+                            div { key: "{plugin.name}", class: if index == 0 { "py-3" } else { "py-3 border-t" },
+                                div { class: "flex items-center justify-between gap-2",
+                                    strong { "{plugin.name}" }
+                                    span { class: "text-muted", "v{plugin.version}" }
+                                }
+                                p { class: "text-muted", "Hooks: {plugin.hooks}" }
+                            }
+                        }
+                    }
+                }
+            })}
         }
     }
 }

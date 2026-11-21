@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+use horae_core::permissions::invoices;
 
 use crate::components::admin_shell::first_admin_route;
 use crate::components::avatar::Avatar;
@@ -124,9 +125,9 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                         }
                     }
                     div { class: "sidebar-menu-list",
-                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                        Link { to: Route::SettingsProfile {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                             span { class: "menu-item-icon", NavIcon { name: "users" } }
-                            "Settings"
+                            "My settings"
                         }
                         // The admin shell's own sub-navigation reaches the other sections.
                         if let Some(to) = admin_route {
@@ -210,16 +211,22 @@ struct NavAccess {
     people: bool,
     clients: bool,
     tasks: bool,
+    invoices: bool,
+    approvals: bool,
 }
 
-/// Each gated row follows its read grant. Failed or unknown permission state
-/// hides every gated row.
+/// Each gated row follows the grants its page requires. Failed or unknown
+/// permission state hides every gated row.
 fn nav_access(own: Option<&Result<OwnPermissions, ServerFnError>>) -> NavAccess {
-    current(own).map_or_else(NavAccess::default, |access| NavAccess {
-        people: access.grants.contains(&Permission::PeopleReadAll)
-            || access.grants.contains(&Permission::PeopleReadManaged),
-        clients: access.grants.contains(&Permission::ClientReadAll),
-        tasks: access.grants.contains(&Permission::TaskReadAll),
+    current(own).map_or_else(NavAccess::default, |access| {
+        let has = |grant: Permission| access.grants.contains(&grant);
+        NavAccess {
+            people: has(Permission::PeopleReadAll) || has(Permission::PeopleReadManaged),
+            clients: has(Permission::ClientReadAll),
+            tasks: has(Permission::TaskReadAll),
+            invoices: invoices::holds(has, invoices::READ),
+            approvals: has(Permission::TimeApproveAll) || has(Permission::TimeApproveManaged),
+        }
     })
 }
 
@@ -261,18 +268,24 @@ fn nav_sections(access: NavAccess) -> Vec<(&'static str, Vec<NavRow>)> {
         ),
         (
             "Bill",
-            vec![Some(row(Route::InvoiceList {}, "invoices", "Invoices"))],
+            vec![
+                access
+                    .invoices
+                    .then(|| row(Route::InvoiceList {}, "invoices", "Invoices")),
+            ],
         ),
         (
             "Review",
             vec![
-                Some(row(
-                    Route::Approvals {
-                        week: String::new(),
-                    },
-                    "approvals",
-                    "Approvals",
-                )),
+                access.approvals.then(|| {
+                    row(
+                        Route::Approvals {
+                            week: String::new(),
+                        },
+                        "approvals",
+                        "Approvals",
+                    )
+                }),
                 Some(row(Route::Reports {}, "reports", "Reports")),
             ],
         ),
@@ -284,7 +297,7 @@ fn nav_sections(access: NavAccess) -> Vec<(&'static str, Vec<NavRow>)> {
 }
 
 /// Up to two leading initials from a display name, uppercased.
-fn initials(name: &str) -> String {
+pub(crate) fn initials(name: &str) -> String {
     name.split_whitespace()
         .filter_map(|w| w.chars().next())
         .take(2)
@@ -326,6 +339,8 @@ mod tests {
             people: true,
             clients: true,
             tasks: true,
+            invoices: true,
+            approvals: true,
         };
         assert_eq!(
             labels(all),
@@ -345,38 +360,63 @@ mod tests {
             [
                 ("Track", vec!["Timesheet"]),
                 ("Organize", vec!["Projects"]),
-                ("Bill", vec!["Invoices"]),
-                ("Review", vec!["Approvals", "Reports"]),
+                ("Review", vec!["Reports"]),
             ]
         );
     }
 
     #[test]
     fn grants_open_their_own_rows() {
-        let only = |people, clients, tasks| NavAccess {
-            people,
-            clients,
-            tasks,
-        };
+        let none = NavAccess::default();
         assert_eq!(
             granted(vec![Permission::PeopleReadAll]),
-            only(true, false, false)
+            NavAccess {
+                people: true,
+                ..none
+            }
         );
         assert_eq!(
             granted(vec![Permission::PeopleReadManaged]),
-            only(true, false, false)
+            NavAccess {
+                people: true,
+                ..none
+            }
         );
         assert_eq!(
             granted(vec![Permission::ClientReadAll]),
-            only(false, true, false)
+            NavAccess {
+                clients: true,
+                ..none
+            }
         );
         assert_eq!(
             granted(vec![Permission::TaskReadAll]),
-            only(false, false, true)
+            NavAccess {
+                tasks: true,
+                ..none
+            }
         );
+        assert_eq!(
+            granted(vec![Permission::InvoiceReadAll]),
+            NavAccess {
+                invoices: true,
+                ..none
+            }
+        );
+        for approve in [Permission::TimeApproveAll, Permission::TimeApproveManaged] {
+            assert_eq!(
+                granted(vec![approve]),
+                NavAccess {
+                    approvals: true,
+                    ..none
+                }
+            );
+        }
+        // The managed invoice grants open no invoice page yet.
         let unrelated = vec![
             Permission::ProjectReadAll,
-            Permission::InvoiceReadAll,
+            Permission::InvoiceReadManaged,
+            Permission::InvoiceWriteManaged,
             Permission::BillableRateReadAll,
             Permission::ReportProfitabilityRead,
         ];
@@ -424,6 +464,8 @@ mod tests {
             Permission::PeopleReadManaged,
             Permission::ClientReadAll,
             Permission::TaskReadAll,
+            Permission::InvoiceReadAll,
+            Permission::TimeApproveManaged,
         ];
         let versions = [
             PERMISSION_CATALOG_VERSION - 1,
