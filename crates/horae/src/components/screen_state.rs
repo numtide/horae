@@ -10,6 +10,56 @@ use crate::components::icons::NavIcon;
 pub const LOAD_FAILED: &str =
     "The request did not complete. Try again, or reload the page if it keeps failing.";
 
+/// Whether a failed read was refused (403), so the region shows `NoAccess`.
+pub fn is_refusal(error: &ServerFnError) -> bool {
+    const FORBIDDEN: u16 = 403;
+    matches!(
+        error,
+        ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        }
+    )
+}
+
+/// Runs a read pinned to the account that first loaded the screen. When the
+/// server refuses the pin (403) or answers for another account, the signed-in
+/// account changed: the read runs once more unpinned, so the screen re-pins to
+/// the account now signed in, and only a refusal of that read is a real one.
+/// The flag says the account changed, so the screen drops what it held for
+/// the old one.
+pub async fn load_pinned<T, R, Fut>(
+    pinned: Option<R>,
+    load: impl Fn(Option<R>) -> Fut,
+    requester: impl Fn(&T) -> R,
+) -> (Result<T, ServerFnError>, bool)
+where
+    R: Copy + PartialEq,
+    Fut: Future<Output = Result<T, ServerFnError>>,
+{
+    let result = load(pinned).await;
+    let changed = pinned.is_some_and(|pinned| match &result {
+        Ok(page) => requester(page) != pinned,
+        Err(error) => is_refusal(error),
+    });
+    if changed {
+        (load(None).await, true)
+    } else {
+        (result, false)
+    }
+}
+
+/// The one state for a screen or region the person may not open (`DESIGN.md`,
+/// *Screen States → No permission*). It names who grants access and nothing
+/// about what is behind it; the screen around it keeps only its header.
+#[component]
+pub fn NoAccess(#[props(default)] inset: bool) -> Element {
+    let tr = crate::i18n::use_tr();
+    rsx! {
+        ErrorState { title: tr.no_access_title(), body: tr.no_access_body(), inset }
+    }
+}
+
 /// The server's own message, for the request line of an `ErrorState`. A
 /// transport failure ("error sending request…") has none worth showing.
 pub fn error_line(error: &ServerFnError) -> Option<String> {
@@ -149,20 +199,17 @@ pub fn LoadError(
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
     const NOT_FOUND: u16 = 404;
+    let tr = crate::i18n::use_tr();
     match &error {
         ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
         } => rsx! {
-            ErrorState { title: "Could not load {what}", body: "Your session has ended. Sign in again to continue.", inset }
+            ErrorState { title: "Could not load {what}", body: tr.common_session_ended(), inset }
         },
         ServerFnError::ServerError {
             code: FORBIDDEN, ..
         } => rsx! {
-            ErrorState {
-                title: "Could not load {what}",
-                body: "Your account cannot view this. Ask an Administrator if you need access.",
-                inset,
-            }
+            NoAccess { inset }
         },
         ServerFnError::ServerError {
             code: NOT_FOUND,
@@ -299,7 +346,7 @@ mod tests {
     fn refusals_and_missing_records_offer_no_retry() {
         for (error, expected) in [
             (server(401, "Sign in"), "Sign in again"),
-            (server(403, "Forbidden"), "Ask an Administrator"),
+            (server(403, "Forbidden"), "Access unavailable"),
             (server(404, "Invoice not found"), "Invoice not found"),
         ] {
             let html = render(error);

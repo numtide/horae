@@ -153,7 +153,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     // an admin section is open, and lands on the first one (`landing`).
     const expectUserMenu = async landing => {
       await page.locator('.sidebar-footer').click();
-      await expect(userMenu.locator('.menu-item')).toHaveText(landing ? ['Settings', 'Administration', 'Sign out'] : ['Settings', 'Sign out']);
+      await expect(userMenu.locator('.menu-item')).toHaveText(landing ? ['My settings', 'Administration', 'Sign out'] : ['My settings', 'Sign out']);
       if (!landing) {
         if (process.env.HORAE_BROWSER_ARTIFACTS) {
           await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, 'account-menu-member.png'), animations: 'disabled' });
@@ -528,15 +528,15 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(history.locator('tbody tr')).toHaveCount(25);
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
     await page.locator('#audit-refresh').click();
-    await expect(page.getByRole('alert')).toContainText('Administrator access is required');
+    await expect(page.getByRole('alert')).toContainText('Access unavailable');
     await expect(history).not.toBeVisible();
     sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
-    await page.locator('#audit-refresh').click();
+    await page.reload();
     await expect(history.locator('tbody tr')).toHaveCount(25);
     assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt: ${id}`));
 
-    await page.goto(`${base}/settings`);
-    await page.getByRole('link', { name: 'View permission audit log', exact: true }).click();
+    await page.goto(`${base}/settings/access`);
+    await page.getByRole('link', { name: 'See changes to your access', exact: true }).click();
     await page.waitForURL(`${base}/admin/audit`);
     await expect(history.locator('tbody tr')).toHaveCount(25);
     await page.goto(`${base}/admin/users`);

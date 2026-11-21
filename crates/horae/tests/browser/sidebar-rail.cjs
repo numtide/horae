@@ -37,7 +37,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     ]);
     await sidebar.locator('.sidebar-footer').click();
     const menu = sidebar.locator('.sidebar-menu');
-    await expect(menu.locator('.sidebar-menu-list .menu-item, .sidebar-menu-foot .menu-item')).toHaveText(['Settings', 'Administration', 'Sign out']);
+    await expect(menu.locator('.sidebar-menu-list .menu-item, .sidebar-menu-foot .menu-item')).toHaveText(['My settings', 'Administration', 'Sign out']);
     await expect(menu.getByRole('link', { name: 'Administration', exact: true })).toHaveAttribute('href', '/admin/users');
     await expect(menu.locator('.menu-group')).toHaveCount(0);
     if (process.env.HORAE_BROWSER_ARTIFACTS) await page.screenshot({ path: `${process.env.HORAE_BROWSER_ARTIFACTS}/account-menu-admin.png`, animations: 'disabled' });

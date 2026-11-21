@@ -92,6 +92,13 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
             line { x1: "3", y1: "11", x2: "13", y2: "11" }
             circle { cx: "10", cy: "11", r: "1.6" }
         },
+        "key" => rsx! {
+            circle { cx: "5", cy: "11", r: "2.6" }
+            path { d: "M6.9 9.1 L13 3 M10.5 5.5 L12 7 M12 4 L13.5 5.5" }
+        },
+        "plugin" => rsx! {
+            path { d: "M3 6 H6 V4.8 A1.4 1.4 0 0 1 8.8 4.8 V6 H12 V9 H10.8 A1.4 1.4 0 0 0 10.8 11.8 H12 V14 H3 Z" }
+        },
         "import" => rsx! {
             line { x1: "8", y1: "2", x2: "8", y2: "9" }
             line { x1: "5", y1: "6", x2: "8", y2: "9" }
