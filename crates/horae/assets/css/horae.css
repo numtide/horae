@@ -1626,7 +1626,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 
 /* A cell of the access table that a change moved, tinted by direction. */
-.access-change { display: inline-block; white-space: nowrap; padding: var(--space-1) var(--space-2); border-radius: var(--radius); font-size: var(--font-size-xs); font-weight: 500; }
+.access-change { display: inline-block; padding: var(--space-1) var(--space-2); border-radius: var(--radius); font-size: var(--font-size-xs); font-weight: 500; }
 .access-change-up { color: var(--color-success-fg); background: var(--color-success-bg); }
 .access-change-down { color: var(--color-danger-fg); background: var(--color-danger-bg); }
 .ts-add {
