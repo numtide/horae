@@ -22,6 +22,14 @@ pub fn PeriodNav(
 ) -> Element {
     let tr = use_tr();
     let mut picker_open = use_signal(|| false);
+    // A new period, from the arrows or from elsewhere (the browser's back
+    // button), closes a picker still showing the old one.
+    use_effect(use_reactive!(|(week_start, day)| {
+        let _ = (week_start, day);
+        if *picker_open.peek() {
+            picker_open.set(false);
+        }
+    }));
     let pick = use_callback(move |picked: NaiveDate| {
         picker_open.set(false);
         on_pick.call(picked);
