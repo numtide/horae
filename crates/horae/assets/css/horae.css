@@ -1621,15 +1621,16 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 /* Where title, total and tabs cannot share a row, give the tabs one of their
    own; plain wrapping would let them climb beside the title whenever the
    total is absent. The header's width, not the viewport's, decides, because
-   the rail beside it is resizable. One row needs about 560px in the brand
-   fonts and noticeably more in fallback fonts, hence the margin. The wrapper
+   the rail beside it is resizable. With "Submit week", one row needs about
+   700px in the brand fonts and noticeably more in fallback fonts, hence the
+   margin. The wrapper
    around the shared header is the container (it holds nothing fixed-position,
    which a container would trap). Below it the title's wrappers dissolve (see
    page_header.rs) so the title, the tabs and the total share the header's own
    rows: the title takes the first row whole, so it never breaks to make room,
    and the total follows the tabs, so its absence moves nothing before it. */
 .ts-header { container: ts-header / inline-size; }
-@container ts-header (max-width: 680px) {
+@container ts-header (max-width: 860px) {
   .ts-header .page-heading,
   .ts-header .page-heading > div,
   .ts-header .page-title-row { display: contents; }
