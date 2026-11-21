@@ -9,7 +9,7 @@ This file is the single source of truth for Horae's design. When it disagrees wi
 - **`DESIGN.md`** (this file) holds the rules: tokens, components, screen states, layout and wording. A rule here overrides the kit and the prototypes, and the sections below say so wherever they differ.
 - **`crates/horae/assets/css/horae.css`** implements the tokens and component classes. Where the CSS and this file disagree, the CSS is out of date and the PR that touches it brings it in line.
 - **`design/project/`** is the claude.ai/design export of 2026-09-21: the kit (`foundations/Components.dc.html`), the shared prototype components (`app/*.dc.html`) and the screen prototypes (`app/01_*` to `13_*`). It is a historical visual reference. Use it for layout, proportions and copy ideas, never as a rule that overrides this file, and never edit it (see [design/README.md](design/README.md)).
-- **Decisions on open questions** were taken after the [design audit of 2026-11-18](docs/design/design-audit.md). Each one is written into the section it governs, with a line on why. Two of them are still under review and are marked *Pending* where they apply: dialog footer order ([Dialogs](#dialogs-srccomponentsmodalrs)) and tables on mobile ([Layout](#layout)).
+- **Decisions on open questions** were taken after the [design audit of 2026-11-18](docs/design/design-audit.md). Each one is written into the section it governs, with a line on why. One is still under review and is marked *Pending* where it applies: tables on mobile ([Layout](#layout)).
 - [`design/IMPLEMENTATION-GAPS.md`](design/IMPLEMENTATION-GAPS.md) tracks what the application still has to change to match this file, and which PR does it.
 
 ## Color Palette
@@ -169,8 +169,8 @@ Status:
 | `Toast`, `ToastContainer` | `toast.rs` | Feedback | in use (3 pages, each with its own container); one container in `AppLayout` and the new look in PR-9 |
 | `NoTrackingHint` | `no_tracking.rs` | Feedback | in use (Timesheet, `TimerWidget`) |
 | `EmptyState`, `ErrorState`, `LoadError`, `Loading`, `Skeleton` | `screen_state.rs` | Feedback | in use (`Skeleton` in the Invoices list) |
-| `Modal` | `modal.rs` | Overlays | in use (18); fixed slots in PR-3 |
-| `ConfirmDialog` | — | Overlays | planned in PR-3 |
+| `Modal`, `ModalHeader`, `ModalBody`, `ModalActions` | `modal.rs` | Overlays | in use (9 dialogs) |
+| `ConfirmDialog` | `confirm_dialog.rs` | Overlays | in use (9) |
 | `use_session`, `use_week_start` | `session.rs` | Helpers | in use |
 | `use_running_timer` | `timer_widget.rs` | Helpers | in use |
 | `today`, `UtcOffset` | `today.rs` | Helpers | in use |
@@ -239,8 +239,12 @@ Status:
 
 #### Overlays
 
-- `Modal` (`modal.rs`) is the native `dialog` every dialog is built on. Keep it mounted and toggle `open`: closing returns focus to the opener, and `busy` blocks Escape and backdrop dismissal while a mutation runs. Props: `id`, `labelledby` (the title's id), `open`, `busy`, `large`, `focus_fallback`, `on_dismiss`, `children`. The header, body and footer slots arrive in PR-3; until then use the `.modal-*` classes. See [Dialogs](#dialogs-srccomponentsmodalrs) and [Accessibility](#accessibility).
-- `ConfirmDialog`: planned in PR-3. See [Dialogs](#dialogs-srccomponentsmodalrs) and [Destructive actions](#destructive-actions).
+- `Modal` (`modal.rs`) is the native `dialog` every dialog is built on. Keep it mounted and toggle `open`: closing returns focus to the opener, and `busy` blocks Escape and backdrop dismissal while a mutation runs. Props: `id`, `labelledby` (the title's id), `describedby` (the id of the text that says what the dialog is about), `open`, `busy`, `large`, `focus_fallback`, `primary`, `secondary`, `cancel`, `on_dismiss`, `children`.
+  - `children` holds the header and the body: `ModalHeader` (props `id`, the `labelledby` value, and `title`) and `ModalBody` (the padded content).
+  - The footer is not a child: `Modal` draws it from `primary` and `secondary` (each an `Option<ModalAction>`) and `cancel` (an `Option<ModalCancel>`, "Cancel" by default; `None` hides it), always in that order, and only while open. A `ModalAction` is built with `ModalAction::click(label, callback)`, `ModalAction::submit(label, form_id)` (it submits a form anywhere in the dialog) or `ModalAction::link(label, href, callback)`, then `.variant(…)` (Primary by default), `.id(…)` and `.disabled(…)`. `ModalCancel::new(label)` takes `.id(…)` (default `{id}-cancel`), `.disabled(…)` and `.autofocus()` (opening focuses Cancel); Cancel always calls `on_dismiss` and is disabled while `busy`.
+  - When the buttons depend on state that only a component inside the dialog holds (a form that loads, a multi-step editor), that component renders `ModalActions` with the same three props. `Modal` draws those instead of its own while it is mounted. Mount one at a time and pass handlers made with `use_callback`.
+  - Never write the `.modal-*` classes, a `dialog` element, a title of your own or footer buttons, and never ask through the browser's `confirm`, `alert` or `prompt`: `tests/dialog_anatomy.rs` fails if a file outside `modal.rs` does. See [Dialogs](#dialogs-srccomponentsmodalrs) and [Accessibility](#accessibility).
+- `ConfirmDialog` (`confirm_dialog.rs`) confirms one destructive, irreversible or otherwise significant action, on top of `Modal`, which draws its footer. `children` is the body: what will happen, and the error of a failed try; it is the dialog's description (`{id}-body`, `aria-describedby`). Its buttons are `{id}-confirm` and `{id}-cancel`; the content renders only while it is open, and the Danger tone opens with Cancel focused. It may open over another dialog (deleting a time entry from its editor). Props: `id`, `labelledby`, `open`, `title`, `confirm_label`, `cancel_label` (default "Cancel"), `tone` (a `ConfirmTone`: Danger, the default, with Danger solid; Neutral with Primary), `busy`, `confirm_disabled` (holds confirm while what it confirms is not ready, such as a preview still loading), `confirm_word` (the word to type before confirm enables), `focus_fallback`, `on_confirm`, `on_dismiss`, `children`. No screen uses `confirm_word` yet; it stays, as part of the prototype's component, for the most serious actions. See [Dialogs](#dialogs-srccomponentsmodalrs) and [Destructive actions](#destructive-actions).
 
 #### Helpers
 
@@ -309,7 +313,7 @@ The `Button` component (`button.rs`) takes the look as `variant: ButtonVariant`,
 - **Secondary**: tertiary surface, `--color-border-input` border; hover raises the border to `--color-border-strong`
 - **Accent**: brass fill `#D99A3C`, dark text — "Send invoice" and billing actions; hover → `--color-accent-hover` + `--glow-accent`
 - **Danger** (`btn-danger`): transparent with dark red border `#6e3634`; hover tints and lifts the border to `--color-border-danger-hover`. Only for the button that opens a destructive confirmation (see [Destructive actions](#destructive-actions)); never for the confirmation itself and never for archiving.
-- **Danger solid**: red fill with dark ink, the kit's `hb-danger-solid` from `ConfirmDialog.dc.html`. Only for the confirm button of an irreversible action. The class is `.btn-danger-solid` (`ButtonVariant::DangerSolid`); PR-3 moves the confirmations to it. In the light theme the fill is `--color-danger-fg` with white ink, because `--color-danger` reaches only 4.47:1 against white, and it deepens on hover instead of brightening, as the light Primary does, because a lighter red would fall below 4.5:1 with white ink.
+- **Danger solid**: red fill with dark ink, the kit's `hb-danger-solid` from `ConfirmDialog.dc.html`. Only for the confirm button of an irreversible action. The class is `.btn-danger-solid` (`ButtonVariant::DangerSolid`); `ConfirmDialog` uses it for the Danger tone. In the light theme the fill is `--color-danger-fg` with white ink, because `--color-danger` reaches only 4.47:1 against white, and it deepens on hover instead of brightening, as the light Primary does, because a lighter red would fall below 4.5:1 with white ink.
 - **Ghost**: transparent pine-ink link; hover → pine-tint background
 - **Split button** (`.btn-split`): a main action with real variants behind a caret, such as submitting a week with or without notifying. Its body is Primary. The Timesheet's "Submit week" is a `.btn-split` with a Primary body; its own `.ts-submit` button is retired.
 
@@ -324,11 +328,13 @@ The `Button` component (`button.rs`) takes the look as `variant: ButtonVariant`,
 
 ### Dialogs (`src/components/modal.rs`)
 
-Every dialog is built on the shared `Modal`, with fixed slots (header, body, footer) so none of them render unpadded or with a title of their own making. `.ts-modal-*` and hand-made `h2`/`p` dialogs are retired.
+Every dialog is built on the shared `Modal`, with fixed slots (header, body, footer) so none of them render unpadded or with a title of their own making. `.ts-modal-*` is gone, and hand-made `h2`/`p` dialogs are retired.
 
-**`ConfirmDialog`** is the one shape for confirming a destructive, irreversible or otherwise significant action, after `ConfirmDialog.dc.html`: an icon tile (red for danger, green for a neutral confirm such as archiving), a serif title, a short body that says what will happen, then the buttons. For the most serious actions (deleting a workspace, for instance) it can require typing a confirmation word before the confirm button enables. Its props follow the prototype: title, body, confirm label, tone (danger or neutral), busy, confirm and dismiss handlers, and the optional confirmation word.
+**`ConfirmDialog`** is the one shape for confirming a destructive, irreversible or otherwise significant action, after `ConfirmDialog.dc.html`: an icon tile (red for danger, green for a neutral confirm such as archiving), a serif title, a short body that says what will happen, then the buttons. For the most serious actions (deleting a workspace, for instance) it can require typing a confirmation word before the confirm button enables. Its props follow the prototype: title, body, confirm label, tone (danger or neutral), busy, confirm and dismiss handlers, and the optional confirmation word. The Danger tone opens with Cancel focused, so a stray Enter cannot destroy anything; the Neutral tone focuses its first control.
 
-**Footer order and alignment: *Pending decision*.** The kit's *Modal* puts the primary action on the right with Cancel to its left. `ConfirmDialog.dc.html`, most prototype screens and the app today put the primary first, on the left (the app also stretches the buttons to full width). Until this is decided, keep each dialog's current order and do not reorder footers as part of other work.
+**No native dialogs.** Every confirmation is a `ConfirmDialog`: never the browser's `confirm`, `alert` or `prompt`, and never a confirmation built by hand in a page or panel (an alert with buttons, a checkbox that unlocks a button). One exception remains: the editor navigation guard (`assets/js/project-edit-navigation.js`) asks natively when the browser's history would leave an editor with unsaved changes, because it must decide synchronously. Moving it to `ConfirmDialog` (block the navigation, ask, replay it on confirm) is its own change, tracked in the inventory.
+
+**Footer order and alignment.** The primary action comes first, on the left, then a second action when the dialog has one ("Delete…" in the time entry, "Back to editing" in the permission editor), then Cancel. The buttons stretch to share the footer's width, and with large text each takes its own line. This follows `ConfirmDialog.dc.html` and most prototype screens; the kit's *Modal*, which puts the primary action on the right, is overridden. Pages never draw the footer: `Modal` draws it from its `primary`, `secondary` and `cancel` props (or `ModalActions`), so the order cannot drift. One order everywhere means the next step is always in the same place.
 
 ### Toast (`src/components/toast.rs`)
 

@@ -15,6 +15,11 @@ use uuid::Uuid;
 
 #[path = "../src/components/badge.rs"]
 pub mod badge;
+#[allow(dead_code)]
+#[path = "../src/components/button.rs"]
+pub mod button;
+#[path = "../src/components/confirm_dialog.rs"]
+pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/form.rs"]
@@ -39,8 +44,8 @@ pub mod screen_state;
 pub mod table;
 mod components {
     pub use super::{
-        badge, controls, form, icons, menu, modal, page_header, permission_description,
-        screen_state, table,
+        badge, button, confirm_dialog, controls, form, icons, menu, modal, page_header,
+        permission_description, screen_state, table,
     };
 }
 pub use horae_types::{
@@ -93,7 +98,6 @@ struct Probe {
     deletion_replies: Rc<RefCell<VecDeque<DeletionReply>>>,
     loads: Rc<RefCell<usize>>,
     load_replies: Rc<RefCell<VecDeque<LoadReply>>>,
-    confirmations: Rc<RefCell<VecDeque<Result<bool, document::EvalError>>>>,
     storage: Rc<RefCell<HashMap<String, String>>>,
     storage_failure: Rc<RefCell<Option<String>>>,
     identity_replies: Rc<RefCell<VecDeque<IdentityReply>>>,
@@ -139,7 +143,6 @@ impl Probe {
             deletion_replies: Default::default(),
             loads: Default::default(),
             load_replies: Default::default(),
-            confirmations: Default::default(),
             storage: Default::default(),
             storage_failure: Default::default(),
             identity_replies: Default::default(),
@@ -260,18 +263,9 @@ impl document::Document for Probe {
                 Err(document::EvalError::Unsupported)
             }
         }
-        let reply = if script.contains("window.confirm(") {
-            assert_eq!(
-                script,
-                "return window.confirm('Discard unsaved permission changes?');"
-            );
-            self.confirmations
-                .borrow_mut()
-                .pop_front()
-                .expect("unexpected discard confirmation")
-        } else {
-            Err(document::EvalError::Unsupported)
-        };
+        // Discarding is confirmed in a ConfirmDialog, never the browser's confirm.
+        assert!(!script.contains("confirm("), "native dialog: {script}");
+        let reply = Err(document::EvalError::Unsupported);
         document::Eval::new(dioxus::core::current_owner().insert(Box::new(Reply(Some(reply)))))
     }
 }
@@ -331,6 +325,13 @@ impl document::Evaluator for StorageReply {
         *self.reply.borrow_mut() = Some(reply);
         Ok(())
     }
+}
+
+/// How a test answers the discard confirmation when it keeps the changes.
+#[derive(Clone, Copy)]
+enum Keep {
+    Button,
+    Escape,
 }
 
 struct Ui {
@@ -416,6 +417,19 @@ impl Ui {
 
     fn html(&self) -> String {
         dioxus::ssr::render(&self.dom)
+    }
+
+    /// Answer the discard confirmation by keeping the changes.
+    fn keep_changes(&mut self, keep: Keep) {
+        match keep {
+            Keep::Button => self.click("permission-discard-dialog-cancel"),
+            Keep::Escape => self.dispatch(
+                "permission-discard-dialog",
+                "cancel",
+                Box::new(SerializedCancelData {}),
+            ),
+        }
+        assert!(!self.html().contains("Discard unsaved permission changes?"));
     }
 
     fn navigation_state(&self, state: &str) {
@@ -557,15 +571,16 @@ async fn subject_picker_preserves_dirty_draft_until_confirmed_and_reloads_select
         .unwrap();
     let mut ui = Ui::new(probe.clone());
     ui.select_profile("Member");
-    for answer in [Ok(false), Err(document::EvalError::Unsupported)] {
-        probe.confirmations.borrow_mut().push_back(answer);
+    for keep in [Keep::Button, Keep::Escape] {
         ui.click(&format!("permission-subject-{other}"));
+        assert!(ui.html().contains("Discard unsaved permission changes?"));
+        ui.keep_changes(keep);
         ui.navigation_state("dirty");
         assert_eq!(*probe.loaded_ids.borrow(), vec![probe.editor.user_id]);
     }
-    probe.confirmations.borrow_mut().push_back(Ok(true));
     let reply = probe.load_reply();
     ui.click(&format!("permission-subject-{other}"));
+    ui.click("permission-discard-dialog-confirm");
     ui.navigation_state("pending");
     let mut selected = probe.editor.clone();
     selected.user_id = other;
@@ -927,26 +942,22 @@ async fn loading_and_reloading_protect_navigation_until_success_or_error() {
 
 #[tokio::test]
 async fn dirty_close_requires_confirmation_and_failure_preserves_the_draft() {
-    for path in [
-        "permission-editor-close",
-        "permission-editor-cancel",
-        "escape",
-        "backdrop",
-    ] {
+    // The open form's footer has one Cancel; it dismisses as Escape and the backdrop do.
+    for path in ["permission-editor-cancel", "escape", "backdrop"] {
         let probe = Probe::new();
         let mut ui = Ui::new(probe.clone());
         ui.select_profile("Member");
-        for reply in [Ok(false), Err(document::EvalError::Unsupported)] {
-            probe.confirmations.borrow_mut().push_back(reply);
+        for keep in [Keep::Button, Keep::Escape] {
             ui.dismiss(path);
+            assert!(ui.html().contains("Discard unsaved permission changes?"));
+            ui.keep_changes(keep);
             ui.navigation_state("dirty");
             assert!(ui.html().contains("Example person"));
         }
-        probe.confirmations.borrow_mut().push_back(Ok(true));
         ui.dismiss(path);
+        ui.click("permission-discard-dialog-confirm");
         ui.navigation_state("clean");
         assert!(!ui.html().contains("Example person"));
-        assert!(probe.confirmations.borrow().is_empty());
         assert!(probe.saves.borrow().is_empty());
         assert!(probe.templates.borrow().is_empty());
     }
@@ -954,12 +965,7 @@ async fn dirty_close_requires_confirmation_and_failure_preserves_the_draft() {
 
 #[tokio::test]
 async fn clean_dismissal_needs_no_confirmation() {
-    for path in [
-        "permission-editor-close",
-        "permission-editor-cancel",
-        "escape",
-        "backdrop",
-    ] {
+    for path in ["permission-editor-cancel", "escape", "backdrop"] {
         let probe = Probe::new();
         let mut ui = Ui::new(probe.clone());
         ui.dismiss(path);
@@ -974,7 +980,7 @@ async fn closing_a_person_does_not_recheck_the_session() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
     assert!(ui.html().contains("Review changes"));
-    ui.dismiss("permission-editor-close");
+    ui.dismiss("permission-editor-cancel");
     ui.navigation_state("clean");
     assert_eq!(*probe.identity_reads.borrow(), 1);
 }
@@ -992,7 +998,7 @@ async fn opening_a_person_rechecks_the_session() {
         ui.click(&format!("people-permissions-{}", probe.editor.user_id));
         assert!(ui.html().contains("Review changes"));
         assert_eq!(*probe.identity_reads.borrow(), reads);
-        ui.dismiss("permission-editor-close");
+        ui.dismiss("permission-editor-cancel");
         assert!(!ui.html().contains("Review changes"));
         assert_eq!(*probe.identity_reads.borrow(), reads);
     }
@@ -1068,7 +1074,7 @@ async fn deleting_a_template_requires_its_current_affected_people_preview() {
     ui.click(&format!("permission-template-delete-{}", template.id));
     assert_eq!(*probe.deletions.borrow(), vec![template.id]);
     assert!(probe.templates.borrow().is_empty());
-    ui.click("permission-template-cancel");
+    ui.click(DELETE_CANCEL);
     assert!(ui.html().contains("Loading affected people"));
     assert!(ui.html().contains("aria-busy=true"));
     assert!(!ui.html().contains(">Close</button>"));
@@ -1086,11 +1092,8 @@ async fn deleting_a_template_requires_its_current_affected_people_preview() {
     ui.settle();
     assert!(ui.html().contains("Affected person"));
     assert!(ui.html().contains("keep their permissions"));
-    ui.click("permission-template-save");
-    assert!(probe.templates.borrow().is_empty());
-    ui.click("permission-template-confirm");
     let reply = probe.template_reply();
-    ui.click("permission-template-save");
+    ui.click(DELETE_CONFIRM);
     assert_eq!(
         probe.templates.borrow()[0].action,
         TemplateAction::Delete {
@@ -1111,9 +1114,13 @@ async fn deleting_a_template_requires_its_current_affected_people_preview() {
         ui.html()
             .contains("Reload and discard unsaved person changes")
     );
-    assert!(!ui.html().contains("permission-template-save"));
+    assert!(!ui.html().contains(">Delete profile<"));
     assert!(probe.saved.borrow().is_empty());
 }
+
+/// The buttons of the profile deletion's ConfirmDialog.
+const DELETE_CONFIRM: &str = "permission-template-delete-dialog-confirm";
+const DELETE_CANCEL: &str = "permission-template-delete-dialog-cancel";
 
 #[tokio::test]
 async fn cancelling_template_creation_keeps_the_unsaved_person_draft() {
@@ -1236,7 +1243,7 @@ async fn deletion_never_confirms_mismatched_or_denied_previews() {
         }
         ui.settle();
         let html = ui.html();
-        assert!(!html.contains("permission-template-save"), "{html}");
+        assert!(!html.contains(">Delete profile<"), "{html}");
         assert!(!html.contains("Sensitive profile"), "{html}");
         assert!(!html.contains("private authority"), "{html}");
         assert!(probe.templates.borrow().is_empty());
@@ -1258,19 +1265,18 @@ async fn empty_profile_deletion_requires_confirmation_and_keeps_exact_retry() {
         .unwrap();
     ui.settle();
     assert!(ui.html().contains("No people currently use this profile"));
-    ui.click("permission-template-save");
     assert!(probe.templates.borrow().is_empty());
-    ui.click("permission-template-confirm");
     let reply = probe.template_reply();
-    ui.click("permission-template-save");
+    ui.click(DELETE_CONFIRM);
     reply
         .send(Err(ServerFnError::new("response lost")))
         .unwrap();
     ui.settle();
-    ui.click("permission-template-confirm");
-    ui.click("permission-template-cancel");
+    // An unconfirmed request cannot be abandoned, only retried exactly.
+    ui.click(DELETE_CANCEL);
+    assert!(ui.html().contains("Retry same save"), "{}", ui.html());
     let reply = probe.template_reply();
-    ui.click("permission-template-save");
+    ui.click(DELETE_CONFIRM);
     assert_eq!(probe.templates.borrow()[0], probe.templates.borrow()[1]);
     reply
         .send(Ok(TemplateOutcome {
@@ -1356,8 +1362,7 @@ async fn cancelling_a_loaded_deletion_preview_preserves_person_edits_without_mut
         }))
         .unwrap();
     ui.settle();
-    ui.click("permission-template-confirm");
-    ui.click("permission-template-cancel");
+    ui.click(DELETE_CANCEL);
     assert!(probe.templates.borrow().is_empty());
     let reply = probe.preview_reply();
     ui.click("permission-review");

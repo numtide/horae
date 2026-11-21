@@ -2,9 +2,9 @@ use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
 use uuid::Uuid;
 
+use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::components::controls::Checkbox;
 use crate::components::form::{FormCard, FormGroup, Input, Select};
-use crate::components::modal::Modal;
 use crate::components::table::DataTable;
 use crate::models::Project;
 use crate::models::invoice::{
@@ -216,6 +216,8 @@ pub(super) fn PrepareInvoice(
             }
         });
     });
+    let generate_excess = use_callback(move |_| generate.call(true));
+    let keep_preparing = use_callback(move |_| confirm.set(false));
 
     rsx! {
         div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if !client().is_empty() || !from().is_empty() || !to().is_empty() || started() { "dirty" } else { "clean" },
@@ -383,19 +385,20 @@ pub(super) fn PrepareInvoice(
                 }
             }
         }
-        Modal { id: "generation-excess", labelledby: "generation-excess-title", open: confirm() && ready, busy: busy(), on_dismiss: move |_| confirm.set(false),
-            h2 { id: "generation-excess-title", "Confirm over-invoicing" }
-            p { class: "text-sm mb-4", "Generating this draft will exceed the agreed fees by the amounts below, before tax. Cancelling creates nothing." }
+        // A generated draft can still be corrected, so this is not a
+        // destructive confirmation.
+        ConfirmDialog { id: "generation-excess", labelledby: "generation-excess-title", open: confirm() && ready, busy: busy(),
+            tone: ConfirmTone::Neutral, title: "Confirm over-invoicing",
+            confirm_label: "Confirm excess and generate", cancel_label: "Cancel over-invoicing",
+            on_confirm: generate_excess,
+            on_dismiss: keep_preparing,
+            p { "Generating this draft will exceed the agreed fees by the amounts below, before tax. Cancelling creates nothing." }
             if let Some(review) = preview.read().as_ref().filter(|_| ready) {
                 for excess in &review.excess {
                     if let Some(line) = review.lines.iter().find(|line| line.source == excess.source) {
-                        p { key: "{excess.source:?}", class: "wrap-anywhere", "{line.description} · Excess: {review.currency} " {format_cents_plain(excess.excess_cents)} }
+                        p { key: "{excess.source:?}", "{line.description} · Excess: {review.currency} " {format_cents_plain(excess.excess_cents)} }
                     }
                 }
-            }
-            div { class: "flex flex-wrap gap-3 mt-4",
-                button { r#type: "button", class: "btn btn-danger", disabled: busy() || !ready, onclick: move |_| generate.call(true), "Confirm excess and generate" }
-                button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| confirm.set(false), "Cancel over-invoicing" }
             }
         }
         }

@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::components::{
     form::{FormGroup, Input},
-    modal::Modal,
+    modal::{Modal, ModalAction, ModalActions, ModalBody, ModalCancel, ModalHeader},
     screen_state::Loading,
 };
 use crate::models::permission_editor::PermissionRequester;
@@ -29,6 +29,7 @@ pub(super) fn PersonRatesDialog(
     let close = use_callback(move |()| target.set(None));
     rsx! {
         Modal { id: "person-rates", labelledby: "person-rates-title", open: target.read().is_some(), busy: busy(),
+            cancel: ModalCancel::new("Close"),
             on_dismiss: close,
             if let Some(person) = target() {
                 RatesForm { key: "{person.id}", person, busy, on_close: close, on_saved }
@@ -50,19 +51,16 @@ fn RatesForm(
     let rates = match &*loaded.read() {
         None => {
             return rsx! {
-                h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
-                Loading { label: "Loading rates…", class: "modal-body" }
+                ModalHeader { id: "person-rates-title", title: "Rates for {person.name}" }
+                ModalBody { Loading { label: "Loading rates…" } }
             };
         }
         Some(Err(failure)) => {
             let message = load_failure(failure);
             return rsx! {
-                h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
-                div { class: "modal-body",
+                ModalHeader { id: "person-rates-title", title: "Rates for {person.name}" }
+                ModalBody {
                     p { role: "alert", class: "alert alert-danger", "{message}" }
-                }
-                div { class: "px-6 pb-6 flex justify-end",
-                    button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Close" }
                 }
             };
         }
@@ -89,7 +87,14 @@ fn RatesEditor(
     let currency = rates.currency.clone();
     let stored = rates.clone();
     rsx! {
-        h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
+        ModalActions {
+            primary: editable.then(|| {
+                ModalAction::submit(if busy() { "Saving…" } else { "Save rates" }, "person-rates-form")
+                    .id("person-rates-save").disabled(busy())
+            }),
+            cancel: ModalCancel::new(if editable { "Cancel" } else { "Close" }),
+        }
+        ModalHeader { id: "person-rates-title", title: "Rates for {person.name}" }
         form { id: "person-rates-form", onsubmit: move |event| {
             event.prevent_default();
             if busy() { return; }
@@ -110,7 +115,7 @@ fn RatesEditor(
                 }
             });
         },
-            div { class: "modal-body",
+            ModalBody {
                 if let Some(message) = error() { p { id: "person-rates-error", role: "alert", class: "alert alert-danger", "{message}" } }
                 p { class: "form-hint",
                     "Amounts are per hour in {currency}, the workspace currency."
@@ -123,16 +128,6 @@ fn RatesEditor(
                 if let Some(rate) = rates.cost {
                     RateField { id: "person-cost-rate", label: format!("Cost rate ({currency})"), rate, value: cost, busy: busy(),
                         hint: "Used to cost this person's time in reports and in the Harvest-compatible time entry API on projects without a project cost rate for them, past time included. New project teams show it as the suggested cost rate.".to_string() }
-                }
-            }
-            div { class: "px-6 pb-6 flex flex-wrap justify-end gap-3",
-                button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| on_close.call(()),
-                    if editable { "Cancel" } else { "Close" }
-                }
-                if editable {
-                    button { id: "person-rates-save", r#type: "submit", class: "btn btn-primary", disabled: busy(),
-                        if busy() { "Saving…" } else { "Save rates" }
-                    }
                 }
             }
         }

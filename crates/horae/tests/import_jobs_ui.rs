@@ -70,8 +70,13 @@ pub mod page_header;
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 
+#[path = "../src/components/button.rs"]
+pub mod button;
+#[path = "../src/components/confirm_dialog.rs"]
+pub mod confirm_dialog;
+
 mod components {
-    pub use crate::{back_link, icons, menu, modal, page_header, screen_state};
+    pub use crate::{back_link, confirm_dialog, icons, menu, page_header, screen_state};
 }
 
 /// The importer routes, as the app declares them.
@@ -1365,7 +1370,7 @@ fn account_change_confirmation_can_cancel_without_mutation_in_both_binding_state
         );
         assert!(html.contains("account-A"));
         assert!(html.contains("Business data and retained reports are kept"));
-        ui.click("cancel-change-account");
+        ui.click("harvest-change-account-cancel");
         assert!(!ui.html().contains("Change account and connect"));
         assert!(probe.changes.borrow().is_empty());
         ui.click("change-account");
@@ -1475,8 +1480,8 @@ fn account_change_is_busy_then_reports_recoverable_authorization_failure() {
     let mut ui = Ui::start(&probe);
     ui.click("choose-api");
     ui.click("change-account");
-    ui.click("confirm-change-account");
-    ui.click("confirm-change-account");
+    ui.click("harvest-change-account-confirm");
+    ui.click("harvest-change-account-confirm");
     assert!(ui.html().contains("Changing account…"));
     ui.cancel_dialog();
     assert!(ui.html().contains("Changing account…"));
@@ -1510,7 +1515,7 @@ fn stale_confirmation_keeps_the_dialog_and_shows_the_error() {
     let mut ui = Ui::start(&probe);
     ui.click("choose-api");
     ui.click("change-account");
-    ui.click("confirm-change-account");
+    ui.click("harvest-change-account-confirm");
     send.send(Err(ServerFnError::new("Reload the importer")))
         .unwrap();
     ui.settle();
@@ -1848,8 +1853,8 @@ fn connection_actions_prevent_duplicate_submissions_and_keep_errors_local() {
                     .contains("Clients, projects and time already imported stay")
             );
             assert_eq!(*probe.disconnects.borrow(), 0);
-            ui.click("confirm-disconnect");
-            ui.click("confirm-disconnect");
+            ui.click("harvest-disconnect-confirm");
+            ui.click("harvest-disconnect-confirm");
             assert_eq!(*probe.disconnects.borrow(), 1);
             send.send(Err(ServerFnError::new("disconnect unavailable")))
                 .unwrap();
@@ -2012,7 +2017,7 @@ fn changes_that_disconnect_harvest_ask_first() {
     ui.click("save-harvest-client");
     assert!(probe.client_saves.borrow().is_empty());
     assert!(ui.html().contains("disconnects Harvest"), "{}", ui.html());
-    ui.click("confirm-harvest-client-change");
+    ui.click("harvest-client-change-confirm");
     assert_eq!(probe.client_saves.borrow().len(), 1);
     assert!(
         probe.client_saves.borrow()[0].3,
@@ -2030,7 +2035,7 @@ fn changes_that_disconnect_harvest_ask_first() {
         "{}",
         ui.html()
     );
-    ui.click("confirm-harvest-client-change");
+    ui.click("harvest-client-change-confirm");
     assert_eq!(*probe.client_removes.borrow(), 1);
     assert!(ui.html().contains("Not configured"));
 }

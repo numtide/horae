@@ -11,10 +11,12 @@ use super::{Failure, loaded};
 
 /// The Timesheet title, where focus lands once a failed week loads again.
 const TIMESHEET_HEADING: &str = "timesheet-heading";
+use crate::components::button::ButtonVariant;
+use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
-use crate::components::modal::Modal;
+use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, LoadError, Loading};
@@ -297,6 +299,7 @@ fn TimesheetContent(
     mut requester: Signal<Option<PermissionRequester>>,
     mut last_context: Signal<Option<TimesheetWriteContext>>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     // View, week, selected day and calendar span all derive from the URL
     // (/timesheet/<view>/<date>?span=<span>), so switching views, changing the
     // calendar span or navigating is shareable and works with the browser's
@@ -1211,6 +1214,174 @@ fn TimesheetContent(
     let is_this_week = today_offset(today, ws).is_some();
     let range_label = format!("{} – {}", ws.format("%d %b"), week_end.format("%d %b %Y"));
 
+    // Harvest-style single primary: with no duration on today's column it
+    // starts a running timer; once a duration is typed (or on a past day /
+    // when editing) it saves a fixed entry.
+    let save_entry = use_callback(move |()| {
+        if busy() {
+            return;
+        }
+        let Some(date) = *add_open.peek() else {
+            return;
+        };
+        let Some(context) = context() else {
+            return;
+        };
+        let Some((project_id, task_id, notes)) = read_pt_notes.call(()) else {
+            return;
+        };
+        let mut running_timer = running_timer;
+        let minutes = match modal_minutes(&add_duration.read(), can_start_timer()) {
+            Ok(minutes) => minutes,
+            Err(message) => {
+                add_error.set(Some(message.to_string()));
+                return;
+            }
+        };
+        let Some(minutes) = minutes else {
+            add_saving.set(true);
+            add_error.set(None);
+            spawn(async move {
+                match server_fns::apply_timesheet_command(
+                    context,
+                    TimesheetCommand::StartTimer {
+                        project_id,
+                        task_id,
+                        notes,
+                    },
+                )
+                .await
+                {
+                    Ok(_) => {
+                        add_open.set(None);
+                    }
+                    Err(e) => add_error.set(Some(format!("Could not start timer: {e}"))),
+                }
+                running_timer.refresh();
+                add_saving.set(false);
+            });
+            return;
+        };
+        let start_minute = *add_start.read();
+        let editing_id = *editing.read();
+        let billable = if editing_id.is_some() {
+            edit_billable()
+        } else {
+            tracking
+                .read()
+                .iter()
+                .find(|option| option.project_id == project_id && option.task_id == task_id)
+                .is_some_and(|option| option.billable)
+        };
+        let mut modal_timer = running_timer;
+        add_saving.set(true);
+        add_error.set(None);
+        spawn(async move {
+            let result = persist_entry(
+                context,
+                editing_id,
+                TimesheetEntryInput {
+                    project_id,
+                    task_id,
+                    spent_date: date,
+                    minutes,
+                    notes,
+                    billable,
+                    start_minute,
+                },
+            )
+            .await;
+            match result {
+                Ok(()) => {
+                    add_open.set(None);
+                }
+                Err(e) => add_error.set(Some(format!("Could not save: {e}"))),
+            }
+            modal_timer.refresh();
+            add_saving.set(false);
+        });
+    });
+    let delete_entry = use_callback(move |()| {
+        if busy() {
+            return;
+        }
+        let Some(context) = context() else {
+            return;
+        };
+        let Some(id) = *editing.read() else {
+            return;
+        };
+        let mut modal_timer = running_timer;
+        add_saving.set(true);
+        add_error.set(None);
+        spawn(async move {
+            match server_fns::apply_timesheet_command(
+                context,
+                TimesheetCommand::Delete {
+                    entry_ids: vec![id],
+                },
+            )
+            .await
+            {
+                Ok(_) => {
+                    add_open.set(None);
+                }
+                Err(e) => add_error.set(Some(format!("Could not delete: {e}"))),
+            }
+            modal_timer.refresh();
+            add_saving.set(false);
+        });
+    });
+    let entry_primary = ModalAction::click(
+        if add_saving() {
+            "Saving…"
+        } else if timer_mode() {
+            "Start timer"
+        } else {
+            "Save entry"
+        },
+        save_entry,
+    )
+    .disabled(busy() || context().is_none() || tracking.read().is_empty());
+    let mut confirm_delete = use_signal(|| false);
+    let ask_delete = use_callback(move |()| confirm_delete.set(true));
+    let keep_entry = use_callback(move |()| confirm_delete.set(false));
+    let delete_confirmed = use_callback(move |()| {
+        confirm_delete.set(false);
+        delete_entry.call(());
+    });
+    // Deleting cannot be undone, so the outlined button only asks first.
+    let entry_delete = editing.read().is_some().then(|| {
+        ModalAction::click("Delete…", ask_delete)
+            .variant(ButtonVariant::Danger)
+            .id("time-entry-delete")
+            .disabled(busy() || context().is_none())
+    });
+    let add_row = use_callback(move |()| {
+        if busy() {
+            return;
+        }
+        let p = addrow_project.read().parse::<Uuid>();
+        let t = addrow_task.read().parse::<Uuid>();
+        if let (Ok(pid), Ok(tid)) = (p, t) {
+            if !tracking::eligible(&tracking.read(), pid, tid) {
+                return;
+            }
+            let key = (pid, tid);
+            if !pending_rows.read().contains(&key)
+                && !week_entries
+                    .read()
+                    .iter()
+                    .any(|entry| (entry.project_id, entry.task_id) == key)
+            {
+                pending_rows.write().push(key);
+            }
+        }
+        addrow_open.set(false);
+    });
+    let add_row_primary =
+        ModalAction::click("Add row", add_row).disabled(busy() || tracking.read().is_empty());
+
     rsx! {
         div {
             "data-editor-kind": "timesheet",
@@ -1473,131 +1644,36 @@ fn TimesheetContent(
                 busy: add_saving(),
                 large: true,
                 focus_fallback: "app-main",
+                primary: entry_primary, secondary: entry_delete,
                 on_dismiss: move |_| add_open.set(None),
                 if let Some(date) = *add_open.read() {
-                    div { id: "time-entry-title", class: "ts-modal-title",
-                        if editing.read().is_some() { "Edit time entry" } else { "New time entry" }
-                        " for {date.format(\"%A, %d %b\")}"
+                    ModalHeader { id: "time-entry-title",
+                        title: format!(
+                            "{} for {}",
+                            if editing.read().is_some() { "Edit time entry" } else { "New time entry" },
+                            date.format("%A, %d %b"),
+                        ),
                     }
-                    div { class: "ts-modal-body",
-                        tracking::TrackingPicker {
-                            project: add_project, task: add_task, options: tracking(),
-                            disabled: add_saving(),
-                        }
-                        EntryFields { notes: add_notes, duration: add_duration, start: add_start, disabled: add_saving() }
-                        if let Some(err) = &*add_error.read() {
-                            div { class: "ts-modal-error", role: "alert", "{err}" }
-                        }
-                        div { class: "ts-modal-actions",
-                            // Harvest-style single primary: with no duration on
-                            // today's column it starts a running timer; once a
-                            // duration is typed (or on a past day / when editing)
-                            // it saves a fixed entry.
-                            button {
-                                class: "btn btn-primary",
-                                disabled: busy() || context().is_none() || tracking.read().is_empty(),
-                                onclick: move |_| {
-                                    if busy() { return; }
-                                    let Some(context) = context() else { return; };
-                                    let Some((project_id, task_id, notes)) = read_pt_notes.call(()) else {
-                                        return;
-                                    };
-                                    let mut running_timer = running_timer;
-                                    let minutes = match modal_minutes(&add_duration.read(), can_start_timer()) {
-                                        Ok(minutes) => minutes,
-                                        Err(message) => {
-                                            add_error.set(Some(message.to_string()));
-                                            return;
-                                        }
-                                    };
-                                    let Some(minutes) = minutes else {
-                                        add_saving.set(true);
-                                        add_error.set(None);
-                                        spawn(async move {
-                                            match server_fns::apply_timesheet_command(context, TimesheetCommand::StartTimer { project_id, task_id, notes }).await {
-                                                Ok(_) => {
-                                                    add_open.set(None);
-                                                }
-                                                Err(e) => add_error
-                                                    .set(Some(format!("Could not start timer: {e}"))),
-                                            }
-                                            running_timer.refresh();
-                                            add_saving.set(false);
-                                        });
-                                        return;
-                                    };
-                                    let start_minute = *add_start.read();
-                                    let editing_id = *editing.read();
-                                    let billable = if editing_id.is_some() {
-                                        edit_billable()
-                                    } else {
-                                        tracking.read().iter().find(|option| option.project_id == project_id && option.task_id == task_id).is_some_and(|option| option.billable)
-                                    };
-                                    let mut modal_timer = running_timer;
-                                    add_saving.set(true);
-                                    add_error.set(None);
-                                    spawn(async move {
-                                        let result = persist_entry(
-                                            context, editing_id,
-                                            TimesheetEntryInput { project_id, task_id, spent_date: date, minutes, notes, billable, start_minute },
-                                        )
-                                        .await;
-                                        match result {
-                                            Ok(()) => {
-                                                add_open.set(None);
-                                            }
-                                            Err(e) => add_error.set(Some(format!("Could not save: {e}"))),
-                                        }
-                                        modal_timer.refresh();
-                                        add_saving.set(false);
-                                    });
-                                },
-                                if add_saving() {
-                                    "Saving…"
-                                } else if timer_mode() {
-                                    "Start timer"
-                                } else {
-                                    "Save entry"
-                                }
-                            }
-                            if editing.read().is_some() {
-                                button {
-                                    class: "btn btn-danger",
-                                    disabled: busy() || context().is_none(),
-                                    onclick: move |_| {
-                                        if busy() { return; }
-                                        let Some(context) = context() else { return; };
-                                        let Some(id) = *editing.read() else {
-                                            return;
-                                        };
-                                        let mut modal_timer = running_timer;
-                                        add_saving.set(true);
-                                        add_error.set(None);
-                                        spawn(async move {
-                                            match server_fns::apply_timesheet_command(context, TimesheetCommand::Delete { entry_ids: vec![id] }).await {
-                                                Ok(_) => {
-                                                    add_open.set(None);
-                                                }
-                                                Err(e) => {
-                                                    add_error.set(Some(format!("Could not delete: {e}")))
-                                                }
-                                            }
-                                            modal_timer.refresh();
-                                            add_saving.set(false);
-                                        });
-                                    },
-                                    "Delete"
-                                }
-                            }
-                            button {
-                                class: "btn btn-ghost",
+                    ModalBody {
+                        div { class: "flex flex-col gap-3",
+                            tracking::TrackingPicker {
+                                project: add_project, task: add_task, options: tracking(),
                                 disabled: add_saving(),
-                                onclick: move |_| add_open.set(None),
-                                "Cancel"
+                            }
+                            EntryFields { notes: add_notes, duration: add_duration, start: add_start, disabled: add_saving() }
+                            if let Some(err) = &*add_error.read() {
+                                div { class: "text-sm text-danger", role: "alert", "{err}" }
                             }
                         }
                     }
                 }
+            }
+
+            ConfirmDialog { id: "time-entry-delete-dialog", labelledby: "time-entry-delete-title",
+                open: confirm_delete(), busy: add_saving(), focus_fallback: "app-main",
+                title: tr.timesheet_delete_entry_title(), confirm_label: tr.timesheet_delete_entry_confirm(),
+                on_confirm: delete_confirmed, on_dismiss: keep_entry,
+                p { {tr.timesheet_delete_entry_body()} }
             }
 
             // Add-row picker: choose a project/task to add an empty grid row.
@@ -1605,36 +1681,14 @@ fn TimesheetContent(
                 id: "add-row-dialog",
                 labelledby: "add-row-title",
                 open: addrow_open(),
+                primary: add_row_primary,
                 on_dismiss: move |_| addrow_open.set(false),
                 if addrow_open() {
-                    div { id: "add-row-title", class: "ts-modal-title", "Add a row" }
-                    div { class: "ts-modal-body",
-                        tracking::TrackingPicker {
-                            project: addrow_project, task: addrow_task, options: tracking(), disabled: busy(),
-                        }
-                        div { class: "ts-modal-actions",
-                            button {
-                                class: "btn btn-primary",
-                                disabled: busy() || tracking.read().is_empty(),
-                                onclick: move |_| {
-                                    if busy() { return; }
-                                    let p = addrow_project.read().parse::<Uuid>();
-                                    let t = addrow_task.read().parse::<Uuid>();
-                                    if let (Ok(pid), Ok(tid)) = (p, t) {
-                                        if !tracking::eligible(&tracking.read(), pid, tid) { return; }
-                                        let key = (pid, tid);
-                                        if !pending_rows.read().contains(&key) && !week_entries.read().iter().any(|entry| (entry.project_id, entry.task_id) == key) {
-                                            pending_rows.write().push(key);
-                                        }
-                                    }
-                                    addrow_open.set(false);
-                                },
-                                "Add row"
-                            }
-                            button {
-                                class: "btn btn-ghost",
-                                onclick: move |_| addrow_open.set(false),
-                                "Cancel"
+                    ModalHeader { id: "add-row-title", title: "Add a row" }
+                    ModalBody {
+                        div { class: "flex flex-col gap-3",
+                            tracking::TrackingPicker {
+                                project: addrow_project, task: addrow_task, options: tracking(), disabled: busy(),
                             }
                         }
                     }
@@ -1667,16 +1721,16 @@ fn EntryFields(
     disabled: bool,
 ) -> Element {
     rsx! {
-        div { class: "ts-modal-row",
+        div { class: "flex gap-3",
             input {
-                class: "form-input ts-modal-notes",
+                class: "form-input flex-1 min-w-0",
                 placeholder: "Notes (optional)",
                 value: "{notes}",
                 disabled,
                 oninput: move |e| notes.set(e.value()),
             }
             input {
-                class: "form-input ts-modal-duration",
+                class: "form-input flex-none w-30 text-right font-mono text-xl",
                 "aria-label": "Duration",
                 placeholder: "0:00",
                 value: "{duration}",

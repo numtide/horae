@@ -50,6 +50,11 @@ pub mod menu {
         rsx! { super::real_menu::Menu { id, label, {children} } }
     }
 }
+#[allow(dead_code)]
+#[path = "../src/components/button.rs"]
+pub mod button;
+#[path = "../src/components/confirm_dialog.rs"]
+pub mod confirm_dialog;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/modal.rs"]
@@ -67,8 +72,8 @@ pub mod select_field;
 pub mod today;
 mod components {
     pub use super::{
-        controls, date_picker, icons, menu, modal, no_tracking, page_header, screen_state,
-        select_field, today,
+        button, confirm_dialog, controls, date_picker, icons, menu, modal, no_tracking,
+        page_header, screen_state, select_field, today,
     };
 
     /// The shell's week start and a viewer who cannot manage projects, without

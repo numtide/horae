@@ -21,7 +21,7 @@ its own before-and-after captures.
 | PR-0 | Bring `DESIGN.md` and this inventory up to date: the decisions, the glossary, the Pages table, the stale nav-dot and `dark.dc.html` references; the audit itself in `docs/design/`. | all | This change |
 | PR-1 | Raise `--color-label` (dark) and `--color-text-muted` (light) to 4.5:1 and use `--color-text-muted` for placeholders; one `--ring` focus rule for links and `[tabindex]`; label the theme select in Settings; calendar event colours as tokens in both themes; move the 10.5, 11, 11.5, 12.5, 13 and 14.5px sizes and the 6, 9 and 11px radii onto the scale; drop the second `.alert-warning`, the static `style:` in `pages/invoices.rs` and `invoices/settings.rs`; decide whether the sign-in page loads `horae.css` or is documented as dark only. | Accessibility, Tokens & utilities | Done. The sign-in page is decided (it loads `horae.css` and follows the theme) and goes in its own PR |
 | PR-2 | `PageHeader` with the 34/600 title, one back link and the actions on all 26 screens; one `.page-title` definition; replace the Harvest `BackLinks` breadcrumb with a back link; remove the `AdminShell` "Back to Timesheet" link; header actions at normal size. | Type scale, Page header | In review (`design/pr2-page-header`) |
-| PR-3 | `ConfirmDialog` and fixed `Modal` slots; move irreversible confirmations to it; drop the dialog when archiving a single record (the toast's "Undo" replaces it) and keep a neutral-tone dialog only for archiving that carries other records or acts in bulk; delete `.ts-modal-*`; give the four unpadded dialogs (disconnect Harvest, change account, both over-invoicing dialogs) the shared anatomy. Footer order waits for its decision. | Dialogs, Destructive actions, Buttons | Not started; footer order pending |
+| PR-3 | `ConfirmDialog` and fixed `Modal` slots; move irreversible confirmations to it; drop the dialog when archiving a single record (the toast's "Undo" replaces it) and keep a neutral-tone dialog only for archiving that carries other records or acts in bulk; delete `.ts-modal-*`; give the four unpadded dialogs (disconnect Harvest, change account, both over-invoicing dialogs) the shared anatomy; one footer order for every dialog, drawn only by `Modal`. | Dialogs, Destructive actions, Buttons | In review (`design/pr3-dialogs`). Footer order resolved: primary first on the left, Cancel last, stretched. Every confirmation, including deleting a time entry, the Harvest OAuth app, discarding permission changes and deleting a custom profile, is a `ConfirmDialog`. Left for PR-9: archiving one client or one task still asks first (neutral `ConfirmDialog`), because their toasts have no Undo yet |
 | PR-4 | `EmptyState`, `ErrorState` and `Loading` on about 20 screens; fold the Projects card into `.empty-state`; `ErrorState` with the same 52px icon tile; optional `Skeleton` for listings; "Try again" on every retry; the `AdminShell`'s "Access unavailable" card, which still has its own `h1` and a `btn-secondary` "Back to Timesheet" (a no-permission state: name who can grant access instead). | Empty, loading and error states, Screen States | In review (`design/pr4-screen-states`). Retries after an uncertain save ("Retry same save", "Retry generation" and the like) keep their labels |
 | PR-5 | `FilterBar` and `SearchField` on every filterable list; move the native `<select>` uses (`reports.rs` ×3, `tasks.rs`, `tasks/editor.rs`, `admin/people.rs`, `admin/add_person.rs`, `admin/permission_editor.rs`, `components/project_task_picker.rs`, the Settings theme select) to `SelectField`; retire `form::Select`. | Selects, filters and search | Not started |
 | PR-6 | Organization default and personal override for the duration format; one formatter in `horae-core`, used by the UI, the server and the reports, and the `pages/projects.rs` formatter removed; exports stay decimal; one money formatter in `horae-core` (currency code, grouped thousands, the currency's own decimals) used by the UI, the server, PDFs and emails, with no amount built by hand in a page and `format_cents_plain` kept for editable fields and interchange formats; replace `type=date` inputs (Reports, invoice preparation, New Project milestones) with `DatePicker`; extract `PeriodNav` from the Timesheet and use it in Approvals. | Formats, Selects, filters and search | Not started |
@@ -29,6 +29,16 @@ its own before-and-after captures.
 | PR-8 | One "Actions" menu per table row, except Approvals' inline "Approve" and "Reopen", which become Secondary `btn-sm`; status always a `Badge`; Primary for main actions and form submits, at most one per screen or form; retire Solid: Approvals' "Approve all" and the Invoice settings submits become Primary, "Submit week" becomes a `.btn-split` with a Primary body and `.ts-submit` goes, then delete `.btn-solid` and `--glow-pine`; retire the timesheet's other `ts-*` classes that copy `.btn`. Its labels go into the text catalog (`crates/i18n/locales/en/horae.ftl`) from its first commit, as any new interface text does (`specs/023-i18n`, C-9). | Buttons, Data Tables, Destructive actions | Not started |
 | PR-9 | One toast container in `AppLayout`, styled after `Toast.dc.html`; every success confirmed with a toast; inline "Saved." text and `.alert-success` confirmations removed; long messages wrap instead of truncating. | Toast | Not started |
 | PR-10 | Apply the glossary: "People" in the sidebar and subnavigation, "Team" only for a project's team, "Person" for the Reports grouping, "Restore", "Settings" for the workspace page and "My settings" for `/settings`, "Try again", "Discard changes", "Cancel" and "Close", and the conventions (sentence case, ellipses, empty-state titles, toast wording). It waits for the first increment of `specs/023-i18n` to close, and then edits only `crates/i18n/locales/en/horae.ftl` and tests (C-6). | Glossary | Not started |
+
+A follow-up of PR-3, in its own PR and not numbered yet:
+
+- **Editor navigation guard asks in `ConfirmDialog`.** `assets/js/project-edit-navigation.js`
+  still uses the browser's `confirm()` and `alert()` when history navigation would
+  leave an editor (project, client, invoice, timesheet, permissions) with unsaved
+  changes or a pending request, because it decides synchronously. Block the
+  navigation, open a `ConfirmDialog` and replay the navigation on confirm, then
+  rewrite the browser suites that answer the native dialog. It is the one
+  exception `tests/dialog_anatomy.rs` allows.
 
 Two follow-ups of PR-1, each in its own PR and not numbered yet:
 
@@ -44,15 +54,19 @@ against it.
 
 ## Open questions
 
-Two decisions are under review and are marked *Pending* in `DESIGN.md`:
+One decision is under review and is marked *Pending* in `DESIGN.md`:
 
-- **Dialog footer order and alignment** (blocks part of PR-3). The kit puts the
-  primary action on the right; `ConfirmDialog`, most prototype screens and the
-  app put it first, on the left.
 - **Tables on mobile** (blocks the mobile part of PR-7). The prototypes stop at
   900px. The direction under review is stacked cards for list tables and
   horizontal scroll with an indicator for wide data tables; the stacked card and
   the Timesheet at 390px need designing first.
+
+Resolved:
+
+- **Dialog footer order and alignment** (question 4). The primary action comes
+  first, on the left, then Cancel; the buttons stretch to the footer's width.
+  `Modal` draws every footer from its props, so no page can order it by hand
+  (PR-3).
 
 ## Superseded entries
 

@@ -14,6 +14,10 @@ use dioxus_html::{SerializedFormData, SerializedHtmlEventConverter, SerializedMo
 use futures_util::FutureExt;
 use uuid::Uuid;
 
+#[path = "../src/components/button.rs"]
+pub mod button;
+#[path = "../src/components/confirm_dialog.rs"]
+pub mod confirm_dialog;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
@@ -22,11 +26,13 @@ pub mod form;
 mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
+#[path = "../src/components/modal.rs"]
+pub mod modal;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 mod components {
-    pub use super::{form, icons, screen_state};
+    pub use super::{confirm_dialog, form, icons, screen_state};
 }
 mod models {
     pub use horae_types::api_tokens;
@@ -249,11 +255,18 @@ async fn revoking_asks_first_and_then_shows_the_token_revoked() {
 
     click(&mut dom, &format!("api-token-revoke-{id}"));
     assert!(html(&dom).contains("Revoke “Old script”?"));
-    click(&mut dom, &format!("api-token-cancel-{id}"));
+    click(&mut dom, "api-token-revoke-dialog-cancel");
     assert!(probe.revokes.borrow().is_empty(), "cancel revokes nothing");
 
     click(&mut dom, &format!("api-token-revoke-{id}"));
-    click(&mut dom, &format!("api-token-confirm-{id}"));
+    let confirm = html(&dom);
+    assert!(
+        confirm.contains(
+            r#"id="api-token-revoke-dialog-confirm" type="button" class="btn btn-danger-solid""#
+        ),
+        "an irreversible revoke confirms with the solid danger button: {confirm}"
+    );
+    click(&mut dom, "api-token-revoke-dialog-confirm");
     assert_eq!(*probe.revokes.borrow(), [id.to_string()]);
     let html = html(&dom);
     assert!(html.contains("Revoked"), "{html}");

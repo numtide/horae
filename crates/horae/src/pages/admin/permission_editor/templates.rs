@@ -2,8 +2,10 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::Permission;
 use uuid::Uuid;
 
-use crate::components::controls::Checkbox;
+use crate::components::button::ButtonVariant;
+use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::components::form::{FormGroup, Input};
+use crate::components::modal::{ModalAction, ModalActions, ModalCancel};
 use crate::components::permission_description::permission_description;
 use crate::components::screen_state::Loading;
 use crate::models::permission_editor::{
@@ -36,6 +38,7 @@ pub(super) fn TemplateEditor(
     on_cancel: EventHandler<()>,
     on_reload: EventHandler<()>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let initial = intent.clone();
     let preview = use_resource(move || {
         let initial = initial.clone();
@@ -55,7 +58,6 @@ pub(super) fn TemplateEditor(
         }
     });
     let mut name = use_signal(String::new);
-    let mut confirmed = use_signal(|| false);
     let mut pending = use_signal(|| None::<TemplateCommand>);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
@@ -63,7 +65,7 @@ pub(super) fn TemplateEditor(
     let mut denied = use_signal(|| false);
     let mut saved = use_signal(|| false);
     let acknowledged = use_signal(|| None::<AcknowledgedPermission>);
-    use_effect(move || dirty.set(!saved() && (!name.read().is_empty() || confirmed())));
+    use_effect(move || dirty.set(!saved() && !name.read().is_empty()));
     let create = matches!(intent, TemplateIntent::Create(_));
     let preview_ready = preview.state()() == UseResourceState::Ready;
     let preview_pending = !create && !preview_ready;
@@ -90,125 +92,177 @@ pub(super) fn TemplateEditor(
         || rejected()
         || saved()
         || preview_failed;
+    // A deletion is confirmed by its dialog once the preview matches.
     let ready_to_save = matching_preview
         && match &intent {
             TemplateIntent::Create(_) => !name.read().trim().is_empty(),
-            TemplateIntent::Delete(_) => confirmed(),
+            TemplateIntent::Delete(_) => true,
         };
     let command_intent = intent.clone();
+    let reload = use_callback(move |()| {
+        if !busy() && pending.peek().is_none() {
+            on_reload.call(());
+        }
+    });
+    let save = use_callback(move |()| {
+        if busy() || rejected() || saved() || preview_failed {
+            return;
+        }
+        let command = if let Some(command) = pending.peek().as_ref() {
+            command.clone()
+        } else {
+            if !ready_to_save {
+                return;
+            }
+            let action = match &command_intent {
+                TemplateIntent::Create(grants) => TemplateAction::Create {
+                    name: name.peek().trim().to_owned(),
+                    grants: grants.clone(),
+                },
+                TemplateIntent::Delete(template) => TemplateAction::Delete {
+                    id: template.id,
+                    expected_revision: template.revision,
+                },
+            };
+            TemplateCommand {
+                request_id: Uuid::now_v7(),
+                expected_access_revision: access_revision,
+                action,
+            }
+        };
+        pending.set(Some(command.clone()));
+        busy.set(true);
+        locked.set(true);
+        error.set(None);
+        spawn(async move {
+            let request = PendingPermission {
+                requester,
+                command: PendingCommand::Template(command),
+            };
+            match request.attempt(acknowledged).await {
+                Ok(_) => {
+                    pending.set(None);
+                    saved.set(true);
+                    locked.set(false);
+                }
+                Err(RecoveryError::Storage(message) | RecoveryError::Cleanup(message)) => {
+                    error.set(Some(message))
+                }
+                Err(RecoveryError::Server(problem)) => {
+                    if definite_rejection(&problem) {
+                        pending.set(None);
+                        rejected.set(true);
+                        denied.set(access_denied(&problem));
+                        locked.set(false);
+                        error.set(Some(rejection_message(&problem)));
+                    } else {
+                        error.set(Some("The save could not be confirmed. Retry the same save before making another change.".into()));
+                    }
+                }
+            }
+            busy.set(false);
+        });
+    });
+    let back = use_callback(move |()| {
+        if !preview_pending && !busy() && pending.peek().is_none() {
+            on_cancel.call(());
+        }
+    });
+    let finished = saved() || rejected() || preview_failed;
+    let label = if busy() {
+        "Saving…"
+    } else if acknowledged.read().is_some() {
+        "Finish recovery cleanup"
+    } else if pending.read().is_some() {
+        "Retry same save"
+    } else if create {
+        "Create custom profile"
+    } else {
+        "Delete profile"
+    };
+    let preview_failure = preview_failed.then(|| match &*deletion {
+        Some(Err(problem)) => load_error(problem),
+        _ => "The profile or its affected people changed. Reload permissions before deleting it.",
+    });
+    if let TemplateIntent::Delete(template) = &intent {
+        // Deleting a profile cannot be undone, so it is confirmed in a dialog
+        // over the person's permissions; once it settles, only a reload is left.
+        // The name shows only with a preview that matches it.
+        let leave = if finished { reload } else { back };
+        return rsx! {
+            p { class: "text-sm text-secondary m-0", {tr.permissions_profile_delete_pending()} }
+            ConfirmDialog { id: "permission-template-delete-dialog", labelledby: "permission-template-delete-title",
+                open: true, busy: busy(),
+                tone: if finished { ConfirmTone::Neutral } else { ConfirmTone::Danger },
+                title: tr.permissions_profile_delete_title(),
+                confirm_label: if finished { "Reload and discard unsaved person changes" } else { label },
+                confirm_disabled: !finished && (preview_pending || (!ready_to_save && pending.read().is_none())),
+                cancel_label: "Back to person permissions",
+                on_confirm: if finished { reload } else { save }, on_dismiss: leave,
+                if let Some(message) = error() {
+                    p { class: "text-danger", role: "alert", "{message}" }
+                }
+                if saved() {
+                    p { role: "status", "Custom profile deleted. Everyone keeps their permissions." }
+                } else if let Some(message) = preview_failure {
+                    p { role: "alert", class: "text-danger", "{message}" }
+                } else if !denied() {
+                    p { class: "font-semibold", "{template.name}" }
+                    if !preview_ready { Loading { label: "Loading affected people…" } }
+                    else if let Some(Ok(Some(value))) = &*deletion {
+                        p { "People using this profile: {value.people.len()}. They keep their permissions as individual configurations. Existing work and management responsibilities will not change." }
+                        if value.people.is_empty() { p { "No people currently use this profile." } }
+                        ul { class: "flex flex-col gap-2 pl-5",
+                            for person in &value.people { li { key: "{person.user_id}", "{person.name}" } }
+                        }
+                    }
+                }
+                p { {tr.permissions_profile_delete_hint()} }
+            }
+        };
+    }
+    let (primary, secondary) = if finished {
+        let reload = ModalAction::click("Reload and discard unsaved person changes", reload)
+            .variant(ButtonVariant::Secondary)
+            .id(RELOAD_BUTTON);
+        (reload, None)
+    } else {
+        let save = ModalAction::click(label, save)
+            .id(SAVE_BUTTON)
+            .disabled(busy() || (!ready_to_save && pending.read().is_none()));
+        let back = ModalAction::click("Back to person permissions", back)
+            .variant(ButtonVariant::Secondary)
+            .id(CANCEL_BUTTON)
+            .disabled(preview_pending || busy() || pending.read().is_some());
+        (save, Some(back))
+    };
 
     rsx! {
-        h3 { class: "text-xl mb-3", if create { "Create custom profile" } else { "Delete custom profile" } }
+        ModalActions { primary, secondary,
+            // Hidden while locked, as the dialog's own Close is.
+            cancel: (!(preview_pending || busy() || pending.read().is_some()))
+                .then(|| ModalCancel::new("Close").id(super::CLOSE_BUTTON)),
+        }
+        h3 { class: "text-xl mb-3", "Create custom profile" }
         if let Some(message) = error() {
             p { class: "text-sm text-danger mb-4", role: "alert", "{message}" }
         }
         if saved() {
-            p { role: "status", class: "text-sm mb-4",
-                if create { "Custom profile created. No person's permissions were changed." }
-                else { "Custom profile deleted. Everyone keeps their permissions." }
-            }
-        } else if !denied() && !preview_failed {
-            match &intent {
-                TemplateIntent::Create(grants) => rsx! {
-                    FormGroup { label: "Profile name", id: "permission-template-name",
-                        hint: "Up to 100 characters. Names must be unique, ignoring case and surrounding spaces.",
-                        Input { id: "permission-template-name", value: name(), disabled: freeze,
-                            oninput: move |event: FormEvent| { if !freeze { name.set(event.value()); error.set(None); } },
-                        }
+            p { role: "status", class: "text-sm mb-4", "Custom profile created. No person's permissions were changed." }
+        } else if !denied() {
+            if let TemplateIntent::Create(grants) = &intent {
+                FormGroup { label: "Profile name", id: "permission-template-name",
+                    hint: "Up to 100 characters. Names must be unique, ignoring case and surrounding spaces.",
+                    Input { id: "permission-template-name", value: name(), disabled: freeze,
+                        oninput: move |event: FormEvent| { if !freeze { name.set(event.value()); error.set(None); } },
                     }
-                    p { class: "text-sm text-secondary mb-3", "This reusable profile contains the permissions below, without Administrator access. It will not be applied to anyone automatically." }
-                    ul { class: "text-sm flex flex-col gap-2 pl-5 mb-4",
-                        for grant in grants { li { "{permission_description(*grant)}" } }
-                    }
-                },
-                TemplateIntent::Delete(template) => rsx! {
-                    p { class: "text-sm font-semibold mb-3", "{template.name}" }
-                    if !preview_ready { Loading { label: "Loading affected people…" } }
-                    else if let Some(Ok(Some(value))) = &*deletion {
-                        p { class: "text-sm mb-3", "People using this profile: {value.people.len()}. They keep their permissions as individual configurations. Existing work and management responsibilities will not change." }
-                        if value.people.is_empty() { p { class: "text-sm mb-3", "No people currently use this profile." } }
-                        ul { class: "text-sm flex flex-col gap-2 pl-5 mb-4",
-                            for person in &value.people { li { key: "{person.user_id}", "{person.name}" } }
-                        }
-                        Checkbox { id: "permission-template-confirm", checked: confirmed(), disabled: freeze,
-                            label: "Delete this custom profile and keep everyone's permissions",
-                            onclick: move |_| { if !freeze { confirmed.toggle(); } },
-                        }
-                    }
-                },
-            }
-        }
-        if preview_failed {
-            p { role: "alert", class: "text-sm text-danger mb-4",
-                {match &*deletion {
-                    Some(Err(problem)) => load_error(problem),
-                    _ => "The profile or its affected people changed. Reload permissions before deleting it.",
-                }}
-            }
-        }
-        p { class: "text-sm text-secondary mt-4 mb-4", "This action does not save the person's draft. Reloading discards unsaved person changes." }
-        div { class: "flex flex-wrap gap-3 mt-4",
-            if saved() || rejected() || preview_failed {
-                button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary",
-                    onclick: move |_| { if !busy() && pending.peek().is_none() { on_reload.call(()); } },
-                    "Reload and discard unsaved person changes"
                 }
-            } else {
-                button { id: SAVE_BUTTON, r#type: "button",
-                    class: if create { "btn btn-primary" } else { "btn btn-danger" },
-                    disabled: busy() || (!ready_to_save && pending.read().is_none()),
-                    onclick: move |_| {
-                        if busy() || rejected() || saved() || preview_failed { return; }
-                        let command = if let Some(command) = pending.peek().as_ref() {
-                            command.clone()
-                        } else {
-                            if !ready_to_save { return; }
-                            let action = match &command_intent {
-                                TemplateIntent::Create(grants) => TemplateAction::Create {
-                                    name: name.peek().trim().to_owned(), grants: grants.clone(),
-                                },
-                                TemplateIntent::Delete(template) => TemplateAction::Delete {
-                                    id: template.id, expected_revision: template.revision,
-                                },
-                            };
-                            TemplateCommand { request_id: Uuid::now_v7(), expected_access_revision: access_revision, action }
-                        };
-                        pending.set(Some(command.clone()));
-                        busy.set(true);
-                        locked.set(true);
-                        error.set(None);
-                        spawn(async move {
-                            let request = PendingPermission { requester, command: PendingCommand::Template(command) };
-                            match request.attempt(acknowledged).await {
-                                Ok(_) => { pending.set(None); saved.set(true); locked.set(false); },
-                                Err(RecoveryError::Storage(message) | RecoveryError::Cleanup(message)) => error.set(Some(message)),
-                                Err(RecoveryError::Server(problem)) => {
-                                    if definite_rejection(&problem) {
-                                        pending.set(None);
-                                        rejected.set(true);
-                                        denied.set(access_denied(&problem));
-                                        locked.set(false);
-                                        error.set(Some(rejection_message(&problem)));
-                                    } else {
-                                        error.set(Some("The save could not be confirmed. Retry the same save before making another change.".into()));
-                                    }
-                                },
-                            }
-                            busy.set(false);
-                        });
-                    },
-                    if busy() { "Saving…" }
-                    else if acknowledged.read().is_some() { "Finish recovery cleanup" }
-                    else if pending.read().is_some() { "Retry same save" }
-                    else if create { "Create custom profile" }
-                    else { "Confirm deletion" }
-                }
-                button { id: CANCEL_BUTTON, r#type: "button", class: "btn btn-secondary",
-                    disabled: preview_pending || busy() || pending.read().is_some(),
-                    onclick: move |_| { if !preview_pending && !busy() && pending.peek().is_none() { on_cancel.call(()); } },
-                    "Back to person permissions"
+                p { class: "text-sm text-secondary mb-3", "This reusable profile contains the permissions below, without Administrator access. It will not be applied to anyone automatically." }
+                ul { class: "text-sm flex flex-col gap-2 pl-5 mb-4",
+                    for grant in grants { li { "{permission_description(*grant)}" } }
                 }
             }
         }
+        p { class: "text-sm text-secondary mt-4 mb-0", "This action does not save the person's draft. Reloading discards unsaved person changes." }
     }
 }

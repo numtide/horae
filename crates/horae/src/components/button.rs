@@ -18,7 +18,7 @@ pub enum ButtonVariant {
 }
 
 impl ButtonVariant {
-    fn class(self) -> &'static str {
+    pub fn class(self) -> &'static str {
         match self {
             Self::Primary => "btn-primary",
             Self::Secondary => "btn-secondary",

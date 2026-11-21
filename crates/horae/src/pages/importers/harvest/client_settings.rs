@@ -9,6 +9,7 @@ use horae_core::importers::harvest::client::{
 
 use super::connect_outcome::SecretFocus;
 use super::redirect_url_field::{RedirectUrlField, redirect_url, use_origin};
+use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::screen_state::{LoadError, Loading};
 use crate::route::Route;
 use crate::server_fns;
@@ -31,6 +32,7 @@ pub(super) fn HarvestOAuthApp(
     focus_secret: bool,
     on_changed: EventHandler<()>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut settings = use_resource(server_fns::harvest_client_settings);
     let retry = use_callback(move |_| settings.restart());
     let navigator = use_navigator();
@@ -101,6 +103,18 @@ pub(super) fn HarvestOAuthApp(
         }
     };
 
+    // Disconnecting Harvest cannot be undone, so a change that does asks first.
+    let confirm_change = use_callback(move |()| {
+        let Some(change) = *confirming.peek() else {
+            return;
+        };
+        let Some(Ok(current)) = settings.peek().clone() else {
+            return;
+        };
+        spawn(submit(change, current));
+    });
+    let keep_client = use_callback(move |()| confirming.set(None));
+
     let loaded = settings.read().clone();
     let current = match loaded {
         None => {
@@ -134,7 +148,6 @@ pub(super) fn HarvestOAuthApp(
         current.secret_set && current.secret_readable && !(replacing() && editable);
     let save_current = current.clone();
     let remove_current = current.clone();
-    let confirm_current = current.clone();
 
     rsx! {
         div { class: "flex flex-col gap-5",
@@ -237,32 +250,18 @@ pub(super) fn HarvestOAuthApp(
                             "Encrypted at rest and never returned by the API. Horae can overwrite it, never read it back."
                         }
                     }
-                    if let Some(change) = confirming() {
-                        div { class: "alert alert-warning mb-0", role: "alert",
-                            p {
-                                if change == Change::Remove {
-                                    "Removing the OAuth app disconnects Harvest."
-                                } else {
-                                    "A different client ID disconnects Harvest: its tokens belong to the current app."
-                                }
-                                " The account binding, import history and imported data are kept; reconnect the same Harvest account afterwards."
+                    ConfirmDialog { id: "harvest-client-change", labelledby: "harvest-client-change-title",
+                        open: confirming().is_some(), busy: busy(),
+                        title: if confirming() == Some(Change::Remove) { tr.harvest_client_remove_title() } else { tr.harvest_client_change_title() },
+                        confirm_label: if confirming() == Some(Change::Remove) { tr.harvest_client_remove_confirm() } else { tr.harvest_client_change_confirm() },
+                        on_confirm: confirm_change, on_dismiss: keep_client,
+                        p {
+                            if confirming() == Some(Change::Remove) {
+                                "Removing the OAuth app disconnects Harvest."
+                            } else {
+                                "A different client ID disconnects Harvest: its tokens belong to the current app."
                             }
-                            div { class: "flex items-center gap-3 flex-wrap mt-3",
-                                button {
-                                    r#type: "button",
-                                    class: "btn btn-danger btn-sm",
-                                    "data-testid": "confirm-harvest-client-change".to_owned(),
-                                    disabled: busy(),
-                                    onclick: move |_| submit(change, confirm_current.clone()),
-                                    if change == Change::Remove { "Remove and disconnect" } else { "Save and disconnect" }
-                                }
-                                button {
-                                    r#type: "button",
-                                    class: "btn btn-ghost btn-sm",
-                                    onclick: move |_| confirming.set(None),
-                                    "Cancel"
-                                }
-                            }
+                            " The account binding, import history and imported data are kept; reconnect the same Harvest account afterwards."
                         }
                     }
                     if let Some(failure) = error() {
@@ -285,7 +284,7 @@ pub(super) fn HarvestOAuthApp(
                             if current.source == ClientSource::Stored {
                                 button {
                                     r#type: "button",
-                                    class: "btn btn-ghost btn-sm text-danger",
+                                    class: "btn btn-danger btn-sm",
                                     "data-testid": "remove-harvest-client".to_owned(),
                                     disabled: busy(),
                                     onclick: move |_| submit(Change::Remove, remove_current.clone()),

@@ -4,8 +4,8 @@ use horae_core::importers::harvest::types::ConnectionStatus;
 use super::change_account::ChangeAccount;
 use super::{Conn, HarvestLogo};
 use crate::components::back_link::BackLink;
+use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::menu::{Menu, MenuDivider};
-use crate::components::modal::Modal;
 use crate::components::page_header::PageHeader;
 use crate::route::Route;
 use crate::server_fns;
@@ -163,26 +163,19 @@ pub(super) fn ConnectionCard(
                 div { class: "alert alert-danger mb-4", role: "alert", "{message}" }
             }
         }
-        Modal { id: "harvest-disconnect", labelledby: "harvest-disconnect-title", open: confirm_disconnect(), busy: busy(),
+        ConfirmDialog { id: "harvest-disconnect", labelledby: "harvest-disconnect-title", open: confirm_disconnect(), busy: busy(),
+            title: "Disconnect Harvest?",
+            confirm_label: if busy() { "Disconnecting…" } else { "Disconnect Harvest" },
+            on_confirm: disconnect,
             on_dismiss: dismiss,
-            h2 { id: "harvest-disconnect-title", "Disconnect Harvest?" }
             if confirm_disconnect() {
                 p {
                     "Horae deletes its access to Harvest"
                     if let Some(account) = &account { " account " span { class: "text-mono", "{account}" } }
                     ". Clients, projects and time already imported stay as they are."
                 }
-                p { class: "text-sm text-secondary", "You can reconnect later, but only to this same account." }
+                p { "You can reconnect later, but only to this same account." }
                 if let Some(message) = error() { p { role: "alert", class: "text-danger", "{message}" } }
-                div { class: "flex gap-3 flex-wrap justify-end mt-4",
-                    button { r#type: "button", class: "btn btn-secondary", "data-testid": "cancel-disconnect".to_owned(),
-                        disabled: busy(), onclick: move |_| confirm_disconnect.set(false), "Cancel"
-                    }
-                    button { r#type: "button", class: "btn btn-danger", "data-testid": "confirm-disconnect".to_owned(),
-                        disabled: busy(), onclick: disconnect,
-                        if busy() { "Disconnecting…" } else { "Disconnect Harvest" }
-                    }
-                }
             }
         }
         ChangeAccount { inspected: change, busy, on_changed }

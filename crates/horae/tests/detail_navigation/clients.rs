@@ -184,7 +184,7 @@ async fn pending_refresh_withholds_previous_manager_controls_and_editor() {
     // Archiving is confirmed before anything is sent.
     click(&mut dom, &format!("client-activity-{id}"));
     assert!(probe.client_status_changes.borrow().is_empty());
-    click(&mut dom, "client-archive-confirm");
+    click(&mut dom, "client-archive-dialog-confirm");
     assert_eq!(*probe.client_status_changes.borrow(), [(id, false)]);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Loading clients"), "{html}");
@@ -223,7 +223,7 @@ async fn list_refresh_rejects_changed_account_or_organization() {
         let (send, receive) = oneshot::channel();
         *probe.client_overview_response.borrow_mut() = Some(receive);
         click(&mut dom, &format!("client-activity-{id}"));
-        click(&mut dom, "client-archive-confirm");
+        click(&mut dom, "client-archive-dialog-confirm");
         let mut changed = overview(&probe);
         match change {
             "user" => changed.requester.user_id = Uuid::now_v7(),

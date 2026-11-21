@@ -43,7 +43,7 @@ pub fn AdminApiTokens() -> Element {
                     body: "Tokens people create in My settings appear here, where you can revoke them.",
                 }
             },
-            Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: true, on_revoke } },
+            Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: true, focus_fallback: "admin-api-tokens-title", on_revoke } },
         }
     }
 }
