@@ -22,6 +22,9 @@ use horae_core::importers::harvest::types::{
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/pages/importers.rs"]
 mod importers;
 #[path = "../src/components/menu.rs"]

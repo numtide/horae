@@ -5,6 +5,7 @@ use crate::route::Route;
 
 #[allow(non_snake_case)]
 pub fn App() -> Element {
+    crate::i18n::use_tr_provider();
     rsx! {
         document::Link {
             rel: "stylesheet",

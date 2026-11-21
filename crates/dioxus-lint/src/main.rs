@@ -5,17 +5,23 @@
 //! the check fails when a file's count moves either way, so new violations are caught and
 //! fixed ones lower the baseline.
 //!
+//! `literal-text` counts loose interface text in `rsx!` (text nodes, readable attributes,
+//! prose props) outside test code, `EXEMPT_FILES` and `NOT_LANGUAGE`. The lint also prints,
+//! as information that never fails, how many prose literals sit outside `rsx!` markup.
+//!
 //! Known gaps: `resource-gate` sees only `state()` compared with `UseResourceState::Ready`
 //! (directly, through a `let`, or joined by `||`), not a `match` on the state, `pending()`
 //! or a gate inside a helper fn. `render-helper` sees only free `fn render_*` returning
-//! `Element`, not methods, closures or helpers with other names.
+//! `Element`, not methods, closures or helpers with other names. `literal-text` sees literals
+//! only (alone, as `{"…"}` or as `if` branches), not `format!(…)` or other expressions in a
+//! readable attribute or prose prop, nor `value` on a submit `input`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use dioxus_rsx::{
-    AttributeName, AttributeValue, BodyNode, CallBody, ElementName, HotLiteral, IfChain,
+    AttributeName, AttributeValue, BodyNode, CallBody, ElementName, HotLiteral, IfChain, Segment,
 };
 use proc_macro2::Span;
 use syn::visit::{self, Visit};
@@ -74,10 +80,139 @@ const RULES: &[Rule] = &[
         fix: "use `Link { to: Route::… }`",
         clippy: false,
     },
+    Rule {
+        id: "dioxus/literal-text",
+        section: "Interface text",
+        evidence_file: "rsx/src/text_node.rs",
+        why: "text written in `rsx!` cannot be translated and escapes the catalog, so each language would mean editing the screen",
+        fix: "move the text into `crates/i18n/locales/en/horae.ftl` and call `tr.<id>()` (see the skill's \"Interface text\")",
+        clippy: false,
+    },
 ];
 
 /// Paths served by Axum routes rather than the Dioxus router, where a full navigation is intended.
 const SERVER_PATHS: &[&str] = &["/api/", "/auth/", "/harvest/", "/health"];
+
+/// Files whose text is not part of the product.
+const EXEMPT_FILES: &[(&str, &str)] = &[(
+    "crates/horae/src/pages/gallery.rs",
+    "development page with sample data (spec Edge Cases)",
+)];
+
+/// Literals that are not language: shown as they are in every language. A literal part of
+/// a text (`"horae_pat_"` in `"horae_pat_{prefix}…"`) matches an entry when it equals it.
+const NOT_LANGUAGE: &[(&str, &str)] = &[("horae_pat_", "token prefix, part of the token format")];
+
+/// Element attributes whose value is read or heard by a person.
+const READABLE_ATTRS: &[&str] = &[
+    "placeholder",
+    "title",
+    "alt",
+    "label",
+    "aria_label",
+    "aria-label",
+    "aria_description",
+    "aria-description",
+    "aria_valuetext",
+    "aria-valuetext",
+    "aria_roledescription",
+    "aria-roledescription",
+    "data-tooltip",
+];
+
+/// Component props that never carry prose, even when the literal looks like it.
+const MACHINE_PROPS: &[&str] = &[
+    "class",
+    "trigger_class",
+    "id",
+    "key",
+    "href",
+    "to",
+    "name",
+    "icon",
+    "r#type",
+    "variant",
+    "kind",
+    "tone",
+    "size",
+    "width",
+    "autocomplete",
+    "inputmode",
+    "pattern",
+    "accept",
+    "form",
+    "role",
+    "testid",
+    "test_id",
+    "target",
+    "rel",
+    "style",
+    "min",
+    "max",
+    "step",
+    "value",
+    "field",
+    "input_id",
+    "list_id",
+    "menu_id",
+    "popover_id",
+    "panel_id",
+    // Element ids: `Modal`'s labelling heading and focus fallback, `PageHeader`'s heading,
+    // `LoadError`'s retry button and the element it focuses after a recovery.
+    "labelledby",
+    "focus_fallback",
+    "title_id",
+    "retry_id",
+    "focus_on_recovery",
+    // A test hook passed through to the element.
+    "data-testid",
+    // `MetricCard`'s trend arrow (`up`, `down`), mapped to an icon.
+    "direction",
+    // `document::Link`'s icon dimensions (`32x32`).
+    "sizes",
+];
+
+/// Macros whose string arguments never reach a person: logs, panics, SQL, includes.
+const SILENT_MACROS: &[&str] = &[
+    "trace",
+    "debug",
+    "info",
+    "warn",
+    "error",
+    "event",
+    "span",
+    "panic",
+    "unreachable",
+    "todo",
+    "unimplemented",
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "debug_assert",
+    "debug_assert_eq",
+    "query",
+    "query_as",
+    "query_scalar",
+    "query_file",
+    "include_str",
+    "include_bytes",
+    "concat",
+    "env",
+    "option_env",
+    "asset",
+    "json",
+    "matches",
+    "cfg",
+    "compile_error",
+    "stringify",
+    "anyhow",
+    "bail",
+    "ensure",
+    "context",
+];
+
+/// Methods whose string argument is for developers.
+const SILENT_METHODS: &[&str] = &["expect", "context", "with_context", "unwrap_or_else"];
 
 #[derive(Debug, PartialEq)]
 struct Finding {
@@ -97,6 +232,13 @@ struct Checker {
     /// resource state comparison such as `let ready = r.state()() == UseResourceState::Ready;`;
     /// `None` for any other binding, which shadows an earlier one of the same name.
     state_flags: Vec<(String, Option<bool>)>,
+    /// Inside test code, where interface text is not counted.
+    in_test: bool,
+    /// Inside a class attribute or an argument of a log, panic or SQL macro or of
+    /// `expect`-like methods, whose literals never reach a person.
+    quiet: usize,
+    /// Prose literals in Rust code, outside `rsx!` markup (information only).
+    prose_literals: usize,
 }
 
 impl Checker {
@@ -145,7 +287,7 @@ impl Checker {
                     if is_internal_link(el) {
                         self.push("dioxus/internal-href", el.name.span());
                     }
-                    self.attributes(&el.raw_attributes);
+                    self.attributes(&el.raw_attributes, false);
                     self.nodes(&el.children);
                 }
                 BodyNode::Component(component) => {
@@ -154,11 +296,28 @@ impl Checker {
                             self.push("dioxus/inline-callback-prop", field.name.span());
                         }
                     }
-                    self.attributes(&component.fields);
+                    self.attributes(&component.fields, true);
                     self.nodes(&component.children.roots);
                 }
                 BodyNode::RawExpr(raw) => {
                     if let Some(expr) = self.parsed(raw.expr.as_expr()) {
+                        // `{"Save"}` is a text node written as an expression.
+                        let inner = match &expr {
+                            Expr::Block(b) => match b.block.stmts.as_slice() {
+                                [Stmt::Expr(e, None)] => e,
+                                _ => &expr,
+                            },
+                            e => e,
+                        };
+                        if let Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(lit),
+                            ..
+                        }) = inner
+                            && !self.in_test
+                            && is_language(&lit.value())
+                        {
+                            self.push("dioxus/literal-text", lit.span());
+                        }
                         self.visit_expr(&expr);
                     }
                 }
@@ -167,7 +326,11 @@ impl Checker {
                     self.nodes(&lp.body.roots);
                 }
                 BodyNode::IfChain(chain) => self.if_chain(chain),
-                BodyNode::Text(_) => {}
+                BodyNode::Text(text) => {
+                    if !self.in_test && has_language(&text.input.segments) {
+                        self.push("dioxus/literal-text", text.input.span());
+                    }
+                }
             }
         }
     }
@@ -188,8 +351,24 @@ impl Checker {
         }
     }
 
-    fn attributes(&mut self, attributes: &[dioxus_rsx::Attribute]) {
+    /// The attributes of an element, or the props of a component when `component`.
+    fn attributes(&mut self, attributes: &[dioxus_rsx::Attribute], component: bool) {
         for attribute in attributes {
+            let name = match &attribute.name {
+                AttributeName::BuiltIn(ident) => ident.to_string(),
+                AttributeName::Custom(lit) => lit.value(),
+                AttributeName::Spread(_) => String::new(),
+            };
+            // `class: if x { "a b" } else { "c" }` is not prose.
+            let quiet = usize::from(name == "class" || name.ends_with("_class"));
+            let readable = if component {
+                !MACHINE_PROPS.contains(&name.as_str())
+            } else {
+                READABLE_ATTRS.contains(&name.as_str())
+            };
+            if readable && !self.in_test {
+                self.literal_text(&attribute.value);
+            }
             match &attribute.value {
                 AttributeValue::EventTokens(closure) => {
                     if let Some(body) = self.parsed(closure.body.as_expr()) {
@@ -200,12 +379,35 @@ impl Checker {
                 }
                 AttributeValue::AttrExpr(expr) => {
                     if let Some(expr) = self.parsed(expr.as_expr()) {
+                        self.quiet += quiet;
                         self.visit_expr(&expr);
+                        self.quiet -= quiet;
                     }
                 }
-                AttributeValue::IfExpr(value) => self.visit_expr_if(&value.if_expr),
+                AttributeValue::IfExpr(value) => {
+                    self.quiet += quiet;
+                    self.visit_expr_if(&value.if_expr);
+                    self.quiet -= quiet;
+                }
                 AttributeValue::Shorthand(_) | AttributeValue::AttrLiteral(_) => {}
             }
+        }
+    }
+
+    /// The value of a readable attribute or prose prop: a literal with a letter, alone or
+    /// as a branch of `if`. An expression such as `format!(…)` is not seen (see the gaps).
+    fn literal_text(&mut self, value: &AttributeValue) {
+        match value {
+            AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) if has_language(&lit.segments) => {
+                self.push("dioxus/literal-text", lit.span());
+            }
+            AttributeValue::IfExpr(value) => {
+                self.literal_text(&value.then_value);
+                if let Some(other) = &value.else_value {
+                    self.literal_text(other);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -231,10 +433,57 @@ impl<'ast> Visit<'ast> for Checker {
             self.in_render,
             self.closure_depth,
             std::mem::take(&mut self.state_flags),
+            self.in_test,
         );
         (self.in_render, self.closure_depth) = (render, 0);
+        self.in_test |= is_test(&item.attrs);
         visit::visit_item_fn(self, item);
-        (self.in_render, self.closure_depth, self.state_flags) = saved;
+        (
+            self.in_render,
+            self.closure_depth,
+            self.state_flags,
+            self.in_test,
+        ) = saved;
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        let saved = self.in_test;
+        self.in_test |= is_test(&item.attrs);
+        visit::visit_item_mod(self, item);
+        self.in_test = saved;
+    }
+
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        let saved = self.in_test;
+        self.in_test |= is_test(&item.attrs);
+        visit::visit_item_impl(self, item);
+        self.in_test = saved;
+    }
+
+    fn visit_impl_item_fn(&mut self, item: &'ast syn::ImplItemFn) {
+        let saved = self.in_test;
+        self.in_test |= is_test(&item.attrs);
+        visit::visit_impl_item_fn(self, item);
+        self.in_test = saved;
+    }
+
+    /// Doc comments and other attributes are not shown to anyone.
+    fn visit_attribute(&mut self, _: &'ast syn::Attribute) {}
+
+    fn visit_lit_str(&mut self, lit: &'ast syn::LitStr) {
+        if !self.in_test && self.quiet == 0 && is_prose(&lit.value()) {
+            self.prose_literals += 1;
+        }
+    }
+
+    fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+        let quiet = usize::from(SILENT_METHODS.contains(&call.method.to_string().as_str()));
+        self.visit_expr(&call.receiver);
+        self.quiet += quiet;
+        for arg in &call.args {
+            self.visit_expr(arg);
+        }
+        self.quiet -= quiet;
     }
 
     fn visit_block(&mut self, block: &'ast syn::Block) {
@@ -274,12 +523,92 @@ impl<'ast> Visit<'ast> for Checker {
     }
 
     fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        if last_is(&mac.path, "rsx")
-            && let Some(body) = self.parsed(syn::parse2::<CallBody>(mac.tokens.clone()))
+        if last_is(&mac.path, "rsx") {
+            if let Some(body) = self.parsed(syn::parse2::<CallBody>(mac.tokens.clone())) {
+                self.nodes(&body.body.roots);
+            }
+            return;
+        }
+        let name = mac.path.segments.last().map(|s| s.ident.to_string());
+        if name.is_some_and(|n| SILENT_MACROS.contains(&n.as_str())) {
+            return;
+        }
+        // format!, vec!, toast helpers: their arguments are expressions. Macros with
+        // another syntax are skipped, as before this count existed.
+        if let Ok(args) = mac
+            .parse_body_with(syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated)
         {
-            self.nodes(&body.body.roots);
+            for arg in &args {
+                self.visit_expr(arg);
+            }
         }
     }
+}
+
+/// `#[test]`, `#[tokio::test]`, `#[sqlx::test]`, `#[cfg(test)]` or `#[cfg(all(test, …))]`.
+/// `cfg(not(test))` and `cfg(feature = "test-support")` are production code.
+fn is_test(attrs: &[syn::Attribute]) -> bool {
+    fn only_in_tests(meta: &syn::Meta) -> bool {
+        match meta {
+            syn::Meta::Path(path) => path.is_ident("test"),
+            syn::Meta::List(list) if list.path.is_ident("all") => list
+                .parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                )
+                .is_ok_and(|metas| metas.iter().any(only_in_tests)),
+            _ => false,
+        }
+    }
+    attrs.iter().any(|a| {
+        last_is(a.path(), "test")
+            || (a.path().is_ident("cfg")
+                && a.parse_args::<syn::Meta>().is_ok_and(|m| only_in_tests(&m)))
+    })
+}
+
+/// A literal part with a letter that is not a `NOT_LANGUAGE` entry.
+fn has_language(segments: &[Segment]) -> bool {
+    segments
+        .iter()
+        .any(|s| matches!(s, Segment::Literal(l) if is_language(l)))
+}
+
+fn is_language(text: &str) -> bool {
+    text.chars().any(char::is_alphabetic) && !NOT_LANGUAGE.iter().any(|(n, _)| *n == text)
+}
+
+/// A literal a person would read: a capitalised word followed by more text, or
+/// several lowercase words. CSS classes, paths, keys and identifiers are not prose.
+fn is_prose(s: &str) -> bool {
+    let t = s.trim();
+    let Some(first) = t.chars().next() else {
+        return false;
+    };
+    if !t.chars().any(char::is_alphabetic) || t.starts_with(['/', '#', '.', '-', '{', '<']) {
+        return false;
+    }
+    if t.contains("://") || t.contains("::") || t.contains("{{") {
+        return false;
+    }
+    let words: Vec<&str> = t.split_whitespace().collect();
+    // `btn btn-secondary`, `text-sm px-4`: utility classes.
+    let class_like = words.iter().all(|w| {
+        w.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-_:/[].%".contains(c))
+    }) && words.iter().any(|w| w.contains('-') || w.contains(':'));
+    if class_like {
+        return false;
+    }
+    if first.is_uppercase() {
+        // `Ready`, `NotFound`: one CamelCase word is an identifier more often than a label.
+        let camel = words.len() == 1
+            && t.chars().skip(1).any(char::is_uppercase)
+            && t.chars().all(char::is_alphanumeric);
+        let shouting = words.len() == 1 && t.chars().all(|c| c.is_uppercase() || c == '_');
+        return !camel && !shouting;
+    }
+    // Lowercase: only phrases ("per hour", "of {total}"), not single keys like "active".
+    words.len() >= 2 && words.iter().all(|w| !w.contains('_') && !w.contains('='))
 }
 
 /// Matches `rsx` as well as `dioxus::prelude::rsx`.
@@ -367,7 +696,13 @@ fn is_internal_link(el: &dioxus_rsx::Element) -> bool {
     href.starts_with('/') && !SERVER_PATHS.iter().any(|p| href.starts_with(p))
 }
 
+#[cfg(test)]
 fn check_source(src: &str) -> syn::Result<Vec<Finding>> {
+    check_file(src).map(|(findings, _)| findings)
+}
+
+/// The findings and the count of prose literals outside `rsx!` markup.
+fn check_file(src: &str) -> syn::Result<(Vec<Finding>, usize)> {
     let file = syn::parse_file(src)?;
     let mut checker = Checker::default();
     checker.visit_file(&file);
@@ -377,8 +712,27 @@ fn check_source(src: &str) -> syn::Result<Vec<Finding>> {
             first.extend(errors);
             Err(first)
         }
-        None => Ok(checker.findings),
+        None => Ok((checker.findings, checker.prose_literals)),
     }
+}
+
+/// Files whose text the interface never shows: the gallery and test-only files.
+fn text_exempt(shown: &str) -> bool {
+    let name = shown.rsplit('/').next().unwrap_or(shown);
+    EXEMPT_FILES.iter().any(|(file, _)| *file == shown)
+        || name == "tests.rs"
+        || name.ends_with("_tests.rs")
+        || shown.contains("/tests/")
+}
+
+/// The web app's interface (spec FR-010), where the prose outside markup is reported.
+fn interface(shown: &str) -> bool {
+    ["crates/horae/src/pages/", "crates/horae/src/components/"]
+        .iter()
+        .any(|dir| shown.starts_with(dir))
+        || ["app.rs", "route.rs", "pages.rs", "components.rs"]
+            .iter()
+            .any(|file| shown == format!("crates/horae/src/{file}"))
 }
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
@@ -440,6 +794,7 @@ fn main() -> ExitCode {
 
     // rule -> file -> lines
     let mut found: BTreeMap<&str, BTreeMap<String, Vec<usize>>> = BTreeMap::new();
+    let mut prose_literals = 0;
     for path in &files {
         let shown = path
             .strip_prefix(&root)
@@ -453,8 +808,13 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         };
-        match check_source(&src) {
-            Ok(findings) => {
+        match check_file(&src) {
+            Ok((mut findings, prose)) => {
+                if text_exempt(&shown) {
+                    findings.retain(|f| f.rule != "dioxus/literal-text");
+                } else if interface(&shown) {
+                    prose_literals += prose;
+                }
                 for f in findings {
                     let files = found.entry(f.rule).or_default();
                     files.entry(shown.clone()).or_default().push(f.line);
@@ -510,6 +870,9 @@ fn main() -> ExitCode {
         let allowed: usize = allowed.values().sum();
         println!("{}: {total} (baseline {allowed})", rule.id);
     }
+    println!(
+        "info: prose literals outside rsx! markup: {prose_literals} (toasts, messages built in Rust; not checked)"
+    );
     if ok {
         ExitCode::SUCCESS
     } else {
@@ -553,8 +916,19 @@ mod tests {
                 "{}: bad.rs has no `// next line flagged` marker",
                 rule.id
             );
-            assert_eq!(check_source(&bad).unwrap(), marked, "{}: bad.rs", rule.id);
-            let good = check_source(&good).unwrap();
+            // The other rules' fixtures write loose text, as most screens still do.
+            let ours = |findings: Vec<Finding>| -> Vec<Finding> {
+                (findings.into_iter())
+                    .filter(|f| f.rule == rule.id || f.rule != "dioxus/literal-text")
+                    .collect()
+            };
+            assert_eq!(
+                ours(check_source(&bad).unwrap()),
+                marked,
+                "{}: bad.rs",
+                rule.id
+            );
+            let good = ours(check_source(&good).unwrap());
             assert_eq!(good, vec![], "{}: good.rs is flagged", rule.id);
         }
     }

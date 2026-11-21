@@ -8,6 +8,9 @@ use dioxus::prelude::*;
 mod combobox;
 #[path = "../src/components/controls.rs"]
 mod controls;
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/menu.rs"]
 mod menu;
 

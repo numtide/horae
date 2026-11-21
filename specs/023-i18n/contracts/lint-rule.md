@@ -29,11 +29,31 @@ Machine props are the proof of concept's `MACHINE_PROPS` list (`class`, `trigger
 `key`, `href`, `to`, `name`, `icon`, `r#type`, `variant`, `kind`, `tone`, `size`, `width`,
 `autocomplete`, `inputmode`, `pattern`, `accept`, `form`, `role`, `testid`, `test_id`, `target`,
 `rel`, `style`, `min`, `max`, `step`, `value`, `field`, `input_id`, `list_id`, `menu_id`,
-`popover_id`, `panel_id`). A design PR that adds a component with another machine prop adds it to
+`popover_id`, `panel_id`), plus the ones I-1 found when taking the baseline, each with its reason
+in the code: the element ids `labelledby`, `focus_fallback`, `title_id`, `retry_id` and
+`focus_on_recovery`, the test hook `data-testid`, `MetricCard`'s `direction` and
+`document::Link`'s `sizes`. A design PR that adds a component with another machine prop adds it to
 the list in the same PR.
 
-Text inside `if`/`match` arms and `for` bodies of `rsx!` counts the same as at top level. Test
-code (`#[cfg(test)]` modules, `tests.rs`, `*_tests.rs`) is not counted.
+Text inside `if`/`match` arms and `for` bodies of `rsx!` counts the same as at top level, and so
+does a text node written as an expression (`{"Save"}`) and each literal branch of an attribute or
+prop written with `if` (`placeholder: if x { "Add tags…" } else { "" }`). Test code
+(`#[cfg(test)]` and `#[cfg(all(test, …))]` items, `#[test]` functions, `tests.rs`, `*_tests.rs`)
+is not counted;
+`#[cfg(not(test))]` and `#[cfg(feature = "test-support")]` are.
+
+### Known gaps
+
+The rule counts literals only. These sites hold interface text it does not see; the info count
+includes them, and each migration PR (I-2 to I-12) looks for them in its area by hand:
+
+- a readable attribute or prose prop built with an expression: `title: format!("Delete {name}")`,
+  `label: name.to_string()`, a `match`;
+- `value: "Save changes"` on an `input` of type `submit` or `button` (`value` is not a readable
+  attribute, because on other inputs it is data);
+- text returned by a Rust function or constant and shown by the screen (FR-023).
+
+I-13 checks these by hand before it removes the table, so SC-001 does not pass with them left.
 
 ## Exceptions
 
@@ -79,6 +99,8 @@ term.
 ## Fixtures
 
 `crates/dioxus-lint/fixtures/literal-text/bad.rs` holds one marked line per kind (text node,
-readable attribute, prose prop, text inside an `if` arm); `good.rs` holds the same markup through
+readable attribute, prose prop, text inside an `if` arm, a short prop such as `label: "API"`, a
+`{"…"}` text, an `if` attribute branch and text under `#[cfg(not(test))]`); `good.rs` holds the
+same markup through
 `tr.*()` calls, a formatted value with no letters, machine props and a `NOT_LANGUAGE` literal.
 `fixtures_flag_their_rule_and_nothing_else` covers them with no change.
