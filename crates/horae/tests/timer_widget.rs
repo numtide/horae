@@ -12,6 +12,9 @@ use dioxus::prelude::*;
 use futures_util::FutureExt;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/timer_widget.rs"]
 mod timer_widget;
 

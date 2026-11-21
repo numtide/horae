@@ -14,6 +14,9 @@ use futures_util::FutureExt;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use tokio::sync::oneshot;
 
+#[allow(dead_code)]
+#[path = "../src/i18n.rs"]
+mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
 #[path = "../src/components/permission_description.rs"]

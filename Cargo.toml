@@ -5,6 +5,7 @@ members = [
   "crates/api",
   "crates/core",
   "crates/types",
+  "crates/i18n",
   "crates/harvest",
   "crates/harvest-api",
   "crates/dioxus-lint",
