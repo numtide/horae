@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable)\n         VALUES ($1, $2, $3, $4, $5, $6::text::date, $7, $8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "483b3b82f894d107ce855e5b98d53ab3b9e1af3499d6d3ab06982d1fe4856f79"
+}

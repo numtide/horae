@@ -1,15 +1,10 @@
 use super::*;
-use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
+use crate::models::people::PeoplePage;
 use crate::ops::{Caller, OpError};
 
-async fn read(
-    pool: &PgPool,
-    org: Uuid,
-    actor: Uuid,
-    activity: PeopleActivity,
-    after: Option<&PeopleCursor>,
-) -> Result<PeoplePage, OpError> {
-    crate::server_fns::users::people_page(pool, Caller::session(org, actor), activity, after).await
+async fn read(pool: &PgPool, org: Uuid, actor: Uuid) -> Result<PeoplePage, OpError> {
+    let week = chrono::NaiveDate::default();
+    crate::server_fns::users::people_page(pool, Caller::session(org, actor), week).await
 }
 
 fn forbidden(result: &Result<PeoplePage, OpError>, message: &str) -> bool {
@@ -61,7 +56,7 @@ async fn directory_uses_each_profiles_people_grants_not_other_scope(pool: PgPool
         .await
         .unwrap();
         grants(&pool, ids.user_id, profile.selection()).await;
-        let result = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All, None).await;
+        let result = read(&pool, ids.org_id, ids.user_id).await;
         match profile {
             BuiltInProfile::PeopleAdmin
             | BuiltInProfile::ExecutiveManager
@@ -87,9 +82,7 @@ async fn directory_uses_each_profiles_people_grants_not_other_scope(pool: PgPool
         PermissionSelection::new(&[Permission::PeopleReadManaged]),
     )
     .await;
-    let page = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All, None)
-        .await
-        .unwrap();
+    let page = read(&pool, ids.org_id, ids.user_id).await.unwrap();
     assert_eq!(
         page.people.iter().map(|row| row.id).collect::<Vec<_>>(),
         [target]
@@ -137,9 +130,7 @@ async fn directory_rechecks_grant_revocation_and_direct_deactivation_after_wait(
             .unwrap()
             .unwrap();
         let db = pool.clone();
-        let pending = tokio::spawn(async move {
-            read(&db, ids.org_id, ids.user_id, PeopleActivity::All, None).await
-        });
+        let pending = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id).await });
         wait_for_blocked(&pool, holder).await;
         revoke.commit().await.unwrap();
         assert!(forbidden(&pending.await.unwrap(), READ_REQUIRED));
@@ -180,17 +171,14 @@ async fn directory_cancellation_releases_connection_and_preserves_pool_defaults(
         .unwrap()
         .unwrap();
     let db = reader.clone();
-    let pending =
-        tokio::spawn(
-            async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All, None).await },
-        );
+    let pending = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id).await });
     wait_for_blocked(&pool, holder).await;
     pending.abort();
     assert!(pending.await.unwrap_err().is_cancelled());
     writer.rollback().await.unwrap();
     let page = tokio::time::timeout(
         Duration::from_secs(6),
-        read(&reader, ids.org_id, ids.user_id, PeopleActivity::All, None),
+        read(&reader, ids.org_id, ids.user_id),
     )
     .await
     .unwrap()
@@ -204,9 +192,7 @@ async fn directory_cancellation_releases_connection_and_preserves_pool_defaults(
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn directory_orders_by_name_then_id_and_accepts_deleted_cursor_without_extra_page(
-    pool: PgPool,
-) {
+async fn directory_lists_everyone_at_once_by_name_then_id(pool: PgPool) {
     let ids = fixture(&pool).await;
     grants(
         &pool,
@@ -215,7 +201,8 @@ async fn directory_orders_by_name_then_id_and_accepts_deleted_cursor_without_ext
     )
     .await;
     let mut expected = Vec::new();
-    for index in (0..50).rev() {
+    // More than the 50 a page held when the directory paged.
+    for index in (0..60).rev() {
         let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
         sqlx::query!(
             "UPDATE users SET name=$2 WHERE id=$1",
@@ -229,69 +216,16 @@ async fn directory_orders_by_name_then_id_and_accepts_deleted_cursor_without_ext
         expected.push(target);
     }
     expected.reverse();
-    let page = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All, None)
-        .await
-        .unwrap();
-    assert_eq!(page.next_after, None);
+    let page = read(&pool, ids.org_id, ids.user_id).await.unwrap();
     assert_eq!(
         page.people.iter().map(|row| row.id).collect::<Vec<_>>(),
         expected
     );
-    let cursor = PeopleCursor {
-        name: "Person 24".into(),
-        id: expected[24],
-    };
-    sqlx::query!(
-        "DELETE FROM person_management_assignments WHERE managed_user_id=$1",
-        cursor.id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        "DELETE FROM person_permission_states WHERE user_id=$1",
-        cursor.id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!("DELETE FROM users WHERE id=$1", cursor.id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    let page = read(
-        &pool,
-        ids.org_id,
-        ids.user_id,
-        PeopleActivity::All,
-        Some(&cursor),
-    )
-    .await
-    .unwrap();
-    assert_eq!(
-        page.people.iter().map(|row| row.id).collect::<Vec<_>>(),
-        expected[25..]
-    );
-    let invalid = PeopleCursor {
-        name: "bad\0name".into(),
-        id: ids.user_id,
-    };
-    assert!(matches!(
-        read(
-            &pool,
-            ids.org_id,
-            ids.user_id,
-            PeopleActivity::All,
-            Some(&invalid)
-        )
-        .await,
-        Err(OpError::Invalid { message, .. }) if message == "Invalid directory cursor"
-    ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn directory_scopes_before_activity_pagination_and_only_returns_basic_identity(pool: PgPool) {
+async fn directory_scopes_before_activity_and_returns_no_grants(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     grants(
@@ -322,32 +256,12 @@ async fn directory_scopes_before_activity_pagination_and_only_returns_basic_iden
         }
     }
     visible.sort_unstable();
-    let first = read(&pool, ids.org_id, ids.user_id, PeopleActivity::All, None)
-        .await
-        .unwrap();
-    assert_eq!(first.people.len(), 50);
-    let cursor = first.next_after.as_ref().unwrap();
-    assert_eq!((cursor.name.as_str(), cursor.id), ("Person", visible[49]));
-    let next = read(
-        &pool,
-        ids.org_id,
-        ids.user_id,
-        PeopleActivity::All,
-        Some(cursor),
-    )
-    .await
-    .unwrap();
-    assert_eq!(next.next_after, None);
+    let first = read(&pool, ids.org_id, ids.user_id).await.unwrap();
     assert_eq!(
-        first
-            .people
-            .iter()
-            .chain(&next.people)
-            .map(|row| row.id)
-            .collect::<Vec<_>>(),
+        first.people.iter().map(|row| row.id).collect::<Vec<_>>(),
         visible
     );
-    for row in first.people.iter().chain(&next.people) {
+    for row in &first.people {
         let value = serde_json::to_value(row).unwrap();
         let mut keys: Vec<_> = value
             .as_object()
@@ -356,45 +270,23 @@ async fn directory_scopes_before_activity_pagination_and_only_returns_basic_iden
             .map(String::as_str)
             .collect();
         keys.sort();
-        assert_eq!(keys, ["active", "can_change_active", "email", "id", "name"]);
+        assert_eq!(
+            keys,
+            [
+                "active",
+                "can_change_active",
+                "can_read_rates",
+                "email",
+                "id",
+                "name",
+                "profile",
+                "week"
+            ]
+        );
         assert_ne!(row.id, foreign.user_id);
     }
-    let archived = read(
-        &pool,
-        ids.org_id,
-        ids.user_id,
-        PeopleActivity::Archived,
-        None,
-    )
-    .await
-    .unwrap();
-    assert_eq!(archived.people.len(), 1);
-    assert!(!archived.people[0].active);
-    let active_tail = read(
-        &pool,
-        ids.org_id,
-        ids.user_id,
-        PeopleActivity::Active,
-        Some(cursor),
-    )
-    .await
-    .unwrap();
-    assert_eq!(active_tail.people.len(), 2);
-    assert!(active_tail.people.iter().all(|row| row.active));
-    let foreign_bound = PeopleCursor {
-        name: "Person".into(),
-        id: foreign.user_id,
-    };
-    let bounded = read(
-        &pool,
-        ids.org_id,
-        ids.user_id,
-        PeopleActivity::All,
-        Some(&foreign_bound),
-    )
-    .await
-    .unwrap();
-    assert_eq!(bounded, first);
+    // Archived people come back too; the page filters by status itself.
+    assert_eq!(first.people.iter().filter(|row| !row.active).count(), 1);
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -420,7 +312,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
     .await
     .unwrap();
     assert!(
-        read(&pool, ids.org_id, ids.user_id, PeopleActivity::All, None)
+        read(&pool, ids.org_id, ids.user_id)
             .await
             .unwrap()
             .people
@@ -428,7 +320,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
     );
     manage(&pool, ids.org_id, ids.user_id, target).await;
     assert_eq!(
-        read(&pool, ids.org_id, ids.user_id, PeopleActivity::All, None)
+        read(&pool, ids.org_id, ids.user_id)
             .await
             .unwrap()
             .people
@@ -457,10 +349,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
         .unwrap()
         .unwrap();
     let db = pool.clone();
-    let pending =
-        tokio::spawn(
-            async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All, None).await },
-        );
+    let pending = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id).await });
     wait_for_blocked(&pool, holder).await;
     removal.commit().await.unwrap();
     assert!(pending.await.unwrap().unwrap().people.is_empty());
@@ -468,32 +357,18 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn directory_denies_foreign_inactive_and_invalid_authority_even_for_empty_pages(
-    pool: PgPool,
-) {
+async fn directory_denies_foreign_inactive_and_invalid_authority(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
-    let cursor = PeopleCursor {
-        name: "zzzz".into(),
-        id: Uuid::max(),
-    };
     for (org, actor) in [
         (ids.org_id, foreign.user_id),
         (foreign.org_id, ids.user_id),
         (ids.org_id, Uuid::now_v7()),
     ] {
-        let result = read(&pool, org, actor, PeopleActivity::All, Some(&cursor)).await;
+        let result = read(&pool, org, actor).await;
         assert!(forbidden(&result, READ_REQUIRED), "{result:?}");
     }
-    let page = || {
-        read(
-            &pool,
-            ids.org_id,
-            ids.user_id,
-            PeopleActivity::All,
-            Some(&cursor),
-        )
-    };
+    let page = || read(&pool, ids.org_id, ids.user_id);
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await

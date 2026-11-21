@@ -37,7 +37,10 @@
 ## Glossary
 
 -brand = Horae
--people = People
+-people = { $case ->
+    [lower] people
+   *[upper] People
+}
 
 ## Shared actions
 
@@ -50,6 +53,14 @@ common-session-ended = Your session has ended. Sign in again to continue.
 nav-my-settings = My settings
 
 ## Components
+
+period-nav-previous-week = Previous week
+period-nav-previous-day = Previous day
+period-nav-next-week = Next week
+period-nav-next-day = Next day
+period-nav-today = Today
+period-nav-this-week = This week
+period-nav-week = Week
 
 no-access-title = Access unavailable
 no-access-body = Your account cannot open this. Ask an administrator of this workspace if you need it.
@@ -160,6 +171,77 @@ harvest-client-change-confirm = Save and disconnect
 ## Importers: runs
 
 ## People and permissions
+
+people-title = { -people }
+people-loading = Loading { -people(case: "lower") }…
+# What LoadError names in "Could not load …".
+people-load-subject = { -people(case: "lower") }
+people-session-changed = Your session changed. Reload this page before selecting a person.
+people-access-check-failed = Could not verify your access
+people-access-check-failed-hint = Try again, or sign in again if it keeps failing.
+people-add = Add person
+people-go-this-week = This week
+people-summary-label = Week summary
+people-total-hours = Total hours
+people-billable = Billable
+people-non-billable = Non-billable
+people-billable-share = Billable { $percent }%
+people-non-billable-share = Non-billable { $percent }%
+people-share = { $percent }%
+people-any-profile = Any profile
+people-status-active = Active ({ $count })
+people-status-archived = Archived ({ $count })
+people-status-all = All ({ $count })
+people-search-label = Search by name or email
+people-none-archived = No archived { -people(case: "lower") }
+people-none-match-filters = No { -people(case: "lower") } match these filters
+people-none-match-filters-hint = Change the filters to see more { -people(case: "lower") }.
+people-clear-filters = Clear filters
+people-none-match-search = No one matches “{ $query }”
+people-search-hint-active = Search looks at names and emails among active { -people(case: "lower") }.
+people-search-hint-archived = Search looks at names and emails among archived { -people(case: "lower") }.
+people-search-hint-all = Search looks at names and emails among everyone.
+people-clear-search = Clear search
+people-column-person = Person
+people-column-hours = Hours
+people-column-billable-share = Billable %
+people-actions = Actions
+people-actions-for = Actions for { $name }
+people-archived = Archived
+people-hours-unavailable-label = Hours not available
+people-billable-unavailable-label = Billable hours not available
+people-share-unavailable-label = Billable share not available
+people-view-timesheet = View timesheet
+people-permissions = Permissions…
+people-rates = Rates…
+people-permission-history = Permission history
+people-archive = Archive
+people-restore = Restore
+people-undo = Undo
+people-added = Person added
+people-archived-toast = Person archived
+people-restored = Person restored
+people-permissions-saved = Permissions saved
+people-permissions-unchanged = Permissions are unchanged
+people-add-title = Add person
+people-adding = Adding person…
+people-add-name = Name
+people-add-email = Email
+people-add-email-hint = They sign in with this address.
+people-add-profile = Profile
+people-profile-member = Member
+people-profile-member-hint = Tracks their own time.
+people-profile-project-manager = Project Manager
+people-profile-project-manager-hint = Also manages the projects you assign.
+people-profile-accounting = Accounting
+people-profile-accounting-hint = Also sees everyone's time, rates and invoices.
+people-profile-people-admin = People Admin
+people-profile-people-admin-hint = Also manages { -people(case: "lower") } and everyone's time.
+people-profile-executive-manager = Executive Manager
+people-profile-executive-manager-hint = Also manages projects, { -people(case: "lower") } and invoicing.
+people-profile-administrator = Administrator
+# A person whose grants were chosen one by one rather than from a profile.
+people-profile-individual = Custom
 
 permissions-discard-title = Discard unsaved permission changes?
 permissions-discard-body = The changes in this form are lost. Saved permissions stay as they are.

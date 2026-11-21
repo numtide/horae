@@ -119,7 +119,7 @@ fn an_administrator_sees_one_sentence_and_no_table() {
         html.contains("You can see and change everything here"),
         "{html}"
     );
-    assert!(html.contains("href=\"/admin/users\""), "{html}");
+    assert!(html.contains("href=\"/people\""), "{html}");
     assert!(html.contains("href=\"/admin/audit\""), "{html}");
     assert!(html.contains("See changes to your access"), "{html}");
     assert!(html.contains("People you manage"), "{html}");

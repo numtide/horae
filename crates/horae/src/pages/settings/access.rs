@@ -118,7 +118,7 @@ fn access_content(
             if own.is_administrator {
                 p { class: "card",
                     "{people_before}"
-                    Link { to: Route::AdminUsers {}, "{people_link}" }
+                    Link { to: Route::People {}, "{people_link}" }
                     "{people_after}"
                 }
             } else {

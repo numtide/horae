@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
 use crate::pages::{
-    admin::{AdminApiTokens, AdminUsers, WorkspaceSettings},
+    admin::{AdminApiTokens, WorkspaceSettings},
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
@@ -14,6 +14,7 @@ use crate::pages::{
     },
     invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoiceForClient},
     new_project::{EditProject, NewProject, NewProjectForClient},
+    people::People,
     permission_audit::PermissionAudit,
     projects::{ProjectDetail, ProjectList, ProjectsForClient},
     reports::Reports,
@@ -80,6 +81,10 @@ pub enum Route {
     ProjectDetail { id: Uuid },
     #[route("/tasks")]
     TaskCatalog {},
+    // People was an admin section; keep its old links working.
+    #[redirect("/admin/users", || Route::People {})]
+    #[route("/people")]
+    People {},
     #[route("/approvals?:week")]
     Approvals { week: String },
     #[route("/reports")]
@@ -93,8 +98,6 @@ pub enum Route {
     #[route("/invoices/:id")]
     InvoiceDetail { id: Uuid },
     #[layout(AdminShell)]
-    #[route("/admin/users")]
-    AdminUsers {},
     #[route("/admin/workspace")]
     WorkspaceSettings {},
     #[route("/admin/importers")]
@@ -183,6 +186,13 @@ mod tests {
                 assert_eq!(route.to_string(), url);
             }
         }
+    }
+
+    #[test]
+    fn the_old_admin_people_address_leads_to_people() {
+        let route: Route = "/admin/users".parse().unwrap();
+        assert!(matches!(route, Route::People {}));
+        assert_eq!(route.to_string(), "/people");
     }
 
     #[test]

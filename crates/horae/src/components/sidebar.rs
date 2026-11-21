@@ -257,7 +257,7 @@ fn nav_sections(access: NavAccess) -> Vec<(&'static str, Vec<NavRow>)> {
             vec![
                 access
                     .people
-                    .then(|| row(Route::AdminUsers {}, "team", "Team")),
+                    .then(|| row(Route::People {}, "team", "People")),
                 access
                     .clients
                     .then(|| row(Route::ClientList {}, "clients", "Clients")),
@@ -347,7 +347,7 @@ mod tests {
             labels(all),
             [
                 ("Track", vec!["Timesheet"]),
-                ("Organize", vec!["Team", "Clients", "Projects", "Tasks"]),
+                ("Organize", vec!["People", "Clients", "Projects", "Tasks"]),
                 ("Bill", vec!["Invoices"]),
                 ("Review", vec!["Approvals", "Reports"]),
             ]

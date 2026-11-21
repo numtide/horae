@@ -21,16 +21,6 @@ async fn archive(
     .await
 }
 
-async fn blocked_connections(pool: &PgPool) -> i64 {
-    sqlx::query_scalar!(
-        r#"SELECT COUNT(*) AS "count!" FROM pg_stat_activity
-           WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0"#
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap()
-}
-
 /// A second active Administrator in `org`.
 async fn second_administrator(pool: &PgPool, org: Uuid) -> Uuid {
     let other = Uuid::now_v7();
@@ -50,92 +40,12 @@ async fn second_administrator(pool: &PgPool, org: Uuid) -> Uuid {
     other
 }
 
-/// Two Administrators archive themselves at once: one wins and the other is
-/// refused, whichever order the database settles on.
-async fn concurrent_archives_keep_an_administrator(pool: &PgPool) {
+/// Two Administrators archive each other at once: the target is locked before
+/// the remaining administrator is, so both cannot pass the check. One wins and
+/// the other is refused, or the deadlock check ends it.
+async fn archiving_each_other_keeps_an_administrator(pool: &PgPool) {
     let ids = seed(pool, BuiltInProfile::Administrator).await;
     let other = second_administrator(pool, ids.org_id).await;
-
-    let mut blocker = pool.begin().await.unwrap();
-    sqlx::query!("SELECT id FROM users WHERE id = $1 FOR UPDATE", ids.user_id)
-        .fetch_one(&mut *blocker)
-        .await
-        .unwrap();
-
-    let mut changes = JoinSet::new();
-    let db = pool.clone();
-    changes.spawn(async move { archive(&db, ids.org_id, ids.user_id, ids.user_id).await });
-
-    timeout(std::time::Duration::from_secs(10), async {
-        while blocked_connections(pool).await < 1 {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("first change must reach the held user lock");
-
-    let db = pool.clone();
-    changes.spawn(async move { archive(&db, ids.org_id, other, other).await });
-
-    // The second request either waits behind the first transaction or commits
-    // while the first is paused. Observe that boundary, not a timing assumption.
-    let early = timeout(std::time::Duration::from_secs(10), async {
-        loop {
-            if let Some(result) = changes.try_join_next() {
-                break Some(result.unwrap());
-            }
-            if blocked_connections(pool).await >= 2 {
-                break None;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("second change must complete or wait for a lock");
-    blocker.commit().await.unwrap();
-
-    let mut results: Vec<_> = early.into_iter().collect();
-    timeout(std::time::Duration::from_secs(10), async {
-        while let Some(result) = changes.join_next().await {
-            results.push(result.unwrap());
-        }
-    })
-    .await
-    .expect("changes must finish after releasing the row lock");
-
-    let remaining = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) AS "count!" FROM users u
-           JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
-           WHERE u.org_id = $1 AND u.active AND p.is_administrator"#,
-        ids.org_id,
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        remaining, 1,
-        "concurrent changes removed every administrator"
-    );
-    assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 1);
-    assert!(
-        results
-            .iter()
-            .any(|r| matches!(r, Err(ServerFnError::ServerError { code: CONFLICT, .. }))),
-        "{results:?}"
-    );
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn concurrent_archives_keep_an_active_administrator(pool: PgPool) {
-    concurrent_archives_keep_an_administrator(&pool).await;
-}
-
-/// Two Administrators archive each other at once: the target is locked before
-/// the remaining administrator is, so both cannot pass the check.
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn administrators_archiving_each_other_keep_one(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    let other = second_administrator(&pool, ids.org_id).await;
     let mut changes = JoinSet::new();
     for (actor, target) in [(ids.user_id, other), (other, ids.user_id)] {
         let db = pool.clone();
@@ -148,15 +58,27 @@ async fn administrators_archiving_each_other_keep_one(pool: PgPool) {
         }
     })
     .await
-    .unwrap();
+    .expect("changes must finish");
     let remaining = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) AS "count!" FROM users WHERE org_id = $1 AND active"#,
+        r#"SELECT COUNT(*) AS "count!" FROM users u
+           JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+           WHERE u.org_id = $1 AND u.active AND p.is_administrator"#,
         ids.org_id,
     )
-    .fetch_one(&pool)
+    .fetch_one(pool)
     .await
     .unwrap();
     assert_eq!(remaining, 1, "{results:?}");
+    assert_eq!(
+        results.iter().filter(|r| r.is_ok()).count(),
+        1,
+        "{results:?}"
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn administrators_archiving_each_other_keep_one(pool: PgPool) {
+    archiving_each_other_keeps_an_administrator(&pool).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -177,16 +99,22 @@ async fn repeatable_read_default_cannot_remove_every_administrator(pool: PgPool)
         .connect_with((*pool.connect_options()).clone())
         .await
         .unwrap();
-    concurrent_archives_keep_an_administrator(&requests).await;
+    archiving_each_other_keeps_an_administrator(&requests).await;
     requests.close().await;
 }
 
+/// The operation refuses archiving yourself, and the server function answers
+/// with its named status.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn the_last_administrator_cannot_be_archived(pool: PgPool) {
+async fn an_administrator_cannot_archive_themselves(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    second_administrator(&pool, ids.org_id).await;
     assert!(matches!(
         archive(&pool, ids.org_id, ids.user_id, ids.user_id).await,
-        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        })
     ));
 }
 

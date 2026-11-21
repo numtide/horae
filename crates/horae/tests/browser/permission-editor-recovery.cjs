@@ -64,8 +64,12 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
   const receipts = () => Number(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}'`));
   const editor = page.getByRole('dialog', { name: 'Edit permissions', exact: true });
   const recovery = page.getByRole('dialog', { name: 'Recover permission request', exact: true });
+  // Each person's actions are in their row's Actions menu.
+  const row = name => page.locator('tbody tr').filter({ has: page.getByText(name, { exact: true }) });
+  const actions = name => row(name).getByRole('button', { name: /^Actions/ });
   const openEditor = async (name = personName) => {
-    await page.getByRole('button', { name: `Edit permissions for ${name}`, exact: true }).click();
+    await actions(name).click();
+    await page.getByRole('menuitem', { name: 'Permissions…', exact: true }).click();
     await expect(editor.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
     await readsFinished();
   };
@@ -143,11 +147,12 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(page.locator('#audit-newest')).toBeDisabled();
     // Directory reads are independent from explicit Administrator identity.
     let readStart = requests.length;
-    await page.goto(`${base}/admin/users`);
-    await expect(page.getByRole('button', { name: `Edit permissions for ${personName}`, exact: true })).toBeVisible();
+    await page.goto(`${base}/people`);
+    await expect(actions(personName)).toBeVisible();
     await readsFinished();
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_users|list_tasks)/.test(path)));
-    const railTeam = page.locator('.app-sidebar').getByRole('link', { name: 'Team', exact: true });
+    const railTeam = page.locator('.app-sidebar').getByRole('link', { name: 'People', exact: true });
+    const permissionItems = page.locator('[role="menuitem"][id^="person-permissions-"]');
     const userMenu = page.locator('.sidebar-menu');
     // Settings and Sign out are always offered. Administration appears only when
     // an admin section is open, and lands on the first one (`landing`).
@@ -169,26 +174,32 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       }
       await expect(userMenu).toHaveCount(0);
     };
+    // People is a main screen: the rail links to it and the admin area does not.
     await expect(railTeam).toBeVisible();
-    await expect(page.locator('.adm-nav').getByRole('link', { name: 'Team', exact: true })).toBeVisible();
-    // An Administrator.
-    await expectUserMenu('/admin/users');
+    await expect(page.locator('.adm-nav')).toHaveCount(0);
+    // An Administrator; the company grant opens Settings first.
+    await expectUserMenu('/admin/workspace');
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
-    await page.reload();
-    await expect(page.getByRole('cell', { name: personName, exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
-    // Directory grants alone still open Team.
-    await expectUserMenu('/admin/users');
+    await page.goto(`${base}/people`);
+    await expect(row(personName)).toBeVisible();
+    await expect(permissionItems).toHaveCount(0);
+    await expectUserMenu('/admin/workspace');
     sql(`INSERT INTO person_management_assignments(id, org_id, manager_id, managed_user_id)
       VALUES ('01960000-0000-7000-8000-000000000708', '${actor.org_id}', '${actor.id}', '${person}');
       UPDATE person_permission_states SET grants=${array([...floor, 'people_read_managed'])} WHERE id='${actorState}'`);
-    await page.reload();
-    await expect(page.getByRole('cell', { name: personName, exact: true })).toBeVisible();
+    await page.goto(`${base}/people`);
+    await expect(row(personName)).toBeVisible();
     await expect(page.locator('tbody tr')).toHaveCount(1);
-    await page.locator('#people-activity').selectOption('archived');
-    await expect(page.getByText('No people match this filter', { exact: false })).toBeVisible();
-    await page.locator('#people-activity').selectOption('all');
+    const status = async label => {
+      await page.locator('#people-status-menu-trigger').click();
+      await page.getByRole('menuitem', { name: new RegExp(`^${label} \\(`) }).click();
+    };
+    await status('Archived');
+    await expect(page.getByText('No archived people', { exact: true })).toBeVisible();
+    await status('All');
     await expect(page.locator('tbody tr')).toHaveCount(1);
+    // Directory grants alone open no admin section.
+    await expectUserMenu(null);
     sql(`UPDATE person_permission_states SET grants=${array(floor)} WHERE id='${actorState}'`);
     readStart = requests.length;
     await page.reload();
@@ -215,15 +226,11 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     sql(`INSERT INTO users(id, org_id, email, name)
       SELECT ('01960000-0000-7000-8001-' || lpad(i::text,12,'0'))::uuid, '${actor.org_id}',
       'directory-' || i || '@example.test', 'Z Directory ' || lpad(i::text,3,'0') FROM generate_series(1,51) i`);
-    await page.goto(`${base}/admin/users`);
-    await expect(page.locator('tbody tr')).toHaveCount(50);
-    await expect(page.locator('#people-previous')).toBeDisabled();
-    await page.locator('#people-next').focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('cell', { name: 'Z Directory 051', exact: true })).toBeVisible();
-    await expect(page.locator('#people-next')).toBeDisabled();
-    await page.locator('#people-previous').click();
-    await expect(page.locator('tbody tr')).toHaveCount(50);
+    // The whole directory loads at once, with no pager.
+    await page.goto(`${base}/people`);
+    await expect(row('Z Directory 051')).toBeVisible();
+    await expect(row('Z Directory 001')).toBeVisible();
+    await expect(page.locator('#people-next')).toHaveCount(0);
     for (const [width, height, theme] of [[1440,900,'dark'],[390,844,'light']]) {
       await resizeViewport(width, height);
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
@@ -237,7 +244,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
     sql(`DELETE FROM users WHERE org_id='${actor.org_id}' AND id IN
       (SELECT ('01960000-0000-7000-8001-' || lpad(i::text,12,'0'))::uuid FROM generate_series(1,51) i)`);
-    await page.locator('#people-refresh').click();
+    await page.reload();
     await openEditor();
     await capture('permission-editor');
 
@@ -255,7 +262,10 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
       await login();
       for (const action of [
-        () => page.getByRole('button', { name: 'Edit permissions for Other permission administrator', exact: true }).click(),
+        async () => {
+          await actions('Other permission administrator').click();
+          await page.getByRole('menuitem', { name: 'Permissions…', exact: true }).click();
+        },
         () => editor.getByRole('button', { name: 'Reload permissions', exact: true }).click(),
       ]) {
         let release;
@@ -329,7 +339,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await editor.locator('#person-permissions-profile').focus();
     await page.keyboard.press('Tab');
     await expect(editor.locator('#permission-TimeReadManaged')).toBeFocused();
-    await page.getByRole('button', { name: `Edit permissions for ${personName}`, exact: true, includeHidden: true }).evaluate(el => el.focus());
+    await actions(personName).evaluate(el => el.focus());
     await expect(editor.locator('#permission-TimeReadManaged')).toBeFocused();
 
     // A dirty keyboard dismissal must preserve the draft unless confirmed.
@@ -343,7 +353,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.keyboard.press('Escape');
     await discardDialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(editor).not.toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit permissions for Other permission administrator', exact: true })).toBeFocused();
+    await expect(actions('Other permission administrator')).toBeFocused();
     await openEditor();
     await expect(editor.locator('#permission-ClientReadAll')).not.toBeChecked();
     await editor.locator('#permission-ClientReadAll').click();
@@ -390,8 +400,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
     await readsFinished();
-    await page.goto(`${base}/admin/users`);
-    await expect(page.getByRole('button', { name: `Edit permissions for ${personName}`, exact: true })).toBeVisible();
+    await page.goto(`${base}/people`);
+    await expect(actions(personName)).toBeVisible();
     await readsFinished();
     await expect(recovery).not.toBeVisible();
     assert.equal(await record(), templateRecord);
@@ -401,7 +411,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
     await readsFinished();
-    await page.goto(`${base}/admin/users`);
+    await page.goto(`${base}/people`);
     await expect(recovery.getByRole('button', { name: 'Retry original request', exact: true })).toBeEnabled();
     assert.equal(await record(), templateRecord);
     sql(`UPDATE person_permission_states SET is_administrator=false, grants=${array(floor)} WHERE id='${actorState}'`);
@@ -429,7 +439,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(recovery).not.toBeVisible();
     await readsFinished();
     // The own-access resource was loaded while revoked; a fresh visit restores its entry action.
-    await page.goto(`${base}/admin/users`);
+    await page.goto(`${base}/people`);
     console.log('PASS: account changes isolate tab recovery; same-user reauthentication and restored authority recover the template');
 
     // The deleted template must not be needed to recover its historical receipt.
@@ -468,7 +478,9 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     }
     const historyIds = sql(`SELECT id FROM permission_change_receipts WHERE org_id='${actor.org_id}' ORDER BY created_at DESC, id DESC`).split('\n');
     assert.equal(historyIds.length, 29);
-    await page.getByRole('link', { name: 'Audit log', exact: true }).click();
+    // People has no admin subnavigation; a row's Permission history opens the log.
+    await actions(personName).click();
+    await page.getByRole('menuitem', { name: 'Permission history', exact: true }).click();
     await page.waitForURL(`${base}/admin/audit`);
     const history = page.getByRole('table', { name: 'Permission change history', exact: true });
     const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();
@@ -539,7 +551,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.getByRole('link', { name: 'See changes to your access', exact: true }).click();
     await page.waitForURL(`${base}/admin/audit`);
     await expect(history.locator('tbody tr')).toHaveCount(25);
-    await page.goto(`${base}/admin/users`);
+    await page.goto(`${base}/people`);
     console.log('PASS: real permission history supports empty state, keyboard details, stable paging, deleted profiles, refresh/revocation and canonical access');
 
     // Self-demotion makes any second server send forbidden; cleanup must stay local.

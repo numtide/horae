@@ -695,11 +695,11 @@ async fn managed_people_writers_archive_only_the_people_they_manage(pool: PgPool
     );
 }
 
-/// The People page offers archiving exactly where the operation allows it.
+/// The People page offers archiving exactly where the operation allows it,
+/// except on the viewer's own row, where an Undo could not follow.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn the_directory_offers_archiving_where_the_operation_allows_it(pool: PgPool) {
-    use crate::models::people::PeopleActivity;
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let people_admin = create(&pool, &ids, BuiltInProfile::PeopleAdmin)
         .await
@@ -723,8 +723,7 @@ async fn the_directory_offers_archiving_where_the_operation_allows_it(pool: PgPo
         let page = people_page(
             &pool,
             Caller::session(ids.org_id, actor),
-            PeopleActivity::All,
-            None,
+            chrono::NaiveDate::default(),
         )
         .await
         .unwrap();
@@ -740,7 +739,8 @@ async fn the_directory_offers_archiving_where_the_operation_allows_it(pool: PgPo
             .await
             .is_ok();
             assert_eq!(
-                person.can_change_active, allowed,
+                person.can_change_active,
+                allowed && person.id != actor,
                 "{actor} on {}",
                 person.id
             );
