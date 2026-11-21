@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::components::screen_state::PageFailed;
+use crate::components::session::page_failed;
 use crate::components::theme::ThemeInit;
 use crate::route::Route;
 
@@ -33,11 +33,5 @@ pub fn App() -> Element {
         // A failed `use_loader` read (the session, in `AppLayout`) lands here
         // instead of leaving the page blank.
         ErrorBoundary { handle_error: page_failed, Router::<Route> {} }
-    }
-}
-
-fn page_failed(_: ErrorContext) -> Element {
-    rsx! {
-        main { id: "app-main", class: "p-5", PageFailed {} }
     }
 }

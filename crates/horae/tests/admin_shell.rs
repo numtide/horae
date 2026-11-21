@@ -71,6 +71,8 @@ struct Probe {
     me_requests: Rc<Cell<usize>>,
     /// `get_me` refuses, as for a session that has ended.
     me_refused: bool,
+    /// `get_week_start` fails on the server.
+    week_start_error: bool,
     /// Answer `get_my_permissions` at once instead of waiting for a response.
     canonical: Option<(bool, Vec<Permission>)>,
     /// The People panel's router and scope, and the shared session it sees.
@@ -89,10 +91,7 @@ impl Probe {
 fn app(probe: Probe) -> Element {
     use_context_provider(|| probe);
     rsx! {
-        ErrorBoundary {
-            handle_error: |_: ErrorContext| rsx! { screen_state::PageFailed {} },
-            Layout {}
-        }
+        ErrorBoundary { handle_error: session::page_failed, Layout {} }
     }
 }
 
@@ -183,22 +182,37 @@ async fn the_server_render_has_the_workspace_and_its_panel() {
     assert!(!html.contains("Loading"), "{html}");
 }
 
+fn failed_page(probe: &Probe) -> String {
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert_panel_hidden(&dom, probe);
+    dioxus::ssr::render(&dom)
+}
+
 #[tokio::test]
-async fn an_ended_session_shows_the_page_error_not_a_blank_page() {
-    let probe = Probe {
+async fn an_ended_session_asks_to_sign_in_again_not_a_blank_page() {
+    let html = failed_page(&Probe {
         me_refused: true,
         canonical: Some((true, vec![Permission::CompanyWrite])),
         ..Probe::default()
-    };
-    let mut dom = VirtualDom::new_with_props(app, probe.clone());
-    dom.rebuild_in_place();
-    dom.wait_for_suspense().await;
-    settle(&mut dom);
-    assert_panel_hidden(&dom, &probe);
-    let html = dioxus::ssr::render(&dom);
+    });
+    assert!(html.contains("Session ended"), "{html}");
+    assert!(html.contains("Sign in again"), "{html}");
+    assert!(html.contains(r#"action="/auth/logout""#), "{html}");
+    assert!(!html.contains("Not authenticated"), "{html}");
+}
+
+#[tokio::test]
+async fn a_failed_session_read_shows_the_page_error_not_a_blank_page() {
+    let html = failed_page(&Probe {
+        week_start_error: true,
+        canonical: Some((true, vec![Permission::CompanyWrite])),
+        ..Probe::default()
+    });
     assert!(html.contains("Could not load this page"), "{html}");
     assert!(html.contains("Try again"), "{html}");
-    assert!(!html.contains("Not authenticated"), "{html}");
+    assert!(!html.contains("week start unavailable"), "{html}");
 }
 
 #[tokio::test]
@@ -339,6 +353,9 @@ mod server_fns {
     }
 
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
+        if consume_context::<Probe>().week_start_error {
+            return Err(ServerFnError::new("week start unavailable"));
+        }
         Ok(chrono::Weekday::Mon)
     }
 

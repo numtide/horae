@@ -113,8 +113,11 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     await reread();
     await expect(table).toBeVisible();
     sql(`UPDATE users SET active=false WHERE id='${actor.id}'`);
-    await reread();
-    await expect(main.getByRole('alert')).toContainText('Sign in again');
+    // The re-read meets a 401, so the whole page asks to sign in again.
+    await page.locator('.sidebar-footer').click();
+    await expect(page.getByRole('heading', { name: 'Session ended', exact: true })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('Sign in again');
+    await expect(page.getByRole('button', { name: 'Sign in again', exact: true })).toBeVisible();
     await expect(table).toHaveCount(0);
     assert.deepEqual(errors, []);
     console.log(`PASS: Your access in Chromium ${browser.version()}: My settings subpages, missing and stored states, member table, administrator sentence, error recovery, deactivation, both themes and responsive/CSS-zoom layouts`);

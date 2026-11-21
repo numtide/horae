@@ -4,7 +4,7 @@
 const { request } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
-const { setAsideSeededStates, signInAsAdmin, devLoginUser } = require('./seeded-permissions.cjs');
+const { setAsideSeededStates, devLoginUser } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -36,7 +36,8 @@ const regions = html => Object.fromEntries(['aside', 'main'].map(tag => {
     assert.equal(out.status, 303);
     assert.match(out.location, /\/auth\/login$/);
 
-    await signInAsAdmin(signedIn, base);
+    const login = await signedIn.post('/auth/dev-login', { maxRedirects: 0 });
+    assert.equal(login.status(), 303);
     const actor = devLoginUser();
     const name = sql(`SELECT name FROM users WHERE id='${actor.id}'`);
     const org = sql(`SELECT name FROM organizations WHERE id='${actor.org_id}'`);

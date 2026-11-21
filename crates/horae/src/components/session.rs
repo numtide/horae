@@ -1,8 +1,10 @@
+use dioxus::core::CapturedError;
 use dioxus::prelude::dioxus_fullstack::Loader;
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use serde::{Deserialize, Serialize};
 
+use crate::components::screen_state::PageFailed;
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::user::CurrentUser;
 use crate::server_fns;
@@ -58,6 +60,12 @@ impl Session {
     }
 }
 
+/// The error the session raises when the server no longer knows the person
+/// (401): the session expired, or the account was deactivated. It crosses
+/// hydration as text, so the error boundary compares the text.
+pub const SESSION_ENDED: &str = "The session has ended";
+const UNAUTHORIZED: u16 = 401;
+
 /// Call once, above every component that reads the session, and propagate
 /// with `?`. The server render waits for the session and sends it with the
 /// HTML, so the first page already shows the signed-in shell. A failed read
@@ -76,7 +84,13 @@ pub fn use_session_provider() -> Result<(), RenderError> {
             server_fns::get_org_name(),
         );
         refreshing.set(false);
-        Ok::<_, ServerFnError>(Loaded {
+        let me = me.map_err(|error| match error {
+            ServerFnError::ServerError {
+                code: UNAUTHORIZED, ..
+            } => CapturedError::from_display(SESSION_ENDED),
+            error => error.into(),
+        });
+        Ok::<_, CapturedError>(Loaded {
             me: me?,
             permissions,
             week_start: week_start?,
@@ -96,6 +110,17 @@ pub fn use_session_provider() -> Result<(), RenderError> {
         loaded,
     });
     Ok(())
+}
+
+/// The app's `ErrorBoundary` handler: the page error, or "Session ended"
+/// when the session raised [`SESSION_ENDED`].
+pub fn page_failed(errors: ErrorContext) -> Element {
+    let ended = errors
+        .error()
+        .is_some_and(|error| error.to_string() == SESSION_ENDED);
+    rsx! {
+        main { id: "app-main", class: "p-5", PageFailed { ended } }
+    }
 }
 
 /// The shared session. Panics if no provider is above the caller, which would

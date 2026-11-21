@@ -66,6 +66,8 @@ no-access-title = Access unavailable
 no-access-body = Your account cannot open this. Ask an administrator of this workspace if you need it.
 page-failed = Could not load this page
 page-failed-hint = Reload the page. If it keeps failing, sign in again.
+page-session-ended = Session ended
+page-sign-in-again = Sign in again
 confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 
 ## Settings
