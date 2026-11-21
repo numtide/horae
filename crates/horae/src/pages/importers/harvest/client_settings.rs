@@ -32,6 +32,7 @@ pub(super) fn HarvestOAuthApp(
     focus_secret: bool,
     on_changed: EventHandler<()>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut settings = use_resource(server_fns::harvest_client_settings);
     let retry = use_callback(move |_| settings.restart());
     let navigator = use_navigator();
@@ -251,8 +252,8 @@ pub(super) fn HarvestOAuthApp(
                     }
                     ConfirmDialog { id: "harvest-client-change", labelledby: "harvest-client-change-title",
                         open: confirming().is_some(), busy: busy(),
-                        title: if confirming() == Some(Change::Remove) { "Remove the OAuth app?" } else { "Change the client ID?" },
-                        confirm_label: if confirming() == Some(Change::Remove) { "Remove and disconnect" } else { "Save and disconnect" },
+                        title: if confirming() == Some(Change::Remove) { tr.harvest_client_remove_title() } else { tr.harvest_client_change_title() },
+                        confirm_label: if confirming() == Some(Change::Remove) { tr.harvest_client_remove_confirm() } else { tr.harvest_client_change_confirm() },
                         on_confirm: confirm_change, on_dismiss: keep_client,
                         p {
                             if confirming() == Some(Change::Remove) {

@@ -299,6 +299,7 @@ fn TimesheetContent(
     mut requester: Signal<Option<PermissionRequester>>,
     mut last_context: Signal<Option<TimesheetWriteContext>>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     // View, week, selected day and calendar span all derive from the URL
     // (/timesheet/<view>/<date>?span=<span>), so switching views, changing the
     // calendar span or navigating is shareable and works with the browser's
@@ -1670,9 +1671,9 @@ fn TimesheetContent(
 
             ConfirmDialog { id: "time-entry-delete-dialog", labelledby: "time-entry-delete-title",
                 open: confirm_delete(), busy: add_saving(), focus_fallback: "app-main",
-                title: "Delete this time entry?", confirm_label: "Delete entry",
+                title: tr.timesheet_delete_entry_title(), confirm_label: tr.timesheet_delete_entry_confirm(),
                 on_confirm: delete_confirmed, on_dismiss: keep_entry,
-                p { "The entry is removed from this timesheet and from reports. This cannot be undone." }
+                p { {tr.timesheet_delete_entry_body()} }
             }
 
             // Add-row picker: choose a project/task to add an empty grid row.

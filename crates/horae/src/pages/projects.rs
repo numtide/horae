@@ -1254,6 +1254,7 @@ const CONFLICT: u16 = 409;
 
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut binding = use_signal(|| None::<PermissionRequester>);
     let mut access_lost = use_signal(|| false);
     let mut details = use_resource(move || async move {
@@ -1526,7 +1527,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             // A failed Archive, which has no dialog to report in.
             if status_change().is_none() && loaded && status_failed() {
                 p { class: "alert alert-danger mt-5", role: "alert",
-                    "Could not archive the project. Try again, or refresh the page."
+                    {tr.projects_archive_failed()}
                 }
             }
             // A refusal outside the dialog, such as from Undo.

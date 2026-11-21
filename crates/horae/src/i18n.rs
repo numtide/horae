@@ -14,9 +14,9 @@ pub(crate) fn use_tr_provider() {
 
 /// The catalog of the language the page renders in. English when no provider
 /// is above the caller, as in the component tests that mount one section.
-#[expect(
+#[allow(
     dead_code,
-    reason = "no screen reads the catalog yet; the first migrated one removes this"
+    reason = "the UI tests include this module whole, and not all of them mount a screen that reads it"
 )]
 pub(crate) fn use_tr() -> Tr {
     try_use_context::<Tr>().unwrap_or_default()
