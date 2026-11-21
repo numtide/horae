@@ -3,18 +3,41 @@ use dioxus::prelude::*;
 use crate::components::controls::Radio;
 use crate::components::form::{FormGroup, Input};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
+use crate::i18n::{Tr, use_tr};
 use crate::server_fns;
 
-/// Profiles an administrator may give a new person, with what each adds.
-/// Administrators are chosen in the permission editor, never here; everyone
-/// else adds Members.
-const PROFILES: &[(&str, &str, &str)] = &[
-    ("member", "Member", "Tracks their own time."),
-    ("project_manager", "Project Manager", "Also manages the projects you assign."),
-    ("accounting", "Accounting", "Also sees everyone's time, rates and invoices."),
-    ("people_admin", "People Admin", "Also manages people and everyone's time."),
-    ("executive_manager", "Executive Manager", "Also manages projects, people and invoicing."),
-];
+/// Profiles an administrator may give a new person: the stored name, the
+/// label and what each adds. Administrators are chosen in the permission
+/// editor, never here; everyone else adds Members.
+fn profiles(tr: Tr) -> [(&'static str, String, String); 5] {
+    [
+        (
+            "member",
+            tr.people_profile_member(),
+            tr.people_profile_member_hint(),
+        ),
+        (
+            "project_manager",
+            tr.people_profile_project_manager(),
+            tr.people_profile_project_manager_hint(),
+        ),
+        (
+            "accounting",
+            tr.people_profile_accounting(),
+            tr.people_profile_accounting_hint(),
+        ),
+        (
+            "people_admin",
+            tr.people_profile_people_admin(),
+            tr.people_profile_people_admin_hint(),
+        ),
+        (
+            "executive_manager",
+            tr.people_profile_executive_manager(),
+            tr.people_profile_executive_manager_hint(),
+        ),
+    ]
+}
 
 /// The dialog that adds one active person. `on_added` gets their name.
 #[component]
@@ -24,6 +47,7 @@ pub(super) fn AddPerson(
     on_added: EventHandler<String>,
     on_dismiss: EventHandler<()>,
 ) -> Element {
+    let tr = use_tr();
     let mut email = use_signal(String::new);
     let mut name = use_signal(String::new);
     let mut profile = use_signal(|| "member");
@@ -50,42 +74,37 @@ pub(super) fn AddPerson(
             saving.set(false);
         });
     };
-    let dismiss = move |_| {
+    let dismiss = use_callback(move |()| {
         error.set(None);
         on_dismiss.call(());
-    };
+    });
+    let type_name = use_callback(move |event: FormEvent| name.set(event.value()));
+    let type_email = use_callback(move |event: FormEvent| email.set(event.value()));
 
     rsx! {
         Modal { id: "people-add-dialog", labelledby: "people-add-title", open, busy: saving(),
             focus_fallback: Some("people-add"),
-            primary: ModalAction::submit(if saving() { "Adding person…" } else { "Add person" }, "people-add-form")
+            primary: ModalAction::submit(if saving() { tr.people_adding() } else { tr.people_add() }, "people-add-form")
                 .disabled(saving()),
             on_dismiss: dismiss,
-            ModalHeader { id: "people-add-title", title: "Add person" }
+            ModalHeader { id: "people-add-title", title: tr.people_add_title() }
             form { id: "people-add-form", onsubmit: submit,
                 ModalBody {
                     if let Some(message) = error() {
                         p { class: "alert alert-danger", role: "alert", "{message}" }
                     }
-                    FormGroup { label: "Name", id: "people-add-name",
-                        Input { id: "people-add-name", value: name(), disabled: saving(),
-                            oninput: move |event: FormEvent| name.set(event.value()),
-                        }
+                    FormGroup { label: tr.people_add_name(), id: "people-add-name",
+                        Input { id: "people-add-name", value: name(), disabled: saving(), oninput: type_name }
                     }
-                    FormGroup { label: "Email", id: "people-add-email", hint: "They sign in with this address.",
-                        Input { id: "people-add-email", kind: "email", value: email(), disabled: saving(),
-                            oninput: move |event: FormEvent| email.set(event.value()),
-                        }
+                    FormGroup { label: tr.people_add_email(), id: "people-add-email", hint: tr.people_add_email_hint(),
+                        Input { id: "people-add-email", kind: "email", value: email(), disabled: saving(), oninput: type_email }
                     }
                     if choose_profile {
                         div { class: "form-group",
-                            p { id: "people-add-profile", class: "form-label", "Profile" }
+                            p { id: "people-add-profile", class: "form-label", {tr.people_add_profile()} }
                             div { class: "flex flex-col gap-2", role: "radiogroup", aria_labelledby: "people-add-profile",
-                                for (value, label, hint) in PROFILES {
-                                    Radio { key: "{value}", id: "people-add-profile-{value}", selected: profile() == *value,
-                                        label: label.to_string(), hint: hint.to_string(),
-                                        onclick: move |_| profile.set(*value),
-                                    }
+                                for (value, label, hint) in profiles(tr) {
+                                    ProfileChoice { key: "{value}", value, label, hint, profile }
                                 }
                             }
                         }
@@ -93,5 +112,19 @@ pub(super) fn AddPerson(
                 }
             }
         }
+    }
+}
+
+#[component]
+fn ProfileChoice(
+    value: &'static str,
+    label: String,
+    hint: String,
+    profile: Signal<&'static str>,
+) -> Element {
+    let mut profile = profile;
+    let choose = use_callback(move |_: MouseEvent| profile.set(value));
+    rsx! {
+        Radio { id: "people-add-profile-{value}", selected: profile() == value, label, hint, onclick: choose }
     }
 }

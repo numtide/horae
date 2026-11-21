@@ -61,10 +61,10 @@ pub mod icons;
 pub mod modal;
 #[path = "../src/components/no_tracking.rs"]
 pub mod no_tracking;
-#[path = "../src/components/period_nav.rs"]
-pub mod period_nav;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[path = "../src/components/period_nav.rs"]
+pub mod period_nav;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
@@ -74,8 +74,8 @@ pub mod select_field;
 pub mod today;
 mod components {
     pub use super::{
-        button, confirm_dialog, controls, icons, menu, modal, no_tracking,
-        page_header, period_nav, screen_state, select_field, today,
+        button, confirm_dialog, controls, icons, menu, modal, no_tracking, page_header, period_nav,
+        screen_state, select_field, today,
     };
 
     /// The shell's week start and a viewer who cannot manage projects, without

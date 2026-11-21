@@ -92,7 +92,10 @@ pub async fn page(
                 .map(str::to_owned)
                 .or(row.template)
                 .or_else(|| row.individual.unwrap_or(false).then(|| "Individual".into())),
-            week: row.total.zip(row.billable).map(|(total, billable)| WeekMinutes { total, billable }),
+            week: row
+                .total
+                .zip(row.billable)
+                .map(|(total, billable)| WeekMinutes { total, billable }),
             id: row.id,
             name: row.name,
             email: row.email,

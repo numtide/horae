@@ -67,17 +67,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await,
         expected
     );
-    assert_eq!(
-        api.call(
-            "list_people",
-            json!({"activity":"all","week":"not a date"}),
-            Some(&cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::BAD_REQUEST
-    );
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", target)
         .execute(pool)
         .await

@@ -29,42 +29,67 @@ let restoreSeededStates = () => {};
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const row = name => page.locator('tbody tr').filter({ hasText: name });
+  // The row's actions live in its Actions menu; `null` when the menu lacks the item.
+  const menuItems = async name => {
+    const trigger = row(name).getByRole('button', { name: 'Actions', exact: true });
+    if (await trigger.count() === 0) return [];
+    await trigger.click();
+    const items = await page.locator('.menu-popover:popover-open [role="menuitem"]').allTextContents();
+    await page.keyboard.press('Escape');
+    return items;
+  };
+  const rowAction = async (name, item) => {
+    await row(name).getByRole('button', { name: 'Actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: item, exact: true }).click();
+  };
+  const status = async label => {
+    await page.locator('#people-status-menu-trigger').click();
+    await page.getByRole('menuitem', { name: new RegExp(`^${label} \\(`) }).click();
+  };
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
-    await page.goto(`${base}/admin/users`);
+    await page.goto(`${base}/people`);
 
     // An administrator adds a person with a profile; Administrator is not offered.
     await page.locator('#people-add').click();
-    const form = page.locator('#people-add-form');
-    await expect(form.locator('#people-add-profile option[value="administrator"]')).toHaveCount(0);
-    await form.getByLabel('Email', { exact: true }).fill(email);
-    await form.getByLabel('Name', { exact: true }).fill('Managed Person');
-    await form.locator('#people-add-profile').selectOption('people_admin');
+    const dialog = page.getByRole('dialog', { name: 'Add person', exact: true });
+    await expect(dialog.locator('#people-add-profile-administrator')).toHaveCount(0);
+    await dialog.getByLabel('Email', { exact: true }).fill(email);
+    await dialog.getByLabel('Name', { exact: true }).fill('Managed Person');
+    await dialog.getByRole('radio', { name: /^People Admin/ }).click();
     if (evidence) await page.screenshot({ path: join(evidence, 'people-add-1440.png') });
-    await form.getByRole('button', { name: 'Add person', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Managed Person was added.' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Add person', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Person added' })).toBeVisible();
     await expect(row('Managed Person')).toBeVisible();
     assert.equal(sql(`SELECT p.built_in_profile || '/' || u.active FROM users u
       JOIN person_permission_states p ON p.user_id = u.id WHERE u.email='${email}'`), 'people_admin/true');
 
-    // Archiving moves the person out of the active list; restoring brings them back.
-    await page.getByRole('button', { name: 'Archive Managed Person', exact: true }).click();
+    // Archiving applies at once and moves the person out of the active list;
+    // Undo brings them back, and so does Restore.
+    await rowAction('Managed Person', 'Archive');
     await expect(row('Managed Person')).toHaveCount(0);
     assert.equal(sql(`SELECT active FROM users WHERE email='${email}'`), 'f');
-    await page.locator('#people-activity').selectOption('archived');
-    await page.getByRole('button', { name: 'Restore Managed Person', exact: true }).click();
+    const toast = page.getByRole('status').filter({ hasText: 'Person archived' });
+    await toast.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(row('Managed Person')).toBeVisible();
+    assert.equal(sql(`SELECT active FROM users WHERE email='${email}'`), 't');
+    await rowAction('Managed Person', 'Archive');
+    await expect(row('Managed Person')).toHaveCount(0);
+    await status('Archived');
+    await rowAction('Managed Person', 'Restore');
     await expect(row('Managed Person')).toHaveCount(0);
     assert.equal(sql(`SELECT active FROM users WHERE email='${email}'`), 't');
-    await page.locator('#people-activity').selectOption('active');
+    await status('Active');
 
     // The last administrator cannot archive themselves.
     const self = sql(`SELECT name FROM users WHERE id='${actor.id}'`);
-    await page.getByRole('button', { name: `Archive ${self}`, exact: true }).click();
+    await rowAction(self, 'Archive');
     await expect(page.getByRole('alert')).toContainText('at least one active administrator');
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}'`), 't');
-    console.log('PASS: an administrator adds people with a profile, archives and restores them, and keeps an administrator');
+    console.log('PASS: an administrator adds people with a profile, archives with Undo, restores them, and keeps an administrator');
 
     // A People Admin adds Members only and cannot edit permissions. The actor
     // takes the grants the new People Admin was given.
@@ -75,7 +100,7 @@ let restoreSeededStates = () => {};
       VALUES ('${state}','${actor.org_id}','${actor.id}',1,'${peopleAdmin}',false,'individual')`);
     await page.reload();
     await expect(row('Managed Person')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit permissions for Managed Person', exact: true })).toHaveCount(0);
+    assert.ok(!(await menuItems('Managed Person')).includes('Permissions…'));
     await page.locator('#people-add').click();
     await expect(page.locator('#people-add-profile')).toHaveCount(0);
     await expect(page.locator('#people-add-email')).toBeVisible();
@@ -87,7 +112,7 @@ let restoreSeededStates = () => {};
     await page.reload();
     await expect(row('Managed Person')).toBeVisible();
     await expect(page.locator('#people-add')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Archive Managed Person', exact: true })).toHaveCount(0);
+    assert.ok(!(await menuItems('Managed Person')).includes('Archive'));
     assert.deepEqual(errors, []);
     console.log('PASS: People Admins add Members only, and the page offers no management without the grant');
   } finally {

@@ -177,6 +177,13 @@ mod tests {
     }
 
     #[test]
+    fn the_old_admin_people_address_leads_to_people() {
+        let route: Route = "/admin/users".parse().unwrap();
+        assert!(matches!(route, Route::People {}));
+        assert_eq!(route.to_string(), "/people");
+    }
+
+    #[test]
     fn invalid_timesheet_person_is_not_silently_removed_from_the_route() {
         let url = "/timesheet/week/2026-09-07?span=week&user=invalid-person";
         assert_eq!(url.parse::<Route>().unwrap().to_string(), url);

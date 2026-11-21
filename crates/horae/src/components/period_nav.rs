@@ -2,6 +2,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use dioxus::prelude::*;
 
 use super::date_picker::DatePicker;
+use crate::i18n::use_tr;
 
 /// The week pager: previous and next arrows around a label that opens a
 /// `DatePicker`. With `day_paged` it names one day instead of the week. The
@@ -19,7 +20,12 @@ pub fn PeriodNav(
     on_step: Callback<bool>,
     on_pick: Callback<NaiveDate>,
 ) -> Element {
+    let tr = use_tr();
     let mut picker_open = use_signal(|| false);
+    let pick = use_callback(move |picked: NaiveDate| {
+        picker_open.set(false);
+        on_pick.call(picked);
+    });
     let week_end = week_start + Duration::days(6);
     let is_this_week = (week_start..=week_end).contains(&today);
     let range_label = format!(
@@ -37,7 +43,7 @@ pub fn PeriodNav(
                     r#type: "button",
                     id: "{id}-prev",
                     class: "ts-pager-btn prev",
-                    "aria-label": if day_paged { "Previous day" } else { "Previous week" },
+                    "aria-label": if day_paged { tr.period_nav_previous_day() } else { tr.period_nav_previous_week() },
                     onclick: move |_| on_step.call(false),
                     "←"
                 }
@@ -57,7 +63,7 @@ pub fn PeriodNav(
                     span { class: "ts-pager-faces",
                         span { class: if day_paged { "ts-pager-face" } else { "ts-pager-face reserve" },
                             span { class: "text-faint", "▦" }
-                            span { class: "cur", if day == today { "Today" } else { "{day.format(\"%A\")}" } }
+                            span { class: "cur", if day == today { {tr.period_nav_today()} } else { "{day.format(\"%A\")}" } }
                             span { class: "ts-pager-range", "{day.format(\"%d %b %Y\")}" }
                         }
                         span { class: if day_paged { "ts-pager-face reserve" } else { "ts-pager-face" },
@@ -65,8 +71,8 @@ pub fn PeriodNav(
                             // "Week" keeps the room "This week" takes, so leaving the current
                             // week does not narrow the pager either.
                             span { class: "cur ts-pager-faces",
-                                span { class: if is_this_week { "ts-pager-face" } else { "ts-pager-face reserve" }, "This week" }
-                                span { class: if is_this_week { "ts-pager-face reserve" } else { "ts-pager-face" }, "Week" }
+                                span { class: if is_this_week { "ts-pager-face" } else { "ts-pager-face reserve" }, {tr.period_nav_this_week()} }
+                                span { class: if is_this_week { "ts-pager-face reserve" } else { "ts-pager-face" }, {tr.period_nav_week()} }
                             }
                             span { class: "ts-pager-range", "{range_label}" }
                         }
@@ -76,7 +82,7 @@ pub fn PeriodNav(
                     r#type: "button",
                     id: "{id}-next",
                     class: "ts-pager-btn next",
-                    "aria-label": if day_paged { "Next day" } else { "Next week" },
+                    "aria-label": if day_paged { tr.period_nav_next_day() } else { tr.period_nav_next_week() },
                     onclick: move |_| on_step.call(true),
                     "→"
                 }
@@ -88,10 +94,7 @@ pub fn PeriodNav(
                         first_day: week_start.weekday(),
                         selected: day,
                         week: !day_paged,
-                        onpick: move |picked| {
-                            picker_open.set(false);
-                            on_pick.call(picked);
-                        },
+                        onpick: pick,
                     }
                 }
             }

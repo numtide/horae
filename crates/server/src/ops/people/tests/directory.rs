@@ -21,7 +21,14 @@ async fn read(pool: &PgPool, ids: &SeedIds) -> Result<PeoplePage, OpError> {
     read.finish(result).await
 }
 
-async fn entry(pool: &PgPool, ids: &SeedIds, person: Uuid, day: &str, minutes: i32, billable: bool) {
+async fn entry(
+    pool: &PgPool,
+    ids: &SeedIds,
+    person: Uuid,
+    day: &str,
+    minutes: i32,
+    billable: bool,
+) {
     sqlx::query!(
         "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable)
          VALUES ($1, $2, $3, $4, $5, $6::text::date, $7, $8)",
@@ -78,7 +85,9 @@ fn week_of(page: &PeoplePage, person: Uuid) -> Option<WeekMinutes> {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_administrator_sees_everyones_profile_and_only_the_weeks_hours(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    let teammate = add_person(&pool, &ids, BuiltInProfile::ProjectManager).await.user_id;
+    let teammate = add_person(&pool, &ids, BuiltInProfile::ProjectManager)
+        .await
+        .user_id;
     entry(&pool, &ids, teammate, "2026-09-07", 120, true).await;
     entry(&pool, &ids, teammate, "2026-09-13", 45, false).await;
     // Outside the week on both sides.
@@ -87,7 +96,13 @@ async fn an_administrator_sees_everyones_profile_and_only_the_weeks_hours(pool: 
 
     let listed = read(&pool, &ids).await.unwrap();
 
-    assert_eq!(week_of(&listed, teammate), Some(WeekMinutes { total: 165, billable: 120 }));
+    assert_eq!(
+        week_of(&listed, teammate),
+        Some(WeekMinutes {
+            total: 165,
+            billable: 120
+        })
+    );
     assert_eq!(week_of(&listed, ids.user_id), Some(WeekMinutes::default()));
     // Ordered by name: "Teammate", then "Test User".
     let profiles: Vec<_> = listed.people.iter().map(|p| p.profile.as_deref()).collect();
@@ -98,22 +113,40 @@ async fn an_administrator_sees_everyones_profile_and_only_the_weeks_hours(pool: 
 async fn reading_everyone_without_reading_their_time_shows_only_own_hours(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     provision(&pool, &ids, &[Permission::PeopleReadAll], false).await;
-    let teammate = add_person(&pool, &ids, BuiltInProfile::Member).await.user_id;
+    let teammate = add_person(&pool, &ids, BuiltInProfile::Member)
+        .await
+        .user_id;
     entry(&pool, &ids, teammate, "2026-09-08", 60, true).await;
     entry(&pool, &ids, ids.user_id, "2026-09-08", 30, true).await;
 
     let listed = read(&pool, &ids).await.unwrap();
 
     assert_eq!(week_of(&listed, teammate), None);
-    assert_eq!(week_of(&listed, ids.user_id), Some(WeekMinutes { total: 30, billable: 30 }));
+    assert_eq!(
+        week_of(&listed, ids.user_id),
+        Some(WeekMinutes {
+            total: 30,
+            billable: 30
+        })
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn managed_time_shows_managed_peoples_hours_but_not_a_managed_projects(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
-    provision(&pool, &ids, &[Permission::PeopleReadAll, Permission::TimeReadManaged], false).await;
-    let managed = add_person(&pool, &ids, BuiltInProfile::Member).await.user_id;
-    let on_my_project = add_person(&pool, &ids, BuiltInProfile::Member).await.user_id;
+    provision(
+        &pool,
+        &ids,
+        &[Permission::PeopleReadAll, Permission::TimeReadManaged],
+        false,
+    )
+    .await;
+    let managed = add_person(&pool, &ids, BuiltInProfile::Member)
+        .await
+        .user_id;
+    let on_my_project = add_person(&pool, &ids, BuiltInProfile::Member)
+        .await
+        .user_id;
     manage_person(&pool, &ids, managed).await;
     manage_project(&pool, &ids).await;
     entry(&pool, &ids, managed, "2026-09-09", 90, false).await;
@@ -121,7 +154,13 @@ async fn managed_time_shows_managed_peoples_hours_but_not_a_managed_projects(poo
 
     let listed = read(&pool, &ids).await.unwrap();
 
-    assert_eq!(week_of(&listed, managed), Some(WeekMinutes { total: 90, billable: 0 }));
+    assert_eq!(
+        week_of(&listed, managed),
+        Some(WeekMinutes {
+            total: 90,
+            billable: 0
+        })
+    );
     // A project's entries are not the person's week.
     assert_eq!(week_of(&listed, on_my_project), None);
 }
@@ -130,13 +169,19 @@ async fn managed_time_shows_managed_peoples_hours_but_not_a_managed_projects(poo
 async fn reading_managed_people_lists_only_them(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     provision(&pool, &ids, &[Permission::PeopleReadManaged], false).await;
-    let managed = add_person(&pool, &ids, BuiltInProfile::Member).await.user_id;
+    let managed = add_person(&pool, &ids, BuiltInProfile::Member)
+        .await
+        .user_id;
     add_person(&pool, &ids, BuiltInProfile::Member).await;
     manage_person(&pool, &ids, managed).await;
 
     let listed = read(&pool, &ids).await.unwrap();
 
-    let people: Vec<_> = listed.people.iter().map(|p| (p.id, p.profile.as_deref())).collect();
+    let people: Vec<_> = listed
+        .people
+        .iter()
+        .map(|p| (p.id, p.profile.as_deref()))
+        .collect();
     assert_eq!(people, [(managed, Some("Member"))]);
 }
 
@@ -144,7 +189,10 @@ async fn reading_managed_people_lists_only_them(pool: PgPool) {
 async fn a_person_without_people_reads_is_refused(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
 
-    assert!(matches!(read(&pool, &ids).await, Err(OpError::Forbidden(_))));
+    assert!(matches!(
+        read(&pool, &ids).await,
+        Err(OpError::Forbidden(_))
+    ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

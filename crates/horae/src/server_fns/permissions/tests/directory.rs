@@ -137,9 +137,10 @@ async fn directory_rechecks_grant_revocation_and_direct_deactivation_after_wait(
             .unwrap()
             .unwrap();
         let db = pool.clone();
-        let pending = tokio::spawn(async move {
-            read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await
-        });
+        let pending =
+            tokio::spawn(
+                async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await },
+            );
         wait_for_blocked(&pool, holder).await;
         revoke.commit().await.unwrap();
         assert!(forbidden(&pending.await.unwrap(), READ_REQUIRED));
@@ -181,9 +182,7 @@ async fn directory_cancellation_releases_connection_and_preserves_pool_defaults(
         .unwrap();
     let db = reader.clone();
     let pending =
-        tokio::spawn(
-            async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await },
-        );
+        tokio::spawn(async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await });
     wait_for_blocked(&pool, holder).await;
     pending.abort();
     assert!(pending.await.unwrap_err().is_cancelled());
@@ -288,7 +287,15 @@ async fn directory_scopes_before_activity_and_returns_no_grants(pool: PgPool) {
         keys.sort();
         assert_eq!(
             keys,
-            ["active", "can_change_active", "email", "id", "name", "profile", "week"]
+            [
+                "active",
+                "can_change_active",
+                "email",
+                "id",
+                "name",
+                "profile",
+                "week"
+            ]
         );
         assert_ne!(row.id, foreign.user_id);
     }
@@ -365,9 +372,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
         .unwrap();
     let db = pool.clone();
     let pending =
-        tokio::spawn(
-            async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await },
-        );
+        tokio::spawn(async move { read(&db, ids.org_id, ids.user_id, PeopleActivity::All).await });
     wait_for_blocked(&pool, holder).await;
     removal.commit().await.unwrap();
     assert!(pending.await.unwrap().unwrap().people.is_empty());

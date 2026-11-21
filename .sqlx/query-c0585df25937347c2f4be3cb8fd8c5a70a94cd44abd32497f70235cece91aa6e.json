@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id, u.name, u.email, u.active,\n                  COALESCE(p.is_administrator, false) AS \"administrator!\", d.managed AS \"managed!\",\n                  p.built_in_profile AS \"built_in_profile?\", t.name AS \"template?\",\n                  (p.source = 'individual') AS \"individual?\",\n                  w.total AS \"total?\", w.billable AS \"billable?\"\n             FROM users u\n             CROSS JOIN LATERAL (SELECT EXISTS (\n               SELECT 1 FROM person_management_assignments m\n               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id) AS managed) d\n             LEFT JOIN person_permission_states p ON p.org_id=u.org_id AND p.user_id=u.id\n             LEFT JOIN permission_templates t ON t.org_id=p.org_id AND t.id=p.template_id\n             LEFT JOIN LATERAL (\n               SELECT COALESCE(SUM(e.minutes),0)::bigint AS total,\n                      COALESCE(SUM(e.minutes) FILTER (WHERE e.billable),0)::bigint AS billable\n                 FROM time_entries e\n                WHERE e.org_id=u.org_id AND e.user_id=u.id AND e.spent_date BETWEEN $5 AND $6) w\n               ON $7::bool OR ($8::bool AND d.managed) OR ($9::bool AND u.id=$2)\n            WHERE u.org_id=$1\n              AND ($3::bool OR d.managed)\n              AND ($4::bool IS NULL OR u.active=$4)\n            ORDER BY u.name,u.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "administrator!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "managed!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "built_in_profile?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "template?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "individual?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "total?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "billable?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Date",
+        "Date",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c0585df25937347c2f4be3cb8fd8c5a70a94cd44abd32497f70235cece91aa6e"
+}

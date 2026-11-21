@@ -16,8 +16,9 @@ use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{ErrorState, Skeleton};
 use crate::components::session::{use_session, use_week_start};
 use crate::components::today::today;
-use crate::route::Route;
+use crate::i18n::use_tr;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
+use crate::route::Route;
 
 mod add_person;
 mod directory;
@@ -28,6 +29,7 @@ use super::admin::{permission_editor, rates};
 
 #[component]
 pub fn People() -> Element {
+    let tr = use_tr();
     let session = use_session();
     let own = session.permissions;
     let week_start = use_week_start();
@@ -61,8 +63,8 @@ pub fn People() -> Element {
     let resolved = matches!(&*own.read(), Some(Ok(_)));
     if (!resolved && own.state()() != UseResourceState::Ready) || first_day.is_none() {
         return rsx! {
-            PageHeader { title: "People" }
-            Skeleton { columns: 5, label: "Loading people…" }
+            PageHeader { title: tr.people_title() }
+            Skeleton { columns: 5, label: tr.people_loading() }
         };
     }
     match &*own.read() {
@@ -73,9 +75,13 @@ pub fn People() -> Element {
         {
             // Per-person access is decided when the dialog loads; with a
             // managed-only grant, other people's rows show a refusal there.
-            let can_view_rates = [BillableRateReadManaged, BillableRateReadAll, CostRateReadAll]
-                .iter()
-                .any(|grant| access.grants.contains(grant));
+            let can_view_rates = [
+                BillableRateReadManaged,
+                BillableRateReadAll,
+                CostRateReadAll,
+            ]
+            .iter()
+            .any(|grant| access.grants.contains(grant));
             rsx! {
                 directory::PeopleDirectory {
                     can_edit_permissions: access.is_administrator,
@@ -91,18 +97,18 @@ pub fn People() -> Element {
             }
         }
         Some(Ok(_)) => rsx! {
-            PageHeader { title: "People" }
+            PageHeader { title: tr.people_title() }
             ErrorState {
-                title: "Access unavailable",
-                body: "Your account cannot view people. Ask an Administrator if you need it.",
+                title: tr.people_access_unavailable(),
+                body: tr.people_access_unavailable_hint(),
             }
             super::admin::PermissionRecovery { on_saved }
         },
         _ => rsx! {
-            PageHeader { title: "People" }
+            PageHeader { title: tr.people_title() }
             ErrorState {
-                title: "Could not verify your access",
-                body: "Try again, or sign in again if it keeps failing.",
+                title: tr.people_access_check_failed(),
+                body: tr.people_access_check_failed_hint(),
                 onretry: retry,
             }
             super::admin::PermissionRecovery { on_saved }

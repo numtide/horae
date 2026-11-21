@@ -20,7 +20,7 @@ pub fn FilterBar(filters: Element, search: Option<Element>) -> Element {
 /// A list's search box, with the magnifier inset on the left. `label` is its
 /// accessible name and placeholder.
 #[component]
-pub fn SearchField(id: &'static str, label: &'static str, query: Signal<String>) -> Element {
+pub fn SearchField(id: &'static str, label: String, query: Signal<String>) -> Element {
     let mut query = query;
     rsx! {
         div { class: "search-field w-form-select max-w-full",
@@ -29,7 +29,7 @@ pub fn SearchField(id: &'static str, label: &'static str, query: Signal<String>)
                 id,
                 class: "form-input",
                 r#type: "search",
-                aria_label: label,
+                aria_label: label.clone(),
                 placeholder: label,
                 value: "{query}",
                 oninput: move |event| query.set(event.value()),

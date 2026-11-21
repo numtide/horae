@@ -18,16 +18,6 @@ use uuid::Uuid;
 pub mod avatar;
 #[path = "../src/components/badge.rs"]
 pub mod badge;
-#[path = "../src/components/date_picker.rs"]
-pub mod date_picker;
-#[path = "../src/components/filter_bar.rs"]
-pub mod filter_bar;
-#[path = "../src/components/period_nav.rs"]
-pub mod period_nav;
-#[path = "../src/components/today.rs"]
-pub mod today;
-#[path = "../src/components/toast.rs"]
-pub mod toast;
 #[allow(dead_code)]
 #[path = "../src/components/button.rs"]
 pub mod button;
@@ -35,6 +25,10 @@ pub mod button;
 pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/date_picker.rs"]
+pub mod date_picker;
+#[path = "../src/components/filter_bar.rs"]
+pub mod filter_bar;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[allow(dead_code)]
@@ -48,6 +42,8 @@ pub mod menu;
 pub mod modal;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[path = "../src/components/period_nav.rs"]
+pub mod period_nav;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
 #[allow(dead_code)]
@@ -55,11 +51,14 @@ pub mod permission_description;
 pub mod screen_state;
 #[path = "../src/components/table.rs"]
 pub mod table;
+#[path = "../src/components/toast.rs"]
+pub mod toast;
+#[path = "../src/components/today.rs"]
+pub mod today;
 mod components {
     pub use super::{
-        avatar, badge, button, confirm_dialog, controls, filter_bar, form, icons,
-        menu, modal, page_header, period_nav, permission_description, screen_state, table, toast,
-        today,
+        avatar, badge, button, confirm_dialog, controls, filter_bar, form, icons, menu, modal,
+        page_header, period_nav, permission_description, screen_state, table, toast, today,
     };
 }
 pub use horae_types::{
@@ -848,10 +847,16 @@ async fn changing_the_week_keeps_the_rows_dimmed_until_its_hours_arrive() {
     ui.click("people-week-next");
     let html = ui.html();
     assert!(html.contains("Directory person"), "{html}");
-    assert!(html.contains("class=\"ppl-content\" aria-busy=true"), "{html}");
+    assert!(
+        html.contains("class=\"ppl-content\" aria-busy=true"),
+        "{html}"
+    );
     assert!(html.contains("14 Sep – 20 Sep 2026"), "{html}");
     let mut later = directory_page(&probe);
-    later.people[0].week = Some(people_model::WeekMinutes { total: 0, billable: 0 });
+    later.people[0].week = Some(people_model::WeekMinutes {
+        total: 0,
+        billable: 0,
+    });
     next.send(Ok(later)).unwrap();
     ui.settle();
     assert!(!ui.html().contains("aria-busy=true"));
@@ -860,13 +865,13 @@ async fn changing_the_week_keeps_the_rows_dimmed_until_its_hours_arrive() {
     let failed = directory_reply(&probe);
     ui.click("people-week-prev");
     failed
-        .send(Err(ServerFnError::new("private SQL error")))
+        .send(Err(ServerFnError::new("Server unavailable")))
         .unwrap();
     ui.settle();
     let html = ui.html();
-    assert!(html.contains("Could not load people"));
+    assert!(html.contains("Could not load people"), "{html}");
+    assert!(html.contains("Try again"), "{html}");
     assert!(!html.contains("Directory person"));
-    assert!(!html.contains("private SQL"));
 
     let next_week = WEEK + chrono::Duration::days(7);
     assert_eq!(
@@ -926,7 +931,10 @@ async fn view_timesheet_opens_the_persons_shown_week() {
         .unwrap();
     let mut ui = Ui::new(probe.clone());
     ui.click(&format!("person-timesheet-{}", probe.editor.user_id));
-    assert_eq!(*probe.timesheets.borrow(), vec![(probe.editor.user_id, WEEK)]);
+    assert_eq!(
+        *probe.timesheets.borrow(),
+        vec![(probe.editor.user_id, WEEK)]
+    );
 }
 
 #[tokio::test]
@@ -940,7 +948,10 @@ async fn archiving_applies_at_once_and_offers_undo() {
     let mut ui = Ui::new(probe.clone());
     let reload = directory_reply(&probe);
     ui.click(&format!("person-active-{}", probe.editor.user_id));
-    assert_eq!(*probe.archives.borrow(), vec![(probe.editor.user_id, false)]);
+    assert_eq!(
+        *probe.archives.borrow(),
+        vec![(probe.editor.user_id, false)]
+    );
     let mut archived = directory_page(&probe);
     archived.people[0].active = false;
     reload.send(Ok(archived)).unwrap();

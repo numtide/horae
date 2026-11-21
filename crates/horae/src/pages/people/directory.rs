@@ -16,6 +16,7 @@ use crate::components::period_nav::PeriodNav;
 use crate::components::screen_state::{EmptyState, LoadError, Skeleton};
 use crate::components::table::DataTable;
 use crate::components::toast::{Toast, ToastContainer};
+use crate::i18n::use_tr;
 use crate::models::people::{PeopleActivity, PeoplePage, PersonSummary, WeekMinutes};
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
@@ -40,6 +41,7 @@ pub(super) fn PeopleDirectory(
     on_view_timesheet: Callback<(Uuid, NaiveDate)>,
     on_view_history: Option<Callback<()>>,
 ) -> Element {
+    let tr = use_tr();
     let this_week = horae_core::week::week_start(today, first_day).unwrap_or(today);
     let mut week = use_signal(|| this_week);
     let status = use_signal(|| PeopleActivity::Active);
@@ -56,10 +58,11 @@ pub(super) fn PeopleDirectory(
     let mut page = use_resource(move || async move {
         let week = week();
         let loaded = server_fns::list_people(PeopleActivity::All, week).await?;
-        if requester.peek().is_some_and(|expected| expected != loaded.requester) {
-            return Err(ServerFnError::new(
-                "Your session changed. Reload this page before selecting a person.",
-            ));
+        if requester
+            .peek()
+            .is_some_and(|expected| expected != loaded.requester)
+        {
+            return Err(ServerFnError::new(tr.people_session_changed()));
         }
         requester.set(Some(loaded.requester));
         Ok::<_, ServerFnError>((week, loaded))
@@ -76,15 +79,28 @@ pub(super) fn PeopleDirectory(
     let close_add = use_callback(move |()| adding.set(false));
     let on_added = use_callback(move |_name: String| {
         adding.set(false);
-        notice.set(Some(Notice { message: "Person added".into(), undo: None }));
+        notice.set(Some(Notice {
+            message: tr.people_added(),
+            undo: None,
+        }));
         page.restart();
     });
     let on_rates_saved = use_callback(move |message: String| {
-        notice.set(Some(Notice { message, undo: None }));
+        notice.set(Some(Notice {
+            message,
+            undo: None,
+        }));
     });
     let on_permissions_saved = use_callback(move |changed: bool| {
-        let message = if changed { "Permissions saved" } else { "Permissions are unchanged" };
-        notice.set(Some(Notice { message: message.into(), undo: None }));
+        let message = if changed {
+            tr.people_permissions_saved()
+        } else {
+            tr.people_permissions_unchanged()
+        };
+        notice.set(Some(Notice {
+            message,
+            undo: None,
+        }));
         on_saved.call(changed);
         page.restart();
     });
@@ -99,9 +115,13 @@ pub(super) fn PeopleDirectory(
             match server_fns::set_user_active(id.to_string(), active).await {
                 Ok(_) => {
                     row_error.set(None);
-                    let message = if active { "Person restored" } else { "Person archived" };
+                    let message = if active {
+                        tr.people_restored()
+                    } else {
+                        tr.people_archived_toast()
+                    };
                     let undo = undoable.then_some((id, !active));
-                    notice.set(Some(Notice { message: message.into(), undo }));
+                    notice.set(Some(Notice { message, undo }));
                 }
                 Err(failure) => row_error.set(Some(failure.to_string())),
             }
@@ -109,10 +129,15 @@ pub(super) fn PeopleDirectory(
             page.restart();
         });
     });
-    let change_active = use_callback(move |(id, active): (Uuid, bool)| set_active.call((id, active, true)));
+    let change_active =
+        use_callback(move |(id, active): (Uuid, bool)| set_active.call((id, active, true)));
     let open_rates = use_callback(move |(id, name): (Uuid, String)| {
         if let Some(requester) = *requester.peek() {
-            rates_target.set(Some(RatesTarget { id, name, requester }));
+            rates_target.set(Some(RatesTarget {
+                id,
+                name,
+                requester,
+            }));
         }
     });
     let open_permissions = use_callback(move |id: Uuid| {
@@ -121,13 +146,21 @@ pub(super) fn PeopleDirectory(
         }
     });
 
+    let go_this_week = use_callback(move |_: MouseEvent| week.set(this_week));
+    let dismiss_notice = use_callback(move |_: MouseEvent| notice.set(None));
+    let undo = use_callback(move |_: MouseEvent| {
+        if let Some((id, active)) = notice.peek().as_ref().and_then(|notice| notice.undo) {
+            set_active.call((id, active, false));
+        }
+    });
+
     let reloading = page.state()() != UseResourceState::Ready;
     let shown_week = week();
     let response = page.read();
     let content = match &*response {
-        None => rsx! { Skeleton { columns: 5, label: "Loading people…" } },
+        None => rsx! { Skeleton { columns: 5, label: tr.people_loading() } },
         Some(Err(error)) => rsx! {
-            LoadError { error: error.clone(), what: "people", retry, pending: reloading }
+            LoadError { error: error.clone(), what: tr.people_load_subject(), retry, pending: reloading }
         },
         Some(Ok((loaded_week, loaded))) => {
             // A new week keeps the old rows on screen, dimmed, until its hours arrive.
@@ -145,19 +178,17 @@ pub(super) fn PeopleDirectory(
     };
 
     rsx! {
-        PageHeader { title: "People",
+        PageHeader { title: tr.people_title(),
             actions: rsx! {
                 if can_manage_people {
-                    Button { id: "people-add", label: "Add person", onclick: open_add }
+                    Button { id: "people-add", label: tr.people_add(), onclick: open_add }
                 }
             },
         }
         div { class: "flex flex-wrap items-center gap-4 mb-5",
             PeriodNav { id: "people-week", week_start: shown_week, day: shown_week, today, on_step: step, on_pick: pick }
             if shown_week != this_week {
-                Button { variant: ButtonVariant::Ghost, small: true, label: "This week",
-                    onclick: move |_| week.set(this_week),
-                }
+                Button { variant: ButtonVariant::Ghost, small: true, label: tr.people_go_this_week(), onclick: go_this_week }
             }
         }
         if let Some(message) = row_error() {
@@ -170,16 +201,12 @@ pub(super) fn PeopleDirectory(
         PermissionEditorDialog { person, on_saved: on_permissions_saved }
         PersonRatesDialog { target: rates_target, on_saved: on_rates_saved }
         ToastContainer {
-            if let Some(Notice { message, undo }) = notice() {
+            if let Some(Notice { message, undo: reversible }) = notice() {
                 Toast { message, variant: "success", icon: "✓", dismissible: true,
-                    ondismiss: move |_| notice.set(None),
-                    action_label: if undo.is_some() { "Undo" } else { "" },
+                    ondismiss: dismiss_notice,
+                    action_label: if reversible.is_some() { tr.people_undo() } else { String::new() },
                     action_busy: changing(),
-                    onaction: move |_| {
-                        if let Some((id, active)) = undo {
-                            set_active.call((id, active, false));
-                        }
-                    },
+                    onaction: undo,
                 }
             }
         }
@@ -190,17 +217,24 @@ pub(super) fn PeopleDirectory(
 /// any filter.
 #[component]
 fn Summary(people: Vec<PersonSummary>) -> Element {
-    let week = people
-        .iter()
-        .filter_map(|person| person.week)
-        .fold(WeekMinutes::default(), |sum, week| WeekMinutes {
-            total: sum.total + week.total,
-            billable: sum.billable + week.billable,
-        });
+    let tr = use_tr();
+    let week =
+        people
+            .iter()
+            .filter_map(|person| person.week)
+            .fold(WeekMinutes::default(), |sum, week| WeekMinutes {
+                total: sum.total + week.total,
+                billable: sum.billable + week.billable,
+            });
     let share = percent(week.billable, week.total);
+    let figures = [
+        (tr.people_total_hours(), week.total),
+        (tr.people_billable(), week.billable),
+        (tr.people_non_billable(), week.total - week.billable),
+    ];
     rsx! {
-        section { class: "ppl-summary card rounded-xl mb-5", aria_label: "Week summary",
-            for (label, minutes) in [("Total hours", week.total), ("Billable", week.billable), ("Non-billable", week.total - week.billable)] {
+        section { class: "ppl-summary card rounded-xl mb-5", aria_label: tr.people_summary_label(),
+            for (label, minutes) in figures {
                 div { key: "{label}", class: "flex flex-col",
                     span { class: "text-sm text-secondary", "{label}" }
                     span { class: "font-display text-3xl font-semibold text-strong", "{format_hhmm(minutes)}" }
@@ -209,8 +243,8 @@ fn Summary(people: Vec<PersonSummary>) -> Element {
             div { class: "flex flex-col justify-center gap-2",
                 if let Some(share) = share {
                     p { class: "flex justify-between text-sm text-secondary m-0",
-                        span { "Billable {share}%" }
-                        span { "Non-billable {100 - share}%" }
+                        span { {tr.people_billable_share(share)} }
+                        span { {tr.people_non_billable_share(100 - share)} }
                     }
                 }
                 HoursBar { week, scale: week.total }
@@ -237,14 +271,25 @@ fn Listing(
     on_permissions: Callback<Uuid>,
     on_set_active: Callback<(Uuid, bool)>,
 ) -> Element {
+    let tr = use_tr();
     let (mut status, mut profile, mut query) = (status, profile, query);
+    let clear_filters = use_callback(move |_: MouseEvent| {
+        profile.set(None);
+        status.set(PeopleActivity::Active);
+    });
+    let clear_search = use_callback(move |_: MouseEvent| query.set(String::new()));
     let people = &page.people;
     let count = |wanted: PeopleActivity| people.iter().filter(|p| shows(wanted, p)).count();
-    let (active, archived) = (count(PeopleActivity::Active), count(PeopleActivity::Archived));
+    let (active, archived, all) = (
+        count(PeopleActivity::Active),
+        count(PeopleActivity::Archived),
+        people.len(),
+    );
     let mut profiles: Vec<String> = people.iter().filter_map(|p| p.profile.clone()).collect();
     profiles.sort();
     profiles.dedup();
-    let needle = query().trim().to_lowercase();
+    let typed = query();
+    let needle = typed.trim().to_lowercase();
     let visible: Vec<&PersonSummary> = people
         .iter()
         .filter(|p| shows(status(), p))
@@ -255,65 +300,63 @@ fn Listing(
                 || p.email.to_lowercase().contains(&needle)
         })
         .collect();
-    let scale = visible.iter().filter_map(|p| p.week).map(|w| w.total).max().unwrap_or(0);
+    let scale = visible
+        .iter()
+        .filter_map(|p| p.week)
+        .map(|w| w.total)
+        .max()
+        .unwrap_or(0);
     let status_label = match status() {
-        PeopleActivity::Active => format!("Active ({active})"),
-        PeopleActivity::Archived => format!("Archived ({archived})"),
-        PeopleActivity::All => format!("All ({})", people.len()),
+        PeopleActivity::Active => tr.people_status_active(active),
+        PeopleActivity::Archived => tr.people_status_archived(archived),
+        PeopleActivity::All => tr.people_status_all(all),
     };
-    let profile_label = profile().unwrap_or_else(|| "Any profile".into());
-    let which = match status() {
-        PeopleActivity::Active => "active people",
-        PeopleActivity::Archived => "archived people",
-        PeopleActivity::All => "everyone",
+    let profile_label = profile().unwrap_or_else(|| tr.people_any_profile());
+    let search_hint = match status() {
+        PeopleActivity::Active => tr.people_search_hint_active(),
+        PeopleActivity::Archived => tr.people_search_hint_archived(),
+        PeopleActivity::All => tr.people_search_hint_all(),
+    };
+    let filters_title = if status() == PeopleActivity::Archived && profile().is_none() {
+        tr.people_none_archived()
+    } else {
+        tr.people_none_match_filters()
     };
     let actions = can_view_rates
         || can_edit_permissions
-        || people.iter().any(|p| p.week.is_some() || p.can_change_active)
+        || people
+            .iter()
+            .any(|p| p.week.is_some() || p.can_change_active)
         || on_view_history.is_some();
 
     rsx! {
         FilterBar {
             filters: rsx! {
                 Menu { id: "people-profile-menu", label: profile_label, trigger_class: "text-sm px-4",
-                    MenuItem { selected: profile().is_none(), onclick: move |_| profile.set(None), "Any profile" }
+                    ProfileOption { value: None, label: tr.people_any_profile(), profile }
                     for name in profiles {
-                        MenuItem { key: "{name}", selected: profile().as_deref() == Some(name.as_str()),
-                            onclick: { let name = name.clone(); move |_| profile.set(Some(name.clone())) },
-                            "{name}"
-                        }
+                        ProfileOption { key: "{name}", value: Some(name.clone()), label: name, profile }
                     }
                 }
                 Menu { id: "people-status-menu", label: status_label, trigger_class: "text-sm px-4",
-                    MenuItem { id: "people-status-active", selected: status() == PeopleActivity::Active,
-                        onclick: move |_| status.set(PeopleActivity::Active), "Active ({active})" }
-                    MenuItem { id: "people-status-archived", selected: status() == PeopleActivity::Archived,
-                        onclick: move |_| status.set(PeopleActivity::Archived), "Archived ({archived})" }
-                    MenuItem { id: "people-status-all", selected: status() == PeopleActivity::All,
-                        onclick: move |_| status.set(PeopleActivity::All), "All ({people.len()})" }
+                    StatusOption { id: "people-status-active", value: PeopleActivity::Active, label: tr.people_status_active(active), status }
+                    StatusOption { id: "people-status-archived", value: PeopleActivity::Archived, label: tr.people_status_archived(archived), status }
+                    StatusOption { id: "people-status-all", value: PeopleActivity::All, label: tr.people_status_all(all), status }
                 }
             },
-            search: rsx! { SearchField { id: "people-search", label: "Search by name or email", query } },
+            search: rsx! { SearchField { id: "people-search", label: tr.people_search_label(), query } },
         }
         if visible.is_empty() {
             if needle.is_empty() {
-                EmptyState { icon: "team",
-                    title: if status() == PeopleActivity::Archived && profile().is_none() { "No archived people" } else { "No people match these filters" },
-                    body: "Change the filters to see more people.",
+                EmptyState { icon: "team", title: filters_title, body: tr.people_none_match_filters_hint(),
                     actions: rsx! {
-                        Button { variant: ButtonVariant::Secondary, label: "Clear filters",
-                            onclick: move |_| { profile.set(None); status.set(PeopleActivity::Active); },
-                        }
+                        Button { variant: ButtonVariant::Secondary, label: tr.people_clear_filters(), onclick: clear_filters }
                     },
                 }
             } else {
-                EmptyState { icon: "team",
-                    title: "No one matches “{query().trim()}”",
-                    body: "Search looks at names and emails among {which}.",
+                EmptyState { icon: "team", title: tr.people_none_match_search(typed.trim()), body: search_hint,
                     actions: rsx! {
-                        Button { variant: ButtonVariant::Secondary, label: "Clear search",
-                            onclick: move |_| query.set(String::new()),
-                        }
+                        Button { variant: ButtonVariant::Secondary, label: tr.people_clear_search(), onclick: clear_search }
                     },
                 }
             }
@@ -322,11 +365,11 @@ fn Listing(
                 DataTable {
                     table { class: "name-table",
                         thead { tr {
-                            th { scope: "col", "Person" }
-                            th { scope: "col", "Hours" }
-                            th { scope: "col", class: "text-right", "Billable" }
-                            th { scope: "col", class: "text-right", "Billable %" }
-                            if actions { th { scope: "col", span { class: "sr-only", "Actions" } } }
+                            th { scope: "col", {tr.people_column_person()} }
+                            th { scope: "col", {tr.people_column_hours()} }
+                            th { scope: "col", class: "text-right", {tr.people_billable()} }
+                            th { scope: "col", class: "text-right", {tr.people_column_billable_share()} }
+                            if actions { th { scope: "col", span { class: "sr-only", {tr.people_actions()} } } }
                         } }
                         tbody {
                             for entry in visible {
@@ -341,6 +384,28 @@ fn Listing(
             }
         }
     }
+}
+
+/// One profile in the profile filter; `None` is "Any profile".
+#[component]
+fn ProfileOption(value: Option<String>, label: String, profile: Signal<Option<String>>) -> Element {
+    let mut profile = profile;
+    let selected = profile() == value;
+    let choose = use_callback(move |_: MouseEvent| profile.set(value.clone()));
+    rsx! { MenuItem { selected, onclick: choose, "{label}" } }
+}
+
+/// One status in the status filter.
+#[component]
+fn StatusOption(
+    id: &'static str,
+    value: PeopleActivity,
+    label: String,
+    status: Signal<PeopleActivity>,
+) -> Element {
+    let mut status = status;
+    let choose = use_callback(move |_: MouseEvent| status.set(value));
+    rsx! { MenuItem { id, selected: status() == value, onclick: choose, "{label}" } }
 }
 
 fn shows(status: PeopleActivity, person: &PersonSummary) -> bool {
@@ -372,9 +437,20 @@ fn PersonRow(
     on_permissions: Callback<Uuid>,
     on_set_active: Callback<(Uuid, bool)>,
 ) -> Element {
+    let tr = use_tr();
     let id = person.id;
     let manage = can_view_rates || can_edit_permissions || on_view_history.is_some();
     let has_menu = person.week.is_some() || manage || person.can_change_active;
+    let (name, active) = (person.name.clone(), person.active);
+    let view_timesheet = use_callback(move |_: MouseEvent| on_view_timesheet.call((id, week)));
+    let edit_permissions = use_callback(move |_: MouseEvent| on_permissions.call(id));
+    let edit_rates = use_callback(move |_: MouseEvent| on_rates.call((id, name.clone())));
+    let view_history = use_callback(move |_: MouseEvent| {
+        if let Some(history) = on_view_history {
+            history.call(());
+        }
+    });
+    let toggle_active = use_callback(move |_: MouseEvent| on_set_active.call((id, !active)));
     rsx! {
         tr {
             td {
@@ -387,7 +463,7 @@ fn PersonRow(
                                 Badge { variant: "neutral", "{profile}" }
                             }
                             if !person.active {
-                                Badge { variant: "warning", "Archived" }
+                                Badge { variant: "warning", {tr.people_archived()} }
                             }
                         }
                         div { class: "text-xs text-secondary truncate", "{person.email}" }
@@ -405,42 +481,38 @@ fn PersonRow(
                     td { class: "text-right text-mono", "{format_hhmm(hours.billable)}" }
                     td { class: "text-right text-mono",
                         match percent(hours.billable, hours.total) {
-                            Some(share) => rsx! { "{share}%" },
+                            Some(share) => rsx! { {tr.people_share(share)} },
                             None => rsx! { "—" },
                         }
                     }
                 },
                 // The viewer may not read this person's time.
                 None => rsx! {
-                    td { span { class: "text-muted", aria_label: "Hours not available", "—" } }
-                    td { class: "text-right", span { class: "text-muted", aria_label: "Billable hours not available", "—" } }
-                    td { class: "text-right", span { class: "text-muted", aria_label: "Billable share not available", "—" } }
+                    td { span { class: "text-muted", aria_label: tr.people_hours_unavailable_label(), "—" } }
+                    td { class: "text-right", span { class: "text-muted", aria_label: tr.people_billable_unavailable_label(), "—" } }
+                    td { class: "text-right", span { class: "text-muted", aria_label: tr.people_share_unavailable_label(), "—" } }
                 },
             }
             if actions {
                 td { class: "text-right",
                     if has_menu {
-                        Menu { id: "person-actions-{id}", label: "Actions", align_right: true,
+                        Menu { id: "person-actions-{id}", label: tr.people_actions(), align_right: true,
                             if person.week.is_some() {
-                                MenuItem { id: "person-timesheet-{id}", onclick: move |_| on_view_timesheet.call((id, week)), "View timesheet" }
+                                MenuItem { id: "person-timesheet-{id}", onclick: view_timesheet, {tr.people_view_timesheet()} }
                             }
                             if can_edit_permissions {
-                                MenuItem { id: "person-permissions-{id}", onclick: move |_| on_permissions.call(id), "Permissions…" }
+                                MenuItem { id: "person-permissions-{id}", onclick: edit_permissions, {tr.people_permissions()} }
                             }
                             if can_view_rates {
-                                MenuItem { id: "person-rates-{id}",
-                                    onclick: { let name = person.name.clone(); move |_| on_rates.call((id, name.clone())) },
-                                    "Rates…"
-                                }
+                                MenuItem { id: "person-rates-{id}", onclick: edit_rates, {tr.people_rates()} }
                             }
-                            if let Some(history) = on_view_history {
-                                MenuItem { id: "person-history-{id}", onclick: move |_| history.call(()), "Permission history" }
+                            if on_view_history.is_some() {
+                                MenuItem { id: "person-history-{id}", onclick: view_history, {tr.people_permission_history()} }
                             }
                             if person.can_change_active {
                                 if person.week.is_some() || manage { MenuDivider {} }
-                                MenuItem { id: "person-active-{id}", disabled: busy,
-                                    onclick: { let active = !person.active; move |_| on_set_active.call((id, active)) },
-                                    if person.active { "Archive" } else { "Restore" }
+                                MenuItem { id: "person-active-{id}", disabled: busy, onclick: toggle_active,
+                                    if person.active { {tr.people_archive()} } else { {tr.people_restore()} }
                                 }
                             }
                         }
