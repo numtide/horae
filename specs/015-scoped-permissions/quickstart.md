@@ -758,7 +758,7 @@ Run through Nix against disposable PostgreSQL only:
 
 ```sh
 cargo test -p horae --features server --bin horae
-cargo test -p horae --features server --test permission_audit_ui --test admin_shell --test own_permissions_ui --test permission_editor_ui
+cargo test -p horae --features server --test admin_shell --test own_permissions_ui --test permission_editor_ui
 ```
 
 Complete SQLx preparation preserves all existing descriptors and adds five.

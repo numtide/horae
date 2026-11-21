@@ -17,7 +17,7 @@ use crate::components::permission_description::permission_description;
 use crate::components::screen_state::{
     EmptyState, ErrorState, LOAD_FAILED, NoAccess, Skeleton, is_refusal, load_pinned,
 };
-use crate::i18n::{Tr, use_tr};
+use crate::i18n::{Tr, split_tags, use_tr};
 use crate::models::permission_audit::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::route::Route;
@@ -33,34 +33,69 @@ struct Shown {
     page: AuditPage,
 }
 
-/// Adds a loaded page to what is shown: the next page of the same filter
-/// appends, anything else replaces.
-fn merge(shown: &mut Option<Shown>, filter: AuditFilter, appended: bool, page: AuditPage) {
+/// Whether the rows on screen are `filter`'s and end where `cursor` starts.
+fn continues(shown: Option<&Shown>, filter: AuditFilter, cursor: AuditCursor) -> bool {
+    shown.is_some_and(|shown| shown.filter == filter && shown.page.next_after == Some(cursor))
+}
+
+/// Where a read of `filter` starts: after the "Load more" cursor only while it
+/// still continues the rows on screen. A cursor left from an earlier visit to
+/// the filter would show its later pages as if they were the newest.
+fn continuation(
+    filter: AuditFilter,
+    more: Option<(AuditFilter, AuditCursor)>,
+    shown: Option<&Shown>,
+) -> Option<AuditCursor> {
+    more.filter(|&(more_filter, cursor)| more_filter == filter && continues(shown, filter, cursor))
+        .map(|(_, cursor)| cursor)
+}
+
+/// Adds a loaded page to what is shown. The page read `after` a cursor
+/// appends when it continues the rows on screen; anything else replaces
+/// them, and so does a page for another account (`changed`).
+fn merge(
+    shown: &mut Option<Shown>,
+    filter: AuditFilter,
+    after: Option<AuditCursor>,
+    changed: bool,
+    page: AuditPage,
+) {
+    let appends = !changed && after.is_some_and(|cursor| continues(shown.as_ref(), filter, cursor));
     match shown {
-        Some(current) if appended && current.filter == filter => {
+        // Only the first page carries the people; the shown ones stay.
+        Some(current) if appends => {
             current.page.entries.extend(page.entries);
             current.page.next_after = page.next_after;
             current.page.projects.extend(page.projects);
             current.page.profiles.extend(page.profiles);
-            current.page.people = page.people;
             current.page.today = page.today;
         }
         _ => *shown = Some(Shown { filter, page }),
     }
 }
 
+/// What the history resource answers: the filter and whether it was a "Load
+/// more", with the outcome. The loaded rows themselves go to `Shown`.
+type Answer = (AuditFilter, bool, Result<(), ServerFnError>);
+
+/// The failure on screen: only one for the filter now in the address, so a
+/// new filter shows its skeleton instead of the last filter's error.
+fn current_failure(filter: AuditFilter, answer: Option<&Answer>) -> Option<(bool, &ServerFnError)> {
+    answer
+        .filter(|(answered, _, _)| *answered == filter)
+        .and_then(|(_, appending, result)| result.as_ref().err().map(|error| (*appending, error)))
+}
+
 #[component]
 pub fn PermissionAudit(filter: AuditFilter) -> Element {
     let tr = use_tr();
     // "Load more" asks for the page after this cursor, for the filter it was
-    // set under; a new filter starts again from the newest.
+    // set under; `continuation` decides whether it still applies.
     let mut more = use_signal(|| None::<(AuditFilter, AuditCursor)>);
     let mut shown = use_signal(|| None::<Shown>);
     let mut requester = use_signal(|| None::<PermissionRequester>);
     let mut history = use_resource(use_reactive!(|filter| async move {
-        let after = more()
-            .filter(|(more_filter, _)| *more_filter == filter)
-            .map(|(_, cursor)| cursor);
+        let after = continuation(filter, more(), shown.peek().as_ref());
         let pinned = *requester.peek();
         let (result, changed) = load_pinned(
             pinned,
@@ -70,19 +105,13 @@ pub fn PermissionAudit(filter: AuditFilter) -> Element {
         .await;
         let page = match result {
             Ok(page) => page,
-            Err(error) => return (after.is_some(), Err(error)),
+            Err(error) => return (filter, after.is_some(), Err(error)),
         };
         if *requester.peek() != Some(page.requester) {
             requester.set(Some(page.requester));
         }
-        // Another account's rows never join this one's.
-        merge(
-            &mut shown.write(),
-            filter,
-            after.is_some() && !changed,
-            page,
-        );
-        (after.is_some(), Ok(()))
+        merge(&mut shown.write(), filter, after, changed, page);
+        (filter, after.is_some(), Ok(()))
     }));
     let retry = use_callback(move |_| {
         if *history.state().peek() == UseResourceState::Ready {
@@ -99,20 +128,13 @@ pub fn PermissionAudit(filter: AuditFilter) -> Element {
         }
     });
     let pending = history.state()() != UseResourceState::Ready;
-    let failure = history.read().as_ref().and_then(|(appending, result)| {
-        result
-            .as_ref()
-            .err()
-            .map(|error| (*appending, error.clone()))
-    });
+    let answer = history.read();
     let shown = shown.read();
     audit_log(
         tr,
         filter,
         shown.as_ref(),
-        failure
-            .as_ref()
-            .map(|(appending, error)| (*appending, error)),
+        current_failure(filter, answer.as_ref()),
         pending,
         load_more,
         retry,
@@ -382,17 +404,37 @@ fn counts(audit: &HistoricalAudit) -> (usize, usize) {
     }
 }
 
-/// Who and what a sentence links to, besides its text.
+// Stand-ins for the names a sentence holds, from Unicode's private use area.
+// The message is formatted with them and split into its tagged runs before
+// the names go in, so a name such as "Leads <b>EU</b>" is never read as markup.
+const ACTOR: &str = "\u{E000}";
+const PERSON: &str = "\u{E001}";
+const PROJECT: &str = "\u{E002}";
+const PROFILE: &str = "\u{E003}";
+
+/// A sentence with stand-ins, the names they hold, and what its tagged parts
+/// link to.
 struct Sentence {
     text: String,
+    names: Vec<(&'static str, String)>,
     actor: Option<Uuid>,
     person: Option<Uuid>,
     project: Option<Uuid>,
 }
 
+/// `part` with each stand-in replaced by its name.
+fn fill(part: &str, names: &[(&'static str, String)]) -> String {
+    names
+        .iter()
+        .fold(part.to_owned(), |text, (stand_in, name)| {
+            text.replace(stand_in, name)
+        })
+}
+
 fn sentence(tr: Tr, filter: AuditFilter, page: &AuditPage, entry: &AuditEntry) -> Element {
     let Sentence {
         text,
+        names,
         actor,
         person,
         project,
@@ -404,45 +446,21 @@ fn sentence(tr: Tr, filter: AuditFilter, page: &AuditPage, entry: &AuditEntry) -
         },
     };
     rsx! {
-        for (index, (tag, part)) in segments(&text).into_iter().enumerate() {
+        for (index, (tag, part)) in split_tags(&text).into_iter().enumerate() {
             span { key: "{index}",
                 match (tag, actor, person, project) {
                     // The actor's and the person's names filter the log to them.
                     (Some("actor"), Some(id), _, _) | (Some("person"), _, Some(id), _) => rsx! {
-                        Link { to: by_person(id), "{part}" }
+                        Link { to: by_person(id), {fill(part, &names)} }
                     },
                     (Some("project"), _, _, Some(id)) => rsx! {
-                        Link { to: Route::ProjectDetail { id }, "{part}" }
+                        Link { to: Route::ProjectDetail { id }, {fill(part, &names)} }
                     },
-                    _ => rsx! { "{part}" },
+                    _ => rsx! { {fill(part, &names)} },
                 }
             }
         }
     }
-}
-
-/// Splits a message into its plain runs and its `<tag>…</tag>` runs, in order.
-fn segments(text: &str) -> Vec<(Option<&str>, &str)> {
-    let mut parts = Vec::new();
-    let mut rest = text;
-    while let Some(open) = rest.find('<') {
-        let tagged = rest[open + 1..].split_once('>').and_then(|(tag, after)| {
-            let (inner, tail) = after.split_once(&format!("</{tag}>"))?;
-            Some((tag, inner, tail))
-        });
-        let Some((tag, inner, tail)) = tagged else {
-            break;
-        };
-        if open > 0 {
-            parts.push((None, &rest[..open]));
-        }
-        parts.push((Some(tag), inner));
-        rest = tail;
-    }
-    if !rest.is_empty() {
-        parts.push((None, rest));
-    }
-    parts
 }
 
 fn person_name(tr: Tr, page: &AuditPage, id: Uuid) -> String {
@@ -481,99 +499,85 @@ fn describe(tr: Tr, page: &AuditPage, entry: &AuditEntry) -> Sentence {
         AuditPrincipal::User { user_id } => (person_name(tr, page, *user_id), Some(*user_id)),
         AuditPrincipal::Operator { command, .. } => (tr.audit_operator(command.as_str()), None),
     };
-    let actor_name = actor_name.as_str();
-    let sentence = |text: String, person: Option<Uuid>, project: Option<Uuid>| Sentence {
-        text,
-        actor,
-        person,
-        project,
-    };
-    match &entry.audit {
+    let mut names = vec![(ACTOR, actor_name)];
+    let (mut person, mut project) = (None, None);
+    let text = match &entry.audit {
         HistoricalAudit::Profile(audit) => {
-            let name = person_name(tr, page, audit.user_id);
-            let name = name.as_str();
-            let text = match &audit.change {
-                None => tr.audit_event_person_unchanged(actor_name, name),
+            names.push((PERSON, person_name(tr, page, audit.user_id)));
+            person = Some(audit.user_id);
+            match &audit.change {
+                None => tr.audit_event_person_unchanged(ACTOR, PERSON),
                 Some(change)
                     if !change.before.is_administrator && change.after.is_administrator =>
                 {
-                    tr.audit_event_person_admin_granted(actor_name, name)
+                    tr.audit_event_person_admin_granted(ACTOR, PERSON)
                 }
                 Some(change)
                     if change.before.is_administrator && !change.after.is_administrator =>
                 {
-                    tr.audit_event_person_admin_revoked(actor_name, name)
+                    tr.audit_event_person_admin_revoked(ACTOR, PERSON)
                 }
                 Some(change) if change.before.source != change.after.source => {
                     match &change.after.source {
                         HistoricalSource::Individual => {
-                            tr.audit_event_person_individual(actor_name, name)
+                            tr.audit_event_person_individual(ACTOR, PERSON)
                         }
-                        source => tr.audit_event_person_moved(
-                            actor_name,
-                            name,
-                            source_label(tr, page, source),
-                        ),
+                        source => {
+                            names.push((PROFILE, source_label(tr, page, source)));
+                            tr.audit_event_person_moved(ACTOR, PERSON, PROFILE)
+                        }
                     }
                 }
-                Some(_) => tr.audit_event_person_changed(actor_name, name),
-            };
-            sentence(text, Some(audit.user_id), None)
-        }
-        HistoricalAudit::Template(audit) => {
-            let text = match (&audit.before, &audit.after) {
-                (_, Some(after)) => tr.audit_event_profile_created(
-                    actor_name,
-                    after.grants.len(),
-                    after.name.as_str(),
-                ),
-                (Some(before), None) => {
-                    tr.audit_event_profile_deleted(actor_name, before.name.as_str())
-                }
-                // `decode` refuses a template receipt with neither side.
-                (None, None) => {
-                    tr.audit_event_profile_deleted(actor_name, tr.audit_unknown_profile())
-                }
-            };
-            sentence(text, None, None)
-        }
-        HistoricalAudit::ProjectManagers(audit) => {
-            let project = project_name(tr, page, audit.project_id);
-            let project = project.as_str();
-            let project_link = page
-                .project_name(audit.project_id)
-                .map(|_| audit.project_id);
-            match &audit.change {
-                Some(change) if change.added.len() == 1 && change.removed.is_empty() => {
-                    let id = change.added[0].manager_id;
-                    let text = tr.audit_event_managers_added(
-                        actor_name,
-                        person_name(tr, page, id),
-                        project,
-                    );
-                    sentence(text, Some(id), project_link)
-                }
-                Some(change) if change.removed.len() == 1 && change.added.is_empty() => {
-                    let id = change.removed[0].manager_id;
-                    let text = tr.audit_event_managers_removed(
-                        actor_name,
-                        person_name(tr, page, id),
-                        project,
-                    );
-                    sentence(text, Some(id), project_link)
-                }
-                Some(_) => sentence(
-                    tr.audit_event_managers_changed(actor_name, project),
-                    None,
-                    project_link,
-                ),
-                None => sentence(
-                    tr.audit_event_managers_unchanged(actor_name, project),
-                    None,
-                    project_link,
-                ),
+                Some(_) => tr.audit_event_person_changed(ACTOR, PERSON),
             }
         }
+        HistoricalAudit::Template(audit) => match (&audit.before, &audit.after) {
+            (_, Some(after)) => {
+                names.push((PROFILE, after.name.clone()));
+                tr.audit_event_profile_created(ACTOR, after.grants.len(), PROFILE)
+            }
+            (before, None) => {
+                // `decode` refuses a template receipt with neither side.
+                let name = before
+                    .as_ref()
+                    .map_or_else(|| tr.audit_unknown_profile(), |before| before.name.clone());
+                names.push((PROFILE, name));
+                tr.audit_event_profile_deleted(ACTOR, PROFILE)
+            }
+        },
+        HistoricalAudit::ProjectManagers(audit) => {
+            names.push((PROJECT, project_name(tr, page, audit.project_id)));
+            project = page
+                .project_name(audit.project_id)
+                .map(|_| audit.project_id);
+            // The one manager a change added (or removed) and nothing else.
+            let only = |one: &[Designation], none: &[Designation]| {
+                (one.len() == 1 && none.is_empty()).then(|| one[0].manager_id)
+            };
+            match &audit.change {
+                Some(change) => {
+                    if let Some(id) = only(&change.added, &change.removed) {
+                        names.push((PERSON, person_name(tr, page, id)));
+                        person = Some(id);
+                        tr.audit_event_managers_added(ACTOR, PERSON, PROJECT)
+                    } else if let Some(id) = only(&change.removed, &change.added) {
+                        names.push((PERSON, person_name(tr, page, id)));
+                        person = Some(id);
+                        tr.audit_event_managers_removed(ACTOR, PERSON, PROJECT)
+                    } else {
+                        tr.audit_event_managers_changed(ACTOR, PROJECT)
+                    }
+                }
+                None => tr.audit_event_managers_unchanged(ACTOR, PROJECT),
+            }
+        }
+    };
+    Sentence {
+        text,
+        names,
+        actor,
+        person,
+        project,
     }
 }
 

@@ -142,6 +142,18 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     await expect(rows).toHaveCount(28);
     assert.deepEqual(await receiptIds(), ids.map(id => `Receipt ${id}`));
     await expect(page.locator('#audit-load-more')).toHaveCount(0);
+    // Another filter, then Back: the log starts again from the newest instead
+    // of reusing the cursor of the earlier "Load more".
+    await page.locator('#audit-kind-menu-trigger').click();
+    await page.getByRole('menuitem', { name: 'Changes to a profile', exact: true }).click();
+    await page.waitForURL(`${base}/admin/audit?kind=profile`);
+    await expect(page.getByRole('heading', { name: 'No changes match these filters', exact: true })).toBeVisible();
+    await page.goBack();
+    await page.waitForURL(/\/admin\/audit\??$/);
+    await expect(page.locator('#audit-kind-menu-trigger')).toContainText('All changes');
+    await expect(page.locator('.audit-content')).not.toHaveAttribute('aria-busy', 'true');
+    await expect(rows).toHaveCount(25);
+    assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt ${id}`));
 
     // Filters live in the address. One that matches nothing offers to clear it.
     await page.goto(`${base}/admin/audit?kind=profile`);

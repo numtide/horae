@@ -601,41 +601,154 @@ fn a_failed_load_more_keeps_the_rows_above_its_error() {
 fn the_next_page_appends_and_a_new_filter_replaces() {
     let first = entry("2026-11-20T10:00:00", time_change());
     let second = entry("2026-11-19T10:00:00", time_change());
+    let all = AuditFilter::default();
     let mut shown = None;
-    merge(
-        &mut shown,
-        AuditFilter::default(),
-        false,
-        page(vec![first.clone()], true),
-    );
-    merge(
-        &mut shown,
-        AuditFilter::default(),
-        true,
-        page(vec![second.clone()], false),
-    );
+    let newest = page(vec![first.clone()], true);
+    let cursor = newest.next_after;
+    merge(&mut shown, all, None, false, newest);
+    // Later pages carry no people; the first page's stay.
+    let mut older = page(vec![second.clone()], false);
+    older.people.clear();
+    merge(&mut shown, all, cursor, false, older);
     let current = shown.as_ref().unwrap();
     assert_eq!(current.page.entries, vec![first.clone(), second]);
     assert_eq!(current.page.next_after, None);
+    assert_eq!(current.page.people.len(), 3);
     let filter = AuditFilter::person(MARIA);
-    merge(&mut shown, filter, true, page(vec![first.clone()], false));
+    merge(
+        &mut shown,
+        filter,
+        cursor,
+        false,
+        page(vec![first.clone()], false),
+    );
     let current = shown.unwrap();
     assert_eq!(current.filter, filter);
     assert_eq!(current.page.entries, vec![first]);
 }
 
 #[test]
-fn a_message_splits_into_its_tagged_runs() {
-    assert_eq!(
-        segments("<actor>Ana</actor> made <person>Bo</person> a manager"),
-        vec![
-            (Some("actor"), "Ana"),
-            (None, " made "),
-            (Some("person"), "Bo"),
-            (None, " a manager"),
-        ]
+fn another_accounts_page_replaces_even_after_a_cursor() {
+    let first = entry("2026-11-20T10:00:00", time_change());
+    let all = AuditFilter::default();
+    let mut shown = None;
+    let newest = page(vec![first], true);
+    let cursor = newest.next_after;
+    merge(&mut shown, all, None, false, newest);
+    let theirs = entry("2026-11-19T10:00:00", template(true));
+    merge(
+        &mut shown,
+        all,
+        cursor,
+        true,
+        page(vec![theirs.clone()], false),
     );
-    assert_eq!(segments("no tags < here"), vec![(None, "no tags < here")]);
+    assert_eq!(shown.unwrap().page.entries, vec![theirs]);
+}
+
+/// "Load more" under one filter, then another filter, then back: the old
+/// cursor must not show the first filter's later pages as its newest.
+#[test]
+fn a_cursor_from_an_earlier_visit_to_a_filter_is_not_reused() {
+    let persons = AuditFilter {
+        kind: Some(AuditKind::Person),
+        ..AuditFilter::default()
+    };
+    let managers = AuditFilter {
+        kind: Some(AuditKind::Managers),
+        ..AuditFilter::default()
+    };
+    let mut shown = None;
+    let newest = page(vec![entry("2026-11-20T10:00:00", time_change())], true);
+    let cursor = newest.next_after.unwrap();
+    merge(&mut shown, persons, None, false, newest);
+    let more = Some((persons, cursor));
+    // While the rows end at the cursor, the next read continues them.
+    assert_eq!(continuation(persons, more, shown.as_ref()), Some(cursor));
+    merge(
+        &mut shown,
+        persons,
+        Some(cursor),
+        false,
+        page(vec![entry("2026-11-19T10:00:00", time_change())], false),
+    );
+    // After it: the same cursor no longer continues the rows.
+    assert_eq!(continuation(persons, more, shown.as_ref()), None);
+    // Another filter never takes it.
+    assert_eq!(continuation(managers, more, shown.as_ref()), None);
+    let other = page(vec![entry("2026-11-20T09:00:00", managers_change())], false);
+    merge(&mut shown, managers, None, false, other);
+    // Back on the first filter, the read starts again from the newest.
+    assert_eq!(continuation(persons, more, shown.as_ref()), None);
+    // A page that arrives with that stale cursor replaces rather than appends.
+    let late = entry("2026-11-18T10:00:00", time_change());
+    merge(
+        &mut shown,
+        persons,
+        Some(cursor),
+        false,
+        page(vec![late.clone()], false),
+    );
+    assert_eq!(shown.unwrap().page.entries, vec![late]);
+}
+
+fn managers_change() -> HistoricalAudit {
+    managers(&[JAMIE], &[])
+}
+
+#[test]
+fn only_the_current_filters_failure_is_shown() {
+    let persons = AuditFilter {
+        kind: Some(AuditKind::Person),
+        ..AuditFilter::default()
+    };
+    let answer: Answer = (persons, false, Err(server(500)));
+    assert!(current_failure(persons, Some(&answer)).is_some());
+    // A new filter's read is pending: the old filter's error is not its own.
+    assert!(current_failure(AuditFilter::default(), Some(&answer)).is_none());
+    let ok: Answer = (persons, true, Ok(()));
+    assert!(current_failure(persons, Some(&ok)).is_none());
+    // So the screen shows the skeleton, not the error.
+    let html = render(View {
+        filter: AuditFilter::default(),
+        shown: None,
+        failure: None,
+        pending: true,
+    });
+    assert!(html.contains("skeleton"), "{html}");
+}
+
+#[test]
+fn names_that_look_like_markup_are_shown_as_typed() {
+    let mut created = template(true);
+    if let HistoricalAudit::Template(audit) = &mut created {
+        audit.after.as_mut().unwrap().name = "Leads <b>EU</b>".into();
+    }
+    let mut renamed = page(
+        vec![
+            entry("2026-11-20T10:00:00", created),
+            entry("2026-11-20T09:00:00", time_change()),
+        ],
+        false,
+    );
+    renamed.people[1].name = "Maria </person><actor>Ruiz".into();
+    let html = render(View::loaded(renamed));
+    // SSR escapes the brackets; nothing of the names became markup.
+    assert!(
+        html.contains("created the profile Leads &#60;b&#62;EU&#60;/b&#62; with 2 permissions"),
+        "{html}"
+    );
+    assert!(
+        html.contains("Maria &#60;/person&#62;&#60;actor&#62;Ruiz</a>"),
+        "{html}"
+    );
+    // The whole name is one link, to the log filtered to Maria.
+    assert_eq!(
+        html.matches(&format!("href=\"/admin/audit?person={MARIA}\""))
+            .count(),
+        1,
+        "{html}"
+    );
 }
 
 #[test]

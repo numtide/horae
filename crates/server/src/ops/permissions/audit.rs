@@ -83,13 +83,18 @@ pub async fn page(
     } else {
         None
     };
-    let people = sqlx::query_as!(
-        AuditName,
-        "SELECT id, name FROM users WHERE org_id=$1 ORDER BY name, id",
-        actor.org_id()
-    )
-    .fetch_all(&mut **tx)
-    .await?;
+    // The people stay the same from page to page, so only the first carries them.
+    let people = if after.is_none() {
+        sqlx::query_as!(
+            AuditName,
+            "SELECT id, name FROM users WHERE org_id=$1 ORDER BY name, id",
+            actor.org_id()
+        )
+        .fetch_all(&mut **tx)
+        .await?
+    } else {
+        Vec::new()
+    };
     let (project_ids, profile_ids) = referenced(&entries);
     let projects = sqlx::query_as!(
         AuditName,

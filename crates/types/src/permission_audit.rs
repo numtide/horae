@@ -76,7 +76,9 @@ impl fmt::Display for AuditFilter {
 }
 
 /// What a receipt changed: a person's permissions, a custom profile, or a
-/// project's managers.
+/// project's managers. The names are the screen's, so they cross over with
+/// the receipt's: `Person` is [`HistoricalAudit::Profile`] (a person's profile
+/// change) and `Profile` is [`HistoricalAudit::Template`] (a custom profile).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuditKind {
@@ -153,7 +155,8 @@ pub struct AuditPage {
     pub time_zone: String,
     pub today: NaiveDate,
     /// Everyone in the organization, archived people included: the names the
-    /// entries refer to and the choices of the person filter.
+    /// entries refer to and the choices of the person filter. Only the first
+    /// page carries them; a page read after a cursor leaves this empty.
     pub people: Vec<AuditName>,
     /// The projects and custom profiles the entries refer to and that still exist.
     pub projects: Vec<AuditName>,

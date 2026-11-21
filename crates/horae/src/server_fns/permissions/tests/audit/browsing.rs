@@ -413,6 +413,20 @@ mod filters {
             "removed": []}})
     }
 
+    fn manager_removed(project: Uuid, manager: Uuid) -> serde_json::Value {
+        json!({"project_id": project, "previous_access_revision": 0, "access_revision": 1,
+            "change": {"added": [],
+            "removed": [{"id": Uuid::now_v7(), "manager_id": manager, "revision": 0}]}})
+    }
+
+    /// A change to `user` that also ended their management of `managed`.
+    fn management_ended(user: Uuid, managed: Uuid) -> serde_json::Value {
+        let mut change = person_change(user);
+        change["change"]["removed_people"] =
+            json!([{"id": Uuid::now_v7(), "subject_id": managed, "revision": 0}]);
+        change
+    }
+
     fn profile_created() -> serde_json::Value {
         json!({"previous_access_revision": 0, "access_revision": 1, "before": null,
             "after": {"id": Uuid::now_v7(), "name": "Readers", "catalog_version": 1,
@@ -420,14 +434,36 @@ mod filters {
             "detached_people": []})
     }
 
+    /// A deleted profile whose person keeps its permissions as their own.
+    fn profile_deleted_detaching(person: Uuid) -> serde_json::Value {
+        let template = Uuid::now_v7();
+        let grants = json!(BuiltInProfile::Member.selection());
+        json!({"previous_access_revision": 0, "access_revision": 1, "after": null,
+            "before": {"id": template, "name": "Readers", "catalog_version": 1,
+            "grants": grants, "revision": 0},
+            "detached_people": [{"user_id": person, "catalog_version": 1, "grants": grants,
+            "is_administrator": false, "previous_template_id": template,
+            "previous_applied_revision": 0, "previous_revision": 0, "revision": 1}]})
+    }
+
+    /// Newest first, `days` ago. B is `other`; each receipt reaches B through
+    /// a different part of its document, or not at all (`profile`).
     struct History {
         ids: SeedIds,
         other: Uuid,
-        /// Newest first: B acted on the admin (1 day ago), the admin changed B
-        /// (2 days), made B a manager (40 days), created a profile (100 days).
+        /// B, as the actor, changed the admin (1).
         b_acted: Uuid,
+        /// The admin changed B (2).
         b_changed: Uuid,
+        /// B stopped managing a project (3).
+        b_unmanaged: Uuid,
+        /// The admin stopped managing B (4).
+        b_unlinked: Uuid,
+        /// A profile B had was deleted, and B kept its permissions (5).
+        b_detached: Uuid,
+        /// B became a manager of a project (40).
         b_managed: Uuid,
+        /// A profile with nobody on it (100).
         profile: Uuid,
     }
 
@@ -437,6 +473,17 @@ mod filters {
         let admin = ids.user_id;
         let b_acted = receipt(pool, ids.org_id, other, person_change(admin), 1).await;
         let b_changed = receipt(pool, ids.org_id, admin, person_change(other), 2).await;
+        let b_unmanaged = receipt(
+            pool,
+            ids.org_id,
+            admin,
+            manager_removed(ids.project_id, other),
+            3,
+        )
+        .await;
+        let b_unlinked = receipt(pool, ids.org_id, admin, management_ended(admin, other), 4).await;
+        let b_detached =
+            receipt(pool, ids.org_id, admin, profile_deleted_detaching(other), 5).await;
         let b_managed = receipt(
             pool,
             ids.org_id,
@@ -461,6 +508,9 @@ mod filters {
             other,
             b_acted,
             b_changed,
+            b_unmanaged,
+            b_unlinked,
+            b_detached,
             b_managed,
             profile,
         }
@@ -488,45 +538,51 @@ mod filters {
             period: Some(period),
             ..AuditFilter::default()
         };
+        let b = |kind| AuditFilter {
+            kind: Some(kind),
+            person: Some(h.other),
+            period: None,
+        };
+        let everything = vec![
+            h.b_acted,
+            h.b_changed,
+            h.b_unmanaged,
+            h.b_unlinked,
+            h.b_detached,
+            h.b_managed,
+            h.profile,
+        ];
         for (filter, expected) in [
+            (AuditFilter::default(), everything.clone()),
             (
-                AuditFilter::default(),
-                vec![h.b_acted, h.b_changed, h.b_managed, h.profile],
+                kind(AuditKind::Person),
+                vec![h.b_acted, h.b_changed, h.b_unlinked],
             ),
-            (kind(AuditKind::Person), vec![h.b_acted, h.b_changed]),
-            (kind(AuditKind::Managers), vec![h.b_managed]),
-            (kind(AuditKind::Profile), vec![h.profile]),
-            // A person's history: what they did, what was done to them, and
-            // the projects they were made a manager of.
+            (kind(AuditKind::Managers), vec![h.b_unmanaged, h.b_managed]),
+            (kind(AuditKind::Profile), vec![h.b_detached, h.profile]),
+            // A person's history: what they did and what was done to them,
+            // whichever part of the receipt names them.
+            (AuditFilter::person(h.other), everything[..6].to_vec()),
+            // Actor, `user_id` and `removed_people[].subject_id`.
             (
-                AuditFilter::person(h.other),
-                vec![h.b_acted, h.b_changed, h.b_managed],
+                b(AuditKind::Person),
+                vec![h.b_acted, h.b_changed, h.b_unlinked],
             ),
-            (
-                AuditFilter::person(h.ids.user_id),
-                vec![h.b_acted, h.b_changed, h.b_managed, h.profile],
-            ),
+            // `removed[].manager_id` and `added[].manager_id`.
+            (b(AuditKind::Managers), vec![h.b_unmanaged, h.b_managed]),
+            // `detached_people[].user_id`; the empty profile names nobody.
+            (b(AuditKind::Profile), vec![h.b_detached]),
+            (AuditFilter::person(h.ids.user_id), everything.clone()),
             (AuditFilter::person(Uuid::now_v7()), vec![]),
-            (period(AuditPeriod::Days7), vec![h.b_acted, h.b_changed]),
-            (
-                period(AuditPeriod::Days90),
-                vec![h.b_acted, h.b_changed, h.b_managed],
-            ),
-            (
-                AuditFilter {
-                    kind: Some(AuditKind::Managers),
-                    person: Some(h.other),
-                    period: Some(AuditPeriod::Days90),
-                },
-                vec![h.b_managed],
-            ),
+            (period(AuditPeriod::Days7), everything[..5].to_vec()),
+            (period(AuditPeriod::Days90), everything[..6].to_vec()),
             (
                 AuditFilter {
                     kind: Some(AuditKind::Managers),
                     person: Some(h.other),
                     period: Some(AuditPeriod::Days30),
                 },
-                vec![],
+                vec![h.b_unmanaged],
             ),
         ] {
             assert_eq!(shown(&pool, &h.ids, filter).await, expected, "{filter:?}");
@@ -585,6 +641,9 @@ mod filters {
         .await
         .unwrap();
         assert!(second.next_after.is_none());
+        // Only the first page carries the people.
+        assert_eq!(first.people.len(), 2);
+        assert!(second.people.is_empty());
         let ids_shown: Vec<_> = first
             .entries
             .iter()
@@ -661,5 +720,58 @@ mod filters {
             .unwrap();
         assert_eq!(new_york.time_zone, "America/New_York");
         assert_eq!(local(&new_york), "2026-09-07 19:30:00");
+    }
+
+    /// Madrid leaves summer time at 01:00 UTC on 25 October 2026 (03:00 CEST
+    /// becomes 02:00 CET): each instant takes the offset in force at that
+    /// instant, not the offset of today.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn local_days_follow_the_offset_in_force_across_a_dst_change(pool: PgPool) {
+        let ids = fixture(&pool, true).await;
+        sqlx::query!(
+            "UPDATE users SET timezone='Europe/Madrid' WHERE id=$1",
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let instants = [
+            "2026-10-25 23:30:00+00",
+            "2026-10-25 01:30:00+00",
+            "2026-10-25 00:30:00+00",
+            "2026-10-24 22:30:00+00",
+        ];
+        for at in instants {
+            let id = receipt(&pool, ids.org_id, ids.user_id, profile_created(), 0).await;
+            sqlx::query!(
+                "UPDATE permission_change_receipts SET created_at=$2::text::timestamptz WHERE id=$1",
+                id,
+                at
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let page = page(&pool, ids.org_id, ids.user_id, None, None)
+            .await
+            .unwrap();
+        let local: Vec<_> = page
+            .entries
+            .iter()
+            .map(|entry| entry.local.to_string())
+            .collect();
+        assert_eq!(
+            local,
+            [
+                // CET (+1): after midnight on the 26th.
+                "2026-10-26 00:30:00",
+                // The repeated hour: 02:30 CET, then 02:30 CEST an hour earlier.
+                "2026-10-25 02:30:00",
+                "2026-10-25 02:30:00",
+                // CEST (+2): already the 25th.
+                "2026-10-25 00:30:00",
+            ]
+        );
     }
 }
