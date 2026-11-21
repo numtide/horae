@@ -66,7 +66,9 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     await reread();
     await expect(table).toBeVisible();
     const invoices = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Invoices', exact: true }) });
-    await expect(invoices.getByRole('cell')).toHaveText(['Managed', 'No', '—']);
+    await expect(invoices.getByRole('cell')).toHaveText(['Managed', 'No', '—Does not apply']);
+    // The dash is hidden from screen readers, which read the words instead.
+    await expect(invoices.getByRole('cell').nth(2).locator('[aria-hidden="true"]')).toHaveText('—');
     const time = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Time', exact: true }) });
     await expect(time.getByRole('cell')).toHaveText(['Own', 'Own', 'No']);
     await expect(main).toContainText('To change your access, ask an administrator of this workspace.');
