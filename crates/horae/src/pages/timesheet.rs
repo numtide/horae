@@ -1425,7 +1425,7 @@ fn TimesheetContent(
                     }),
                     actions: rsx! {
                         if submittable {
-                            Button { id: "ts-submit-week", label: tr.timesheet_submit_week(), disabled: busy(), onclick: submit_week }
+                            Button { id: "timesheet-submit-week", label: tr.timesheet_submit_week(), disabled: busy(), onclick: submit_week }
                         }
                         Segmented {
                             items: vec!["Day".to_string(), "Week".to_string(), "Calendar".to_string()],
