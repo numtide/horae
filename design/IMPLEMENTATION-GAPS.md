@@ -1,14 +1,19 @@
 # Design implementation inventory
 
-Updated on 2026-11-19 from the [design audit of 2026-11-18](../docs/design/design-audit.md)
-(application baseline `3b08dd25`) and the decisions taken on it. [DESIGN.md](../DESIGN.md) holds those
-decisions and is the source of truth for every rule below; this file only tracks
-what the application still has to change to follow it, and which PR does it.
+Updated on 2026-11-20 from the [design audit of 2026-11-18](../docs/design/design-audit.md)
+(application baseline `3b08dd25`), the decisions taken on it, and the decisions of
+2026-11-20 on two studies of master `d9791da4` (screen coherence and loading).
+[DESIGN.md](../DESIGN.md) holds those decisions and is the source of truth for every
+rule below; this file only tracks what the application still has to change to follow
+it, and which PR does it.
 
 The audit compared the 26 application screens, at 360, 768 and 1280px in both
 themes, with `DESIGN.md`, the kit and the prototypes. Its findings are grouped by
 pattern, and each pattern is fixed across every screen in one PR, numbered PR-0
-to PR-10. This file is PR-0.
+to PR-10. This file is PR-0. The decisions of 2026-11-20 add PRs named by letter
+(PR-P, PR-C, PR-S, PR-T, PR-A, PR-People, the Tasks PR and the session PR). Rows
+cite the coherence study's findings by id (P-n.m); the study is not in the
+repository, so [Findings cited](#findings-cited) lists each one.
 
 The audit cites 156 screenshots by name (`audit/screenshots/<screen>-<width>-<theme>.png`,
 about 10 MB). Because of their size they are not in the repository; each PR takes
@@ -18,17 +23,30 @@ its own before-and-after captures.
 
 | PR | Work | `DESIGN.md` section | Status |
 | --- | --- | --- | --- |
-| PR-0 | Bring `DESIGN.md` and this inventory up to date: the decisions, the glossary, the Pages table, the stale nav-dot and `dark.dc.html` references; the audit itself in `docs/design/`. | all | This change |
+| PR-0 | Bring `DESIGN.md` and this inventory up to date: the decisions, the glossary, the Pages table, the stale nav-dot and `dark.dc.html` references; the audit itself in `docs/design/`. | all | Done (#434) |
 | PR-1 | Raise `--color-label` (dark) and `--color-text-muted` (light) to 4.5:1 and use `--color-text-muted` for placeholders; one `--ring` focus rule for links and `[tabindex]`; label the theme select in Settings; calendar event colours as tokens in both themes; move the 10.5, 11, 11.5, 12.5, 13 and 14.5px sizes and the 6, 9 and 11px radii onto the scale; drop the second `.alert-warning`, the static `style:` in `pages/invoices.rs` and `invoices/settings.rs`; decide whether the sign-in page loads `horae.css` or is documented as dark only. | Accessibility, Tokens & utilities | Done. The sign-in page is decided (it loads `horae.css` and follows the theme) and goes in its own PR |
-| PR-2 | `PageHeader` with the 34/600 title, one back link and the actions on all 26 screens; one `.page-title` definition; replace the Harvest `BackLinks` breadcrumb with a back link; remove the `AdminShell` "Back to Timesheet" link; header actions at normal size. | Type scale, Page header | In review (`design/pr2-page-header`) |
-| PR-3 | `ConfirmDialog` and fixed `Modal` slots; move irreversible confirmations to it; drop the dialog when archiving a single record (the toast's "Undo" replaces it) and keep a neutral-tone dialog only for archiving that carries other records or acts in bulk; delete `.ts-modal-*`; give the four unpadded dialogs (disconnect Harvest, change account, both over-invoicing dialogs) the shared anatomy; one footer order for every dialog, drawn only by `Modal`. | Dialogs, Destructive actions, Buttons | In review (`design/pr3-dialogs`). Footer order resolved: primary first on the left, Cancel last, stretched. Every confirmation, including deleting a time entry, the Harvest OAuth app, discarding permission changes and deleting a custom profile, is a `ConfirmDialog`. Left for PR-9: archiving one client or one task still asks first (neutral `ConfirmDialog`), because their toasts have no Undo yet |
-| PR-4 | `EmptyState`, `ErrorState` and `Loading` on about 20 screens; fold the Projects card into `.empty-state`; `ErrorState` with the same 52px icon tile; optional `Skeleton` for listings; "Try again" on every retry; the `AdminShell`'s "Access unavailable" card, which still has its own `h1` and a `btn-secondary` "Back to Timesheet" (a no-permission state: name who can grant access instead). | Empty, loading and error states, Screen States | In review (`design/pr4-screen-states`). Retries after an uncertain save ("Retry same save", "Retry generation" and the like) keep their labels |
-| PR-5 | `FilterBar` and `SearchField` on every filterable list; move the native `<select>` uses (`reports.rs` ×3, `tasks.rs`, `tasks/editor.rs`, `admin/people.rs`, `admin/add_person.rs`, `admin/permission_editor.rs`, `components/project_task_picker.rs`, the Settings theme select) to `SelectField`; retire `form::Select`. | Selects, filters and search | Not started |
-| PR-6 | Organization default and personal override for the duration format; one formatter in `horae-core`, used by the UI, the server and the reports, and the `pages/projects.rs` formatter removed; exports stay decimal; one money formatter in `horae-core` (currency code, grouped thousands, the currency's own decimals) used by the UI, the server, PDFs and emails, with no amount built by hand in a page and `format_cents_plain` kept for editable fields and interchange formats; replace `type=date` inputs (Reports, invoice preparation, New Project milestones) with `DatePicker`; extract `PeriodNav` from the Timesheet and use it in Approvals. | Formats, Selects, filters and search | Not started |
-| PR-7 | Timesheet week fits at 1280px with the sidebar (Total and delete visible); name columns get a minimum width; Projects' last column is not cut off. The mobile layout waits for its design. | Layout | Desktop done; mobile pending |
-| PR-8 | One "Actions" menu per table row, except Approvals' inline "Approve" and "Reopen", which become Secondary `btn-sm`; status always a `Badge`; Primary for main actions and form submits, at most one per screen or form; retire Solid: Approvals' "Approve all" and the Invoice settings submits become Primary, "Submit week" becomes a `.btn-split` with a Primary body and `.ts-submit` goes, then delete `.btn-solid` and `--glow-pine`; retire the timesheet's other `ts-*` classes that copy `.btn`. Its labels go into the text catalog (`crates/i18n/locales/en/horae.ftl`) from its first commit, as any new interface text does (`specs/023-i18n`, C-9). | Buttons, Data Tables, Destructive actions | Not started |
+| PR-2 | `PageHeader` with the 34/600 title, one back link and the actions on all 26 screens; one `.page-title` definition; replace the Harvest `BackLinks` breadcrumb with a back link; remove the `AdminShell` "Back to Timesheet" link; header actions at normal size. | Type scale, Page header | Done (#437). Left: the Timesheet's `.ts-header` copy of `.page-header` and its 26px `Segmented` (P-1.10) |
+| PR-3 | `ConfirmDialog` and fixed `Modal` slots; move irreversible confirmations to it; drop the dialog when archiving a single record (the toast's "Undo" replaces it) and keep a neutral-tone dialog only for archiving that carries other records or acts in bulk; delete `.ts-modal-*`; give the four unpadded dialogs (disconnect Harvest, change account, both over-invoicing dialogs) the shared anatomy; one footer order for every dialog, drawn only by `Modal`. | Dialogs, Destructive actions, Buttons | Done (#445). Footer order resolved: primary first on the left, Cancel last, stretched. Every confirmation, including deleting a time entry, the Harvest OAuth app, discarding permission changes and deleting a custom profile, is a `ConfirmDialog`. Left for PR-9: archiving one client or one task still asks first (neutral `ConfirmDialog`), because their toasts have no Undo yet |
+| PR-4 | `EmptyState`, `ErrorState` and `Loading` on about 20 screens; fold the Projects card into `.empty-state`; `ErrorState` with the same 52px icon tile; optional `Skeleton` for listings; "Try again" on every retry; the `AdminShell`'s "Access unavailable" card, which still has its own `h1` and a `btn-secondary` "Back to Timesheet" (a no-permission state: name who can grant access instead). | Empty, loading and error states, Screen States | Done (#443). Retries after an uncertain save ("Retry same save", "Retry generation" and the like) keep their labels. Left: one icon per kind of empty state (`key`, `plugin`, `history` instead of `settings` in five states, P-7.1), done by PR-P for plugins and both token lists and by PR-A for the audit log |
+| PR-5 | `FilterBar` and `SearchField` on every filterable list; move the native `<select>` uses (`reports.rs` ×3, `tasks.rs`, `tasks/editor.rs`, `admin/people.rs`, `admin/add_person.rs`, `admin/permission_editor.rs`, `components/project_task_picker.rs`, the Settings theme select) to `SelectField`; retire `form::Select`. | Selects, filters and search | Not started. People's `FilterBar` and its `<select>`s are done first, in PR-People |
+| PR-6 | Organization default and personal override for the duration format; one formatter in `horae-core`, used by the UI, the server and the reports, and the `pages/projects.rs` formatter removed; exports stay decimal; one money formatter in `horae-core` (currency code, grouped thousands, the currency's own decimals) used by the UI, the server, PDFs and emails, with no amount built by hand in a page and `format_cents_plain` kept for editable fields and interchange formats; replace `type=date` inputs (Reports, invoice preparation, New Project milestones) with `DatePicker`; use `PeriodNav` in Approvals (PR-People extracts it from the Timesheet's week pager first). | Formats, Selects, filters and search | Not started |
+| PR-7 | Timesheet week fits at 1280px with the sidebar (Total and delete visible); name columns get a minimum width; Projects' last column is not cut off. The mobile layout waits for its design. | Layout | Desktop done (#436); mobile pending |
+| PR-8 | One "Actions" menu per table row, except Approvals' inline "Approve" and "Reopen", which become Secondary `btn-sm`; status always a `Badge`; Primary for main actions and form submits, at most one per screen or form; retire Solid: Approvals' "Approve all" and the Invoice settings submits become Primary, "Submit week" becomes a `.btn-split` with a Primary body and `.ts-submit` goes, then delete `.btn-solid` and `--glow-pine`; retire the timesheet's other `ts-*` classes that copy `.btn`. Its labels go into the text catalog (`crates/i18n/locales/en/horae.ftl`) from its first commit, as any new interface text does (`specs/023-i18n`, C-9). | Buttons, Data Tables, Destructive actions | Not started. People's row actions and "Add person" (P-2.3, P-1.1) are done first, in PR-People |
 | PR-9 | One toast container in `AppLayout`, styled after `Toast.dc.html`; every success confirmed with a toast; inline "Saved." text and `.alert-success` confirmations removed; long messages wrap instead of truncating. | Toast | Not started |
 | PR-10 | Apply the glossary: "People" in the sidebar and subnavigation, "Team" only for a project's team, "Person" for the Reports grouping, "Restore", "Settings" for the workspace page and "My settings" for `/settings`, "Try again", "Discard changes", "Cancel" and "Close", and the conventions (sentence case, ellipses, empty-state titles, toast wording). It waits for the first increment of `specs/023-i18n` to close, and then edits only `crates/i18n/locales/en/horae.ftl` and tests (C-6). | Glossary | Not started |
+| Session PR | Load the session (`get_me`, `get_my_permissions`) with `use_loader` in `use_session_provider`, so the server renders the sidebar, its sections and permission-dependent actions in the first HTML; move the week start into the session; drop `AdminShell`'s own "Loading…" and load `get_org_name` the same way; add the `ErrorBoundary` that `use_loader` failures need. First check that server functions can read the session during the server render. It changes the first HTML, the sidebar and the waves that wait on the session; it does not change how screens reload. | Screen States (Loading) | Not started |
+| PR-P | Permissions in My settings and one "no access" form. My settings becomes subpages in a side menu (SETTINGS: Profile, Preferences, API tokens; ACCOUNT: Your access); Your access: for a member, an area × View / Edit / Approve table and the line "To change your access, ask an administrator of this workspace."; for an administrator, one sentence linking to People > Permissions and no table; for both, People you manage, Projects you manage and a `Link` to "See changes to your access"; no amber notice and no "Refresh permissions"; the profile shown once. Plugins move to Workspace settings, with an empty state written for users. Own icons for the empty plugins and token lists. One "Access unavailable" state on every screen, with nothing around it; the sidebar filters Invoices and Approvals by permission. Covers P-4.6, P-5.1, P-6.4, P-7.1 (plugins, both token lists), P-7.2–P-7.4, P-8.1, P-8.4, P-8.6 and P-9.1–P-9.3, P-9.5, P-9.6 (P-9.4 is superseded by the Your access decision). | My settings, Workspace settings, Sidebar, Screen States (No permission), Glossary (copy) | Not started. Depends on nothing |
+| PR-People | People as a main screen, phase 1: rename the sidebar's Organize entry from "Team" to People, remove the "Team" link from the admin subnavigation and take the screen out of `AdminShell` (the route path is decided here); "Add person" in the header, opening a `Modal` with `Radio` profile cards; a week selector, extracting `PeriodNav` from the Timesheet's week pager, and the hours summary; `FilterBar` (search, a profile `Menu`, a status `Menu` with Active, Archived and All, Active by default, counts in each option); table with hours, billable hours and billable %; one "Actions" `Menu` per row with only what the viewer may do; whole list, no "Refresh"; the screen keeps its data on reload, so rows dim while a new week loads. Needs the profile and the week's hours in the people listing (a small server change). Covers P-1.1, P-2.3, P-3.1 (People), P-4.2 and P-6.3 (People). | People, Sidebar, Data Tables | Not started. After PR-P. Extracts `PeriodNav` ahead of PR-6 |
+| PR-People 2 | Weekly capacity per person (a new column and its editor), then utilization and available capacity. Later, an assignments tab and Export. | People | Not started. After PR-People |
+| PR-S | Sections, radius and width: every section a card with `card-title`; `--radius-xl` for tables, cards, `Skeleton`, `EmptyState` and `ErrorState`; `--width-form` (720px) for forms and form cards, lists at full width; remove `.adm-main { max-width: 760px }`; lists of data without bullets. With C4 (`Card`). Covers P-5.2–P-5.8, P-6.1, P-6.2, P-6.5 and what is left of P-6.3 (the API tokens table; People has left the admin shell by then). Visual: take before-and-after captures. | Typography (section titles), Border Radius, Layout (form width), Catalog (lists) | Not started |
+| PR-C | What is left of refreshing and paging. First, reloads keep their data on the screens whose own PR has not done it (Clients, Reports and the scoped reports): load only the first time (`read().is_none()`), or `use_loader` per list, instead of checking `state() != Ready`. Then one `visibilitychange` listener in `AppLayout` that the screens' resources follow; Project detail without "Refresh details"; "Load more" for Harvest runs and the scoped detailed report, whose "Refresh report" and "Refresh access" go; the copy that points to a refresh button. Covers P-1.7, P-4.4, P-4.5, P-4.7 and P-4.8. | Interaction Principles, Data Tables, Screen States (Loading) | Not started. After PR-5 and the Tasks PR |
+| PR-A | Audit log redesign: no "Refresh history"; one "Load more"; `FilterBar` (change type, person, period) kept in the URL; times in the viewer's time zone; events grouped by day as readable sentences with a "+2 −1" summary and a kind badge; the expanded detail as the Your access table limited to the changed areas, changed cells highlighted, plus the receipt id with Copy; names link to the person, the project, or the log filtered to the actor; its own history icon, the filtered empty state and a skeleton of grouped rows; the screen keeps its data on reload. Covers P-4.3 and P-7.1 (audit log). | Audit log | Not started. After PR-P (shares the access table) |
+| PR-A 2 | Server work, its own PR: an optional reason on a permission change, CSV export, "Restore this version" for custom profiles. | Audit log | Not started |
+| Tasks PR | What is left after PR-8 (the row's "Actions" menu and the status `Badge`, P-2.2 and P-10.2) and PR-5 (the `FilterBar` and search, P-3.1): Edit opens a dialog; `BulkBar` at the bottom for bulk selection; an "Assigned by default" column; the whole list, with no Previous/Next or "Refresh tasks"; `PeoplePicker` for default assignees; `ExportDialog` for exports; 16px radius; the screen keeps its data on reload. Covers P-4.1. | Tasks, Catalog | Not started. After PR-5 |
+| PR-T | Copy for users: no environment variables, directories, file extensions or test cases in the interface; the `HORAE_HARVEST_*` variables on the Harvest OAuth screen fold under a collapsed "For the operator"; the Harvest empty history says how to start; "Not set" instead of "Unknown currency 0.00"; plain estimate copy in invoice preparation; the Tasks section title; optionally, the build labels moved into the account menu. Covers P-7.5, P-8.2, P-8.3, P-8.5, P-8.7 and P-8.9. | Glossary (copy) | Not started. With or before PR-10 |
+
+C3 of the component study (`Button` takes native attributes and a text label) is
+done (#441).
 
 A follow-up of PR-3, in its own PR and not numbered yet:
 
@@ -45,12 +63,84 @@ Two follow-ups of PR-1, each in its own PR and not numbered yet:
 - **Sign-in page follows the theme.** `crates/api/src/auth/page.rs` loads `horae.css` (its hashed URL passed through `LoginAssets`) and the theme script, instead of copying the dark palette by hand.
 - **Merge `--color-text-muted` and `--color-label`.** At 4.5:1 they are almost the same tone (1.05:1 between them in the dark theme, 1.03:1 in the light), so one token replaces both. Pending.
 
-PR-0 and PR-1 depend on no open question. PR-4 follows PR-2, PR-7 follows PR-5,
-and PR-10 is best last so its copy changes do not conflict with the others.
+Recommended order for what remains:
+
+1. PR-P
+1. PR-People
+1. PR-8, the row actions and headers of the remaining screens
+1. PR-S, before PR-5, because the radius and width change every capture
+1. PR-5 (`FilterBar`), then the Tasks PR
+1. PR-C, once PR-5 has given Tasks and People a search
+1. PR-A
+1. PR-6
+1. PR-T and PR-10, last, so their copy changes do not conflict with the others
+
+Each finding belongs to the first PR in this order that does it; a later row says
+what is left. Each screen PR (PR-People, the Tasks PR, PR-A) makes its own screen
+keep its data on reload, and PR-C does it for the remaining screens before it adds
+the automatic refresh.
+
+The session PR depends on none of them and goes as early as possible: it puts the
+sidebar and the permission-dependent actions in the first HTML and removes the wave
+that waits on the session. The mobile part of PR-7 waits for its design.
 The browser suites in `crates/horae/tests/browser/` (`shared-style-audit.cjs`,
 `responsive-layout.cjs`, `modals.cjs`) check classes and measurements, so each PR
 records the `shared-style-audit` baseline at its starting commit and compares
 against it.
+
+## Findings cited
+
+The coherence study's findings that the rows above cite, as measured on master `d9791da4`:
+
+| Id | Screen | Finding |
+| --- | --- | --- |
+| P-1.1 | People | "Add person" (Primary) sits in the body, under the header |
+| P-1.7 | Project detail | "Refresh details" as a Ghost header action |
+| P-1.10 | Timesheet | `.ts-header` copies `.page-header`; its `Segmented` is 26px in a header of 44px buttons |
+| P-2.2 | Tasks | A loose "Edit" button per row; archiving lives in the editor |
+| P-2.3 | People | "Rates", "Permissions" and "Archive" stacked per row, overflowing the table at 1280px |
+| P-3.1 | Tasks, People | A full-width native "Show" `<select>` and no search |
+| P-4.1 | Tasks | "Refresh tasks" and Previous/Next |
+| P-4.2 | People | "Refresh" and Previous/Next |
+| P-4.3 | Audit log | "Refresh history", and "Newest events"/"Older events" even when empty |
+| P-4.4 | Harvest runs | "Older runs" as a link instead of "Load more" |
+| P-4.5 | Project detail | "Refresh details" |
+| P-4.6 | My settings | "Refresh permissions" |
+| P-4.7 | Reports (scoped) | "Refresh report", "Refresh access" and Previous/Next |
+| P-4.8 | Tasks editor, Harvest | Copy that tells the user to press a refresh button |
+| P-5.1 | My settings | "Your permissions" outside a card, with a 24/600 heading |
+| P-5.2 | Project detail | "Tags" as a bare 14/700 heading; tasks and team as bulleted lists |
+| P-5.3 | Client detail | Section titles at 18/600 instead of `card-title` |
+| P-5.4 | Harvest | `.himp-title` headings and "History" outside a card |
+| P-5.5 | Harvest OAuth | A 14/600 heading and uppercase field labels |
+| P-5.6 | New project | Section titles at 20/600 |
+| P-5.7 | Invoice preparation | `FormCard` title in 14/700 capitals |
+| P-5.8 | All | Panel radii of 11, 16 and 20px on the same screen |
+| P-6.1 | My settings | Forms 952px wide (Theme at 902px, the token name at 820px) |
+| P-6.2 | Workspace, Invoice settings | Each form card sets its own width (about 510 and 540px) |
+| P-6.3 | Admin shell | `.adm-main { max-width: 760px }` cuts the People and API tokens tables |
+| P-6.4 | My settings | The management `dl` spreads its two figures 470px apart |
+| P-6.5 | My settings | The token form: full-width name, misaligned "Expires", the button alone below |
+| P-7.1 | Plugins, token lists, audit log | Five empty states share the `settings` icon |
+| P-7.2 | 20 routes | Seven different titles for a missing permission |
+| P-7.3 | Tasks (member) | Filter, "Refresh" and pager around the access error |
+| P-7.4 | New/Edit project (member) | A load failure shown for something the member may not do |
+| P-7.5 | Harvest | "Start a preview" in the empty history before a preview is possible |
+| P-8.1 | My settings | "Drop .wasm files into the plugins/ directory." |
+| P-8.2 | Harvest OAuth | `HORAE_HARVEST_*` variables in the interface |
+| P-8.3 | Tasks | "Unknown currency 0.00" |
+| P-8.4 | Tasks, audit log (member) | "If you changed accounts, reopen this page." |
+| P-8.5 | Invoice preparation | Specification wording about estimates and charges |
+| P-8.6 | My settings | Specification notes under the permissions |
+| P-8.7 | Tasks | An "Other tasks" section with no other section visible |
+| P-8.9 | Sidebar | Server and front-end build labels shown to administrators |
+| P-9.1 | My settings | The amber "Only an Administrator can edit your permissions" notice, shown to administrators too |
+| P-9.2 | My settings | Permissions shown twice: a disabled field in Profile and the section |
+| P-9.3 | My settings | "Administrator access" as a loose bold paragraph |
+| P-9.4 | My settings | About 50 permissions in an ungrouped bulleted list (superseded) |
+| P-9.5 | My settings | "View permission audit log" as `a { href }` |
+| P-9.6 | Sidebar | Invoices and Approvals shown to members who cannot open them |
+| P-10.2 | Tasks | Status "Active" as plain text |
 
 ## Open questions
 
