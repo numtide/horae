@@ -182,12 +182,13 @@ pub mod session {
 
     #[derive(Clone, Copy)]
     pub struct Session {
-        pub permissions: Resource<Result<OwnPermissions, ServerFnError>>,
+        pub permissions: Memo<Result<OwnPermissions, ServerFnError>>,
+        pub loaded: Resource<Result<OwnPermissions, ServerFnError>>,
     }
 
     impl Session {
         pub fn refresh(mut self) {
-            self.permissions.restart();
+            self.loaded.restart();
         }
     }
 
@@ -195,8 +196,8 @@ pub mod session {
         use_context::<Session>()
     }
 
-    pub fn use_week_start() -> Resource<Result<chrono::Weekday, ServerFnError>> {
-        use_resource(|| async { Ok(chrono::Weekday::Mon) })
+    pub fn use_week_start() -> chrono::Weekday {
+        chrono::Weekday::Mon
     }
 }
 #[path = "../src/pages/admin/permission_editor.rs"]
@@ -928,11 +929,19 @@ fn directory_page(probe: &Probe) -> people_model::PeoplePage {
 #[component]
 fn PeoplePageHost() -> Element {
     let probe = use_context::<Probe>();
-    let permissions = use_resource(move || {
+    let loaded = use_resource(move || {
         let answer = probe.page_access.clone().expect("page access");
         async move { answer }
     });
-    use_context_provider(|| session::Session { permissions });
+    // The app's session arrives with the page, so the page never sees it pending.
+    if loaded.read().is_none() {
+        return rsx! {};
+    }
+    let permissions = use_memo(move || loaded.read().clone().expect("loaded"));
+    use_context_provider(|| session::Session {
+        permissions,
+        loaded,
+    });
     rsx! {
         dioxus::router::components::HistoryProvider {
             history: move |_| {

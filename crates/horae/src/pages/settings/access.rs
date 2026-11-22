@@ -10,7 +10,7 @@ use crate::components::access_table::{AccessCell, AccessTable, OTHER, access_row
 use crate::components::card::MetricCard;
 use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED};
 use crate::components::session::use_session;
 use crate::i18n::{Tr, split_tag};
 use crate::models::own_permissions::OwnPermissions;
@@ -22,13 +22,8 @@ pub fn SettingsAccess() -> Element {
     let tr = crate::i18n::use_tr();
     let session = use_session();
     let retry = use_callback(move |_| session.refresh());
-    let pending = session.permissions.state()() != UseResourceState::Ready;
-    let me = session
-        .me
-        .read()
-        .as_ref()
-        .and_then(|me| me.as_ref().ok())
-        .map(|me| me.id);
+    let pending = (session.refreshing)();
+    let me = session.me.read().id;
     access_page(tr, &session.permissions.read(), me, retry, pending)
 }
 
@@ -37,15 +32,15 @@ pub fn SettingsAccess() -> Element {
 /// person, whom the link to their history filters the audit log by.
 fn access_page(
     tr: Tr,
-    response: &Option<Result<OwnPermissions, ServerFnError>>,
-    me: Option<Uuid>,
+    response: &Result<OwnPermissions, ServerFnError>,
+    me: Uuid,
     retry: Callback<()>,
     pending: bool,
 ) -> Element {
     // The badge shows only above the access it describes, not above an error.
     let badge = response
         .as_ref()
-        .and_then(|result| result.as_ref().ok())
+        .ok()
         .filter(|own| own.catalog_version == PERMISSION_CATALOG_VERSION)
         .map(|own| {
             if own.is_administrator {
@@ -72,36 +67,35 @@ fn access_page(
     }
 }
 
-/// The page body for the session's permission read. Only the first load shows
-/// `Loading`: a session refresh keeps the last answer on screen.
+/// The page body for the session's permission read. A session refresh keeps
+/// the last answer on screen until the new one arrives.
 fn access_content(
     tr: Tr,
-    response: &Option<Result<OwnPermissions, ServerFnError>>,
-    me: Option<Uuid>,
+    response: &Result<OwnPermissions, ServerFnError>,
+    me: Uuid,
     retry: Callback<()>,
     pending: bool,
 ) -> Element {
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
     let own = match response {
-        None => return rsx! { Loading { label: tr.settings_access_loading() } },
-        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
-        Some(Err(ServerFnError::ServerError {
+        Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
+        Err(ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
-        })) => {
+        }) => {
             return rsx! {
                 ErrorState { title: tr.settings_access_failed(), body: tr.common_session_ended() }
             };
         }
         // No stored permission state: only an administrator can repair it.
-        Some(Err(ServerFnError::ServerError {
+        Err(ServerFnError::ServerError {
             code: FORBIDDEN, ..
-        })) => {
+        }) => {
             return rsx! {
                 ErrorState { title: tr.settings_access_failed(), body: tr.settings_access_repair() }
             };
         }
-        Some(_) => {
+        _ => {
             return rsx! {
                 ErrorState { title: tr.settings_access_failed(), body: LOAD_FAILED, onretry: retry, retry_disabled: pending }
             };
@@ -119,7 +113,7 @@ fn access_content(
     let administrator = tr.settings_access_administrator();
     let (people_before, people_link, people_after) = split_tag(&administrator, "link");
     let history = AuditFilter {
-        person: me,
+        person: Some(me),
         ..AuditFilter::default()
     };
     rsx! {

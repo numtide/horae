@@ -60,6 +60,32 @@ pub fn NoAccess(#[props(default)] inset: bool) -> Element {
     }
 }
 
+/// What an `ErrorBoundary` shows when a page cannot load what it needs to
+/// render at all (the session, read with `use_loader`). Reloading runs the
+/// reads again. When the session `ended`, signing out leads to the sign-in
+/// page, as the account menu's "Sign out" does.
+#[component]
+pub fn PageFailed(#[props(default)] ended: bool) -> Element {
+    let tr = crate::i18n::use_tr();
+    let reload = use_callback(|()| {
+        document::eval("window.location.reload()");
+    });
+    if ended {
+        return rsx! {
+            ErrorState { title: tr.page_session_ended(), body: tr.common_session_ended(),
+                actions: rsx! {
+                    form { method: "post", action: "/auth/logout",
+                        button { class: "btn btn-primary", r#type: "submit", {tr.page_sign_in_again()} }
+                    }
+                },
+            }
+        };
+    }
+    rsx! {
+        ErrorState { title: tr.page_failed(), body: tr.page_failed_hint(), onretry: reload }
+    }
+}
+
 /// The server's own message, for the request line of an `ErrorState`. A
 /// transport failure ("error sending request…") has none worth showing.
 pub fn error_line(error: &ServerFnError) -> Option<String> {

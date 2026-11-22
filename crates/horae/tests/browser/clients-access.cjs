@@ -53,7 +53,11 @@ const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
     await visit('/clients');
+    // The session arrives with the page; opening the account menu re-reads it.
+    await expect.poll(() => endpoints.has('client_overview')).toBe(true);
+    await page.locator('.sidebar-footer').click();
     await expect.poll(() => endpoints.has('get_me')).toBe(true);
+    await page.locator('.sidebar-footer').click();
     // Dev login can select another admin created by a preceding suite.
     actor = await json('get_me', {});
     assert.match(actor.id, /^[0-9a-f-]{36}$/);

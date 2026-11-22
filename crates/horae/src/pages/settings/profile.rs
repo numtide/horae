@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 
 use crate::components::form::{FormGroup, Input};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading};
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
 use crate::models::user::{CurrentUser, ProfileOptions, profile_name_is_valid};
@@ -15,20 +14,13 @@ pub fn SettingsProfile() -> Element {
     let tr = crate::i18n::use_tr();
     let session = use_session();
     let options = use_resource(server_fns::get_profile_options);
-    let retry = use_callback(move |_| session.refresh());
-    // Only the first load is gated: re-reading the session after a save keeps
-    // the previous value, so the form stays mounted.
-    let me = session.me.read();
+    // Re-reading the session after a save keeps the previous value until the
+    // new one arrives, so the form stays mounted.
+    let me = session.me.cloned();
     rsx! {
         PageHeader { title: tr.settings_profile_title() }
         section { class: "card", aria_label: tr.settings_profile_title(),
-            match &*me {
-                None => rsx! { Loading { label: tr.settings_profile_loading() } },
-                Some(Err(_)) => rsx! {
-                    ErrorState { title: tr.settings_profile_failed(), body: LOAD_FAILED, inset: true, onretry: retry }
-                },
-                Some(Ok(me)) => rsx! { ProfileForm { key: "{me.id}", me: me.clone(), options } },
-            }
+            ProfileForm { key: "{me.id}", me, options }
         }
     }
 }
@@ -39,7 +31,7 @@ fn ProfileForm(
     options: Resource<Result<ProfileOptions, ServerFnError>>,
 ) -> Element {
     let tr = crate::i18n::use_tr();
-    let mut session_me = use_session().me;
+    let session = use_session();
     let saved_zone = me.timezone.clone().unwrap_or_default();
     let mut name = use_signal(|| me.name.clone());
     let mut zone = use_signal(|| saved_zone.clone());
@@ -96,7 +88,7 @@ fn ProfileForm(
             match server_fns::update_own_profile(new_name, new_zone).await {
                 Ok(()) => {
                     saved.set(true);
-                    session_me.restart();
+                    session.refresh();
                 }
                 Err(ServerFnError::ServerError {
                     code: BAD_REQUEST,

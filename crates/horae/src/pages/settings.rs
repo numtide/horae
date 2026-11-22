@@ -33,10 +33,7 @@ pub fn SettingsShell() -> Element {
             "if (/^\\/settings\\/?$/.test(location.pathname)) history.replaceState(history.state, '', {profile:?});"
         ));
     });
-    let name = match &*me.read() {
-        Some(Ok(me)) => me.name.clone(),
-        _ => String::new(),
-    };
+    let name = me.read().name.clone();
     rsx! {
         div { class: "flex flex-wrap items-start gap-12",
             aside { class: "adm-nav",

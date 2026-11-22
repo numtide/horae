@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::form::FormGroup;
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, Failure, Loading, loaded};
+use crate::components::screen_state::{EmptyState, Failure, loaded};
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
 use crate::server_fns;
@@ -13,18 +13,12 @@ use crate::server_fns;
 pub fn WorkspaceSettings() -> Element {
     let session = use_session();
     let zones = use_resource(server_fns::get_profile_options);
-    let saved = match &*session.me.read() {
-        Some(Ok(me)) => Some(me.workspace_timezone.clone()),
-        _ => None,
-    };
+    let saved = session.me.read().workspace_timezone.clone();
     rsx! {
         PageHeader { title: "Workspace settings" }
         section { class: "card max-w-lg", aria_labelledby: "workspace-timezone-title",
             h2 { id: "workspace-timezone-title", class: "card-title", "Time zone" }
-            match saved {
-                None => rsx! { Loading {} },
-                Some(saved) => rsx! { TimezoneForm { key: "{saved}", saved, zones } },
-            }
+            TimezoneForm { key: "{saved}", saved, zones }
         }
         Plugins {}
     }
@@ -71,7 +65,7 @@ fn TimezoneForm(
     saved: String,
     zones: Resource<Result<crate::models::user::ProfileOptions, ServerFnError>>,
 ) -> Element {
-    let mut me = use_session().me;
+    let session = use_session();
     let mut zone = use_signal(|| saved.clone());
     let query = use_signal(String::new);
     let mut saving = use_signal(|| false);
@@ -98,7 +92,7 @@ fn TimezoneForm(
         spawn(async move {
             match server_fns::set_workspace_timezone(picked).await {
                 // The new zone reaches every reader through the session.
-                Ok(()) => me.restart(),
+                Ok(()) => session.refresh(),
                 Err(ServerFnError::ServerError {
                     code: BAD_REQUEST | FORBIDDEN,
                     message,

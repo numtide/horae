@@ -19,12 +19,11 @@ pub mod tasks;
 pub mod timesheet;
 
 /// Whether the session's stored permissions carry the Administrator identity.
-/// `false` while they are loading, failed, or on a catalog this bundle does
-/// not know.
-pub(crate) fn is_administrator(own: &Resource<Result<OwnPermissions, ServerFnError>>) -> bool {
+/// `false` when they failed, or on a catalog this bundle does not know.
+pub(crate) fn is_administrator(own: &Result<OwnPermissions, ServerFnError>) -> bool {
     matches!(
-        &*own.read(),
-        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION && own.is_administrator
+        own,
+        Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION && own.is_administrator
     )
 }
 

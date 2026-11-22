@@ -75,16 +75,11 @@ struct Probe {
     permissions_unknown: bool,
     /// The session user's id; a fresh one when unset.
     me_id: Option<Uuid>,
-    /// The session user never resolves.
-    me_pending: bool,
     pending: bool,
     error: Option<String>,
     /// The `?week=` the page is opened with.
     week: String,
     sunday: bool,
-    week_start_error: Option<String>,
-    /// Only the first week-start read fails.
-    week_start_fails_once: bool,
     /// Weeks whose list request never completes.
     pending_weeks: Vec<String>,
     /// Approve actions never complete.
@@ -105,7 +100,7 @@ fn app(probe: Probe) -> Element {
     let path = format!("/approvals?week={}", probe.week);
     use_context_provider(|| probe);
     // AppLayout provides the session above every page.
-    session::use_session_provider();
+    session::use_session_provider()?;
     rsx! {
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
@@ -276,7 +271,7 @@ async fn approval_names_render_from_rows_without_directory_and_escape_markup() {
 fn remountable(probe: Probe) -> Element {
     let path = format!("/approvals?week={}", probe.week);
     use_context_provider(|| probe);
-    session::use_session_provider();
+    session::use_session_provider()?;
     let shown = use_context_provider(|| Signal::new(true));
     rsx! {
         if shown() {
@@ -301,48 +296,6 @@ async fn returning_to_approvals_reuses_the_session_week_start() {
     }
     assert!(html(&dom).contains("Ada"));
     assert_eq!(probe.week_start_reads.get(), 1);
-}
-
-#[tokio::test]
-async fn a_failed_week_start_is_retried_when_approvals_is_opened_again() {
-    let probe = Probe {
-        week_start_fails_once: true,
-        ..approver(vec![row("Ada")])
-    };
-    let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
-    dom.rebuild_in_place();
-    settle(&mut dom);
-    assert!(html(&dom).contains("Week start blip"));
-
-    let mut shown = dom.in_scope(ScopeId::APP, consume_context::<Signal<bool>>);
-    for visible in [false, true] {
-        dom.in_scope(ScopeId::APP, || shown.set(visible));
-        settle(&mut dom);
-    }
-    let html = html(&dom);
-    assert!(
-        html.contains("Ada") && !html.contains("Week start blip"),
-        "{html}"
-    );
-    assert_eq!(probe.week_start_reads.get(), 2);
-}
-
-#[tokio::test]
-async fn a_session_refresh_retries_a_failed_week_start_only() {
-    let probe = Probe {
-        week_start_fails_once: true,
-        ..approver(vec![row("Ada")])
-    };
-    let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
-    dom.rebuild_in_place();
-    settle(&mut dom);
-    let session = dom.in_scope(ScopeId::APP, consume_context::<session::Session>);
-    for _ in 0..2 {
-        dom.in_scope(ScopeId::APP, || session.refresh());
-        settle(&mut dom);
-    }
-    assert!(html(&dom).contains("Ada"));
-    assert_eq!(probe.week_start_reads.get(), 2);
 }
 
 #[tokio::test]
@@ -611,7 +564,7 @@ async fn every_action_is_disabled_while_one_is_in_flight() {
 
 // T-U8
 #[tokio::test]
-async fn no_list_is_requested_without_approval_access_or_a_week_start() {
+async fn no_list_is_requested_without_approval_access() {
     let member = Probe {
         approves: false,
         ..approver(vec![])
@@ -619,27 +572,6 @@ async fn no_list_is_requested_without_approval_access_or_a_week_start() {
     let (dom, _) = render(&member);
     assert!(html(&dom).contains("Access unavailable"));
     assert!(member.requests.borrow().is_empty());
-
-    let unconfigured = Probe {
-        week_start_error: Some("Week start unavailable".into()),
-        ..approver(vec![])
-    };
-    let (dom, _) = render(&unconfigured);
-    assert!(html(&dom).contains("Week start unavailable"));
-    assert!(unconfigured.requests.borrow().is_empty());
-}
-
-#[tokio::test]
-async fn a_pending_session_user_shows_loading_not_a_denial() {
-    let probe = Probe {
-        me_pending: true,
-        ..approver(vec![row("A")])
-    };
-    let (dom, _) = render(&probe);
-    let html = html(&dom);
-    assert!(html.contains("Loading"), "{html}");
-    assert!(!html.contains("Approval access is unavailable"), "{html}");
-    assert!(probe.requests.borrow().is_empty());
 }
 
 /// When the permission read fails there are no grants to show, so the page
@@ -686,7 +618,7 @@ pub mod server_fns {
 
     pub async fn get_my_permissions() -> Result<own_permissions_model::OwnPermissions, ServerFnError>
     {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         if probe.permissions_unknown {
             return Err(ServerFnError::new("Permission state is unavailable"));
         }
@@ -712,10 +644,7 @@ pub mod server_fns {
     }
 
     pub async fn get_me() -> Result<user_model::CurrentUser, ServerFnError> {
-        let probe = use_context::<Probe>();
-        if probe.me_pending {
-            std::future::pending::<()>().await;
-        }
+        let probe = consume_context::<Probe>();
         Ok(user_model::CurrentUser {
             id: probe.me_id.unwrap_or_else(Uuid::now_v7),
             org_id: Uuid::now_v7(),
@@ -728,23 +657,24 @@ pub mod server_fns {
     }
 
     pub async fn get_week_start() -> Result<Weekday, ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         probe.week_start_reads.set(probe.week_start_reads.get() + 1);
-        if probe.week_start_fails_once && probe.week_start_reads.get() == 1 {
-            return Err(ServerFnError::new("Week start blip"));
-        }
-        match probe.week_start_error {
-            Some(error) => Err(ServerFnError::new(error)),
-            None if probe.sunday => Ok(Weekday::Sun),
-            None => Ok(Weekday::Mon),
-        }
+        Ok(if probe.sunday {
+            Weekday::Sun
+        } else {
+            Weekday::Mon
+        })
+    }
+
+    pub async fn get_org_name() -> Result<String, ServerFnError> {
+        Ok("Test workspace".into())
     }
 
     pub async fn list_approvals(
         _: Option<String>,
         week_start: String,
     ) -> Result<Vec<approval_model::ApprovalSummary>, ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         probe
             .navigator
             .set(Some((navigator(), dioxus::core::current_scope_id())));
@@ -759,13 +689,13 @@ pub mod server_fns {
     }
 
     pub async fn list_users(_: bool) -> Result<Vec<user_model::UserListItem>, ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         probe.directory_reads.set(probe.directory_reads.get() + 1);
         Err(ServerFnError::new("Directory must not be needed"))
     }
 
     pub async fn approve_submission(id: String) -> Result<approval_model::Approval, ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         probe.actions.borrow_mut().push(vec![id]);
         if probe.action_pending {
             std::future::pending::<()>().await;
@@ -774,7 +704,7 @@ pub mod server_fns {
     }
 
     pub async fn approve_submissions(ids: Vec<String>) -> Result<usize, ServerFnError> {
-        let probe = use_context::<Probe>();
+        let probe = consume_context::<Probe>();
         let count = probe.approved.unwrap_or(ids.len());
         probe.actions.borrow_mut().push(ids);
         if probe.action_pending {
@@ -784,7 +714,10 @@ pub mod server_fns {
     }
 
     pub async fn reject_submission(id: String) -> Result<(), ServerFnError> {
-        use_context::<Probe>().actions.borrow_mut().push(vec![id]);
+        consume_context::<Probe>()
+            .actions
+            .borrow_mut()
+            .push(vec![id]);
         Ok(())
     }
 }

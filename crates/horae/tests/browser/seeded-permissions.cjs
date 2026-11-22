@@ -21,4 +21,11 @@ const signInAsAdmin = async (context, base) => {
   if (login.status() !== 303) throw new Error(`Development login answered ${login.status()}`);
 };
 
-module.exports = { setAsideSeededStates, signInAsAdmin };
+// The person the development login signs in, by its own query
+// (`crates/api/src/auth/dev.rs`). The page no longer asks for the session
+// after loading, since the server sends it with the HTML.
+const devLoginUser = () => JSON.parse(sql(`SELECT json_build_object('id', u.id, 'org_id', u.org_id)
+  FROM users u JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+  WHERE p.is_administrator AND u.active ORDER BY u.id LIMIT 1`));
+
+module.exports = { setAsideSeededStates, signInAsAdmin, devLoginUser };

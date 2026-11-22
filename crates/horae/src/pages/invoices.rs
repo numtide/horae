@@ -50,7 +50,7 @@ pub use settings::InvoiceSettings;
 fn holds(session: crate::components::session::Session, required: &[Permission]) -> bool {
     matches!(
         &*session.permissions.read(),
-        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION
+        Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION
             && invoices::holds(|grant| own.grants.contains(&grant), required)
     )
 }
@@ -127,12 +127,10 @@ fn NewInvoiceContent(client_context: Option<String>) -> Element {
         div {
             BackLink { to: Route::InvoiceList {}, label: tr.invoices_back() }
             PageHeader { title: tr.invoices_new_title(), title_id: INVOICES_HEADING }
-            if session.permissions.read().is_none() {
-                Loading {}
-            } else if matches!(&*session.permissions.read(), Some(Err(_))) {
+            if session.permissions.read().is_err() {
                 // A failed read says nothing about access, so it offers a retry.
                 ErrorState { title: tr.invoices_permissions_failed(), body: LOAD_FAILED, onretry: retry_session,
-                    focus_on_recovery: INVOICES_HEADING }
+                    retry_disabled: (session.refreshing)(), focus_on_recovery: INVOICES_HEADING }
             } else if !prepares {
                 NoAccess {}
             } else if storage.ready() {
@@ -173,7 +171,7 @@ fn InvoiceListContent() -> Element {
     let session = crate::components::session::use_session();
     let configures = matches!(
         &*session.permissions.read(),
-        Some(Ok(own)) if settings::edits_invoice_settings(own)
+        Ok(own) if settings::edits_invoice_settings(own)
     );
     let prepares = prepares_invoices(session);
 

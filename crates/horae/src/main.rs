@@ -326,6 +326,7 @@ fn main() -> anyhow::Result<()> {
                     .merge(horae_harvest_api::mount(cfg.harvest_api, v1.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated.
+                    .layer(axum::middleware::map_response(private_pages))
                     .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))
                     .layer(session_layer);
                 // Compression wraps everything, sessions included.
@@ -459,6 +460,25 @@ async fn vary_on_encoding(mut response: axum::response::Response) -> axum::respo
     });
     if !varies {
         headers.append(VARY, ACCEPT_ENCODING.into());
+    }
+    response
+}
+
+/// Pages carry the signed-in person: their name and permissions in the markup
+/// and the session in the hydration data. No cache may keep or share them, so
+/// Back after signing out cannot show the previous person's page.
+#[cfg(feature = "server")]
+async fn private_pages(mut response: axum::response::Response) -> axum::response::Response {
+    use axum::http::HeaderValue;
+    use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, COOKIE, VARY};
+    let page = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .is_some_and(|value| value.as_bytes().starts_with(b"text/html"));
+    if page {
+        let headers = response.headers_mut();
+        headers.insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+        headers.append(VARY, COOKIE.into());
     }
     response
 }

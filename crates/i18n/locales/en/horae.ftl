@@ -58,6 +58,9 @@ common-session-ended = Your session has ended. Sign in again to continue.
 ## Navigation and shell
 
 nav-my-settings = My settings
+session-refresh-failed = Could not update your session
+session-refresh-failed-hint = The page keeps what it showed before.
+session-try-again = Try again
 
 ## Components
 
@@ -71,6 +74,10 @@ period-nav-week = Week
 
 no-access-title = Access unavailable
 no-access-body = Your account cannot open this. Ask an administrator of this workspace if you need it.
+page-failed = Could not load this page
+page-failed-hint = Reload the page. If it keeps failing, sign in again.
+page-session-ended = Session ended
+page-sign-in-again = Sign in again
 confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 
 ## Settings
@@ -78,8 +85,6 @@ confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 settings-group-settings = Settings
 settings-group-account = Account
 settings-profile-title = Profile
-settings-profile-loading = Loading your profile…
-settings-profile-failed = Could not load your profile
 settings-profile-name-label = Name
 settings-profile-email-label = Work email
 settings-profile-email-hint = Managed by your sign-in provider.
@@ -104,7 +109,6 @@ settings-theme-hint = Choose how { -brand } looks on this device.
 settings-access-title = Your access
 settings-access-intro = What you can see and do in this workspace.
 settings-access-history = See changes to your access
-settings-access-loading = Loading your access…
 settings-access-failed = Could not load your access
 settings-access-repair = Ask an administrator of this workspace to check your access.
 settings-access-administrator = You can see and change everything here, including other people's access in <link>{ -people }</link>.
@@ -145,6 +149,8 @@ workspace-plugins-empty = No plugins installed
 workspace-plugins-empty-hint = Plugins add features to { -brand }. The person who runs your { -brand } server installs them.
 workspace-plugin-version = v{ $version }
 workspace-plugin-hooks = Hooks: { $hooks }
+workspace-access-failed = Could not verify workspace access
+workspace-access-failed-hint = Try again, or sign in again if it keeps failing.
 
 ## API tokens
 

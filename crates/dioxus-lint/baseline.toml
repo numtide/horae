@@ -49,7 +49,7 @@ reason = "Predates the check; each needs its own first-load gate and aria-busy f
 
 ["dioxus/literal-text"]
 reason = "Predates the text catalog (specs/023-i18n). Each migration PR (I-2 to I-12) moves its area's text into crates/i18n/locales/en/horae.ftl and lowers its lines; I-13 removes this table."
-"crates/horae/src/components/admin_shell.rs" = 9
+"crates/horae/src/components/admin_shell.rs" = 7
 "crates/horae/src/components/button.rs" = 1
 "crates/horae/src/components/combobox.rs" = 2
 "crates/horae/src/components/date_picker.rs" = 9
@@ -69,7 +69,7 @@ reason = "Predates the text catalog (specs/023-i18n). Each migration PR (I-2 to 
 "crates/horae/src/pages/admin/permission_editor/templates.rs" = 12
 "crates/horae/src/pages/admin/rates.rs" = 7
 "crates/horae/src/pages/admin/workspace.rs" = 8
-"crates/horae/src/pages/approvals.rs" = 19
+"crates/horae/src/pages/approvals.rs" = 18
 "crates/horae/src/pages/clients.rs" = 29
 "crates/horae/src/pages/clients/detail.rs" = 34
 "crates/horae/src/pages/clients/form.rs" = 15

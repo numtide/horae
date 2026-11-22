@@ -7,8 +7,6 @@ use uuid::Uuid;
 use horae_core::duration::format_hhmm;
 use horae_core::week::week_start as start_of_week;
 
-use super::{Failure, loaded};
-
 /// The Timesheet title, where focus lands once a failed week loads again.
 const TIMESHEET_HEADING: &str = "timesheet-heading";
 use crate::components::badge::Badge;
@@ -248,14 +246,12 @@ impl CalSpan {
 
 #[component]
 pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> Element {
-    let config = use_week_start();
+    let first_day = use_week_start();
     // Keep the requester pinned across selected-person/date/view remounts.
     let requester = use_signal(|| None::<PermissionRequester>);
     // The last week's write context, so the next week can start loading its
     // tracking choices without waiting for its sheet.
     let last_context = use_signal(|| None::<TimesheetWriteContext>);
-    let session = use_session();
-    let retry_config = use_callback(move |_| session.refresh());
     let subject = if user.is_empty() {
         None
     } else if let Ok(id) = user.parse::<Uuid>() {
@@ -263,32 +259,20 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
     } else {
         return rsx! { div { class: "alert alert-danger", role: "alert", "Invalid timesheet person. Choose Timesheet from the navigation to return to your own time." } };
     };
-    loaded(
-        &config.read(),
-        Failure {
-            what: "the week settings",
-            retry: retry_config,
-            pending: config.state()() != UseResourceState::Ready,
-            inset: false,
-            focus: None,
-        },
-        |first_day| {
-            let Some(start) = start_of_week(date.0, *first_day)
-                .filter(|start| start.checked_add_days(chrono::Days::new(6)).is_some())
-            else {
-                return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
-            };
-            // Keys reset component state only inside a dynamic fragment. Another
-            // person must discard the previous resources and drafts. Another week
-            // keeps the page mounted, so the last week stays on screen while the
-            // next one loads; TimesheetContent resets its week-scoped state itself.
-            rsx! {
-                for key in [user.clone()] {
-                    TimesheetContent { key: "{key}", view, date, span, start, subject, requester, last_context }
-                }
-            }
-        },
-    )
+    let Some(start) = start_of_week(date.0, first_day)
+        .filter(|start| start.checked_add_days(chrono::Days::new(6)).is_some())
+    else {
+        return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
+    };
+    // Keys reset component state only inside a dynamic fragment. Another
+    // person must discard the previous resources and drafts. Another week
+    // keeps the page mounted, so the last week stays on screen while the
+    // next one loads; TimesheetContent resets its week-scoped state itself.
+    rsx! {
+        for key in [user.clone()] {
+            TimesheetContent { key: "{key}", view, date, span, start, subject, requester, last_context }
+        }
+    }
 }
 
 #[component]

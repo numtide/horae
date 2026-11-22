@@ -68,7 +68,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       ['/clients', 'client_overview'], ['/projects', 'get_project_overview'],
       ['/invoices', 'list_invoices'], ['/reports', 'report_time'],
       ['/admin/workspace', 'get_profile_options'], ['/approvals', 'list_approvals'],
-      ['/settings/profile', 'get_me'], ['/admin/importers', 'get_me'],
+      ['/settings/profile', 'get_current_timer'], ['/admin/importers', 'get_current_timer'],
       [`/timesheet/week/${week}`, 'load_timesheet_page'],
       [`/timesheet/day/${week}`, 'load_timesheet_page'],
       [`/timesheet/calendar/${week}`, 'load_timesheet_page'],
@@ -230,7 +230,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       await headersFit();
     });
     await check('shared toasts keep message and dismiss control inside the viewport at normal and enlarged text', async () => {
-      await visit('/components', 'get_me');
+      await visit('/components', 'get_current_timer');
       const toasts = page.locator('.gallery-section .toast');
       await expect(toasts).toHaveCount(3);
       // Stress only a rendered label, not stored data.

@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use crate::components::session::page_failed;
 use crate::components::theme::ThemeInit;
 use crate::route::Route;
 
@@ -29,6 +30,9 @@ pub fn App() -> Element {
         }
         ThemeInit {}
         document::Script { src: asset!("/assets/js/project-edit-navigation.js") }
-        Router::<Route> {}
+        // The session only (`AppLayout`): its first read failing, or the session
+        // ending. A screen's own failure stops at the boundary around the
+        // `Outlet`, so the rail stays.
+        ErrorBoundary { handle_error: page_failed, Router::<Route> {} }
     }
 }
