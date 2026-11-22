@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_clients SET name = $2, redirect_uris = $3, scopes = $4 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1def2c65eb641b5d8a54f199f347693de27075875dd98bb862d8d5f3a83d36ad"
+}

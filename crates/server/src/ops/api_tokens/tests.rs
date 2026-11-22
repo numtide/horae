@@ -10,15 +10,17 @@ use crate::testing::{SeedIds, add_person, seed};
 
 #[test]
 fn a_secret_is_the_prefix_and_32_random_bytes_in_base64url() {
-    let secret = Secret::generate();
+    use base64::Engine;
+    let secret = Secret::generate(PREFIX);
     let encoded = secret.expose().strip_prefix(PREFIX).unwrap();
-    assert_eq!(URL_SAFE_NO_PAD.decode(encoded).unwrap().len(), 32);
-    assert_ne!(secret.expose(), Secret::generate().expose());
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded);
+    assert_eq!(decoded.unwrap().len(), 32);
+    assert_ne!(secret.expose(), Secret::generate(PREFIX).expose());
 }
 
 #[test]
 fn the_display_prefix_is_the_first_eight_characters_after_the_prefix() {
-    let secret = Secret::generate();
+    let secret = Secret::generate(PREFIX);
     assert_eq!(
         secret.display_prefix(),
         &secret.expose()[PREFIX.len()..PREFIX.len() + 8]
@@ -40,7 +42,7 @@ fn the_digest_is_sha256_of_the_whole_token() {
 
 #[test]
 fn debug_shows_only_the_display_prefix() {
-    let secret = Secret::generate();
+    let secret = Secret::generate(PREFIX);
     let debug = format!("{secret:?}");
     assert_eq!(debug, format!("{PREFIX}{}…", secret.display_prefix()));
     assert!(!debug.contains(&secret.expose()[PREFIX.len() + 8..]));
@@ -169,7 +171,7 @@ async fn a_valid_token_authenticates_as_its_owner(pool: PgPool) {
 async fn unknown_and_malformed_tokens_are_refused(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     let (secret, _) = create_as(&pool, &ids, "script", None).await.unwrap();
-    let unknown = Secret::generate();
+    let unknown = Secret::generate(PREFIX);
     let without_prefix = &secret.expose()[PREFIX.len()..];
     for token in [unknown.expose(), without_prefix, "", "horae_pat_"] {
         assert!(

@@ -3,6 +3,7 @@
 //! permission state.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
+use horae_core::permissions::oauth::ScopeSet;
 use sqlx::PgConnection;
 
 use super::permissions::{PermissionStorageError, load_person_permissions};
@@ -18,6 +19,14 @@ pub enum Channel {
     /// A person's personal access token: the person and their permissions,
     /// exactly as for a session.
     Token { token_id: uuid::Uuid },
+    /// An app's OAuth access token: the person, with their grants narrowed to
+    /// what the token's scopes let through and never the Administrator
+    /// identity (spec 024 R-6).
+    OAuth {
+        grant_id: uuid::Uuid,
+        token_id: uuid::Uuid,
+        scopes: ScopeSet,
+    },
     /// The server's operator at its terminal: no person, and no grants. Each
     /// operation that accepts it says what it may do.
     Operator,
@@ -98,7 +107,10 @@ impl Actor {
             }
         };
         // Only the organization is locked for a channel with no person.
-        let person_channel = matches!(caller.channel, Channel::Session | Channel::Token { .. });
+        let person_channel = matches!(
+            caller.channel,
+            Channel::Session | Channel::Token { .. } | Channel::OAuth { .. }
+        );
         if organization.is_none() || !person_channel {
             return Ok(actor);
         }
@@ -125,7 +137,7 @@ impl Actor {
         if person.is_none() {
             return Ok(actor);
         }
-        let state = load_person_permissions(connection, caller.org_id, caller.user_id)
+        let mut state = load_person_permissions(connection, caller.org_id, caller.user_id)
             .await
             .map_err(|error| match error {
                 // A lost race or a storage fault, not missing authority.
@@ -136,6 +148,13 @@ impl Actor {
                 }
             })?
             .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
+        if let Channel::OAuth { scopes, .. } = caller.channel {
+            // Scopes only narrow: whatever an operation checks, it checks
+            // against a subset of the person's grants, and no scope covers
+            // administration.
+            state.grants = state.grants.intersection(&scopes.ceiling());
+            state.is_administrator = false;
+        }
         actor.identity.active = true;
         actor.permissions = Some(state);
         Ok(actor)
@@ -179,6 +198,15 @@ impl Actor {
 
     pub fn channel(&self) -> Channel {
         self.channel
+    }
+
+    /// The scopes of an OAuth access token; `None` for every other channel,
+    /// which no scope limits.
+    pub fn scopes(&self) -> Option<ScopeSet> {
+        match self.channel {
+            Channel::OAuth { scopes, .. } => Some(scopes),
+            _ => None,
+        }
     }
 
     /// Whether the actor's stored state grants `permission`.

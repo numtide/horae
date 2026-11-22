@@ -7,59 +7,25 @@
 //! requests that carry it. [`authenticate`] turns a presented token into a
 //! [`Caller`] that [`Actor::load`](super::Actor::load) treats as a session.
 
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use chacha20poly1305::aead::OsRng;
-use chacha20poly1305::aead::rand_core::RngCore;
 use chrono::{DateTime, Utc};
-use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use super::oauth::digest;
 use super::{Actor, Caller, Channel, Done, OpError, Tx};
 use crate::models::api_tokens::ApiTokenRow;
 
+/// A token's secret, from the generator every Horae credential shares.
+pub use super::oauth::Secret;
+
 /// What every token starts with, so people and secret scanners recognise it.
 pub const PREFIX: &str = "horae_pat_";
-/// How many characters after [`PREFIX`] are kept to tell tokens apart.
-const DISPLAY_LEN: usize = 8;
-const SECRET_BYTES: usize = 32;
 const MAX_NAME: usize = 100;
 
 const ACTIVE_REQUIRED: &str = "An active account is required";
 const NOT_FOUND: &str = "API token not found";
 const NAME_LENGTH: &str = "Name the token in 1 to 100 characters";
 const EXPIRY_PAST: &str = "Choose an expiry in the future";
-
-/// A token's secret. `Debug` prints only its display prefix.
-pub struct Secret(String);
-
-impl Secret {
-    fn generate() -> Self {
-        let mut bytes = [0u8; SECRET_BYTES];
-        OsRng.fill_bytes(&mut bytes);
-        Self(format!("{PREFIX}{}", URL_SAFE_NO_PAD.encode(bytes)))
-    }
-
-    /// The whole token, to hand to its owner once.
-    pub fn expose(&self) -> &str {
-        &self.0
-    }
-
-    fn display_prefix(&self) -> &str {
-        &self.0[PREFIX.len()..PREFIX.len() + DISPLAY_LEN]
-    }
-}
-
-impl std::fmt::Debug for Secret {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{PREFIX}{}…", self.display_prefix())
-    }
-}
-
-fn digest(token: &str) -> Vec<u8> {
-    Sha256::digest(token.as_bytes()).to_vec()
-}
 
 fn require_active(actor: &Actor) -> Result<(), OpError> {
     if actor.is_active() {
@@ -175,7 +141,7 @@ pub async fn create(
     if expires_at.is_some_and(|at| at <= Utc::now()) {
         return Err(OpError::invalid("expires_at", EXPIRY_PAST));
     }
-    let secret = Secret::generate();
+    let secret = Secret::generate(PREFIX);
     let row = sqlx::query_as!(
         ApiTokenRow,
         r#"WITH token AS (

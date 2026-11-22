@@ -243,3 +243,112 @@ async fn a_token_of_an_inactive_person_has_no_authority(pool: PgPool) {
     assert!(actor.permissions().is_none());
     assert!(!actor.administrator());
 }
+
+// ── OAuth: the person's grants narrowed to the token's scopes ────────────────
+
+use horae_core::permissions::oauth::{Scope, ScopeSet};
+
+async fn load_oauth(pool: &PgPool, org_id: Uuid, user_id: Uuid, scopes: ScopeSet) -> Actor {
+    let mut tx: Tx = pool.begin().await.unwrap();
+    let caller = Caller::oauth(org_id, user_id, Uuid::now_v7(), Uuid::now_v7(), scopes);
+    Actor::load(&mut tx, caller).await.unwrap()
+}
+
+fn scope_sets() -> Vec<ScopeSet> {
+    (0..8u8)
+        .map(|bits| {
+            let scopes: Vec<Scope> = Scope::ALL
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| bits & (1 << index) != 0)
+                .map(|(_, scope)| scope)
+                .collect();
+            ScopeSet::of(&scopes)
+        })
+        .collect()
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_actor_holds_the_persons_grants_within_its_scopes(pool: PgPool) {
+    for profile in [BuiltInProfile::Member, BuiltInProfile::Administrator] {
+        let ids = seed(&pool, profile).await;
+        let session = load(&pool, ids.org_id, ids.user_id).await.unwrap();
+        let stored = session.grants().unwrap().clone();
+        for scopes in scope_sets() {
+            let actor = load_oauth(&pool, ids.org_id, ids.user_id, scopes).await;
+            assert!(actor.is_active());
+            assert_eq!(actor.scopes(), Some(scopes));
+            assert_eq!(
+                actor.grants(),
+                Some(&stored.intersection(&scopes.ceiling())),
+                "{profile:?} {scopes:?}"
+            );
+            assert!(!actor.administrator(), "{profile:?} {scopes:?}");
+            assert!(actor.require_administrator().is_err());
+            assert!(!actor.permissions().unwrap().is_administrator);
+        }
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_administrators_oauth_actor_reaches_only_what_the_scopes_cover(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let read = load_oauth(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        ScopeSet::of(&[Scope::TimeRead]),
+    )
+    .await;
+    assert!(read.has(Permission::TimeReadAll));
+    assert!(!read.has(Permission::TimeWriteOwn));
+    assert!(!read.has(Permission::ProjectReadAll));
+
+    let all = ScopeSet::of(&Scope::ALL);
+    let write = load_oauth(&pool, ids.org_id, ids.user_id, all).await;
+    assert!(write.has(Permission::TimeWriteAll));
+    assert!(write.has(Permission::ProjectReadAll));
+    for outside in [
+        Permission::TimeApproveAll,
+        Permission::ProjectWriteAll,
+        Permission::PeopleWriteAll,
+        Permission::InvoiceReadAll,
+        Permission::BillableRateReadAll,
+        Permission::CompanyWrite,
+    ] {
+        assert!(!write.has(outside), "{outside:?}");
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_actor_of_an_inactive_person_has_no_authority(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let actor = load_oauth(&pool, ids.org_id, ids.user_id, ScopeSet::of(&Scope::ALL)).await;
+    assert!(!actor.is_active());
+    assert!(actor.grants().is_none());
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_actor_of_a_missing_organization_has_no_authority(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let actor = load_oauth(
+        &pool,
+        Uuid::now_v7(),
+        ids.user_id,
+        ScopeSet::of(&Scope::ALL),
+    )
+    .await;
+    assert!(!actor.is_active());
+    assert!(actor.grants().is_none());
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn only_oauth_actors_have_scopes(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let session = load(&pool, ids.org_id, ids.user_id).await.unwrap();
+    assert_eq!(session.scopes(), None);
+}
