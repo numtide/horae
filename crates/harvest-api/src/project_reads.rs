@@ -27,7 +27,8 @@ async fn visible_projects(
     project_id: Option<Uuid>,
     window: &Window,
 ) -> Result<Listed<ProjectRow>, ApiError> {
-    let (cursor_at, cursor_id, before) = window.position();
+    let horizon = list_horizon(read, project_id).await?;
+    let position = window.position();
     // Count and page must use the same visible set, including out-of-range pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -50,13 +51,18 @@ async fn visible_projects(
                AND ($4::uuid IS NULL OR p.client_id=$4)
                AND ($5::timestamptz IS NULL OR p.updated_at >= $5)
                AND ($6::uuid IS NULL OR p.id=$6)
+               AND ($15::timestamptz IS NULL OR p.updated_at < $15)
            ), totals AS (
-             SELECT COUNT(*) total, CASE WHEN $13::timestamptz IS NULL THEN $8
-               WHEN $15 THEN GREATEST(COUNT(*) FILTER (WHERE (updated_at,id) < ($13,$14::uuid)) - $7, 0)
-               ELSE COUNT(*) FILTER (WHERE (updated_at,id) <= ($13,$14::uuid)) END start
+             SELECT COUNT(*) total,
+               CASE WHEN $13::uuid IS NULL THEN $8
+                 WHEN $14 THEN GREATEST(COUNT(*) FILTER (WHERE id > $13) - $7, 0)
+                 ELSE COUNT(*) FILTER (WHERE id >= $13) END start,
+               CASE WHEN $13::uuid IS NOT NULL AND $14
+                 THEN LEAST(COUNT(*) FILTER (WHERE id > $13), $7) ELSE $7 END take
              FROM visible
            ), page AS (
-             SELECT * FROM visible ORDER BY updated_at,id LIMIT $7 OFFSET (SELECT start FROM totals)
+             SELECT * FROM visible ORDER BY id DESC
+             LIMIT (SELECT take FROM totals) OFFSET (SELECT start FROM totals)
            )
            SELECT totals.total AS "total!",totals.start AS "start!",p.id AS "uuid?",
                   p.harvest_id AS "id?",p.name AS "name?",p.code,
@@ -65,12 +71,12 @@ async fn visible_projects(
                   p.ends_on AS "ends_on?: chrono::NaiveDate",p.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
                   p.updated_at AS "updated_at?: chrono::DateTime<chrono::Utc>",
                   p.client_harvest_id AS "client_id?",p.client_name AS "client_name?"
-           FROM totals LEFT JOIN page p ON true ORDER BY p.updated_at,p.id"#,
+           FROM totals LEFT JOIN page p ON true ORDER BY p.id DESC"#,
         caller.org_id, caller.user_id, filters.is_active, client_id,
         filters.updated_since as Option<DateTime<Utc>>, project_id, window.per_page, window.offset,
         read.actor.has(Permission::ProjectReadAll), read.actor.has(Permission::ProjectReadManaged),
         read.actor.has(Permission::BillableRateReadAll), read.actor.has(Permission::BillableRateReadManaged),
-        cursor_at as Option<DateTime<Utc>>, cursor_id, before,
+        position.id, position.before, horizon as Option<DateTime<Utc>>,
     ).fetch_all(&mut *read.tx).await.map_err(internal)?;
     let first = records
         .first()
@@ -81,12 +87,10 @@ async fn visible_projects(
         // Only the row of an empty page has no id.
         let Some(uuid) = record.uuid else { continue };
         rows.push(ProjectRow {
-            key: Key {
-                at: record
-                    .updated_at
-                    .ok_or_else(|| internal("Missing project update time"))?,
-                id: uuid,
-            },
+            uuid,
+            updated_at: record
+                .updated_at
+                .ok_or_else(|| internal("Missing project update time"))?,
             id: record.id.ok_or_else(|| internal("Missing api number"))?,
             name: record
                 .name

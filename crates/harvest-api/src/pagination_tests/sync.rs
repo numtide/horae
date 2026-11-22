@@ -144,17 +144,9 @@ async fn links_are_absolute_on_the_request_host(pool: PgPool) {
 #[serial_test::serial]
 async fn a_cursor_walk_visits_the_same_rows_as_a_page_walk(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    add_clients(&pool, ids.org_id, 6).await;
-    // Equal update times fall back to the id.
-    sqlx::query!(
-        "UPDATE clients SET updated_at = '2026-01-01T00:00:03Z' WHERE org_id = $1 AND name IN ('Client 4', 'Client 5')",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    add_rows_of_every_kind(&pool, &ids, 5).await;
     let app = signed_in(&pool, ids.user_id).await;
-    for resource in ["clients", "projects", "tasks", "users"] {
+    for resource in LISTS {
         let mut by_page = Vec::new();
         let first = big_page(&app, &format!("/harvest/v2/{resource}?per_page=2")).await;
         let total_pages = first["total_pages"].as_i64().unwrap();
@@ -189,14 +181,149 @@ async fn a_cursor_walk_visits_the_same_rows_as_a_page_walk(pool: PgPool) {
             );
         }
     }
-    let ordered = big_page(&app, "/harvest/v2/clients").await;
-    let times: Vec<&str> = ordered["clients"]
+    // Catalogue lists run newest first, as Harvest's do.
+    let clients = big_page(&app, "/harvest/v2/clients").await;
+    let created: Vec<&str> = clients["clients"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|row| row["updated_at"].as_str().unwrap())
+        .map(|row| row["created_at"].as_str().unwrap())
         .collect();
-    assert!(times.is_sorted(), "{times:?}");
+    assert!(created.is_sorted_by(|a, b| a >= b), "{created:?}");
+}
+
+const LISTS: [&str; 5] = ["clients", "projects", "tasks", "users", "time_entries"];
+
+/// Adds `count` records of every listed kind, each kind's newest last, and
+/// time entries over several days.
+async fn add_rows_of_every_kind(pool: &PgPool, ids: &crate::testing::SeedIds, count: i32) {
+    for n in 0..count {
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, $3, 'EUR')",
+            id,
+            ids.org_id,
+            format!("Client {n}")
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO projects (id, org_id, client_id, name, currency) VALUES ($1, $2, $3, $4, 'EUR')",
+            Uuid::now_v7(),
+            ids.org_id,
+            id,
+            format!("Project {n}")
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO tasks (id, org_id, name) VALUES ($1, $2, $3)",
+            Uuid::now_v7(),
+            ids.org_id,
+            format!("Task {n}")
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        add_person(pool, ids, BuiltInProfile::Member).await;
+        let entry = time_entry(pool, ids, EntryState::Open).await;
+        sqlx::query!(
+            "UPDATE time_entries SET spent_date = spent_date - $2::int WHERE id = $1",
+            entry,
+            n % 3
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+/// The ids a link-following client collects from `resource` in pages of two,
+/// running `between` after the first page.
+async fn follow_links(app: &Router, resource: &str, between: impl AsyncFnOnce()) -> Vec<i64> {
+    let mut body = big_page(app, &format!("/harvest/v2/{resource}?per_page=2")).await;
+    let mut seen = ids_of(&body, resource);
+    between().await;
+    while let Some(next) = body["links"]["next"].as_str() {
+        body = big_page(app, next).await;
+        seen.extend(ids_of(&body, resource));
+    }
+    seen
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn edits_and_deletes_during_a_cursor_walk_skip_nothing(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    add_rows_of_every_kind(&pool, &ids, 5).await;
+    let app = signed_in(&pool, ids.user_id).await;
+    for resource in LISTS {
+        let before = follow_links(&app, resource, async || {}).await;
+        // Edit every record and delete one the client has already read: on
+        // an offset walk the rest would shift and one would be skipped.
+        let walked = follow_links(&app, resource, async || {
+            let first = before[0];
+            match resource {
+                "clients" => {
+                    sqlx::query!(
+                        "UPDATE clients SET name = name || '!' WHERE org_id = $1",
+                        ids.org_id
+                    )
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                }
+                "projects" => {
+                    sqlx::query!(
+                        "UPDATE projects SET name = name || '!' WHERE org_id = $1",
+                        ids.org_id
+                    )
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                }
+                "tasks" => {
+                    sqlx::query!(
+                        "UPDATE tasks SET name = name || '!' WHERE org_id = $1",
+                        ids.org_id
+                    )
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                }
+                "users" => {
+                    sqlx::query!(
+                        "UPDATE users SET name = name || '!' WHERE org_id = $1",
+                        ids.org_id
+                    )
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                }
+                _ => {
+                    sqlx::query!(
+                        "UPDATE time_entries SET notes = 'edited' WHERE org_id = $1",
+                        ids.org_id
+                    )
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                    sqlx::query!(
+                        "DELETE FROM time_entries WHERE org_id = $1 AND harvest_id = $2",
+                        ids.org_id,
+                        first
+                    )
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                }
+            }
+        })
+        .await;
+        assert_eq!(walked, before, "{resource}");
+    }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -215,11 +342,21 @@ async fn a_changed_or_foreign_cursor_is_a_bad_request(pool: PgPool) {
     let mut changed = cursor.clone().into_bytes();
     changed[4] = if changed[4] == b'A' { b'B' } else { b'A' };
     let changed = String::from_utf8(changed).unwrap();
-    for bad in [changed.as_str(), "nope", ""] {
-        let (status, body) =
-            get_with(&app, &format!("/harvest/v2/clients?cursor={bad}"), &[]).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}: {body}");
+    for list in ["clients", "time_entries", "roles"] {
+        for bad in [changed.as_str(), "nope", ""] {
+            let (status, body) =
+                get_with(&app, &format!("/harvest/v2/{list}?cursor={bad}"), &[]).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{list} {bad}: {body}");
+        }
     }
+    // My project assignments have no cursor, so one is refused, not ignored.
+    let (status, _) = get_with(
+        &app,
+        &format!("/harvest/v2/users/me/project_assignments?cursor={cursor}"),
+        &[],
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     // The cursor wins over page.
     let both = big_page(
         &app,
@@ -437,7 +574,30 @@ async fn time_entries_take_every_documented_filter(pool: PgPool) {
         assert_eq!(body["total_entries"], expected.len(), "{query}");
     }
     let (status, _) = get_with(&app, "/harvest/v2/time_entries?approval_status=maybe", &[]).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    for (entry, status) in [
+        (open, "unsubmitted"),
+        (submitted, "submitted"),
+        (approved, "approved"),
+    ] {
+        let row = big_page(&app, &format!("/harvest/v2/time_entries/{entry}")).await;
+        assert_eq!(row["approval_status"], status);
+    }
+
+    // A running timer's hours include the time since it last started.
+    sqlx::query!(
+        "UPDATE time_entries SET is_running = true, started_at = now() - interval '90 minutes' WHERE id = $1",
+        elsewhere
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let running = big_page(&app, &format!("/harvest/v2/time_entries/{elsewhere}")).await;
+    assert_eq!(running["hours_without_timer"], 1.0);
+    assert_eq!(running["hours"], 2.5);
+    let listed = big_page(&app, "/harvest/v2/time_entries?is_running=true").await;
+    assert_eq!(listed["time_entries"][0]["hours"], 2.5);
 
     let row = &big_page(&app, &format!("/harvest/v2/time_entries/{open}")).await;
     assert_eq!(row["hours_without_timer"], 1.0);
@@ -489,4 +649,125 @@ async fn kinds_horae_lacks_list_empty_and_find_nothing(pool: PgPool) {
     let unsigned = router(pool.clone(), limiter());
     let (status, _) = get_with(&unsigned, "/harvest/v2/expenses", &[]).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// The ids and the latest `updated_at` a sync client sees on `/clients` since
+/// `watermark`.
+async fn changed_clients(app: &Router, watermark: &str) -> (Vec<i64>, Option<String>) {
+    let since: String = form_urlencoded::byte_serialize(watermark.as_bytes()).collect();
+    let body = big_page(app, &format!("/harvest/v2/clients?updated_since={since}")).await;
+    let latest = body["clients"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|row| row["updated_at"].as_str())
+        .max()
+        .map(str::to_owned);
+    (ids_of(&body, "clients"), latest)
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn a_late_commit_is_not_skipped_by_an_updated_since_watermark(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let early = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Early', 'EUR')",
+        early,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app = signed_in(&pool, ids.user_id).await;
+    let mut watermark =
+        sqlx::query_scalar!(r#"SELECT clock_timestamp() AS "now!: chrono::DateTime<chrono::Utc>""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .to_rfc3339();
+
+    // A slow transaction edits the seeded client and stays open while a
+    // quick one edits another client and commits.
+    let mut slow = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE clients SET name = 'Late' WHERE id = $1",
+        ids.client_id
+    )
+    .execute(&mut *slow)
+    .await
+    .unwrap();
+    sqlx::query!("UPDATE clients SET name = 'Quick' WHERE id = $1", early)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // The client syncs, keeping the latest time it saw as its watermark,
+    // then syncs again after the slow transaction commits.
+    let mut seen = std::collections::BTreeSet::new();
+    let (changed, latest) = changed_clients(&app, &watermark).await;
+    assert!(
+        changed.is_empty(),
+        "a time past an uncommitted write was served"
+    );
+    seen.extend(changed);
+    if let Some(latest) = latest {
+        watermark = latest;
+    }
+    slow.commit().await.unwrap();
+    let (changed, _) = changed_clients(&app, &watermark).await;
+    seen.extend(changed);
+
+    let expected = std::collections::BTreeSet::from([
+        api_id(&pool, "client", ids.client_id).await,
+        api_id(&pool, "client", early).await,
+    ]);
+    assert_eq!(seen, expected);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn a_token_walks_the_lists_by_link_and_nothing_is_cached(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    add_rows_of_every_kind(&pool, &ids, 3).await;
+    let mut write = ops::begin(&pool, ops::Caller::session(ids.org_id, ids.user_id))
+        .await
+        .unwrap();
+    let result = ops::api_tokens::create(&mut write.tx, &write.actor, "Sync", None).await;
+    let (secret, _) = write.commit(result, &ops::NoEvents).await.unwrap();
+    let bearer = format!("Bearer {}", secret.expose());
+    let app = router(pool.clone(), limiter());
+    for resource in LISTS {
+        let mut uri = format!("/v2/{resource}?per_page=2");
+        let mut count = 0;
+        loop {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(&uri)
+                        .header("authorization", &bearer)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "{uri}");
+            assert_eq!(response.headers()["cache-control"], "private, no-store");
+            let body: Value = serde_json::from_slice(
+                &axum::body::to_bytes(response.into_body(), 1024 * 1024)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            count += body[resource].as_array().unwrap().len();
+            match body["links"]["next"].as_str() {
+                Some(next) => uri = next.to_owned(),
+                None => {
+                    assert_eq!(body["total_entries"], count, "{resource}");
+                    break;
+                }
+            }
+        }
+    }
 }

@@ -1,9 +1,11 @@
 //! Harvest's list paging (spec 021 FR-040, FR-041, research R-8). Every list
-//! takes `page` and `per_page` (1–2000, default 2000). Catalogue lists also
-//! take `cursor`: an opaque, signed position, the `(updated_at, id)` of the
-//! row a page continues after (or, going back, ends before). They are ordered
-//! by that pair, so a page walk and a cursor walk visit the same rows in the
-//! same order, and the envelope keeps `page` and the totals filled either way.
+//! takes `page` and `per_page` (1–2000, default 2000). Keyed lists also take
+//! `cursor`, an opaque, signed position: the key of the row a page continues
+//! after (or, going back, ends before). Catalogue lists are keyed by id,
+//! newest first, as Harvest orders them by creation; time entries by
+//! `(spent_date, id)`, latest first. An edit never moves a record, so a cursor
+//! walk skips nothing and repeats nothing, and changes are found with
+//! `updated_since`. The envelope keeps `page` and the totals filled either way.
 //! Links are absolute on the host the request arrived on.
 
 use std::convert::Infallible;
@@ -13,11 +15,12 @@ use axum::extract::{FromRequestParts, OriginalUri};
 use axum::http::{header, request::Parts};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use hmac::{Hmac, Mac};
 use horae_harvest::v2::compat::HarvestPagination;
 use horae_server::config::CursorKey;
 use sha2::Sha256;
+use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::HarvestState;
@@ -25,14 +28,22 @@ use crate::errors::ApiError;
 
 pub(crate) const MAX_PER_PAGE: i64 = 2000;
 
-const VERSION: u8 = 1;
+const VERSION: u8 = 2;
 const MAC_LEN: usize = 32;
+/// Keeps these cursors apart from `/api/v1`'s, which share the key.
+const DOMAIN: &[u8] = b"harvest-v2-cursor";
 
-/// Where a catalogue row sits in its list.
+/// Where a row sits in its list: its id, after its date on dated lists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Key {
-    pub at: DateTime<Utc>,
+    pub date: Option<NaiveDate>,
     pub id: Uuid,
+}
+
+impl Key {
+    pub fn id(id: Uuid) -> Self {
+        Self { date: None, id }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +62,14 @@ pub(crate) struct Window {
     cursor: Option<Cursor>,
 }
 
+/// A window's cursor as query parameters: no cursor leaves `date` and `id`
+/// `None`, and `before` says the page ends before the key.
+pub(crate) struct Position {
+    pub date: Option<NaiveDate>,
+    pub id: Option<Uuid>,
+    pub before: bool,
+}
+
 impl Window {
     /// The window of a read by id.
     pub fn one() -> Self {
@@ -62,12 +81,18 @@ impl Window {
         }
     }
 
-    /// The cursor's position as query parameters: its update time and id
-    /// (both `None` without a cursor), and whether the page ends before it.
-    pub fn position(&self) -> (Option<DateTime<Utc>>, Option<Uuid>, bool) {
+    pub fn position(&self) -> Position {
         match self.cursor {
-            Some(c) => (Some(c.key.at), Some(c.key.id), c.before),
-            None => (None, None, false),
+            Some(c) => Position {
+                date: c.key.date,
+                id: Some(c.key.id),
+                before: c.before,
+            },
+            None => Position {
+                date: None,
+                id: None,
+                before: false,
+            },
         }
     }
 }
@@ -77,6 +102,28 @@ pub(crate) struct Listed<T> {
     pub total: i64,
     pub start: i64,
     pub rows: Vec<T>,
+}
+
+/// The update time below which every committed stamp is final. A transaction
+/// still writing may yet commit rows stamped at or after its own start, so
+/// lists serve only rows stamped before the oldest such start (and before
+/// now). A client that takes the latest `updated_at` it saw as its next
+/// `updated_since` then misses nothing that commits late; those rows show up
+/// once their transaction ends. Stamps are taken at write time
+/// (`0005_updated_at_at_write.sql`), so a transaction that has not written
+/// yet can only stamp later than this. `pg_stat_activity` shows other
+/// sessions' transactions only for the same role, which every Horae writer
+/// uses.
+pub(crate) async fn horizon(tx: &mut PgConnection) -> Result<DateTime<Utc>, ApiError> {
+    sqlx::query_scalar!(
+        r#"SELECT LEAST(statement_timestamp(),
+             (SELECT min(xact_start) FROM pg_stat_activity
+              WHERE datname = current_database() AND backend_xid IS NOT NULL
+                AND pid <> pg_backend_pid())) AS "horizon!: DateTime<Utc>""#
+    )
+    .fetch_one(tx)
+    .await
+    .map_err(ApiError::internal)
 }
 
 /// What a list handler needs from its request to page and link.
@@ -184,9 +231,9 @@ impl ListRequest {
             .with_query(self.query.as_deref())
     }
 
-    /// The envelope of a catalogue list, whose `next` and `previous` links
-    /// carry cursors. `key` gives a row's position.
-    pub fn catalogue<R, T: serde::Serialize>(
+    /// The envelope of a keyed list, whose `next` and `previous` links carry
+    /// cursors. `key` gives a row's position.
+    pub fn keyed<R, T: serde::Serialize>(
         &self,
         kind: &str,
         listed: &Listed<R>,
@@ -195,13 +242,14 @@ impl ListRequest {
         window: &Window,
     ) -> HarvestPagination<T> {
         let per_page = window.per_page;
-        let page = listed.start / per_page + 1;
+        // A cursor may start between page boundaries; a partial page before
+        // it still counts as one.
+        let page = listed.start / per_page + i64::from(listed.start % per_page != 0) + 1;
         let end = listed.start + i64::try_from(items.len()).unwrap_or(i64::MAX);
         let mut envelope =
             HarvestPagination::new(kind, items, page, per_page, listed.total, &self.url);
         if let (Some(first), Some(last)) = (listed.rows.first(), listed.rows.last()) {
-            // A cursor may start between page boundaries, so what follows is
-            // decided by the rows, not by the page number.
+            // What follows is decided by the rows, not by the page number.
             envelope.next_page = (end < listed.total).then_some(page + 1);
             envelope.links.next = envelope.next_page.map(|_| {
                 self.cursor_link(
@@ -212,7 +260,7 @@ impl ListRequest {
                     per_page,
                 )
             });
-            envelope.links.previous = (listed.start > 0).then(|| {
+            envelope.links.previous = envelope.previous_page.map(|_| {
                 self.cursor_link(
                     Cursor {
                         key: key(first),
@@ -233,9 +281,17 @@ impl ListRequest {
         )
     }
 
+    /// `version ‖ before ‖ has date ‖ date (days from CE, i32 BE) ‖ id ‖
+    /// HMAC`. Signed, not encrypted: it shows the row's internal id, which the
+    /// caller may already read.
     fn encode(&self, cursor: Cursor) -> String {
-        let mut bytes = vec![VERSION, u8::from(cursor.before)];
-        bytes.extend_from_slice(&cursor.key.at.timestamp_micros().to_be_bytes());
+        let mut bytes = vec![
+            VERSION,
+            u8::from(cursor.before),
+            u8::from(cursor.key.date.is_some()),
+        ];
+        let days = cursor.key.date.map_or(0, |date| date.num_days_from_ce());
+        bytes.extend_from_slice(&days.to_be_bytes());
         bytes.extend_from_slice(cursor.key.id.as_bytes());
         let mac = self.mac(&bytes).finalize().into_bytes();
         bytes.extend_from_slice(&mac);
@@ -246,13 +302,19 @@ impl ListRequest {
         let bytes = URL_SAFE_NO_PAD.decode(cursor).ok()?;
         let (body, mac) = bytes.split_at_checked(bytes.len().checked_sub(MAC_LEN)?)?;
         self.mac(body).verify_slice(mac).ok()?;
-        let [VERSION, before @ (0 | 1), rest @ ..] = body else {
+        let [VERSION, before @ (0 | 1), dated @ (0 | 1), rest @ ..] = body else {
             return None;
         };
-        let (micros, id) = rest.split_at_checked(8)?;
+        let (days, id) = rest.split_at_checked(4)?;
+        let date = match dated {
+            1 => Some(NaiveDate::from_num_days_from_ce_opt(i32::from_be_bytes(
+                days.try_into().ok()?,
+            ))?),
+            _ => None,
+        };
         Some(Cursor {
             key: Key {
-                at: DateTime::from_timestamp_micros(i64::from_be_bytes(micros.try_into().ok()?))?,
+                date,
                 id: Uuid::from_slice(id).ok()?,
             },
             before: *before == 1,
@@ -262,6 +324,7 @@ impl ListRequest {
     fn mac(&self, bytes: &[u8]) -> Hmac<Sha256> {
         let mut mac =
             Hmac::<Sha256>::new_from_slice(self.key.bytes()).expect("HMAC accepts any key length");
+        mac.update(DOMAIN);
         mac.update(bytes);
         mac
     }
@@ -279,10 +342,10 @@ mod tests {
         }
     }
 
-    fn cursor() -> Cursor {
+    fn cursor(date: Option<NaiveDate>) -> Cursor {
         Cursor {
             key: Key {
-                at: DateTime::from_timestamp_micros(1_790_000_000_123_456).unwrap(),
+                date,
                 id: Uuid::now_v7(),
             },
             before: true,
@@ -292,15 +355,19 @@ mod tests {
     #[test]
     fn a_cursor_reads_back_its_position() {
         let request = request();
-        let cursor = cursor();
-        assert_eq!(request.decode(&request.encode(cursor)), Some(cursor));
+        for date in [None, NaiveDate::from_ymd_opt(2026, 9, 7)] {
+            let cursor = cursor(date);
+            assert_eq!(request.decode(&request.encode(cursor)), Some(cursor));
+        }
     }
 
     #[test]
     fn a_changed_cursor_is_refused() {
         let request = request();
-        let mut bytes = URL_SAFE_NO_PAD.decode(request.encode(cursor())).unwrap();
-        bytes[3] ^= 1;
+        let mut bytes = URL_SAFE_NO_PAD
+            .decode(request.encode(cursor(None)))
+            .unwrap();
+        bytes[8] ^= 1;
         assert_eq!(request.decode(&URL_SAFE_NO_PAD.encode(bytes)), None);
     }
 
@@ -310,6 +377,28 @@ mod tests {
             key: Arc::new(CursorKey::new([8; 32])),
             ..request()
         };
-        assert_eq!(request().decode(&other.encode(cursor())), None);
+        assert_eq!(request().decode(&other.encode(cursor(None))), None);
+    }
+
+    #[test]
+    fn page_numbers_follow_the_rows_when_a_cursor_starts_mid_page() {
+        let request = request();
+        let window = request.window(None, Some(5), None).unwrap();
+        let listed = Listed {
+            total: 20,
+            start: 3,
+            rows: vec![Uuid::now_v7(); 5],
+        };
+        let envelope = request.keyed(
+            "clients",
+            &listed,
+            |id| Key::id(*id),
+            listed.rows.clone(),
+            &window,
+        );
+        assert_eq!(envelope.page, 2);
+        assert_eq!(envelope.previous_page, Some(1));
+        assert!(envelope.links.previous.is_some());
+        assert_eq!(envelope.next_page, Some(3));
     }
 }

@@ -20,13 +20,15 @@ pub(super) const KINDS: [(&str, &str); 7] = [
 pub(super) struct PageQuery {
     page: Option<i64>,
     per_page: Option<i64>,
+    cursor: Option<String>,
 }
 
-/// The empty list of `kind`, for a caller who may use the API at all.
+/// The empty list of `kind`, for a caller who may use the API at all. A
+/// cursor is still checked, as on every keyed list.
 pub(super) fn list(kind: &'static str) -> MethodRouter<HarvestState> {
     get(
         move |_: AuthUser, list: ListRequest, Query(query): Query<PageQuery>| async move {
-            let window = list.window(query.page, query.per_page, None)?;
+            let window = list.window(query.page, query.per_page, query.cursor.as_deref())?;
             Ok::<_, ApiError>(Json(list.pages::<serde_json::Value>(
                 kind,
                 Vec::new(),

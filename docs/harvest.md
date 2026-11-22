@@ -34,7 +34,8 @@ Endpoints under `/harvest/v2` expose a subset of the
 GET    /harvest/v2/company
 GET    /harvest/v2/users/me
 GET    /harvest/v2/users/me/project_assignments
-GET    /harvest/v2/time_entries[?from=&to=&user_id=&project_id=&is_running=&page=&per_page=]
+GET    /harvest/v2/time_entries[?user_id=&client_id=&project_id=&task_id=&is_billed=&is_running=
+                                &approval_status=&from=&to=&updated_since=&page=&per_page=&cursor=]
 GET    /harvest/v2/time_entries/{id}
 POST   /harvest/v2/time_entries
 PATCH  /harvest/v2/time_entries/{id}
@@ -45,6 +46,8 @@ GET    /harvest/v2/projects[/{id}]
 GET    /harvest/v2/clients[/{id}]
 GET    /harvest/v2/tasks[/{id}]
 GET    /harvest/v2/users
+GET    /harvest/v2/{expenses,expense_categories,estimates,estimate_item_categories,
+                    contacts,invoice_item_categories,roles}   (always empty)
 ```
 
 Time-entry writes take their parameters as JSON, as a form or in the query string, and run the
@@ -66,9 +69,17 @@ token page as `Harvest-Account-Id`. A signed-in browser session also works for r
 only the session cookie answers `401`. Requests count against
 the same per-token rate limit as `/api/v1` ([Limits](api.md#limits)).
 
-IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and
-maximum `per_page` of 100; follow the returned links to retain filters. Nonpositive page numbers,
-page sizes outside 1–100, and overflowing offsets return `400 Bad Request`.
+IDs are integers, as on Harvest; the older UUID form is still accepted in paths and filters.
+Lists take `per_page` from 1 to 2000 (default 2000) and `page`; a page size or page number out
+of range answers `422`. Links in each list are absolute URLs on the host the request arrived on
+(with the scheme from `X-Forwarded-Proto`) and keep the request's filters. `links.next` and
+`links.previous` carry a `cursor`: following them walks a list without skipping or repeating a
+record, whatever is edited or deleted meanwhile, while counting up `page` can skip one when a
+record is deleted. Clients, projects, tasks and users run newest first; time entries by
+`spent_date`, latest first. `updated_since` works on every list except my project assignments.
+A list holds back records written after the oldest still-running write began until that write
+ends, so the latest `updated_at` a client has seen is a safe `updated_since` for its next run.
+Lists of kinds Horae lacks, such as expenses and estimates, are empty.
 
 This is not a drop-in replacement for arbitrary Harvest clients. Check the
 [API contract and compatibility matrix](../specs/001-time-tracking-invoicing/contracts/harvest-api.md)

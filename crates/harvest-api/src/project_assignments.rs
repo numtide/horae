@@ -19,6 +19,7 @@ pub(super) struct AssignmentQuery {
     page: Option<i64>,
     per_page: Option<i64>,
     updated_since: Option<String>,
+    cursor: Option<String>,
 }
 
 pub(super) async fn mine(
@@ -27,12 +28,18 @@ pub(super) async fn mine(
     list: ListRequest,
     Query(query): Query<AssignmentQuery>,
 ) -> ApiResult<HarvestPagination<HarvestProjectAssignment>> {
-    // Assignments carry no update time, so a filter on it could only widen
-    // the answer (FR-042).
-    if query.updated_since.is_some() {
-        return Err(ApiError::unprocessable(
-            "updated_since is not supported for project assignments",
-        ));
+    // Assignments carry no update time and no id of their own, so these
+    // could only widen or misplace the answer (FR-042). Lists of a person's
+    // assignments fit one 2000-row page in practice.
+    for (name, given) in [
+        ("updated_since", query.updated_since.is_some()),
+        ("cursor", query.cursor.is_some()),
+    ] {
+        if given {
+            return Err(ApiError::unprocessable(format!(
+                "{name} is not supported for project assignments"
+            )));
+        }
     }
     let window = list.window(query.page, query.per_page, None)?;
     let mut read = begin_read(&db, &user, "Project assignment").await?;

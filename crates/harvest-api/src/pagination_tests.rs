@@ -139,8 +139,8 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
         .unwrap();
         sqlx::query!("INSERT INTO users (id, org_id, name, email, active) VALUES ($1, $2, 'Test User', $3, $4)", id, ids.org_id, format!("{id}@example.test"), active).execute(&pool).await.unwrap();
     }
-    // A save that changes nothing keeps a row's update time, so its place in
-    // the list.
+    // Saves rewrite the original rows after the new ones; the order is by
+    // id, never by where a row sits or when it was saved.
     sqlx::query!(
         "UPDATE clients SET name = name WHERE id = $1",
         ids.client_id
@@ -170,7 +170,8 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
         ("tasks", ids.task_id),
         ("users", ids.user_id),
     ] {
-        let expected = [first, second];
+        // Newest first.
+        let expected = [second, first];
         let mut query = "is_active=true&updated_since=2020-01-01T00%3A00%3A00%2B01%3A00&tag=caf%C3%A9%26a%3Db&tag=two+words".to_owned();
         if resource == "projects" {
             query.push_str(&format!("&client_id={}", ids.client_id));
@@ -610,7 +611,7 @@ async fn harvest_task_access_follows_the_task_catalog_grant(pool: PgPool) {
         &app,
         "tasks",
         "is_active=true",
-        // The rate change above moved the seeded task after `hidden`.
+        // Newest first.
         &[hidden, ids.task_id],
     )
     .await;

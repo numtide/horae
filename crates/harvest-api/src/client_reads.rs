@@ -19,7 +19,8 @@ async fn visible_clients(
     client_id: Option<Uuid>,
     window: &Window,
 ) -> Result<Listed<ClientRow>, ApiError> {
-    let (cursor_at, cursor_id, before) = window.position();
+    let horizon = list_horizon(read, client_id).await?;
+    let position = window.position();
     // Count and page share one source snapshot, including exhausted pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -28,20 +29,25 @@ async fn visible_clients(
                AND ($2::bool IS NULL OR active=$2)
                AND ($3::timestamptz IS NULL OR updated_at >= $3)
                AND ($4::uuid IS NULL OR id=$4)
+               AND ($10::timestamptz IS NULL OR updated_at < $10)
            ), totals AS (
-             SELECT COUNT(*) total, CASE WHEN $8::timestamptz IS NULL THEN $7
-               WHEN $10 THEN GREATEST(COUNT(*) FILTER (WHERE (updated_at,id) < ($8,$9::uuid)) - $6, 0)
-               ELSE COUNT(*) FILTER (WHERE (updated_at,id) <= ($8,$9::uuid)) END start
+             SELECT COUNT(*) total,
+               CASE WHEN $8::uuid IS NULL THEN $7
+                 WHEN $9 THEN GREATEST(COUNT(*) FILTER (WHERE id > $8) - $6, 0)
+                 ELSE COUNT(*) FILTER (WHERE id >= $8) END start,
+               CASE WHEN $8::uuid IS NOT NULL AND $9
+                 THEN LEAST(COUNT(*) FILTER (WHERE id > $8), $6) ELSE $6 END take
              FROM visible
            ), page AS (
-             SELECT * FROM visible ORDER BY updated_at,id LIMIT $6 OFFSET (SELECT start FROM totals)
+             SELECT * FROM visible ORDER BY id DESC
+             LIMIT (SELECT take FROM totals) OFFSET (SELECT start FROM totals)
            )
            SELECT totals.total AS "total!",totals.start AS "start!",c.id AS "uuid?",
                   c.harvest_id AS "id?",c.name AS "name?",
                   c.active AS "active?",c.address,c.currency AS "currency?",
                   c.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
                   c.updated_at AS "updated_at?: chrono::DateTime<chrono::Utc>"
-           FROM totals LEFT JOIN page c ON true ORDER BY c.updated_at,c.id"#,
+           FROM totals LEFT JOIN page c ON true ORDER BY c.id DESC"#,
         caller.org_id,
         filters.is_active,
         filters.updated_since as Option<DateTime<Utc>>,
@@ -49,9 +55,9 @@ async fn visible_clients(
         read.actor.has(Permission::ClientReadAll),
         window.per_page,
         window.offset,
-        cursor_at as Option<DateTime<Utc>>,
-        cursor_id,
-        before,
+        position.id,
+        position.before,
+        horizon as Option<DateTime<Utc>>,
     )
     .fetch_all(&mut *read.tx)
     .await
@@ -65,12 +71,7 @@ async fn visible_clients(
         // Only the row of an empty page has no id.
         let Some(uuid) = record.uuid else { continue };
         rows.push(ClientRow {
-            key: Key {
-                at: record
-                    .updated_at
-                    .ok_or_else(|| internal("Missing client update time"))?,
-                id: uuid,
-            },
+            uuid,
             id: record.id.ok_or_else(|| internal("Missing api number"))?,
             name: record.name.ok_or_else(|| internal("Missing client name"))?,
             active: record
@@ -83,6 +84,9 @@ async fn visible_clients(
             created_at: record
                 .created_at
                 .ok_or_else(|| internal("Missing client timestamp"))?,
+            updated_at: record
+                .updated_at
+                .ok_or_else(|| internal("Missing client update time"))?,
         });
     }
     Ok(Listed { total, start, rows })

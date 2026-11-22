@@ -142,7 +142,19 @@ fn serve(v1: V1State) -> Router {
     Router::new()
         .nest("/harvest/v2", api.clone())
         .nest("/v2", api)
+        .layer(axum::middleware::map_response(no_store))
         .with_state(HarvestState(v1))
+}
+
+/// Responses are per caller, and list links echo the request's `Host` and
+/// `X-Forwarded-Proto`, so no shared cache may keep them; a session-cookie
+/// read is not covered by the caching rules for `Authorization`.
+async fn no_store(mut response: axum::response::Response) -> axum::response::Response {
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, no-store"),
+    );
+    response
 }
 
 // ── Error helper ────────────────────────────────────────────────────────────
@@ -200,6 +212,18 @@ async fn finish_read<T>(read: ops::ReadTx, result: Result<T, ApiError>) -> Resul
             Ok(value)
         }
         Err(error) => Err(read.refuse(error).await),
+    }
+}
+
+/// The update-time horizon a list serves below ([`pagination::horizon`]).
+/// A read of one record by `id` takes none: it is never a sync watermark.
+async fn list_horizon(
+    read: &mut ops::ReadTx,
+    id: Option<Uuid>,
+) -> Result<Option<DateTime<Utc>>, ApiError> {
+    match id {
+        Some(_) => Ok(None),
+        None => pagination::horizon(&mut read.tx).await.map(Some),
     }
 }
 
@@ -294,36 +318,31 @@ pub(crate) struct TimeEntryFilters {
     pub external_reference_id: Option<String>,
     pub is_billed: Option<bool>,
     pub is_running: Option<bool>,
-    pub approval_status: Option<ApprovalStatus>,
+    /// `unsubmitted`, `submitted` or `approved` (which covers invoiced).
+    pub approval_status: Option<String>,
     pub from: Option<NaiveDate>,
     pub to: Option<NaiveDate>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
+    pub cursor: Option<String>,
     pub updated_since: Option<DateTime<Utc>>,
 }
 
-/// The `approval_status` filter's values. Invoiced entries count as approved.
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum ApprovalStatus {
-    Unsubmitted,
-    Submitted,
-    Approved,
-}
-
-impl ApprovalStatus {
-    /// The entry states the value covers.
-    fn states(self) -> &'static [&'static str] {
-        match self {
-            Self::Unsubmitted => &["open"],
-            Self::Submitted => &["submitted"],
-            Self::Approved => &["approved", "invoiced"],
-        }
+/// The entry states an `approval_status` value covers.
+fn approval_states(status: &str) -> Result<&'static [&'static str], ApiError> {
+    match status {
+        "unsubmitted" => Ok(&["open"]),
+        "submitted" => Ok(&["submitted"]),
+        "approved" => Ok(&["approved", "invoiced"]),
+        _ => Err(ApiError::unprocessable(
+            "approval_status must be unsubmitted, submitted or approved",
+        )),
     }
 }
 
 #[derive(sqlx::FromRow)]
 struct TimeEntryRow {
+    uuid: Uuid,
     id: i64,
     spent_date: NaiveDate,
     minutes: i32,
@@ -355,15 +374,25 @@ struct TimeEntryRow {
     budget_kind: Option<String>,
 }
 
+/// `now` measures a running timer: its `hours` include the time since it
+/// last started, and `hours_without_timer` are the stored minutes before that.
 fn time_entry_row_to_harvest(
     row: &TimeEntryRow,
     org_round_min: u32,
     org_round_dir: horae_core::types::RoundDir,
+    now: DateTime<Utc>,
 ) -> HarvestTimeEntry {
-    let hours = Hours(row.minutes.into());
+    let running = match row.started_at {
+        Some(started_at) if row.is_running => {
+            horae_core::duration::minutes_between(started_at, now)
+        }
+        _ => 0,
+    };
+    let stored = i64::from(row.minutes);
+    let hours = Hours(stored + i64::from(running));
     let rounded_hours = Hours(
         horae_core::rounding::effective_minutes(
-            row.minutes as u32,
+            row.minutes as u32 + running,
             row.rounded_minutes.map(|minutes| minutes as u32),
             org_round_min,
             org_round_dir,
@@ -379,7 +408,7 @@ fn time_entry_row_to_harvest(
     };
     let approval_status = match row.state.as_str() {
         "open" => "unsubmitted",
-        "submitted" => "pending_approval",
+        "submitted" => "submitted",
         "approved" | "invoiced" => "approved",
         other => other,
     };
@@ -396,7 +425,7 @@ fn time_entry_row_to_harvest(
         id: row.id,
         spent_date: row.spent_date.to_string(),
         hours,
-        hours_without_timer: hours,
+        hours_without_timer: Hours(stored),
         rounded_hours,
         started_time,
         ended_time,
@@ -461,7 +490,7 @@ async fn time_entries_page(
     filters: TimeEntryFilters,
     list: &ListRequest,
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
-    let window = list.window(filters.page, filters.per_page, None)?;
+    let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
     let org = caller.org_id;
     let records = RecordFilters {
         user: ids::filter(db, org, Kind::User, filters.user_id.as_deref()).await?,
@@ -475,18 +504,24 @@ async fn time_entries_page(
     // Count and rows are read under the grants held for the whole read.
     let mut read = begin_read(db, caller, "Time entry").await?;
     let result = time_entry_rows(&mut read, caller, records, &filters, &window).await;
-    let (total_entries, rows) = finish_read(read, result).await?;
+    let listed = finish_read(read, result).await?;
 
-    let entries: Vec<HarvestTimeEntry> = rows
+    let now = Utc::now();
+    let entries: Vec<HarvestTimeEntry> = listed
+        .rows
         .iter()
-        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir))
+        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir, now))
         .collect();
 
-    Ok(Json(list.pages(
+    Ok(Json(list.keyed(
         "time_entries",
+        &listed,
+        |row| Key {
+            date: Some(row.spent_date),
+            id: row.uuid,
+        },
         entries,
         &window,
-        total_entries,
     )))
 }
 
@@ -499,38 +534,63 @@ struct RecordFilters {
 }
 
 /// The entry count and page in the caller's time scope, read under `read`.
+/// Entries run latest first by `(spent_date, id)`. One statement picks the
+/// page's ids and counts the list, so the two agree; a second reads the
+/// page's entries.
 async fn time_entry_rows(
     read: &mut ops::ReadTx,
     caller: &AuthUser,
     records: RecordFilters,
     filters: &TimeEntryFilters,
     window: &Window,
-) -> Result<(i64, Vec<TimeEntryRow>), ApiError> {
+) -> Result<Listed<TimeEntryRow>, ApiError> {
     let view = TimeView::of(&read.actor);
     let user_id_filter = scoped_user_filter(caller, view, records.user)?;
-    let states = filters.approval_status.map(ApprovalStatus::states);
+    let states = filters
+        .approval_status
+        .as_deref()
+        .map(approval_states)
+        .transpose()?;
+    let horizon = pagination::horizon(&mut read.tx).await?;
+    let position = window.position();
 
-    let total_entries = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM time_entries te
-         JOIN projects p ON p.id = te.project_id
-         CROSS JOIN LATERAL (SELECT
-           EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
-             AND m.manager_id = $8 AND m.managed_user_id = te.user_id) AS person,
-           EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id
-             AND m.manager_id = $8 AND m.project_id = te.project_id) AS project) managed
-         WHERE te.org_id = $1
-           AND ($11 OR ($9 AND te.user_id = $8) OR ($10 AND (managed.person OR managed.project)))
-           AND ($2::uuid IS NULL OR te.user_id = $2)
-           AND ($3::uuid IS NULL OR te.project_id = $3)
-           AND ($4::date IS NULL OR te.spent_date >= $4::date)
-           AND ($5::date IS NULL OR te.spent_date <= $5::date)
-           AND ($6::bool IS NULL OR te.is_running = $6)
-           AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
-           AND ($12::uuid IS NULL OR p.client_id = $12)
-           AND ($13::uuid IS NULL OR te.task_id = $13)
-           AND ($14::bool IS NULL OR (te.invoice_id IS NOT NULL) = $14)
-           AND ($15::text[] IS NULL OR te.state::text = ANY($15))
-           AND $16::text IS NULL",
+    let page = sqlx::query!(
+        r#"WITH scoped AS MATERIALIZED (
+             SELECT te.id, te.spent_date FROM time_entries te
+             JOIN projects p ON p.id = te.project_id
+             CROSS JOIN LATERAL (SELECT
+               EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
+                 AND m.manager_id = $8 AND m.managed_user_id = te.user_id) AS person,
+               EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id
+                 AND m.manager_id = $8 AND m.project_id = te.project_id) AS project) managed
+             WHERE te.org_id = $1
+               AND ($11 OR ($9 AND te.user_id = $8) OR ($10 AND (managed.person OR managed.project)))
+               AND ($2::uuid IS NULL OR te.user_id = $2)
+               AND ($3::uuid IS NULL OR te.project_id = $3)
+               AND ($4::date IS NULL OR te.spent_date >= $4::date)
+               AND ($5::date IS NULL OR te.spent_date <= $5::date)
+               AND ($6::bool IS NULL OR te.is_running = $6)
+               AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
+               AND ($12::uuid IS NULL OR p.client_id = $12)
+               AND ($13::uuid IS NULL OR te.task_id = $13)
+               AND ($14::bool IS NULL OR (te.invoice_id IS NOT NULL) = $14)
+               AND ($15::text[] IS NULL OR te.state::text = ANY($15))
+               AND $16::text IS NULL
+               AND te.updated_at < $17
+           ), totals AS (
+             SELECT COUNT(*) total,
+               CASE WHEN $19::uuid IS NULL THEN $21
+                 WHEN $20 THEN GREATEST(COUNT(*) FILTER (WHERE (spent_date, id) > ($18, $19)) - $22, 0)
+                 ELSE COUNT(*) FILTER (WHERE (spent_date, id) >= ($18, $19)) END start,
+               CASE WHEN $19::uuid IS NOT NULL AND $20
+                 THEN LEAST(COUNT(*) FILTER (WHERE (spent_date, id) > ($18, $19)), $22)
+                 ELSE $22 END take
+             FROM scoped
+           )
+           SELECT total AS "total!", start AS "start!",
+             ARRAY(SELECT id FROM scoped ORDER BY spent_date DESC, id DESC
+                   LIMIT (SELECT take FROM totals) OFFSET (SELECT start FROM totals)) AS "ids!"
+           FROM totals"#,
         caller.org_id,
         user_id_filter,
         records.project,
@@ -547,136 +607,35 @@ async fn time_entry_rows(
         filters.is_billed,
         states as Option<&[&str]>,
         filters.external_reference_id,
+        horizon as DateTime<Utc>,
+        position.date as Option<NaiveDate>,
+        position.id,
+        position.before,
+        window.offset,
+        window.per_page,
     )
     .fetch_one(&mut *read.tx)
     .await
-    .map_err(internal)?
-    .unwrap_or(0);
-
-    let rows = sqlx::query_as!(
-        TimeEntryRow,
-        r#"SELECT te.harvest_id AS id,
-               te.spent_date as "spent_date: chrono::NaiveDate",
-               te.minutes, te.start_minute, te.rounded_minutes, te.notes,
-               (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
-               te.started_at as "started_at: chrono::DateTime<chrono::Utc>",
-               te.state::text AS "state!: String", te.invoice_id,
-               te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
-               te.updated_at as "updated_at: chrono::DateTime<chrono::Utc>",
-               u.harvest_id AS user_id, u.name AS user_name,
-               p.harvest_id AS project_id,
-               p.name AS project_name, p.code AS project_code,
-               t.harvest_id AS task_id, t.name AS task_name,
-               c.harvest_id AS client_id, c.name AS client_name,
-               CASE WHEN $15 OR ($14 AND managed.project) THEN COALESCE(line.rate_cents,
-                 CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
-                 THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
-                 CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
-                 CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
-               ) END) END AS "billable_rate_cents?",
-               CASE WHEN $16 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
-               p.currency AS project_currency, o.default_currency AS org_currency,
-               CASE WHEN $18 OR ($17 AND managed.project)
-                 OR (member.id IS NOT NULL AND COALESCE(ps.report_visibility, 'project_members') = 'project_members')
-                 THEN p.budget_kind::text END AS "budget_kind?: String"
-         FROM time_entries te
-         JOIN users u ON u.id = te.user_id
-         JOIN projects p ON p.id = te.project_id
-         JOIN tasks t ON t.id = te.task_id
-         LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
-         LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
-         LEFT JOIN assignments member ON member.project_id = te.project_id AND member.user_id = $10
-         LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
-         JOIN clients c ON c.id = p.client_id
-         JOIN organizations o ON o.id = te.org_id
-         LEFT JOIN project_settings ps ON ps.project_id = p.id
-         LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
-         CROSS JOIN LATERAL (SELECT
-           EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
-             AND m.manager_id = $10 AND m.managed_user_id = te.user_id) AS person,
-           EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id
-             AND m.manager_id = $10 AND m.project_id = te.project_id) AS project) managed
-         WHERE te.org_id = $1
-           AND ($13 OR ($11 AND te.user_id = $10) OR ($12 AND (managed.person OR managed.project)))
-           AND ($2::uuid IS NULL OR te.user_id = $2)
-           AND ($3::uuid IS NULL OR te.project_id = $3)
-           AND ($4::date IS NULL OR te.spent_date >= $4::date)
-           AND ($5::date IS NULL OR te.spent_date <= $5::date)
-           AND ($6::bool IS NULL OR te.is_running = $6)
-           AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
-           AND ($19::uuid IS NULL OR p.client_id = $19)
-           AND ($20::uuid IS NULL OR te.task_id = $20)
-           AND ($21::bool IS NULL OR (te.invoice_id IS NOT NULL) = $21)
-           AND ($22::text[] IS NULL OR te.state::text = ANY($22))
-           AND $23::text IS NULL
-         ORDER BY te.spent_date DESC, te.created_at DESC, te.id DESC
-         LIMIT $8 OFFSET $9"#,
-        caller.org_id,
-        user_id_filter,
-        records.project,
-        filters.from as Option<NaiveDate>,
-        filters.to as Option<NaiveDate>,
-        filters.is_running,
-        filters.updated_since as Option<DateTime<Utc>>,
-        window.per_page,
-        window.offset,
-        caller.user_id,
-        view.own,
-        view.managed,
-        view.all,
-        view.billable_rates_managed,
-        view.billable_rates_all,
-        view.cost_rates,
-        view.projects_managed,
-        view.projects_all,
-        records.client,
-        records.task,
-        filters.is_billed,
-        states as Option<&[&str]>,
-        filters.external_reference_id,
-    )
-    .fetch_all(&mut *read.tx)
-    .await
     .map_err(internal)?;
-    Ok((total_entries, rows))
+    let rows = entries_by_id(read, caller, view, &page.ids).await?;
+    Ok(Listed {
+        total: page.total,
+        start: page.start,
+        rows,
+    })
 }
 
-async fn get_time_entry(
-    user: AuthUser,
-    State(db): State<PgPool>,
-    Path(id): Path<String>,
-) -> ApiResult<HarvestTimeEntry> {
-    let id = ids::path(&db, user.org_id, Kind::TimeEntry, &id).await?;
-    time_entry_by_id(&db, &user, id).await
-}
-
-/// A single entry out of the same scoped row set as the listing, with the same
-/// rate redaction. An entry outside the caller's time scope is simply not in
-/// their collection, so it reads as missing rather than forbidden — the answer
-/// an id from another org already gets.
-async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult<HarvestTimeEntry> {
-    let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
-        .await
-        .map_err(internal)?;
-    let mut read = begin_read(db, caller, "Time entry").await?;
-    let result = scoped_time_entry(&mut read, caller, id).await;
-    let row = finish_read(read, result).await?;
-
-    Ok(Json(time_entry_row_to_harvest(&row, round_min, round_dir)))
-}
-
-async fn scoped_time_entry(
+/// The entries `ids` names in the caller's time scope, latest first, with the
+/// rates and budget the caller may read. An id outside the scope is left out.
+async fn entries_by_id(
     read: &mut ops::ReadTx,
     caller: &AuthUser,
-    id: Uuid,
-) -> Result<TimeEntryRow, ApiError> {
-    let view = TimeView::of(&read.actor);
-    // Refuses a caller without any time-read grant.
-    scoped_user_filter(caller, view, None)?;
-
-    sqlx::query_as!(
+    view: TimeView,
+    ids: &[Uuid],
+) -> Result<Vec<TimeEntryRow>, ApiError> {
+    let rows = sqlx::query_as!(
         TimeEntryRow,
-        r#"SELECT te.harvest_id AS id,
+        r#"SELECT te.id AS uuid, te.harvest_id AS id,
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
@@ -704,23 +663,24 @@ async fn scoped_time_entry(
          JOIN users u ON u.id = te.user_id
          JOIN projects p ON p.id = te.project_id
          JOIN tasks t ON t.id = te.task_id
-         JOIN clients c ON c.id = p.client_id
-         JOIN organizations o ON o.id = te.org_id
-         LEFT JOIN project_settings ps ON ps.project_id = p.id
-         LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
          LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
          LEFT JOIN assignments member ON member.project_id = te.project_id AND member.user_id = $3
          LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
+         JOIN clients c ON c.id = p.client_id
+         JOIN organizations o ON o.id = te.org_id
+         LEFT JOIN project_settings ps ON ps.project_id = p.id
+         LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
          CROSS JOIN LATERAL (SELECT
            EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
              AND m.manager_id = $3 AND m.managed_user_id = te.user_id) AS person,
            EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id
              AND m.manager_id = $3 AND m.project_id = te.project_id) AS project) managed
-         WHERE te.id = $1 AND te.org_id = $2
-           AND ($6 OR ($4 AND te.user_id = $3) OR ($5 AND (managed.person OR managed.project)))"#,
-        id,
+         WHERE te.org_id = $1 AND te.id = ANY($2)
+           AND ($6 OR ($4 AND te.user_id = $3) OR ($5 AND (managed.person OR managed.project)))
+         ORDER BY te.spent_date DESC, te.id DESC"#,
         caller.org_id,
+        ids,
         caller.user_id,
         view.own,
         view.managed,
@@ -731,10 +691,53 @@ async fn scoped_time_entry(
         view.projects_managed,
         view.projects_all,
     )
-    .fetch_optional(&mut *read.tx)
+    .fetch_all(&mut *read.tx)
     .await
-    .map_err(internal)?
-    .ok_or_else(not_found)
+    .map_err(internal)?;
+    Ok(rows)
+}
+
+async fn get_time_entry(
+    user: AuthUser,
+    State(db): State<PgPool>,
+    Path(id): Path<String>,
+) -> ApiResult<HarvestTimeEntry> {
+    let id = ids::path(&db, user.org_id, Kind::TimeEntry, &id).await?;
+    time_entry_by_id(&db, &user, id).await
+}
+
+/// A single entry out of the same scoped row set as the listing, with the same
+/// rate redaction. An entry outside the caller's time scope is simply not in
+/// their collection, so it reads as missing rather than forbidden — the answer
+/// an id from another org already gets.
+async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult<HarvestTimeEntry> {
+    let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
+        .await
+        .map_err(internal)?;
+    let mut read = begin_read(db, caller, "Time entry").await?;
+    let result = scoped_time_entry(&mut read, caller, id).await;
+    let row = finish_read(read, result).await?;
+
+    Ok(Json(time_entry_row_to_harvest(
+        &row,
+        round_min,
+        round_dir,
+        Utc::now(),
+    )))
+}
+
+async fn scoped_time_entry(
+    read: &mut ops::ReadTx,
+    caller: &AuthUser,
+    id: Uuid,
+) -> Result<TimeEntryRow, ApiError> {
+    let view = TimeView::of(&read.actor);
+    // Refuses a caller without any time-read grant.
+    scoped_user_filter(caller, view, None)?;
+    entries_by_id(read, caller, view, &[id])
+        .await?
+        .pop()
+        .ok_or_else(not_found)
 }
 
 // ── Projects ────────────────────────────────────────────────────────────────
@@ -750,7 +753,8 @@ pub(crate) struct ProjectFilters {
 }
 
 struct ProjectRow {
-    key: Key,
+    uuid: Uuid,
+    updated_at: DateTime<Utc>,
     id: i64,
     name: String,
     code: Option<String>,
@@ -800,7 +804,7 @@ fn project_row_to_harvest(row: &ProjectRow) -> HarvestProject {
         starts_on: row.starts_on.map(|d| d.to_string()),
         ends_on: row.ends_on.map(|d| d.to_string()),
         created_at: row.created_at.to_rfc3339(),
-        updated_at: row.key.at.to_rfc3339(),
+        updated_at: row.updated_at.to_rfc3339(),
         client: HarvestRef {
             id: row.client_id,
             name: row.client_name.clone(),
@@ -817,10 +821,10 @@ async fn list_projects(
     let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
     let listed = project_reads::read(&db, &user, &filters, None, &window).await?;
     let items = listed.rows.iter().map(project_row_to_harvest).collect();
-    Ok(Json(list.catalogue(
+    Ok(Json(list.keyed(
         "projects",
         &listed,
-        |row| row.key,
+        |row| Key::id(row.uuid),
         items,
         &window,
     )))
@@ -856,7 +860,8 @@ pub(crate) struct ClientFilters {
 }
 
 struct ClientRow {
-    key: Key,
+    uuid: Uuid,
+    updated_at: DateTime<Utc>,
     id: i64,
     name: String,
     active: bool,
@@ -873,7 +878,7 @@ fn client_row_to_harvest(row: &ClientRow) -> HarvestClient {
         address: row.address.clone(),
         currency: row.currency.clone(),
         created_at: row.created_at.to_rfc3339(),
-        updated_at: row.key.at.to_rfc3339(),
+        updated_at: row.updated_at.to_rfc3339(),
     }
 }
 
@@ -886,10 +891,10 @@ async fn list_clients(
     let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
     let listed = client_reads::read(&db, &user, &filters, None, &window).await?;
     let items = listed.rows.iter().map(client_row_to_harvest).collect();
-    Ok(Json(list.catalogue(
+    Ok(Json(list.keyed(
         "clients",
         &listed,
-        |row| row.key,
+        |row| Key::id(row.uuid),
         items,
         &window,
     )))
@@ -926,7 +931,8 @@ pub(crate) struct TaskFilters {
 }
 
 struct TaskRow {
-    key: Key,
+    uuid: Uuid,
+    updated_at: DateTime<Utc>,
     created_at: DateTime<Utc>,
     id: i64,
     name: String,
@@ -947,7 +953,7 @@ fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
             .default_rate_cents
             .map(|cents| Amount::new(cents, row.default_rate_currency.as_deref().unwrap_or(""))),
         created_at: row.created_at.to_rfc3339(),
-        updated_at: row.key.at.to_rfc3339(),
+        updated_at: row.updated_at.to_rfc3339(),
     }
 }
 
@@ -960,10 +966,10 @@ async fn list_tasks(
     let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
     let listed = task_reads::read(&db, &user, &filters, None, &window).await?;
     let items = listed.rows.iter().map(task_row_to_harvest).collect();
-    Ok(Json(list.catalogue(
+    Ok(Json(list.keyed(
         "tasks",
         &listed,
-        |row| row.key,
+        |row| Key::id(row.uuid),
         items,
         &window,
     )))
@@ -1000,9 +1006,10 @@ pub(crate) struct UserFilters {
 }
 
 struct UserRow {
+    uuid: Uuid,
     /// Updated when the person or their stored permission state (which
     /// holds `is_admin`) changes.
-    key: Key,
+    updated_at: DateTime<Utc>,
     id: i64,
     name: String,
     email: String,
@@ -1041,7 +1048,7 @@ fn user_row_to_harvest(row: &UserRow, rates: user_access::RateView) -> HarvestUs
             .filter(|_| rates.billable)
             .map(|cents| Amount::new(cents, &row.org_currency)),
         created_at: row.created_at.to_rfc3339(),
-        updated_at: row.key.at.to_rfc3339(),
+        updated_at: row.updated_at.to_rfc3339(),
     }
 }
 
@@ -1079,10 +1086,10 @@ async fn users_page(
         .iter()
         .map(|row| user_row_to_harvest(row, access.rates))
         .collect();
-    Ok(Json(list.catalogue(
+    Ok(Json(list.keyed(
         "users",
         &listed,
-        |row| row.key,
+        |row| Key::id(row.uuid),
         items,
         &window,
     )))
@@ -1096,7 +1103,8 @@ async fn user_rows(
     user_id: Option<Uuid>,
     window: &Window,
 ) -> Result<Listed<UserRow>, ApiError> {
-    let (cursor_at, cursor_id, before) = window.position();
+    let horizon = list_horizon(read, user_id).await?;
+    let position = window.position();
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
              SELECT u.id,u.harvest_id,u.name,u.email,u.active,
@@ -1109,14 +1117,19 @@ async fn user_rows(
                AND ($2::bool IS NULL OR u.active = $2)
                AND ($3::uuid IS NULL OR u.id = $3)
            ), changed AS MATERIALIZED (
-             SELECT * FROM visible WHERE $4::timestamptz IS NULL OR updated_at >= $4
+             SELECT * FROM visible WHERE ($4::timestamptz IS NULL OR updated_at >= $4)
+               AND ($9::timestamptz IS NULL OR updated_at < $9)
            ), totals AS (
-             SELECT COUNT(*) total, CASE WHEN $7::timestamptz IS NULL THEN $6
-               WHEN $9 THEN GREATEST(COUNT(*) FILTER (WHERE (updated_at,id) < ($7,$8::uuid)) - $5, 0)
-               ELSE COUNT(*) FILTER (WHERE (updated_at,id) <= ($7,$8::uuid)) END start
+             SELECT COUNT(*) total,
+               CASE WHEN $7::uuid IS NULL THEN $6
+                 WHEN $8 THEN GREATEST(COUNT(*) FILTER (WHERE id > $7) - $5, 0)
+                 ELSE COUNT(*) FILTER (WHERE id >= $7) END start,
+               CASE WHEN $7::uuid IS NOT NULL AND $8
+                 THEN LEAST(COUNT(*) FILTER (WHERE id > $7), $5) ELSE $5 END take
              FROM changed
            ), page AS (
-             SELECT * FROM changed ORDER BY updated_at,id LIMIT $5 OFFSET (SELECT start FROM totals)
+             SELECT * FROM changed ORDER BY id DESC
+             LIMIT (SELECT take FROM totals) OFFSET (SELECT start FROM totals)
            )
            SELECT totals.total AS "total!",totals.start AS "start!",u.id AS "uuid?",
                   u.harvest_id AS "id?",u.name AS "name?",u.email AS "email?",u.active AS "active?",
@@ -1124,16 +1137,16 @@ async fn user_rows(
                   (SELECT default_currency FROM organizations o WHERE o.id = $1) AS "org_currency!",
                   u.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
                   u.updated_at AS "updated_at?: chrono::DateTime<chrono::Utc>"
-           FROM totals LEFT JOIN page u ON true ORDER BY u.updated_at,u.id"#,
+           FROM totals LEFT JOIN page u ON true ORDER BY u.id DESC"#,
         caller.org_id,
         filters.is_active,
         user_id,
         filters.updated_since as Option<DateTime<Utc>>,
         window.per_page,
         window.offset,
-        cursor_at as Option<DateTime<Utc>>,
-        cursor_id,
-        before,
+        position.id,
+        position.before,
+        horizon as Option<DateTime<Utc>>,
     )
     .fetch_all(&mut *read.tx)
     .await
@@ -1147,12 +1160,10 @@ async fn user_rows(
         // Only the row of an empty page has no id.
         let Some(uuid) = record.uuid else { continue };
         rows.push(UserRow {
-            key: Key {
-                at: record
-                    .updated_at
-                    .ok_or_else(|| internal("Missing user update time"))?,
-                id: uuid,
-            },
+            uuid,
+            updated_at: record
+                .updated_at
+                .ok_or_else(|| internal("Missing user update time"))?,
             id: record.id.ok_or_else(|| internal("Missing api number"))?,
             name: record.name.ok_or_else(|| internal("Missing user name"))?,
             email: record.email.ok_or_else(|| internal("Missing user email"))?,

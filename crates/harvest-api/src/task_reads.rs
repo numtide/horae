@@ -19,7 +19,8 @@ async fn visible_tasks(
     task_id: Option<Uuid>,
     window: &Window,
 ) -> Result<Listed<TaskRow>, ApiError> {
-    let (cursor_at, cursor_id, before) = window.position();
+    let horizon = list_horizon(read, task_id).await?;
+    let position = window.position();
     // Count and rows share the authorized snapshot, even beyond the last page.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -31,13 +32,18 @@ async fn visible_tasks(
                AND ($2::boolean IS NULL OR t.active=$2)
                AND ($3::uuid IS NULL OR t.id=$3)
                AND ($8::timestamptz IS NULL OR t.updated_at >= $8)
+               AND ($11::timestamptz IS NULL OR t.updated_at < $11)
            ), totals AS (
-             SELECT COUNT(*) total, CASE WHEN $9::timestamptz IS NULL THEN $5
-               WHEN $11 THEN GREATEST(COUNT(*) FILTER (WHERE (updated_at,id) < ($9,$10::uuid)) - $4, 0)
-               ELSE COUNT(*) FILTER (WHERE (updated_at,id) <= ($9,$10::uuid)) END start
+             SELECT COUNT(*) total,
+               CASE WHEN $9::uuid IS NULL THEN $5
+                 WHEN $10 THEN GREATEST(COUNT(*) FILTER (WHERE id > $9) - $4, 0)
+                 ELSE COUNT(*) FILTER (WHERE id >= $9) END start,
+               CASE WHEN $9::uuid IS NOT NULL AND $10
+                 THEN LEAST(COUNT(*) FILTER (WHERE id > $9), $4) ELSE $4 END take
              FROM visible
            ), page AS (
-             SELECT * FROM visible ORDER BY updated_at,id LIMIT $4 OFFSET (SELECT start FROM totals)
+             SELECT * FROM visible ORDER BY id DESC
+             LIMIT (SELECT take FROM totals) OFFSET (SELECT start FROM totals)
            )
            SELECT totals.total AS "total!",totals.start AS "start!",t.id AS "uuid?",
                   t.harvest_id AS "id?",t.name AS "name?",
@@ -45,7 +51,7 @@ async fn visible_tasks(
                   t.default_rate_currency,
                   t.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
                   t.updated_at AS "updated_at?: chrono::DateTime<chrono::Utc>"
-           FROM totals LEFT JOIN page t ON true ORDER BY t.updated_at,t.id"#,
+           FROM totals LEFT JOIN page t ON true ORDER BY t.id DESC"#,
         caller.org_id,
         filters.is_active,
         task_id,
@@ -54,9 +60,9 @@ async fn visible_tasks(
         read.actor.has(Permission::TaskReadAll),
         read.actor.has(Permission::BillableRateReadAll),
         filters.updated_since as Option<DateTime<Utc>>,
-        cursor_at as Option<DateTime<Utc>>,
-        cursor_id,
-        before,
+        position.id,
+        position.before,
+        horizon as Option<DateTime<Utc>>,
     )
     .fetch_all(&mut *read.tx)
     .await
@@ -70,12 +76,10 @@ async fn visible_tasks(
         // Only the row of an empty page has no id.
         let Some(uuid) = record.uuid else { continue };
         rows.push(TaskRow {
-            key: Key {
-                at: record
-                    .updated_at
-                    .ok_or_else(|| internal("Missing task update time"))?,
-                id: uuid,
-            },
+            uuid,
+            updated_at: record
+                .updated_at
+                .ok_or_else(|| internal("Missing task update time"))?,
             created_at: record
                 .created_at
                 .ok_or_else(|| internal("Missing task creation time"))?,
