@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO permission_change_receipts\n               (id, org_id, actor_user_id, request_id, format_version, intent, result, audit, created_at)\n             VALUES ($1, $2, $3, $4, 1, '{}', '{}', $5, now() - make_interval(days => $6))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e24a9aa6048f906d7967e19b950d2e4e1ba8bdb49a2fd0eaad0efc28627e9f23"
+}

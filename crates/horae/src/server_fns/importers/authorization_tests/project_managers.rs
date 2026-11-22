@@ -172,7 +172,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.call(
             "list_permission_audit",
-            json!({"after":null,"expected_requester":requester}),
+            json!({"filter":{},"after":null,"expected_requester":requester}),
             Some(&cookie),
             false
         )

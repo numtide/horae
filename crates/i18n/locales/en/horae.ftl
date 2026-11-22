@@ -252,6 +252,70 @@ permissions-profile-delete-hint = This does not save the person's draft. Reloadi
 ## Audit log
 
 audit-title = Audit log
+audit-intro = Every change to who can do what, newest first.
+audit-time-zone = Times in your time zone ({ $zone }).
+audit-loading = Loading permission changes…
+audit-list-label = Permission changes
+audit-failed = Could not load permission changes
+audit-load-more = Load more
+audit-kind-all = All changes
+audit-kind-person = Person
+audit-kind-profile = Profile
+audit-kind-managers = Managers
+audit-filter-kind-person = Changes to a person
+audit-filter-kind-profile = Changes to a profile
+audit-filter-kind-managers = Changes to project managers
+audit-filter-anyone = Anyone
+audit-filter-someone = One person
+audit-period-all = All time
+audit-period-days = { $days ->
+    [one] Last day
+   *[other] Last { $days } days
+}
+audit-today = Today
+audit-yesterday = Yesterday
+audit-unknown-person = A removed person
+audit-unknown-project = A deleted project
+audit-unknown-profile = a deleted profile
+audit-operator = An operator ({ $command })
+audit-summary-label = { $added } added, { $removed } removed
+audit-added = +{ $count }
+audit-removed = −{ $count }
+audit-scope-change = { $before } → { $after }
+audit-event-person-changed = <actor>{ $actor }</actor> changed the permissions of <person>{ $person }</person>
+audit-event-person-moved = <actor>{ $actor }</actor> moved <person>{ $person }</person> to the { $profile } profile
+audit-event-person-individual = <actor>{ $actor }</actor> gave <person>{ $person }</person> their own permissions
+audit-event-person-admin-granted = <actor>{ $actor }</actor> made <person>{ $person }</person> an administrator
+audit-event-person-admin-revoked = <actor>{ $actor }</actor> removed <person>{ $person }</person> as an administrator
+audit-event-person-unchanged = <actor>{ $actor }</actor> saved the permissions of <person>{ $person }</person> without changes
+audit-event-profile-created = <actor>{ $actor }</actor> created the profile { $profile } with { $count ->
+    [one] one permission
+   *[other] { $count } permissions
+}
+audit-event-profile-deleted = <actor>{ $actor }</actor> deleted the profile { $profile }
+audit-event-managers-added = <actor>{ $actor }</actor> made <person>{ $person }</person> a manager of <project>{ $project }</project>
+audit-event-managers-removed = <actor>{ $actor }</actor> removed <person>{ $person }</person> as a manager of <project>{ $project }</project>
+audit-event-managers-changed = <actor>{ $actor }</actor> changed the managers of <project>{ $project }</project>
+audit-event-managers-unchanged = <actor>{ $actor }</actor> saved the managers of <project>{ $project }</project> without changes
+audit-details-label = Details
+audit-detail-label = What changed
+audit-detail-areas = Only the areas that changed.
+audit-detail-added = Now: { $permission }
+audit-detail-removed = No longer: { $permission }
+audit-detail-profile = Profile: { $before } → { $after }
+audit-detail-no-longer-manages = No longer manages { $name }
+audit-detail-detached = { $name } keeps these permissions as their own
+audit-detail-manager-added = { $name } became a manager
+audit-detail-manager-removed = { $name } is no longer a manager
+audit-receipt = Receipt { $id }
+audit-copy = Copy
+audit-copied = Copied
+audit-empty-title = No permission changes yet
+audit-empty-body = When someone changes a person's permissions, a profile or a project's managers, it appears here with who did it and when.
+audit-empty-action = Go to { -people }
+audit-filtered-empty-title = No changes match these filters
+audit-filtered-empty-body = Try a longer period or another person.
+audit-clear-filters = Clear filters
 
 ## Reports
 

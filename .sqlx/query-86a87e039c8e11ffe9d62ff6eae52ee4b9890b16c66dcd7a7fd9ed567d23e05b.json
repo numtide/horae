@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET timezone='America/New_York' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86a87e039c8e11ffe9d62ff6eae52ee4b9890b16c66dcd7a7fd9ed567d23e05b"
+}

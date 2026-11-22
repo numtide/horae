@@ -75,7 +75,12 @@ pub(crate) fn first_admin_route(
     [
         (access.settings, Route::WorkspaceSettings {}),
         (access.importers, Route::ImporterIndex {}),
-        (access.audit, Route::PermissionAudit {}),
+        (
+            access.audit,
+            Route::PermissionAudit {
+                filter: Default::default(),
+            },
+        ),
         (access.api_tokens, Route::AdminApiTokens {}),
     ]
     .into_iter()
@@ -95,7 +100,7 @@ pub(crate) fn first_admin_route(
 pub fn AdminShell() -> Element {
     let section = match use_route::<Route>() {
         Route::WorkspaceSettings {} => Section::Settings,
-        Route::PermissionAudit {} => Section::Audit,
+        Route::PermissionAudit { .. } => Section::Audit,
         Route::AdminApiTokens {} => Section::ApiTokens,
         _ => Section::Importers,
     };
@@ -170,7 +175,7 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                         div { class: "adm-group-label", "Data" }
                         nav { class: "flex flex-col gap-1 mb-5",
                             if access.importers { AdmLink { to: Route::ImporterIndex {}, label: "Importers" } }
-                            if access.audit { AdmLink { to: Route::PermissionAudit {}, label: "Audit log" } }
+                            if access.audit { AdmLink { to: Route::PermissionAudit { filter: Default::default() }, label: "Audit log" } }
                         }
                     }
                 }
