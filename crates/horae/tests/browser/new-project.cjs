@@ -504,6 +504,9 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await teamSection.getByLabel('Billable rate for Admin User (EUR/h)', { exact: true }).fill('0');
     await teamSection.getByLabel('Budget hours for Admin User', { exact: true }).fill('12:30');
     await costInput.fill('0');
+    // Settle the autosave first: otherwise its write can land inside the loop
+    // and readsFinished waits on it instead of on the teammate search.
+    await saved();
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await addPerson.click();
