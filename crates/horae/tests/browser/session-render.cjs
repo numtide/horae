@@ -1,7 +1,7 @@
 // The server renders the signed-in shell: the first HTML of a page already has
 // the person's rail, its permission-dependent rows and the admin workspace,
 // before any script runs. Uses only the design runner's disposable database.
-const { request } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+const { request, chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const { setAsideSeededStates, devLoginUser } = require('./seeded-permissions.cjs');
@@ -29,7 +29,7 @@ const regions = html => Object.fromEntries(['aside', 'main'].map(tag => {
     const response = await context.get(path, { headers: { accept: 'text/html' }, maxRedirects: 0 });
     return { status: response.status(), location: response.headers().location, html: await response.text() };
   };
-  let restoreSeededStates;
+  let restoreSeededStates, browser;
   try {
     // A signed-out page load still goes to the sign-in page.
     const out = await page(signedOut, '/timesheet');
@@ -58,6 +58,35 @@ const regions = html => Object.fromEntries(['aside', 'main'].map(tag => {
     assert.ok(!admin.main.some(text => text.startsWith('Loading')), admin.main.join(' | '));
     console.log('PASS: the first HTML has the signed-in rail and the admin workspace; signed out redirects');
 
+    // The client takes the session from the HTML: it asks for none of it on
+    // load, before the screen's own data, or when moving between screens.
+    browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    assert.equal((await context.request.post(`${base}/auth/dev-login`, { maxRedirects: 0 })).status(), 303);
+    const tab = await context.newPage();
+    const sessionReads = [];
+    tab.on('request', r => {
+      const read = new URL(r.url()).pathname.match(/^\/api\/(get_me|get_my_permissions|get_week_start|get_org_name)\d+$/);
+      if (read) sessionReads.push(read[1]);
+    });
+    const loaded = name => tab.waitForResponse(r => r.url().includes(`/api/${name}`) && r.status() === 200);
+    const firstSheet = loaded('load_timesheet_page');
+    await tab.goto(`${base}${week}`);
+    await firstSheet;
+    assert.deepEqual(sessionReads, [], 'no session read on load');
+    const rail = tab.locator('.app-sidebar');
+    const projectsLink = rail.getByRole('link', { name: 'Projects', exact: true });
+    // Links follow the client router only once hydrated.
+    await expect(projectsLink).toHaveAttribute('data-dioxus-id', /\d+/);
+    const projects = loaded('get_project_overview');
+    await projectsLink.click();
+    await projects;
+    const sheetAgain = loaded('load_timesheet_page');
+    await rail.getByRole('link', { name: 'Timesheet', exact: true }).click();
+    await sheetAgain;
+    assert.deepEqual(sessionReads, [], 'no session read when moving between screens');
+    console.log('PASS: the client reads no session on load or between screens');
+
     // The same person as a member: the rows that need grants are not in the HTML.
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
@@ -76,6 +105,7 @@ const regions = html => Object.fromEntries(['aside', 'main'].map(tag => {
     }
     await signedIn.dispose();
     await signedOut.dispose();
+    if (browser) await browser.close();
   }
 })().catch(error => {
   console.error(error);

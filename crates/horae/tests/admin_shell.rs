@@ -69,8 +69,8 @@ struct Probe {
     future_catalog: bool,
     canonical_requests: Rc<Cell<usize>>,
     me_requests: Rc<Cell<usize>>,
-    /// `get_me` refuses, as for a session that has ended.
-    me_refused: bool,
+    /// `get_me` fails with this status: 401 for a session that has ended.
+    me_fails: Rc<Cell<Option<u16>>>,
     /// `get_week_start` fails on the server.
     week_start_error: bool,
     /// Answer `get_my_permissions` at once instead of waiting for a response.
@@ -110,6 +110,7 @@ fn Layout() -> Element {
     // AppLayout provides the session above every admin route.
     session::use_session_provider()?;
     rsx! {
+        session::SessionRefreshFailed {}
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path(path)) as Rc<dyn History>,
             Router::<route::Route> {}
@@ -193,14 +194,65 @@ fn failed_page(probe: &Probe) -> String {
 #[tokio::test]
 async fn an_ended_session_asks_to_sign_in_again_not_a_blank_page() {
     let html = failed_page(&Probe {
-        me_refused: true,
+        me_fails: Rc::new(Cell::new(Some(401))),
         canonical: Some((true, vec![Permission::CompanyWrite])),
         ..Probe::default()
     });
     assert!(html.contains("Session ended"), "{html}");
     assert!(html.contains("Sign in again"), "{html}");
     assert!(html.contains(r#"action="/auth/logout""#), "{html}");
-    assert!(!html.contains("Not authenticated"), "{html}");
+    assert!(!html.contains("private identity diagnostic"), "{html}");
+}
+
+/// A loaded shell whose session is then re-read with `get_me` failing with `code`.
+fn reread_failing_with(code: u16) -> (Probe, VirtualDom) {
+    let probe = Probe {
+        canonical: Some((true, vec![Permission::CompanyWrite])),
+        ..Probe::default()
+    };
+    let mut dom = start(&probe);
+    assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
+    let (_, scope, session) = probe.panel.get().expect("the Settings panel mounted");
+    probe.me_fails.set(Some(code));
+    dom.in_scope(scope, || session.refresh());
+    settle(&mut dom);
+    (probe, dom)
+}
+
+/// A re-read that fails for another reason keeps the last session, the rail
+/// and the open screen, and says so with a way to try again.
+#[tokio::test]
+async fn a_failed_reread_keeps_the_session_and_the_screen() {
+    let (probe, mut dom) = reread_failing_with(500);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Administrative panel"), "{html}");
+    assert!(html.contains("Test workspace"), "{html}");
+    assert!(html.contains("Could not update your session"), "{html}");
+    assert!(html.contains("Try again"), "{html}");
+    assert!(!html.contains("Could not load this page"), "{html}");
+    assert!(!html.contains("private identity diagnostic"), "{html}");
+    assert_eq!(probe.panel_mounts.get(), 1, "the screen stayed mounted");
+
+    // The next re-read that succeeds clears the notice.
+    let (_, scope, session) = probe.panel.get().expect("the Settings panel mounted");
+    probe.me_fails.set(None);
+    dom.in_scope(scope, || session.refresh());
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(!html.contains("Could not update your session"), "{html}");
+    assert!(html.contains("Administrative panel"), "{html}");
+    assert_eq!(probe.panel_mounts.get(), 1);
+}
+
+/// An ended session during a visit replaces the page: nothing on it works any more.
+#[tokio::test]
+async fn an_ended_session_on_a_reread_asks_to_sign_in_again() {
+    let (_, dom) = reread_failing_with(401);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Session ended"), "{html}");
+    assert!(html.contains(r#"action="/auth/logout""#), "{html}");
+    assert!(!html.contains("Administrative panel"), "{html}");
+    assert!(!html.contains("Could not update your session"), "{html}");
 }
 
 #[tokio::test]
@@ -314,9 +366,13 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
     settle(&mut dom);
     assert_panel_hidden(&dom, &probe);
     let html = dioxus::ssr::render(&dom);
-    // The error stays, with its button disabled, until the new answer.
-    assert!(html.contains("is-disabled"), "{html}");
-    assert!(!html.contains("Session unavailable"), "{html}");
+    // The error stays, with its "Try again" disabled, until the new answer.
+    assert!(html.contains("Could not verify workspace access"), "{html}");
+    // Only the error state's own "Try again" has this class.
+    assert!(
+        html.contains(r#"class="btn btn-secondary is-disabled""#),
+        "{html}"
+    );
 
     response
         .send(Ok(Access::new(false, &[Permission::CompanyWrite])))
@@ -387,10 +443,10 @@ mod server_fns {
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
         let probe = consume_context::<Probe>();
         probe.me_requests.set(probe.me_requests.get() + 1);
-        if probe.me_refused {
+        if let Some(code) = probe.me_fails.get() {
             return Err(ServerFnError::ServerError {
-                message: "Not authenticated — please sign in.".into(),
-                code: 401,
+                message: "private identity diagnostic".into(),
+                code,
                 details: None,
             });
         }

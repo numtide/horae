@@ -51,6 +51,9 @@ common-session-ended = Your session has ended. Sign in again to continue.
 ## Navigation and shell
 
 nav-my-settings = My settings
+session-refresh-failed = Could not update your session
+session-refresh-failed-hint = The page keeps what it showed before.
+session-try-again = Try again
 
 ## Components
 
@@ -139,6 +142,8 @@ workspace-plugins-empty = No plugins installed
 workspace-plugins-empty-hint = Plugins add features to { -brand }. The person who runs your { -brand } server installs them.
 workspace-plugin-version = v{ $version }
 workspace-plugin-hooks = Hooks: { $hooks }
+workspace-access-failed = Could not verify workspace access
+workspace-access-failed-hint = Try again, or sign in again if it keeps failing.
 
 ## API tokens
 

@@ -3,13 +3,13 @@
 use chrono::{Duration, NaiveDate, Utc};
 use dioxus::prelude::*;
 
-/// Seconds the person's zone is ahead of UTC, once the session has loaded.
-/// Provided by the app layout from `get_me`.
+/// Seconds the person's zone is ahead of UTC, from the session. Provided by the
+/// app layout from `get_me`.
 #[derive(Clone, Copy)]
-pub struct UtcOffset(pub Memo<Option<i32>>);
+pub struct UtcOffset(pub Memo<i32>);
 
 /// Today's date for the signed-in person. Reading it in a component re-renders
-/// that component when the session's offset arrives.
+/// that component when the session's offset changes.
 ///
 /// shortcut: the offset is the one `get_me` saw, so a tab left open across a
 /// daylight-saving change is an hour off until the session is re-read (opening
@@ -22,8 +22,8 @@ pub fn today() -> NaiveDate {
     let offset = in_scope
         .then(try_consume_context::<UtcOffset>)
         .flatten()
-        .and_then(|UtcOffset(offset)| offset());
-    offset.map_or_else(before_session, today_at)
+        .map(|UtcOffset(offset)| offset());
+    offset.map_or_else(without_session, today_at)
 }
 
 /// Today's date in a zone `offset_seconds` ahead of UTC.
@@ -31,9 +31,9 @@ pub fn today_at(offset_seconds: i32) -> NaiveDate {
     (Utc::now() + Duration::seconds(offset_seconds.into())).date_naive()
 }
 
-/// Before the session loads (the first redirect from `/` happens then) the
-/// browser's own zone is the best guess; the server renders in UTC.
-fn before_session() -> NaiveDate {
+/// Outside the app layout there is no session: the browser's own zone is the
+/// best guess, and on the server UTC.
+fn without_session() -> NaiveDate {
     #[cfg(feature = "web")]
     return chrono::Local::now().date_naive();
     #[cfg(not(feature = "web"))]
@@ -54,9 +54,11 @@ mod tests {
     }
 
     fn app() -> Element {
-        let probe = use_context::<Probe>();
-        let offset = use_memo(move || probe.offset);
-        use_context_provider(|| UtcOffset(offset));
+        // Without an offset, no session: the layout is not above the reader.
+        if let Some(offset) = use_context::<Probe>().offset {
+            let offset = use_memo(move || offset);
+            use_context_provider(|| UtcOffset(offset));
+        }
         rsx! { Reader {} }
     }
 
@@ -96,7 +98,7 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_utc_on_the_server_before_the_session_loads() {
+    fn falls_back_to_utc_on_the_server_without_a_session() {
         assert_eq!(rendered_today(None), Utc::now().date_naive());
     }
 

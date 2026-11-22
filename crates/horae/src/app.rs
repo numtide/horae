@@ -30,8 +30,9 @@ pub fn App() -> Element {
         }
         ThemeInit {}
         document::Script { src: asset!("/assets/js/project-edit-navigation.js") }
-        // A failed `use_loader` read (the session, in `AppLayout`) lands here
-        // instead of leaving the page blank.
+        // The session only (`AppLayout`): its first read failing, or the session
+        // ending. A screen's own failure stops at the boundary around the
+        // `Outlet`, so the rail stays.
         ErrorBoundary { handle_error: page_failed, Router::<Route> {} }
     }
 }

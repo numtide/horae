@@ -94,6 +94,7 @@ pub fn AdminShell() -> Element {
         Route::AdminApiTokens {} => Section::ApiTokens,
         _ => Section::Importers,
     };
+    let tr = crate::i18n::use_tr();
     let session = use_session();
     let retry = use_callback(move |_| session.refresh());
     // The session arrives with the page, so the shell decides at once. A
@@ -112,8 +113,8 @@ pub fn AdminShell() -> Element {
         },
         Err(()) => rsx! {
             ErrorState {
-                title: "Could not verify workspace access",
-                body: "Try again, or sign in again if it keeps failing.",
+                title: tr.workspace_access_failed(),
+                body: tr.workspace_access_failed_hint(),
                 onretry: retry,
                 retry_disabled: pending,
             }

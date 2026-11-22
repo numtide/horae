@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::components::session::use_session_provider;
+use crate::components::screen_state::PageFailed;
+use crate::components::session::{SessionRefreshFailed, use_session_provider};
 use crate::components::sidebar::Sidebar;
 use crate::components::timer_widget::use_running_timer_provider;
 
@@ -11,6 +12,10 @@ const SIDEBAR_MAX: f64 = 360.0;
 const SIDEBAR_DEFAULT: f64 = 264.0;
 const SIDEBAR_COLLAPSE_AT: f64 = 150.0;
 
+fn screen_failed(_: ErrorContext) -> Element {
+    rsx! { PageFailed {} }
+}
+
 #[component]
 pub fn AppLayout() -> Element {
     // The running timer is shared from here: the rail below renders it, and the
@@ -19,7 +24,7 @@ pub fn AppLayout() -> Element {
     // Who is signed in and what they may do, read by the rail and most pages.
     use_session_provider()?;
     let me = crate::components::session::use_session().me;
-    let offset = use_memo(move || Some(me.read().utc_offset_seconds));
+    let offset = use_memo(move || me.read().utc_offset_seconds);
     use_context_provider(|| crate::components::today::UtcOffset(offset));
 
     // Owned here (not in the sidebar) so the shell class can narrow the content
@@ -70,7 +75,9 @@ pub fn AppLayout() -> Element {
             }
 
             main { id: "app-main", class: "app-content", tabindex: "-1",
-                Outlet::<crate::route::Route> {}
+                SessionRefreshFailed {}
+                // A screen that fails to render loses only itself: the rail stays.
+                ErrorBoundary { handle_error: screen_failed, Outlet::<crate::route::Route> {} }
             }
 
             // While dragging, a full-viewport catcher tracks the pointer so the
