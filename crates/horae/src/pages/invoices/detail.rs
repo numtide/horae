@@ -28,7 +28,7 @@ pub(super) fn InvoiceDetailContent(id: Uuid) -> Element {
     let retry = use_callback(move |()| invoice.restart());
     rsx! {
         div {
-            BackLink { to: Route::InvoiceList {}, label: tr.invoices_back() }
+            BackLink { to: Route::InvoiceList { filter: Default::default() }, label: tr.invoices_back() }
             match &*invoice.read() {
                 Some(Ok(data)) => rsx! { Detail { data: data.clone(), onchanged: retry } },
                 Some(Err(error)) => rsx! {

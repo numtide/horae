@@ -4,7 +4,7 @@ use super::*;
 use crate::models::invoice::{
     InvoiceDefaults, InvoiceDetailView, InvoiceDraftEdit, InvoiceDraftSave, InvoiceDuplicate,
     InvoiceEditReview, InvoiceEditor, InvoiceFeeSelection, InvoiceGenerationRequest,
-    InvoiceListItem, InvoicePreparation, UninvoicedClient,
+    InvoiceListItem, InvoicePreparation, LastInvoice, UninvoicedClient,
 };
 
 /// A snapshot read: every statement sees the state the actor's authority was
@@ -135,6 +135,20 @@ pub async fn list_uninvoiced_clients() -> Result<Vec<UninvoicedClient>, ServerFn
     let state = crate::state::global_state().await;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::uninvoiced::list(&mut read.tx, &read.actor).await;
+    read.finish(result).await.map_err(op_error)
+}
+
+/// The client's latest invoice that is not void: where a new one starts.
+#[server]
+pub async fn get_last_client_invoice(
+    client_id: String,
+) -> Result<Option<LastInvoice>, ServerFnError> {
+    let caller = session_caller().await?;
+    let state = crate::state::global_state().await;
+    let id = parse_uuid(&client_id, "client_id")?;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
+    let result =
+        crate::ops::invoices::uninvoiced::last_invoice(&mut read.tx, &read.actor, id).await;
     read.finish(result).await.map_err(op_error)
 }
 

@@ -4,6 +4,7 @@ use horae_core::project::Percentage;
 
 use crate::components::form::{FormGroup, Input};
 use crate::components::select_field::SelectField;
+use crate::i18n::Tr;
 use crate::models::invoice::InvoiceDefaults;
 use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
 
@@ -24,25 +25,26 @@ pub(super) fn fields_from(defaults: &InvoiceDefaults) -> InvoiceDefaultsInput {
     }
 }
 
-pub(super) fn parse_fields(fields: &InvoiceDefaultsInput) -> Result<InvoiceDefaults, String> {
+pub(super) fn parse_fields(
+    tr: Tr,
+    fields: &InvoiceDefaultsInput,
+) -> Result<InvoiceDefaults, String> {
     let terms_days = fields
         .terms_days
         .trim()
         .parse::<i16>()
         .ok()
         .filter(|days| (0..=365).contains(days))
-        .ok_or("Payment terms must be between 0 and 365 days.")?;
+        .ok_or_else(|| tr.invoices_terms_invalid())?;
     if fields.po_number.chars().count() > 200 || fields.po_number.contains('\0') {
-        return Err("Purchase order must contain at most 200 characters.".into());
+        return Err(tr.invoices_po_number_invalid());
     }
     let percentage = |value: &str| -> Result<i16, String> {
         let value = if value.trim().is_empty() { "0" } else { value };
         value
             .parse::<Percentage>()
             .map(|value| value.basis_points() as i16)
-            .map_err(|_| {
-                "Percentages must be between 0 and 100, with at most two decimal places.".into()
-            })
+            .map_err(|_| tr.invoices_percentage_invalid())
     };
     let (tax2_name, tax2_bps) = match &fields.second_tax {
         Some(tax) => {
@@ -50,7 +52,7 @@ pub(super) fn parse_fields(fields: &InvoiceDefaultsInput) -> Result<InvoiceDefau
                 || tax.name.chars().count() > 100
                 || tax.name.contains('\0')
             {
-                return Err("The second tax needs a name of 1–100 characters.".into());
+                return Err(tr.invoices_second_tax_name_invalid());
             }
             (
                 Some(tax.name.trim().into()),
@@ -155,7 +157,10 @@ mod tests {
             tax2_name: Some("Local tax".into()),
             tax2_bps: Some(150),
         };
-        assert_eq!(parse_fields(&fields_from(&defaults)).unwrap(), defaults);
+        assert_eq!(
+            parse_fields(Tr::default(), &fields_from(&defaults)).unwrap(),
+            defaults
+        );
     }
 
     #[test]
@@ -165,14 +170,14 @@ mod tests {
                 tax: value.into(),
                 ..Default::default()
             };
-            assert!(parse_fields(&fields).is_err());
+            assert!(parse_fields(Tr::default(), &fields).is_err());
         }
         for value in ["", "-1", "366", "1.5"] {
             let fields = InvoiceDefaultsInput {
                 terms_days: value.into(),
                 ..Default::default()
             };
-            assert!(parse_fields(&fields).is_err());
+            assert!(parse_fields(Tr::default(), &fields).is_err());
         }
         let fields = InvoiceDefaultsInput {
             second_tax: Some(SecondTaxInput {
@@ -181,7 +186,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert!(parse_fields(&fields).is_err());
+        assert!(parse_fields(Tr::default(), &fields).is_err());
     }
 
     #[test]
@@ -194,16 +199,16 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert!(parse_fields(&fields).is_ok());
+        assert!(parse_fields(Tr::default(), &fields).is_ok());
         fields.po_number.push('é');
-        assert!(parse_fields(&fields).is_err());
+        assert!(parse_fields(Tr::default(), &fields).is_err());
         fields.po_number = "PO\0number".into();
-        assert!(parse_fields(&fields).is_err());
+        assert!(parse_fields(Tr::default(), &fields).is_err());
         fields.po_number.clear();
         fields.second_tax.as_mut().unwrap().name.push('é');
-        assert!(parse_fields(&fields).is_err());
+        assert!(parse_fields(Tr::default(), &fields).is_err());
         fields.second_tax.as_mut().unwrap().name = "Tax\0name".into();
-        assert!(parse_fields(&fields).is_err());
+        assert!(parse_fields(Tr::default(), &fields).is_err());
     }
 
     #[test]
@@ -213,7 +218,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            parse_fields(&fields).unwrap(),
+            parse_fields(Tr::default(), &fields).unwrap(),
             InvoiceDefaults {
                 terms_days: 0,
                 ..Default::default()

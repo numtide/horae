@@ -87,6 +87,10 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         WHERE e.spent_date BETWEEN '${week}'::date AND '${week}'::date + 6 AND e.billable
         GROUP BY c.id ORDER BY count(*) DESC LIMIT 1`);
       await page.goto(`${base}/invoices/new/client/${seeded}`);
+      // The seeded week may lie in last month: take everything unbilled.
+      await page.waitForLoadState('networkidle');
+      await page.locator('#inv-period-trigger').click();
+      await page.getByRole('menuitem', { name: 'Everything up to today', exact: true }).click();
       const draft = page.getByRole('button', { name: 'Create draft', exact: true });
       await expect(draft).toBeEnabled();
       await draft.click();

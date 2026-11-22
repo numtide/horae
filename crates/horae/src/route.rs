@@ -29,6 +29,7 @@ use crate::pages::{
     timesheet::{Anchor, CalSpan, Timesheet, ViewMode},
 };
 // Route constructors outside the editor name the typed query through this module.
+pub use crate::pages::invoices::InvoiceFilter;
 pub use crate::pages::new_project::EditReturn;
 
 #[component]
@@ -93,8 +94,9 @@ pub enum Route {
     Approvals { week: String },
     #[route("/reports")]
     Reports {},
-    #[route("/invoices")]
-    InvoiceList {},
+    // The tab and the filters are the whole query, so a view can be shared.
+    #[route("/invoices?:..filter")]
+    InvoiceList { filter: InvoiceFilter },
     #[route("/invoices/new")]
     NewInvoice {},
     // `duplicate` names an invoice whose values and projects step 2 starts from.
@@ -169,7 +171,7 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
                 | Route::EditProject { .. }
         ) | (Route::ClientList {}, Route::ClientDetail { .. })
             | (
-                Route::InvoiceList {},
+                Route::InvoiceList { .. },
                 Route::NewInvoice {}
                     | Route::NewInvoiceForClient { .. }
                     | Route::DuplicateInvoice { .. }
@@ -236,8 +238,18 @@ mod tests {
         for (path, section) in [
             (format!("/projects/new/client/{id}"), Route::ProjectList {}),
             (format!("/projects/client/{id}"), Route::ProjectList {}),
-            (format!("/invoices/new/client/{id}"), Route::InvoiceList {}),
-            ("/invoices/new".to_owned(), Route::InvoiceList {}),
+            (
+                format!("/invoices/new/client/{id}"),
+                Route::InvoiceList {
+                    filter: InvoiceFilter::default(),
+                },
+            ),
+            (
+                "/invoices/new".to_owned(),
+                Route::InvoiceList {
+                    filter: InvoiceFilter::default(),
+                },
+            ),
         ] {
             let route: Route = path.parse().unwrap();
             assert!(!matches!(route, Route::NotFound { .. }), "{path}");
@@ -252,7 +264,12 @@ mod tests {
         let route: Route = "/invoices/settings".parse().unwrap();
         assert!(route == Route::InvoiceSettings {});
         assert_eq!(route.to_string(), "/invoices/settings");
-        assert!(matches_navigation(&Route::InvoiceList {}, &route));
+        assert!(matches_navigation(
+            &Route::InvoiceList {
+                filter: InvoiceFilter::default()
+            },
+            &route
+        ));
     }
 
     #[test]
@@ -386,7 +403,12 @@ mod tests {
         assert_eq!(route.to_string(), path);
         assert!(matches_navigation(&Route::ClientList {}, &route));
         assert!(!matches_navigation(&Route::ProjectList {}, &route));
-        assert!(!matches_navigation(&Route::InvoiceList {}, &route));
+        assert!(!matches_navigation(
+            &Route::InvoiceList {
+                filter: InvoiceFilter::default()
+            },
+            &route
+        ));
     }
 
     #[test]
@@ -395,7 +417,12 @@ mod tests {
         assert!(matches!(route, Route::NewProject {}));
         assert!(matches_navigation(&Route::ProjectList {}, &route));
         assert!(!matches_navigation(&Route::ClientList {}, &route));
-        assert!(!matches_navigation(&Route::InvoiceList {}, &route));
+        assert!(!matches_navigation(
+            &Route::InvoiceList {
+                filter: InvoiceFilter::default()
+            },
+            &route
+        ));
     }
 
     #[test]

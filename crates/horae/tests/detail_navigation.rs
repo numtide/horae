@@ -180,6 +180,7 @@ fn app(probe: Probe) -> Element {
 
 mod route {
     pub use super::edit_return::EditReturn;
+    pub use super::invoices::InvoiceFilter;
     use super::*;
     use clients::{ClientDetail, ClientList};
     use invoices::{
@@ -195,8 +196,8 @@ mod route {
         ClientList {},
         #[route("/clients/:id")]
         ClientDetail { id: Uuid },
-        #[route("/invoices")]
-        InvoiceList {},
+        #[route("/invoices?:..filter")]
+        InvoiceList { filter: InvoiceFilter },
         #[route("/invoices/new")]
         NewInvoice {},
         #[route("/invoices/new/client/:client")]
@@ -1419,6 +1420,12 @@ mod server_fns {
     pub async fn list_uninvoiced_clients()
     -> Result<Vec<crate::invoice::UninvoicedClient>, ServerFnError> {
         Ok(Vec::new())
+    }
+
+    pub async fn get_last_client_invoice(
+        _client: String,
+    ) -> Result<Option<crate::invoice::LastInvoice>, ServerFnError> {
+        Ok(None)
     }
 
     pub async fn get_invoice_duplicate(

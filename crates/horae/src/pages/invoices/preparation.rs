@@ -16,14 +16,16 @@ use crate::components::date_field::DateField;
 use crate::components::form::FormGroup;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, LoadError, NoAccess, Skeleton};
+use crate::components::screen_state::{
+    EmptyState, ErrorState, LOAD_FAILED, LoadError, NoAccess, Skeleton,
+};
 use crate::components::select_field::SelectField;
 use crate::components::table::DataTable;
 use crate::i18n::{Tr, split_tag, use_tr};
 use crate::models::Project;
 use crate::models::invoice::{
     InvoiceDefaults, InvoiceDuplicate, InvoiceFeeSelection, InvoiceGenerationRequest,
-    InvoicePreparation, InvoiceSource,
+    InvoicePreparation, InvoiceSource, LastInvoice,
 };
 use crate::models::project_creation::InvoiceDefaultsInput;
 use crate::route::Route;
@@ -66,26 +68,31 @@ fn is_reviewed(current: Option<&InvoiceRequest>, reviewed: Option<&InvoiceReques
         .is_some_and(|(current, reviewed)| current == reviewed)
 }
 
-/// The period presets. Up to today has no start, so it finds everything still
-/// unbilled, as the Uninvoiced view does.
+/// The period presets. Since the last invoice is the default when the client
+/// has one, and This month otherwise. Up to today has no start, so it finds
+/// everything still unbilled, as the Uninvoiced view does; it is never the
+/// default, so old or imported time is billed only when someone asks for it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Preset {
-    UpToToday,
+    SinceLastInvoice,
     ThisMonth,
     LastMonth,
+    UpToToday,
     Custom,
 }
 
 impl Preset {
-    const ALL: [Self; 4] = [
-        Self::UpToToday,
+    const ALL: [Self; 5] = [
+        Self::SinceLastInvoice,
         Self::ThisMonth,
         Self::LastMonth,
+        Self::UpToToday,
         Self::Custom,
     ];
 
     fn label(self, tr: Tr) -> String {
         match self {
+            Self::SinceLastInvoice => tr.invoices_period_since_last(),
             Self::UpToToday => tr.invoices_period_up_to_today(),
             Self::ThisMonth => tr.invoices_period_this_month(),
             Self::LastMonth => tr.invoices_period_last_month(),
@@ -93,10 +100,22 @@ impl Preset {
         }
     }
 
-    /// The dates the preset stands for, or `None` for Custom.
-    fn range(self, today: NaiveDate) -> Option<(NaiveDate, NaiveDate)> {
+    /// The first preset for a client: since its last invoice if it has one.
+    fn default_for(last: Option<&LastInvoice>) -> Self {
+        if last.is_some() {
+            Self::SinceLastInvoice
+        } else {
+            Self::ThisMonth
+        }
+    }
+
+    /// The dates the preset stands for, or `None` for Custom and for Since
+    /// the last invoice when there is none. A last invoice that covers today
+    /// starts the period today rather than after it.
+    fn range(self, today: NaiveDate, last: Option<&LastInvoice>) -> Option<(NaiveDate, NaiveDate)> {
         let first = today.with_day(1)?;
         match self {
+            Self::SinceLastInvoice => Some((last?.next_start()?.min(today), today)),
             Self::UpToToday => Some((NaiveDate::from_ymd_opt(1970, 1, 1)?, today)),
             Self::ThisMonth => Some((first, today)),
             Self::LastMonth => {
@@ -146,7 +165,7 @@ pub(super) fn ChooseClient() -> Element {
     });
     rsx! {
         div {
-            BackLink { to: Route::InvoiceList {}, label: tr.invoices_back() }
+            BackLink { to: Route::InvoiceList { filter: Default::default() }, label: tr.invoices_back() }
             PageHeader { title: tr.invoices_new_title(), title_id: INVOICES_HEADING }
             PrepareGate {
                 match &*clients.read() {
@@ -182,6 +201,8 @@ struct Sources {
     client_name: String,
     projects: Vec<Project>,
     template: Option<InvoiceDuplicate>,
+    /// Where the default period starts.
+    last_invoice: Option<LastInvoice>,
 }
 
 #[component]
@@ -194,9 +215,10 @@ pub(super) fn PrepareForClient(client: String, duplicate: Option<Uuid>) -> Eleme
             let Ok(id) = client.parse::<Uuid>() else {
                 return Ok(None);
             };
-            let (clients, projects, template) = futures_util::join!(
+            let (clients, projects, last_invoice, template) = futures_util::join!(
                 server_fns::list_clients(false),
                 server_fns::list_projects(Some(id.to_string()), true),
+                server_fns::get_last_client_invoice(id.to_string()),
                 async {
                     match duplicate {
                         Some(source) => server_fns::get_invoice_duplicate(source.to_string())
@@ -214,13 +236,14 @@ pub(super) fn PrepareForClient(client: String, duplicate: Option<Uuid>) -> Eleme
                 client_name: found.name,
                 projects: projects?,
                 template: template?.filter(|t: &InvoiceDuplicate| t.client_id == id),
+                last_invoice: last_invoice?,
             }))
         }
     });
     let retry = use_callback(move |()| sources.restart());
     rsx! {
         div {
-            BackLink { to: Route::InvoiceList {}, label: tr.invoices_back() }
+            BackLink { to: Route::InvoiceList { filter: Default::default() }, label: tr.invoices_back() }
             PageHeader { title: tr.invoices_new_title(), title_id: INVOICES_HEADING }
             PrepareGate {
                 match &*sources.read() {
@@ -250,8 +273,12 @@ fn Prepare(sources: Sources) -> Element {
     let duplicate_of = sources.template.as_ref().map(|t| t.source_id);
     let all_projects: Vec<String> = sources.projects.iter().map(|p| p.id.to_string()).collect();
 
-    let mut preset = use_signal(|| Preset::UpToToday);
-    let initial = Preset::UpToToday.range(today).unwrap_or((today, today));
+    let last_invoice = sources.last_invoice.clone();
+    let first_preset = Preset::default_for(last_invoice.as_ref());
+    let mut preset = use_signal(|| first_preset);
+    let initial = first_preset
+        .range(today, last_invoice.as_ref())
+        .unwrap_or((today, today));
     let mut from = use_signal(|| initial.0.to_string());
     let mut to = use_signal(|| initial.1.to_string());
     let template = sources.template.clone();
@@ -303,13 +330,13 @@ fn Prepare(sources: Sources) -> Element {
         .as_ref()
         .is_some_and(|last| last.same_sources(&source_request));
     let current = if started() {
-        parse_fields(&fields.read()).map(Some)
+        parse_fields(tr, &fields.read()).map(Some)
     } else {
         Ok(None)
     }
     .and_then(|overrides| {
         let selected_fees = if same_sources {
-            Some(fees::parse(&fees.read())?)
+            Some(fees::parse(tr, &fees.read())?)
         } else {
             None
         };
@@ -509,13 +536,16 @@ fn Prepare(sources: Sources) -> Element {
     });
     let generate_excess = use_callback(move |()| generate.call(true));
     let keep_preparing = use_callback(move |()| confirm.set(false));
+    let preset_last = last_invoice.clone();
     let choose_preset = use_callback(move |value: Preset| {
         let was = *preset.peek();
         preset.set(value);
         // Custom dates start from this month rather than the open start.
         let range = match value {
-            Preset::Custom if was == Preset::UpToToday => Preset::ThisMonth.range(today),
-            other => other.range(today),
+            Preset::Custom if was == Preset::UpToToday => {
+                Preset::ThisMonth.range(today, preset_last.as_ref())
+            }
+            other => other.range(today, preset_last.as_ref()),
         };
         if let Some((start, end)) = range {
             from.set(start.to_string());
@@ -595,6 +625,13 @@ fn Prepare(sources: Sources) -> Element {
         NaiveDate::parse_from_str(&to(), "%Y-%m-%d"),
     ) {
         _ if preset() == Preset::UpToToday => tr.invoices_period_up_to(date(today)),
+        (Ok(start), Ok(_)) if preset() == Preset::SinceLastInvoice => {
+            let number = last_invoice
+                .as_ref()
+                .map(|last| last.number.clone())
+                .unwrap_or_default();
+            tr.invoices_period_since(date(start), number)
+        }
         (Ok(start), Ok(end)) => tr.invoices_period_range(date(start), date(end)),
         _ => preset().label(tr),
     };
@@ -622,7 +659,7 @@ fn Prepare(sources: Sources) -> Element {
             div {
                 div { id: "inv-period-label", class: "text-sm text-muted", {tr.invoices_period()} }
                 Menu { id: "inv-period", label: period_label, trigger_class: "text-sm px-4",
-                    for value in Preset::ALL {
+                    for value in Preset::ALL.into_iter().filter(|value| *value != Preset::SinceLastInvoice || last_invoice.is_some()) {
                         PresetOption { key: "{value:?}", value, current: preset(), onpick: choose_preset }
                     }
                 }
@@ -716,6 +753,14 @@ fn Prepare(sources: Sources) -> Element {
             match &estimate {
                 None if previewing() || current.is_ok() => rsx! { Skeleton { rows: 3, columns: 4, label: tr.invoices_preview_loading() } },
                 None => rsx! {},
+                // Nothing billable, for example because all of it waits for
+                // approval: the warning above says what is waiting.
+                Some(review) if review.lines.is_empty() => rsx! {
+                    div { class: "inv-content", aria_busy: stale || previewing(),
+                        EmptyState { id: "inv-preview-empty", icon: "invoices", title: tr.invoices_preview_empty(),
+                            body: tr.invoices_preview_empty_body() }
+                    }
+                },
                 Some(review) => rsx! {
                     div { class: "inv-content", aria_busy: stale || previewing(),
                         PreparedLines { estimate: review.clone() }
@@ -895,15 +940,48 @@ mod tests {
         let today: NaiveDate = "2026-03-15".parse().unwrap();
         let day = |text: &str| text.parse::<NaiveDate>().unwrap();
         assert_eq!(
-            Preset::ThisMonth.range(today),
+            Preset::ThisMonth.range(today, None),
             Some((day("2026-03-01"), today))
         );
         assert_eq!(
-            Preset::LastMonth.range(today),
+            Preset::LastMonth.range(today, None),
             Some((day("2026-02-01"), day("2026-02-28")))
         );
-        assert_eq!(Preset::UpToToday.range(today).map(|r| r.1), Some(today));
-        assert_eq!(Preset::Custom.range(today), None);
+        assert_eq!(
+            Preset::UpToToday.range(today, None).map(|r| r.1),
+            Some(today)
+        );
+        assert_eq!(Preset::Custom.range(today, None), None);
+    }
+
+    fn last(covered_to: &str) -> LastInvoice {
+        LastInvoice {
+            id: Uuid::nil(),
+            number: "INV-1".into(),
+            issued_on: covered_to.parse().unwrap(),
+            covered_to: covered_to.parse().unwrap(),
+        }
+    }
+
+    #[test]
+    fn the_period_starts_after_the_last_invoice_or_this_month() {
+        let today: NaiveDate = "2026-03-15".parse().unwrap();
+        assert_eq!(Preset::default_for(None), Preset::ThisMonth);
+        let previous = last("2026-02-20");
+        assert_eq!(
+            Preset::default_for(Some(&previous)),
+            Preset::SinceLastInvoice
+        );
+        assert_eq!(
+            Preset::SinceLastInvoice.range(today, Some(&previous)),
+            Some(("2026-02-21".parse().unwrap(), today))
+        );
+        // A last invoice that already covers today does not start tomorrow.
+        assert_eq!(
+            Preset::SinceLastInvoice.range(today, Some(&last("2026-03-15"))),
+            Some((today, today))
+        );
+        assert_eq!(Preset::SinceLastInvoice.range(today, None), None);
     }
 
     #[test]

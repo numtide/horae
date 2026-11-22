@@ -72,6 +72,18 @@ sql(`BEGIN;
     await expect(rows.first()).toContainText('SCREENS-2');
     await expect(rows.first().locator('.badge')).toHaveText('Overdue');
     await expect(rows.first().locator('td.text-danger')).toHaveText('31 Jan 2026');
+    // The filters are the URL: a reload, or a shared link, shows the same list.
+    await expect(page).toHaveURL(/\/invoices\?status=overdue&q=SCREENS$/);
+    await page.reload();
+    await expect(rows).toHaveCount(1);
+    await expect(search).toHaveValue('SCREENS');
+    // Sent includes the overdue invoice; Overdue narrows to it.
+    await page.locator('#invoices-status-filter-trigger').click();
+    await page.getByRole('menuitem', { name: 'Sent', exact: true }).click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText('SCREENS-2');
+    await page.goBack();
+    await expect(page).toHaveURL(/status=overdue/);
     await page.locator('#invoices-status-filter-trigger').click();
     await page.getByRole('menuitem', { name: 'Void', exact: true }).click();
     await expect(rows).toHaveCount(1);
@@ -109,25 +121,38 @@ sql(`BEGIN;
     await page.goto(`${base}/invoices`);
     await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Uninvoiced', exact: true }).click();
+    await expect(page).toHaveURL(/\/invoices\?tab=uninvoiced$/);
     await expect(page.getByRole('columnheader', { name: 'Unbilled time', exact: true })).toBeVisible();
     const unbilled = page.getByRole('row').filter({ hasText: clientName });
     await expect(unbilled).toContainText('2:00');
     await expect(unbilled).toContainText('EUR 200.00');
+    // Its last invoice that is not void: the draft, issued last.
+    await expect(unbilled.getByRole('link', { name: 'SCREENS-1', exact: true })).toBeVisible();
     await unbilled.getByRole('link', { name: `New invoice for ${clientName}`, exact: true }).click();
     await expect(page).toHaveURL(`${base}/invoices/new/client/${client}`);
 
-    // Step 2 warns about time waiting for approval, which stays out.
+    // Step 2 starts the day after the last invoice, never at the open start.
+    await expect(page.locator('#inv-period-trigger')).toContainText('Since SCREENS-1, from 3 Jan 2026');
+    // It warns about time waiting for approval, which stays out.
     const warning = page.locator('#inv-awaiting-approval');
     await expect(warning).toContainText('1:30 of billable time');
     await expect(warning.getByRole('link', { name: 'Open Approvals', exact: true })).toHaveAttribute('href', /^\/approvals/);
     const preview = page.getByRole('region', { name: 'Preview', exact: true });
     await expect(preview.locator('tbody tr')).toHaveCount(1);
     await expect(preview.locator('tbody')).toContainText('Open hours');
-    sql(`UPDATE time_entries SET state = 'approved' WHERE id = '${submitted}'`);
+    // When all of it waits, the preview is empty and the warning stays.
+    sql(`UPDATE time_entries SET state = 'submitted' WHERE id = '${open}'`);
+    await page.reload();
+    await expect(warning).toContainText('3:30 of billable time');
+    await expect(page.locator('#inv-preview-empty')).toContainText('No billable time or fees in this period');
+    await expect(page.locator('.alert-danger')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Create draft', exact: true })).toBeDisabled();
+    sql(`UPDATE time_entries SET state = CASE id WHEN '${open}' THEN 'open'::entry_state ELSE 'approved'::entry_state END
+      WHERE id IN ('${open}', '${submitted}')`);
     await page.reload();
     await expect(preview.locator('tbody tr')).toHaveCount(2);
     await expect(warning).toHaveCount(0);
-    console.log('PASS: Uninvoiced opens step 2 for its client, which warns about unapproved time and leaves it out');
+    console.log('PASS: Uninvoiced opens step 2 for its client from its last invoice, which warns about unapproved time, leaves it out and shows an empty preview when nothing else is billable');
 
     // Create the draft, give it a subject, and see it on the detail.
     await page.getByRole('button', { name: 'Create draft', exact: true }).click();
@@ -146,11 +171,12 @@ sql(`BEGIN;
     await expect(page).toHaveURL(`${base}/invoices/new/client/${client}/from/${created}`);
     await expect(page.locator('main')).toContainText('Starting from invoice');
     await expect(page.getByRole('region', { name: 'Projects', exact: true }).getByRole('checkbox', { name: projectName, exact: true })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.locator('.alert-danger')).toContainText('No billable time or fees found');
+    await expect(page.locator('#inv-preview-empty')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create draft', exact: true })).toBeDisabled();
+    // Time after the source's period is billed; the source's own is not.
     sql(`INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable)
       SELECT '${later}', org_id, id, '${project}', '${task}', '2026-11-03', 30, 'Later hours', true FROM users WHERE email = 'admin@example.com'`);
-    await page.getByRole('button', { name: 'Try again', exact: true }).click();
+    await page.reload();
     await expect(page.getByRole('button', { name: 'Create draft', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Create draft', exact: true }).click();
     await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}\/edit$/);

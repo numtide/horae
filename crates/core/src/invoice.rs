@@ -140,15 +140,6 @@ pub fn resolve_rate(
         .or(user_rate_cents)
 }
 
-/// Compute line amount in minor units (cents).
-///
-/// `rate_cents` is an hourly rate in cents; `minutes` is the duration.
-/// For the non-negative rates/durations stored by Horae, a half-cent rounds up.
-/// Signed inputs retain truncation toward zero, matching the SQL helper.
-///
-/// # Errors
-/// Returns an error if the final amount cannot fit in `i64`. The intermediate
-/// product of an `i64` rate and `i32` duration always fits in `i128`.
 /// Whether an invoice is overdue on `today`: sent, still unpaid, and past its
 /// due date. Overdue is computed, never stored as a status.
 #[must_use]
@@ -160,6 +151,15 @@ pub fn is_overdue(
     status == crate::types::InvoiceStatus::Sent && due_on < today
 }
 
+/// Compute line amount in minor units (cents).
+///
+/// `rate_cents` is an hourly rate in cents; `minutes` is the duration.
+/// For the non-negative rates/durations stored by Horae, a half-cent rounds up.
+/// Signed inputs retain truncation toward zero, matching the SQL helper.
+///
+/// # Errors
+/// Returns an error if the final amount cannot fit in `i64`. The intermediate
+/// product of an `i64` rate and `i32` duration always fits in `i128`.
 pub fn line_amount_cents(rate_cents: i64, minutes: i32) -> Result<i64, std::num::TryFromIntError> {
     ((i128::from(rate_cents) * i128::from(minutes) + 30) / 60).try_into()
 }

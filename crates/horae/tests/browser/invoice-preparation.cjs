@@ -273,7 +273,7 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     assert.equal(result.lines.length, 1);
     assert.equal(result.lines[0].minutes, null);
     assert.ok(result.lines[0].fee_occurrence_id);
-    await expect(page.locator('.alert-danger')).toContainText('The invoice is saved, but recovery could not be cleared');
+    await expect(page.locator('.alert-danger')).toContainText('The invoice is saved, but its recovery record could not be cleared');
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore + 1);
     await page.evaluate(() => { Storage.prototype.removeItem = window.originalInvoiceRemoveItem; delete window.originalInvoiceRemoveItem; });
     const recoveredAgain = page.waitForRequest(request => request.url().includes('/api/generate_invoice'));
@@ -321,7 +321,8 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     // Leaving a started invoice asks before discarding it.
     page.once('dialog', dialog => dialog.accept());
     await page.getByRole('link', { name: 'Back to Invoices', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/invoices`);
+    // The list's filters are its query, so an unfiltered list ends in `?`.
+    await expect(page).toHaveURL(/\/invoices\??$/);
     await readsFinished();
     await page.goto(`${base}/invoices/${result.invoice.id}`);
     await editValues(page);

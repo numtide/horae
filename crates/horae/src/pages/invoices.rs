@@ -27,6 +27,8 @@ mod defaults_form;
 mod detail;
 #[path = "invoices/editing.rs"]
 mod editing;
+#[path = "invoices/filter.rs"]
+mod filter;
 #[path = "invoices/list.rs"]
 mod list;
 #[path = "invoices/preparation.rs"]
@@ -36,6 +38,7 @@ mod recovery;
 #[path = "invoices/settings.rs"]
 mod settings;
 
+pub use filter::InvoiceFilter;
 pub use settings::InvoiceSettings;
 
 /// Whether the session's own permissions, from a catalog this build
@@ -156,8 +159,8 @@ pub fn DuplicateInvoice(client: String, source: Uuid) -> Element {
 }
 
 #[component]
-pub fn InvoiceList() -> Element {
-    rsx! { recovery::RecoveryGate { list::InvoiceListContent {} } }
+pub fn InvoiceList(filter: InvoiceFilter) -> Element {
+    rsx! { recovery::RecoveryGate { list::InvoiceListContent { filter } } }
 }
 
 #[component]

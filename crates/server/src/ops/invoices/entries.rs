@@ -1,3 +1,12 @@
+//! Billable time an invoice can take.
+//!
+//! Three queries share one rule for which time is invoiceable: [`read`],
+//! [`awaiting_approval_minutes`] (the same rule with `state = 'submitted'`)
+//! and `uninvoiced::list`. Time is invoiceable when it is billable on a
+//! billable project and task, not running, on no invoice, and open or
+//! approved. A further condition, such as leaving out time an import says
+//! was already billed elsewhere, goes into all three.
+
 use super::SourceRead;
 use crate::ops::OpError;
 

@@ -93,6 +93,25 @@ pub struct CurrencyAmount {
     pub cents: i64,
 }
 
+/// A client's latest invoice that is not void, and the last day it billed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LastInvoice {
+    pub id: Uuid,
+    pub number: String,
+    pub issued_on: NaiveDate,
+    /// The latest day of time or fee due date on its lines, or its issue date
+    /// when it bills neither.
+    pub covered_to: NaiveDate,
+}
+
+impl LastInvoice {
+    /// Where a new invoice for the same client starts: the day after the
+    /// last one's period.
+    pub fn next_start(&self) -> Option<NaiveDate> {
+        self.covered_to.succ_opt()
+    }
+}
+
 /// A client with unbilled time or fees due up to today, as preparing an
 /// invoice for it would find them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,6 +123,7 @@ pub struct UninvoicedClient {
     pub time: Vec<CurrencyAmount>,
     /// Fees due and not yet invoiced, per currency.
     pub fees: Vec<CurrencyAmount>,
+    pub last_invoice: Option<LastInvoice>,
 }
 
 /// What Duplicate copies from an invoice into a new one: its client, the
@@ -159,8 +179,10 @@ pub struct InvoicePreparation {
     /// Exact source-level excesses computed by the server for this review.
     pub excess: Vec<InvoiceSourceExcess>,
     /// Billable time in the period still waiting for approval. It stays out
-    /// of the invoice until it is approved.
-    #[serde(default)]
+    /// of the invoice until it is approved. Left out of the serialized form
+    /// when zero, so a reviewed request stored before this field existed
+    /// still replays as the same request.
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub awaiting_approval_minutes: i64,
 }
 
@@ -278,9 +300,14 @@ pub struct InvoiceGenerationRequest {
     pub review: InvoicePreparation,
     pub confirmed_excess: Vec<InvoiceSourceExcess>,
     /// The invoice this one duplicates: the new draft takes its subject and
-    /// notes. It must belong to the same client.
-    #[serde(default)]
+    /// notes. It must belong to the same client. Not serialized when absent,
+    /// for the same replay reason as `awaiting_approval_minutes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duplicate_of: Option<Uuid>,
+}
+
+fn is_zero(value: &i64) -> bool {
+    *value == 0
 }
 
 impl InvoicePreparation {
@@ -313,7 +340,9 @@ pub struct InvoiceDraftEdit {
     pub revision: i64,
     pub defaults: InvoiceDefaults,
     pub fees: Vec<InvoiceFeeEdit>,
-    #[serde(default)]
+    /// Not serialized when empty, so a stored edit from before subjects
+    /// existed still replays as the same request.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub subject: String,
 }
 
@@ -357,4 +386,59 @@ pub struct InvoiceDraftSave {
     pub edit: InvoiceDraftEdit,
     pub review: InvoiceEditReview,
     pub confirmed_excess: Vec<InvoiceExcessConfirmation>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A request stored by a tab before these fields existed must serialize
+    // the same way now, or its replay is refused as a different request.
+    #[test]
+    fn fields_added_for_step_one_are_absent_from_the_wire_until_set() {
+        let edit = InvoiceDraftEdit {
+            revision: 1,
+            defaults: InvoiceDefaults::default(),
+            fees: Vec::new(),
+            subject: String::new(),
+        };
+        let json = serde_json::to_value(&edit).unwrap();
+        assert!(json.get("subject").is_none());
+        let parsed: InvoiceDraftEdit = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed, edit);
+
+        let request = InvoiceGenerationRequest {
+            request_id: Uuid::nil(),
+            review: InvoicePreparation {
+                issued_on: NaiveDate::MIN,
+                due_on: None,
+                currency: "EUR".into(),
+                projects: Vec::new(),
+                defaults: None,
+                lines: Vec::new(),
+                subtotal_cents: 0,
+                amounts: None,
+                excess: Vec::new(),
+                awaiting_approval_minutes: 0,
+            },
+            confirmed_excess: Vec::new(),
+            duplicate_of: None,
+        };
+        let json = serde_json::to_value(&request).unwrap();
+        assert!(json.get("duplicate_of").is_none());
+        assert!(json["review"].get("awaiting_approval_minutes").is_none());
+        let parsed: InvoiceGenerationRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed, request);
+    }
+
+    #[test]
+    fn the_next_invoice_starts_the_day_after_the_last_one_covered() {
+        let last = LastInvoice {
+            id: Uuid::nil(),
+            number: "INV-1".into(),
+            issued_on: NaiveDate::from_ymd_opt(2026, 11, 3).unwrap(),
+            covered_to: NaiveDate::from_ymd_opt(2026, 10, 31).unwrap(),
+        };
+        assert_eq!(last.next_start(), NaiveDate::from_ymd_opt(2026, 11, 1));
+    }
 }

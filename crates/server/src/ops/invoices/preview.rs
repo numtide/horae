@@ -35,8 +35,8 @@ pub async fn prepare(
     });
     authorize_read(actor, PREPARE)?;
     let org_id = actor.org_id();
-    sqlx::query_scalar!(
-        "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
+    let client_currency = sqlx::query_scalar!(
+        "SELECT currency FROM clients WHERE id = $1 AND org_id = $2",
         client_id,
         org_id
     )
@@ -110,7 +110,14 @@ pub async fn prepare(
             },
         })
         .collect();
-    let currency = currency(&lines)?;
+    // A period with nothing to bill, for example because all its time waits
+    // for approval, is an empty preview in the client's currency, not an
+    // error: the screen still shows what is waiting. Generation refuses it.
+    let currency = if lines.is_empty() {
+        client_currency.trim().to_owned()
+    } else {
+        currency(&lines)?
+    };
     let subtotal_cents = subtotal(&lines)?;
     let inherited = projects
         .first()

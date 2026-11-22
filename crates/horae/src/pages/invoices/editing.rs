@@ -100,7 +100,7 @@ fn parse_edit(
     }
     Ok(InvoiceDraftEdit {
         revision,
-        defaults: parse_fields(fields)?,
+        defaults: parse_fields(tr, fields)?,
         subject: subject.to_owned(),
         fees: fees
             .iter()
@@ -148,6 +148,8 @@ fn DraftEditForm(id: Uuid, snapshot: InvoiceEditor, onsaved: EventHandler<()>) -
     let initial = (snapshot.edit.clone(), snapshot.review.clone());
     let mut reviewed = use_signal(move || Some(initial));
     let mut reviewing = use_signal(|| false);
+    let mut review_error = use_signal(|| None::<String>);
+    let mut attempt = use_signal(|| 0_u32);
     let mut busy = use_signal(|| false);
     let mut request = use_signal(|| None::<InvoiceDraftSave>);
     let mut uncertain = use_signal(|| false);
@@ -166,6 +168,8 @@ fn DraftEditForm(id: Uuid, snapshot: InvoiceEditor, onsaved: EventHandler<()>) -
     let waiting = use_hook(|| Rc::new(Cell::new(None::<Task>)));
     let wanted = current.clone();
     use_effect(use_reactive!(|wanted| {
+        // "Try again" asks for the same values once more.
+        let _ = attempt();
         if let Some(task) = waiting.take() {
             task.cancel();
             reviewing.set(false);
@@ -185,14 +189,18 @@ fn DraftEditForm(id: Uuid, snapshot: InvoiceEditor, onsaved: EventHandler<()>) -
             reviewing.set(true);
             match server_fns::review_invoice_edit(id.to_string(), edit.clone()).await {
                 Ok(review) => {
-                    error.set(None);
+                    review_error.set(None);
                     reviewed.set(Some((edit, review)));
                 }
-                Err(failure) => error.set(Some(failure.to_string())),
+                Err(failure) => review_error.set(Some(failure.to_string())),
             }
             reviewing.set(false);
         })));
     }));
+    let retry_review = use_callback(move |_: MouseEvent| {
+        review_error.set(None);
+        attempt += 1;
+    });
 
     let ready = reviewed
         .read()
@@ -314,6 +322,13 @@ fn DraftEditForm(id: Uuid, snapshot: InvoiceEditor, onsaved: EventHandler<()>) -
                 if let Some(message) = error() {
                     div { class: "alert alert-danger", role: "alert", "{message}" }
                 }
+                if let Some(message) = review_error() {
+                    div { class: "alert alert-danger", role: "alert",
+                        p { "{message}" }
+                        button { r#type: "button", class: "btn btn-secondary btn-sm mt-3", disabled: busy() || reviewing(),
+                            onclick: retry_review, {tr.invoices_preview_retry()} }
+                    }
+                }
                 section { class: "card p-5", aria_labelledby: "inv-details-title",
                     h2 { id: "inv-details-title", class: "card-title mb-4", {tr.invoices_details()} }
                     FormGroup { label: tr.invoices_subject(), id: "inv-subject", hint: tr.invoices_subject_hint(),
@@ -348,7 +363,9 @@ fn DraftEditForm(id: Uuid, snapshot: InvoiceEditor, onsaved: EventHandler<()>) -
             }
             aside { class: "inv-editor-totals card p-5", aria_labelledby: "inv-totals-title",
                 h2 { id: "inv-totals-title", class: "card-title mb-4", {tr.invoices_totals()} }
-                div { class: "inv-content", aria_busy: reviewing() || (ready.is_none() && current.is_ok()),
+                // Totals that no longer match the form are dimmed until a
+                // review of the current values replaces them.
+                div { class: "inv-content", aria_busy: reviewing() || ready.is_none(),
                     if let Some(rows) = shown {
                         dl { class: "flex flex-col gap-2 mb-5",
                             for (label, cents) in rows {

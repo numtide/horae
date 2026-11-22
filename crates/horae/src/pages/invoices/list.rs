@@ -2,12 +2,14 @@ use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use horae_core::types::InvoiceStatus;
 
+use super::filter::{InvoiceFilter, PeriodValue, StatusValue};
 use super::recovery::RecoveryStorage;
 use super::{INVOICES_HEADING, Shown, StatusBadge, date, money, prepares_invoices, settings};
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::card::MetricCard;
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::Segmented;
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::filter_bar::{FilterBar, SearchField};
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
@@ -18,76 +20,64 @@ use crate::models::invoice::{CurrencyAmount, InvoiceListItem, UninvoicedClient};
 use crate::route::Route;
 use crate::server_fns;
 
-/// The status filter's values; Overdue is computed, not stored.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum StatusFilter {
-    Any,
-    Is(Shown),
-}
+type Invoices = Resource<Result<Vec<InvoiceListItem>, ServerFnError>>;
+type Uninvoiced = Resource<Result<Option<Vec<UninvoicedClient>>, ServerFnError>>;
 
-impl StatusFilter {
-    fn keeps(self, item: &InvoiceListItem) -> bool {
-        match self {
-            Self::Any => true,
-            Self::Is(shown) => Shown::of(item.invoice.status, item.overdue) == shown,
-        }
+fn status_label(tr: Tr, status: StatusValue) -> String {
+    match status {
+        StatusValue::Draft => tr.invoices_status_draft(),
+        StatusValue::Sent => tr.invoices_status_sent(),
+        StatusValue::Overdue => tr.invoices_status_overdue(),
+        StatusValue::Paid => tr.invoices_status_paid(),
+        StatusValue::Void => tr.invoices_status_void(),
     }
 }
 
-/// The period filter, over the issue date.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Period {
-    Any,
-    ThisMonth,
-    LastMonth,
-    ThisYear,
-    LastYear,
-}
-
-impl Period {
-    const ALL: [Self; 5] = [
-        Self::Any,
-        Self::ThisMonth,
-        Self::LastMonth,
-        Self::ThisYear,
-        Self::LastYear,
-    ];
-
-    fn label(self, tr: Tr) -> String {
-        match self {
-            Self::Any => tr.invoices_period_any(),
-            Self::ThisMonth => tr.invoices_period_this_month(),
-            Self::LastMonth => tr.invoices_period_last_month(),
-            Self::ThisYear => tr.invoices_period_this_year(),
-            Self::LastYear => tr.invoices_period_last_year(),
-        }
-    }
-
-    fn keeps(self, issued: NaiveDate, today: NaiveDate) -> bool {
-        let month = |day: NaiveDate| (day.year(), day.month());
-        let last_month = today
-            .with_day(1)
-            .and_then(|first| first.pred_opt())
-            .unwrap_or(today);
-        match self {
-            Self::Any => true,
-            Self::ThisMonth => month(issued) == month(today),
-            Self::LastMonth => month(issued) == month(last_month),
-            Self::ThisYear => issued.year() == today.year(),
-            Self::LastYear => issued.year() == today.year() - 1,
-        }
+/// Whether `item` has the chosen status. Sent includes the overdue ones,
+/// which are sent and unpaid; Overdue narrows to those.
+fn keeps_status(status: Option<StatusValue>, item: &InvoiceListItem) -> bool {
+    let stored = item.invoice.status;
+    match status {
+        None => true,
+        Some(StatusValue::Draft) => stored == InvoiceStatus::Draft,
+        Some(StatusValue::Sent) => stored == InvoiceStatus::Sent,
+        Some(StatusValue::Overdue) => item.overdue,
+        Some(StatusValue::Paid) => stored == InvoiceStatus::Paid,
+        Some(StatusValue::Void) => stored == InvoiceStatus::Void,
     }
 }
 
-/// Which of the list's two views shows.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum View {
-    Invoices,
-    Uninvoiced,
+fn period_label(tr: Tr, period: Option<PeriodValue>) -> String {
+    match period {
+        None => tr.invoices_period_any(),
+        Some(PeriodValue::ThisMonth) => tr.invoices_period_this_month(),
+        Some(PeriodValue::LastMonth) => tr.invoices_period_last_month(),
+        Some(PeriodValue::ThisYear) => tr.invoices_period_this_year(),
+        Some(PeriodValue::LastYear) => tr.invoices_period_last_year(),
+    }
+}
+
+/// Whether an invoice issued on `issued` falls in `period`, seen on `today`.
+fn keeps_period(period: Option<PeriodValue>, issued: NaiveDate, today: NaiveDate) -> bool {
+    let month = |day: NaiveDate| (day.year(), day.month());
+    let last_month = today
+        .with_day(1)
+        .and_then(|first| first.pred_opt())
+        .unwrap_or(today);
+    match period {
+        None => true,
+        Some(PeriodValue::ThisMonth) => month(issued) == month(today),
+        Some(PeriodValue::LastMonth) => month(issued) == month(last_month),
+        Some(PeriodValue::ThisYear) => issued.year() == today.year(),
+        Some(PeriodValue::LastYear) => issued.year() == today.year() - 1,
+    }
 }
 
 /// Per-currency sums, in currency order, with how many invoices they hold.
-fn totals<'a>(items: impl Iterator<Item = &'a InvoiceListItem>) -> (Vec<CurrencyAmount>, usize) {
+/// `None` when a sum does not fit, so no card shows a capped figure.
+fn totals<'a>(
+    items: impl Iterator<Item = &'a InvoiceListItem>,
+) -> Option<(Vec<CurrencyAmount>, usize)> {
     let mut count = 0;
     let mut sums = std::collections::BTreeMap::<String, i64>::new();
     for item in items {
@@ -95,13 +85,13 @@ fn totals<'a>(items: impl Iterator<Item = &'a InvoiceListItem>) -> (Vec<Currency
         let sum = sums
             .entry(item.invoice.currency.trim().to_owned())
             .or_default();
-        *sum = sum.saturating_add(item.invoice.total_cents);
+        *sum = sum.checked_add(item.invoice.total_cents)?;
     }
     let sums = sums
         .into_iter()
         .map(|(currency, cents)| CurrencyAmount { currency, cents })
         .collect();
-    (sums, count)
+    Some((sums, count))
 }
 
 /// Amounts in several currencies, never added together.
@@ -113,9 +103,10 @@ fn amounts(sums: &[CurrencyAmount]) -> String {
 }
 
 #[component]
-pub(super) fn InvoiceListContent() -> Element {
+pub(super) fn InvoiceListContent(filter: InvoiceFilter) -> Element {
     let tr = use_tr();
     let storage = use_context::<RecoveryStorage>();
+    let navigator = use_navigator();
     let session = crate::components::session::use_session();
     let configures = matches!(
         &*session.permissions.read(),
@@ -133,19 +124,16 @@ pub(super) fn InvoiceListContent() -> Element {
     });
     let retry_invoices = use_callback(move |()| invoices.restart());
     let retry_uninvoiced = use_callback(move |()| uninvoiced.restart());
-    let mut view = use_signal(|| View::Invoices);
+    let shown = filter.clone();
     let switch_view = use_callback(move |label: String| {
-        view.set(if label == tr.invoices_view_uninvoiced() {
-            View::Uninvoiced
-        } else {
-            View::Invoices
+        navigator.push(Route::InvoiceList {
+            filter: InvoiceFilter {
+                uninvoiced: label == tr.invoices_view_uninvoiced(),
+                ..shown.clone()
+            },
         });
     });
-
-    let ready_clients = match &*uninvoiced.read() {
-        Some(Ok(Some(clients))) => Some(clients.len()),
-        _ => None,
-    };
+    let uninvoiced_view = prepares && filter.uninvoiced;
 
     rsx! {
         div {
@@ -161,28 +149,24 @@ pub(super) fn InvoiceListContent() -> Element {
                     }
                 },
             }
-            if let Some(Ok(list)) = &*invoices.read() {
-                Summary { list: list.clone(), ready_clients }
-            }
+            Summary { invoices, uninvoiced }
             if prepares {
                 div { class: "mb-5",
                     Segmented {
                         items: vec![tr.invoices_view_invoices(), tr.invoices_view_uninvoiced()],
-                        active: if view() == View::Uninvoiced { tr.invoices_view_uninvoiced() } else { tr.invoices_view_invoices() },
+                        active: if uninvoiced_view { tr.invoices_view_uninvoiced() } else { tr.invoices_view_invoices() },
                         onselect: switch_view,
                     }
                 }
             }
-            if view() == View::Uninvoiced {
+            if uninvoiced_view {
                 match &*uninvoiced.read() {
                     None => rsx! { Skeleton { rows: 4, columns: 5, label: tr.invoices_uninvoiced_loading() } },
                     Some(Err(error)) => rsx! {
                         LoadError { error: error.clone(), what: tr.invoices_uninvoiced_what(), retry: retry_uninvoiced,
                             pending: uninvoiced.state()() != UseResourceState::Ready }
                     },
-                    Some(Ok(clients)) => rsx! {
-                        UninvoicedTable { clients: clients.clone().unwrap_or_default(), can_prepare: storage.ready() }
-                    },
+                    Some(Ok(_)) => rsx! { UninvoicedTable { uninvoiced, can_prepare: storage.ready() } },
                 }
             } else {
                 match &*invoices.read() {
@@ -192,9 +176,7 @@ pub(super) fn InvoiceListContent() -> Element {
                             pending: invoices.state()() != UseResourceState::Ready,
                             focus_on_recovery: INVOICES_HEADING }
                     },
-                    Some(Ok(list)) => rsx! {
-                        InvoicesTable { list: list.clone(), stale: invoices.state()() != UseResourceState::Ready }
-                    },
+                    Some(Ok(_)) => rsx! { InvoicesTable { invoices, filter: filter.clone() } },
                 }
             }
         }
@@ -215,24 +197,35 @@ fn SettingsItem() -> Element {
 /// What is outstanding, what is overdue, and how many clients have work to
 /// invoice. Paid this month waits for payments, which bring a paid date.
 #[component]
-fn Summary(list: Vec<InvoiceListItem>, ready_clients: Option<usize>) -> Element {
+fn Summary(invoices: Invoices, uninvoiced: Uninvoiced) -> Element {
     let tr = use_tr();
-    let (outstanding, sent) = totals(
+    let Some(Ok(list)) = &*invoices.read() else {
+        return rsx! {};
+    };
+    let ready_clients = match &*uninvoiced.read() {
+        Some(Ok(Some(clients))) => Some(clients.len()),
+        _ => None,
+    };
+    let figure = |totals: Option<(Vec<CurrencyAmount>, usize)>| match totals {
+        Some((sums, count)) if !sums.is_empty() => (amounts(&sums), count),
+        Some((_, count)) => ("—".to_owned(), count),
+        None => ("—".to_owned(), 0),
+    };
+    let (outstanding, sent) = figure(totals(
         list.iter()
             .filter(|item| item.invoice.status == InvoiceStatus::Sent),
-    );
-    let (overdue, late) = totals(list.iter().filter(|item| item.overdue));
-    let zero = || "—".to_owned();
+    ));
+    let (overdue, late) = figure(totals(list.iter().filter(|item| item.overdue)));
     rsx! {
         section { class: "grid md:grid-cols-3 gap-4 mb-6", aria_label: tr.invoices_summary_label(),
             MetricCard {
                 label: tr.invoices_summary_outstanding(),
-                value: if outstanding.is_empty() { zero() } else { amounts(&outstanding) },
+                value: outstanding,
                 delta: tr.invoices_summary_count(sent as i64),
             }
             MetricCard {
                 label: tr.invoices_summary_overdue(),
-                value: if overdue.is_empty() { zero() } else { amounts(&overdue) },
+                value: overdue,
                 delta: tr.invoices_summary_count(late as i64),
                 direction: if late > 0 { "down" } else { "" },
             }
@@ -248,21 +241,83 @@ fn Summary(list: Vec<InvoiceListItem>, ready_clients: Option<usize>) -> Element 
 }
 
 #[component]
-fn InvoicesTable(list: Vec<InvoiceListItem>, stale: bool) -> Element {
+fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter) -> Element {
     let tr = use_tr();
-    let mut status = use_signal(|| StatusFilter::Any);
-    let mut client = use_signal(String::new);
-    let mut period = use_signal(|| Period::Any);
-    let mut query = use_signal(String::new);
+    let navigator = use_navigator();
     let today = crate::components::today::today();
-    let clear = use_callback(move |_: MouseEvent| {
-        status.set(StatusFilter::Any);
-        client.set(String::new());
-        period.set(Period::Any);
-        query.set(String::new());
+    // The search box answers at once; the URL follows when typing pauses.
+    let mut query = use_signal(|| filter.search.clone());
+    let settled = use_debounced(query, SEARCH_DEBOUNCE);
+    // Only a settled search moves the URL. The filter is read from the
+    // router at that moment, so Back to another search is never undone.
+    use_effect(move || {
+        let search = settled();
+        if let Route::InvoiceList { filter: current } = dioxus::router::router().current::<Route>()
+            && search != current.search
+        {
+            navigator.replace(Route::InvoiceList {
+                filter: InvoiceFilter { search, ..current },
+            });
+        }
     });
-    let pick_client = use_callback(move |value: String| client.set(value));
+    // Back, or a shared link, brings another search: show it in the box.
+    let external = filter.search.clone();
+    use_effect(use_reactive!(|external| {
+        if external != *settled.peek() {
+            query.set(external);
+        }
+    }));
+    let go = {
+        let current = filter.clone();
+        move |next: InvoiceFilter| {
+            if next != current {
+                navigator.push(Route::InvoiceList { filter: next });
+            }
+        }
+    };
+    let clear = {
+        let go = go.clone();
+        let current = filter.clone();
+        use_callback(move |_: MouseEvent| {
+            query.set(String::new());
+            go(current.cleared());
+        })
+    };
+    let pick_client = {
+        let go = go.clone();
+        let current = filter.clone();
+        use_callback(move |value: String| {
+            go(InvoiceFilter {
+                client: value.parse().ok(),
+                ..current.clone()
+            })
+        })
+    };
+    let pick_status = {
+        let go = go.clone();
+        let current = filter.clone();
+        use_callback(move |status: Option<StatusValue>| {
+            go(InvoiceFilter {
+                status,
+                ..current.clone()
+            })
+        })
+    };
+    let pick_period = {
+        let current = filter.clone();
+        use_callback(move |period: Option<PeriodValue>| {
+            go(InvoiceFilter {
+                period,
+                ..current.clone()
+            })
+        })
+    };
 
+    let stale = invoices.state()() != UseResourceState::Ready;
+    let read = invoices.read();
+    let Some(Ok(list)) = &*read else {
+        return rsx! {};
+    };
     if list.is_empty() {
         // The header already holds "New invoice", the screen's one Primary.
         return rsx! {
@@ -273,9 +328,13 @@ fn InvoicesTable(list: Vec<InvoiceListItem>, stale: bool) -> Element {
     let needle = query().trim().to_lowercase();
     let visible: Vec<&InvoiceListItem> = list
         .iter()
-        .filter(|item| status().keeps(item))
-        .filter(|item| client().is_empty() || item.invoice.client_id.to_string() == client())
-        .filter(|item| period().keeps(item.invoice.issued_on, today))
+        .filter(|item| keeps_status(filter.status, item))
+        .filter(|item| {
+            filter
+                .client
+                .is_none_or(|client| item.invoice.client_id == client)
+        })
+        .filter(|item| keeps_period(filter.period, item.invoice.issued_on, today))
         .filter(|item| {
             needle.is_empty()
                 || item.invoice.number.to_lowercase().contains(&needle)
@@ -292,32 +351,27 @@ fn InvoicesTable(list: Vec<InvoiceListItem>, stale: bool) -> Element {
         .collect();
     clients.sort_by(|a, b| a.label.cmp(&b.label).then(a.value.cmp(&b.value)));
     clients.dedup_by(|a, b| a.value == b.value);
-    let statuses = [
-        Shown::Status(InvoiceStatus::Draft),
-        Shown::Status(InvoiceStatus::Sent),
-        Shown::Overdue,
-        Shown::Status(InvoiceStatus::Paid),
-        Shown::Status(InvoiceStatus::Void),
-    ];
-    let status_label = match status() {
-        StatusFilter::Any => tr.invoices_status_any(),
-        StatusFilter::Is(shown) => shown.label(tr),
-    };
+    let status_shown = filter.status.map_or_else(
+        || tr.invoices_status_any(),
+        |status| status_label(tr, status),
+    );
 
     rsx! {
         FilterBar {
             filters: rsx! {
-                Menu { id: "invoices-status-filter", label: status_label, trigger_class: "text-sm px-4",
-                    StatusOption { value: StatusFilter::Any, label: tr.invoices_status_any(), status }
-                    for shown in statuses {
-                        StatusOption { key: "{shown:?}", value: StatusFilter::Is(shown), label: shown.label(tr), status }
+                Menu { id: "invoices-status-filter", label: status_shown, trigger_class: "text-sm px-4",
+                    StatusOption { value: None, current: filter.status, onpick: pick_status }
+                    for status in StatusValue::ALL {
+                        StatusOption { key: "{status:?}", value: Some(status), current: filter.status, onpick: pick_status }
                     }
                 }
-                Combobox { options: clients, value: client(), placeholder: tr.invoices_client_any(),
-                    all_label: tr.invoices_client_any(), trigger_class: "text-sm px-4", onselect: pick_client }
-                Menu { id: "invoices-period-filter", label: period().label(tr), trigger_class: "text-sm px-4",
-                    for value in Period::ALL {
-                        PeriodOption { key: "{value:?}", value, period }
+                Combobox { options: clients, value: filter.client.map(|client| client.to_string()).unwrap_or_default(),
+                    placeholder: tr.invoices_client_any(), all_label: tr.invoices_client_any(),
+                    trigger_class: "text-sm px-4", onselect: pick_client }
+                Menu { id: "invoices-period-filter", label: period_label(tr, filter.period), trigger_class: "text-sm px-4",
+                    PeriodOption { value: None, current: filter.period, onpick: pick_period }
+                    for period in PeriodValue::ALL {
+                        PeriodOption { key: "{period:?}", value: Some(period), current: filter.period, onpick: pick_period }
                     }
                 }
             },
@@ -351,7 +405,8 @@ fn InvoicesTable(list: Vec<InvoiceListItem>, stale: bool) -> Element {
     }
 }
 
-/// One invoice; its number's link covers the whole row.
+/// One invoice; its number's link covers the whole row. Rows are small and
+/// compare equal when unchanged, so they take their item by value.
 #[component]
 fn InvoiceRow(item: InvoiceListItem) -> Element {
     let invoice = &item.invoice;
@@ -374,24 +429,39 @@ fn InvoiceRow(item: InvoiceListItem) -> Element {
 }
 
 #[component]
-fn StatusOption(value: StatusFilter, label: String, status: Signal<StatusFilter>) -> Element {
-    let mut status = status;
-    let choose = use_callback(move |_: MouseEvent| status.set(value));
-    rsx! { MenuItem { selected: status() == value, onclick: choose, "{label}" } }
+fn StatusOption(
+    value: Option<StatusValue>,
+    current: Option<StatusValue>,
+    onpick: Callback<Option<StatusValue>>,
+) -> Element {
+    let tr = use_tr();
+    let choose = use_callback(move |_: MouseEvent| onpick.call(value));
+    let label = value.map_or_else(
+        || tr.invoices_status_any(),
+        |status| status_label(tr, status),
+    );
+    rsx! { MenuItem { selected: current == value, onclick: choose, "{label}" } }
 }
 
 #[component]
-fn PeriodOption(value: Period, period: Signal<Period>) -> Element {
+fn PeriodOption(
+    value: Option<PeriodValue>,
+    current: Option<PeriodValue>,
+    onpick: Callback<Option<PeriodValue>>,
+) -> Element {
     let tr = use_tr();
-    let mut period = period;
-    let choose = use_callback(move |_: MouseEvent| period.set(value));
-    rsx! { MenuItem { selected: period() == value, onclick: choose, {value.label(tr)} } }
+    let choose = use_callback(move |_: MouseEvent| onpick.call(value));
+    rsx! { MenuItem { selected: current == value, onclick: choose, {period_label(tr, value)} } }
 }
 
 /// Clients with unbilled time or fees due, each with its own New invoice.
 #[component]
-fn UninvoicedTable(clients: Vec<UninvoicedClient>, can_prepare: bool) -> Element {
+fn UninvoicedTable(uninvoiced: Uninvoiced, can_prepare: bool) -> Element {
     let tr = use_tr();
+    let read = uninvoiced.read();
+    let Some(Ok(Some(clients))) = &*read else {
+        return rsx! {};
+    };
     if clients.is_empty() {
         return rsx! {
             EmptyState { icon: "invoices", success: true, title: tr.invoices_uninvoiced_empty_title(),
@@ -406,6 +476,7 @@ fn UninvoicedTable(clients: Vec<UninvoicedClient>, can_prepare: bool) -> Element
                     th { scope: "col", class: "text-right", {tr.invoices_column_unbilled_time()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_unbilled_amount()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_fees_due()} }
+                    th { scope: "col", {tr.invoices_column_last_invoice()} }
                     th { scope: "col", aria_label: tr.action_menu() }
                 } }
                 tbody {
@@ -415,6 +486,15 @@ fn UninvoicedTable(clients: Vec<UninvoicedClient>, can_prepare: bool) -> Element
                             td { class: "text-mono text-right", {horae_core::duration::format_hhmm(client.unbilled_minutes)} }
                             td { class: "text-mono text-right", {if client.time.is_empty() { "—".into() } else { amounts(&client.time) }} }
                             td { class: "text-mono text-right", {if client.fees.is_empty() { "—".into() } else { amounts(&client.fees) }} }
+                            td {
+                                match &client.last_invoice {
+                                    Some(last) => rsx! {
+                                        Link { to: Route::InvoiceDetail { id: last.id }, class: "text-mono", "{last.number}" }
+                                        span { class: "text-sm text-muted", " " {tr.invoices_last_invoice_date(date(last.issued_on))} }
+                                    },
+                                    None => rsx! { span { class: "text-muted", {tr.invoices_never_invoiced()} } },
+                                }
+                            }
                             td { class: "text-right",
                                 if can_prepare {
                                     Link {
@@ -444,29 +524,72 @@ mod tests {
     #[test]
     fn periods_follow_the_issue_date() {
         let today = day("2026-01-15");
-        assert!(Period::ThisMonth.keeps(day("2026-01-01"), today));
-        assert!(Period::LastMonth.keeps(day("2025-12-31"), today));
-        assert!(!Period::LastMonth.keeps(day("2026-01-01"), today));
-        assert!(Period::LastYear.keeps(day("2025-03-01"), today));
-        assert!(!Period::ThisYear.keeps(day("2025-03-01"), today));
-        assert!(Period::Any.keeps(day("1999-03-01"), today));
+        assert!(keeps_period(
+            Some(PeriodValue::ThisMonth),
+            day("2026-01-01"),
+            today
+        ));
+        assert!(keeps_period(
+            Some(PeriodValue::LastMonth),
+            day("2025-12-31"),
+            today
+        ));
+        assert!(!keeps_period(
+            Some(PeriodValue::LastMonth),
+            day("2026-01-01"),
+            today
+        ));
+        assert!(keeps_period(
+            Some(PeriodValue::LastYear),
+            day("2025-03-01"),
+            today
+        ));
+        assert!(!keeps_period(
+            Some(PeriodValue::ThisYear),
+            day("2025-03-01"),
+            today
+        ));
+        assert!(keeps_period(None, day("1999-03-01"), today));
     }
 
-    #[test]
-    fn totals_keep_currencies_apart() {
-        let item = |currency: &str, cents| InvoiceListItem {
+    fn item(currency: &str, cents: i64, status: InvoiceStatus, overdue: bool) -> InvoiceListItem {
+        InvoiceListItem {
             invoice: crate::models::invoice::Invoice {
                 currency: currency.into(),
                 total_cents: cents,
+                status,
                 ..sample()
             },
             client_name: "Acme".into(),
-            overdue: false,
-        };
-        let list = [item("EUR", 100), item("USD", 50), item("EUR", 25)];
-        let (sums, count) = totals(list.iter());
+            overdue,
+        }
+    }
+
+    #[test]
+    fn totals_keep_currencies_apart_and_refuse_to_cap() {
+        let list = [
+            item("EUR", 100, InvoiceStatus::Sent, false),
+            item("USD", 50, InvoiceStatus::Sent, false),
+            item("EUR", 25, InvoiceStatus::Sent, false),
+        ];
+        let (sums, count) = totals(list.iter()).unwrap();
         assert_eq!(count, 3);
         assert_eq!(amounts(&sums), "EUR 1.25 · USD 0.50");
+        let huge = [
+            item("EUR", i64::MAX, InvoiceStatus::Sent, false),
+            item("EUR", 1, InvoiceStatus::Sent, false),
+        ];
+        assert_eq!(totals(huge.iter()), None);
+    }
+
+    #[test]
+    fn sent_includes_overdue_and_overdue_narrows_to_it() {
+        let late = item("EUR", 1, InvoiceStatus::Sent, true);
+        let on_time = item("EUR", 1, InvoiceStatus::Sent, false);
+        assert!(keeps_status(Some(StatusValue::Sent), &late));
+        assert!(keeps_status(Some(StatusValue::Sent), &on_time));
+        assert!(keeps_status(Some(StatusValue::Overdue), &late));
+        assert!(!keeps_status(Some(StatusValue::Overdue), &on_time));
     }
 
     fn sample() -> crate::models::invoice::Invoice {
