@@ -190,8 +190,12 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
     may differ from it by rounding, as on Harvest.
   - Imported lines (`harvest_invoice_lines`): their stored kind, description, quantity, unit
     price, amount, taxed flags and project.
-- Filters: `client_id`, `project_id` (invoices with a line for that project), `state` (one of
-  the four above), `from` and `to` (on `issue_date`), `updated_since`. Keyed by id, newest
+- Harvest documents `period_start` and `period_end` as the start and end of the period during
+  which the invoice's time entries were added (checked 2026-11-22). Whether Horae's own invoices
+  fill them is still open; until decided they are `null`.
+- Filters: `client_id`, `project_id` (invoices with a line for that project), `state` (one
+  value, `draft`, `open`, `paid` or `closed`, as Harvest's filter takes one; checked
+  2026-11-22), `from` and `to` (on `issue_date`), `updated_since`. Keyed by id, newest
   first.
 - `updated_at` moves when the invoice row or any of its lines changes.
 - `GET /invoices/{id}/payments` is an empty list with the full envelope; Horae has no payment
@@ -230,7 +234,9 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   `budget_by` (`project` for project hours, `project_cost` for project money, `task` and
   `task_fees` for task budgets in hours and money, `person` for person budgets), `budget`,
   `budget_spent`, `budget_remaining` (hours or money by `budget_by`; remaining may be
-  negative).
+  negative). As on Harvest (checked 2026-11-22): only projects that have a budget are listed,
+  `per_page` runs from 1 to 2000 with a default of 2000, and hours are rounded per the
+  account's rounding setting when rounding is on.
 - Rate limit: `/reports/*` count against a second window of 100 requests per 15 minutes per token
   (FR-050), beside the general one.
 
