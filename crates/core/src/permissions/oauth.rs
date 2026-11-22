@@ -175,10 +175,16 @@ impl ClientKind {
 }
 
 /// Why a redirect URI cannot be registered (FR-011).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RedirectUriError {
     #[error("Enter an absolute URI")]
     Invalid,
+    #[error("A redirect URI cannot contain spaces or control characters")]
+    Whitespace,
+    /// The URI parses, but not to itself; it must be registered in the form
+    /// it is compared and redirected to.
+    #[error("Write the redirect URI as {0}")]
+    NotCanonical(String),
     #[error("A redirect URI cannot have a fragment")]
     Fragment,
     #[error("A redirect URI cannot carry a user name or password")]
@@ -195,16 +201,15 @@ pub enum RedirectUriError {
     PublicOnly,
 }
 
-/// A registered redirect URI, kept exactly as written.
+/// A registered redirect URI, in the canonical form of the URL standard, so
+/// the string that was validated is the string compared and redirected to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RedirectUri {
     value: String,
-    /// For a loopback `http` URI, the length of `http://<address>`: the port
-    /// that follows may differ at request time (RFC 8252 §7.3).
-    loopback_authority: Option<usize>,
+    /// For a loopback `http` URI, the canonical URI without its port: the port
+    /// may differ at request time (RFC 8252 §7.3).
+    loopback_without_port: Option<String>,
 }
-
-const LOOPBACK_AUTHORITIES: [&str; 2] = ["http://127.0.0.1", "http://[::1]"];
 
 impl RedirectUri {
     /// Validates a URI for registration by an app of `kind`.
@@ -212,6 +217,11 @@ impl RedirectUri {
     /// # Errors
     /// The first rule of FR-011 the URI breaks.
     pub fn parse(value: &str, kind: ClientKind) -> Result<Self, RedirectUriError> {
+        // The URL parser silently drops tabs and newlines and trims spaces, so
+        // refuse them before it sees the value.
+        if value.chars().any(|c| c.is_whitespace() || c.is_control()) {
+            return Err(RedirectUriError::Whitespace);
+        }
         if value.contains('*') {
             return Err(RedirectUriError::Wildcard);
         }
@@ -224,9 +234,14 @@ impl RedirectUri {
         }
         if url
             .host_str()
-            .is_some_and(|host| host.eq_ignore_ascii_case("localhost"))
+            .is_some_and(|host| host.trim_end_matches('.').eq_ignore_ascii_case("localhost"))
         {
             return Err(RedirectUriError::Localhost);
+        }
+        // `https:/host`, `https:host`, `HTTPS://Host`, `127.1` and the like
+        // parse, but to another string.
+        if url.as_str() != value {
+            return Err(RedirectUriError::NotCanonical(url.as_str().to_owned()));
         }
         let public_only = |uri: Self| match kind {
             ClientKind::Public => Ok(uri),
@@ -235,39 +250,23 @@ impl RedirectUri {
         match url.scheme() {
             "https" if url.host().is_some() => Ok(Self {
                 value: value.to_owned(),
-                loopback_authority: None,
+                loopback_without_port: None,
             }),
             "https" => Err(RedirectUriError::Invalid),
-            "http" => {
-                let loopback = matches!(
-                    url.host(),
-                    Some(url::Host::Ipv4(ip)) if ip == Ipv4Addr::LOCALHOST
-                ) || matches!(
-                    url.host(),
-                    Some(url::Host::Ipv6(ip)) if ip == Ipv6Addr::LOCALHOST
-                );
-                // The URL parser also reads `127.1` or `0x7f.0.0.1` as the
-                // loopback address; only the literal forms are accepted, so
-                // matching can compare strings.
-                let authority = LOOPBACK_AUTHORITIES
-                    .into_iter()
-                    .find(|authority| {
-                        value.strip_prefix(authority).is_some_and(|rest| {
-                            rest.is_empty() || rest.starts_with([':', '/', '?'])
-                        })
-                    })
-                    .filter(|_| loopback)
-                    .ok_or(RedirectUriError::HttpNotLoopback)?;
+            "http" if is_loopback(&url) => public_only(Self {
+                value: value.to_owned(),
+                loopback_without_port: Some(without_port(url).ok_or(RedirectUriError::Invalid)?),
+            }),
+            "http" => Err(RedirectUriError::HttpNotLoopback),
+            // A private-use scheme in reverse domain name form (RFC 8252 §7.1).
+            scheme
+                if scheme.split('.').count() >= 2 && scheme.split('.').all(|l| !l.is_empty()) =>
+            {
                 public_only(Self {
                     value: value.to_owned(),
-                    loopback_authority: Some(authority.len()),
+                    loopback_without_port: None,
                 })
             }
-            // A private-use scheme in reverse domain name form (RFC 8252 §7.1).
-            scheme if scheme.contains('.') => public_only(Self {
-                value: value.to_owned(),
-                loopback_authority: None,
-            }),
             _ => Err(RedirectUriError::Scheme),
         }
     }
@@ -277,34 +276,35 @@ impl RedirectUri {
     }
 
     /// Whether a request's `redirect_uri` is this one: the exact string, or for
-    /// a loopback URI the exact string with any port (FR-010).
+    /// a loopback URI the exact string with any valid port (FR-010).
     pub fn matches(&self, requested: &str) -> bool {
         if requested == self.value {
             return true;
         }
-        let Some(authority) = self.loopback_authority else {
+        let Some(registered) = &self.loopback_without_port else {
             return false;
         };
-        let (prefix, registered_rest) = self.value.split_at(authority);
-        let registered_rest = strip_port(registered_rest);
-        requested
-            .strip_prefix(prefix)
-            .is_some_and(|rest| strip_port(rest) == registered_rest)
+        let Ok(url) = url::Url::parse(requested) else {
+            return false;
+        };
+        url.as_str() == requested
+            && url.scheme() == "http"
+            && url.port().is_none_or(|port| port != 0)
+            && without_port(url).is_some_and(|requested| requested == *registered)
     }
 }
 
-/// What follows an authority without its `:<port>`, if it has one.
-fn strip_port(rest: &str) -> &str {
-    let Some(after_colon) = rest.strip_prefix(':') else {
-        return rest;
-    };
-    let digits = after_colon.bytes().take_while(u8::is_ascii_digit).count();
-    if (1..=5).contains(&digits) {
-        &after_colon[digits..]
-    } else {
-        // Not a port: leave it, so it can never equal a registered path.
-        rest
+fn is_loopback(url: &url::Url) -> bool {
+    match url.host() {
+        Some(url::Host::Ipv4(ip)) => ip == Ipv4Addr::LOCALHOST,
+        Some(url::Host::Ipv6(ip)) => ip == Ipv6Addr::LOCALHOST,
+        _ => false,
     }
+}
+
+fn without_port(mut url: url::Url) -> Option<String> {
+    url.set_port(None).ok()?;
+    Some(url.into())
 }
 
 /// Proof Key for Code Exchange, S256 only (RFC 7636).

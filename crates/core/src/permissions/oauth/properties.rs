@@ -1,6 +1,7 @@
 //! Scopes only narrow (FR-063): for every person's selection and every scope
 //! set, the narrowed grants are a subset of the person's, stay closed under
-//! prerequisites, and never reach beyond time entries and catalog reads.
+//! prerequisites, and hold nothing but time-entry reads and writes and catalog
+//! reads.
 
 use proptest::prelude::*;
 
@@ -16,43 +17,24 @@ fn scopes() -> impl Strategy<Value = ScopeSet> {
     prop::sample::subsequence(Scope::ALL.to_vec(), 0..=3).prop_map(|scopes| ScopeSet::of(&scopes))
 }
 
-/// No scope may let any of these through, whatever the person holds.
-fn outside_every_scope(permission: Permission) -> bool {
+/// Everything any scope may let through (FR-063). An allow-list: a new
+/// permission is outside it until someone decides otherwise.
+fn within_every_scope(permission: Permission) -> bool {
     use Permission::*;
     matches!(
         permission,
-        TimeApproveManaged
-            | TimeApproveAll
-            | ApprovalWithdrawManaged
-            | BillableRateReadManaged
-            | BillableRateWriteManaged
-            | BillableRateReadAll
-            | BillableRateWriteAll
-            | CostRateReadAll
-            | CostRateWriteAll
-            | InvoiceReadManaged
-            | InvoiceDraftWriteManaged
-            | InvoiceWriteManaged
-            | InvoiceReadAll
-            | InvoiceWriteAll
-            | EstimateReadAll
-            | EstimateWriteAll
-            | PeopleWriteManaged
-            | PeopleWriteAll
-            | ProjectWriteManaged
-            | ProjectCreateAll
-            | ProjectWriteAll
-            | ClientWriteAll
-            | TaskWriteAll
-            | CompanyRead
-            | CompanyWrite
-            | BillingRead
-            | BillingWrite
-            | ReportProfitabilityRead
-            | ReportContractorRead
-            | ReportInvoicingRead
-            | SavedReportReadInactive
-            | SavedReportWriteInactive
+        TimeReadOwn
+            | TimeWriteOwn
+            | TimeReadManaged
+            | TimeWriteManaged
+            | TimeReadAll
+            | TimeWriteAll
+            | ProjectReadManaged
+            | ProjectReadAll
+            | ClientReadAll
+            | TaskReadAll
+            | PeopleReadManaged
+            | PeopleReadAll
     )
 }
 
@@ -74,9 +56,9 @@ proptest! {
     }
 
     #[test]
-    fn no_ceiling_reaches_administration(scopes in scopes()) {
-        for permission in scopes.ceiling().iter() {
-            prop_assert!(!outside_every_scope(permission), "{permission:?}");
+    fn narrowed_grants_hold_only_time_and_catalog_reads(grants in selection(), scopes in scopes()) {
+        for permission in grants.intersection(&scopes.ceiling()).iter() {
+            prop_assert!(within_every_scope(permission), "{permission:?}");
         }
     }
 

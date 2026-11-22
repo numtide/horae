@@ -57,17 +57,44 @@ fn subset_compares_scope_sets() {
     assert!(ScopeSet::EMPTY.is_subset(read));
 }
 
+/// Each scope's ceiling is exactly research R-6's table: an allow-list, so a
+/// permission added to the catalog stays outside every scope until someone
+/// puts it in this table.
 #[test]
-fn time_read_ceiling_holds_time_reads_only() {
-    let ceiling = ScopeSet::of(&[Scope::TimeRead]).ceiling();
-    assert_eq!(
-        ceiling.iter().collect::<Vec<_>>(),
-        [
-            Permission::TimeReadOwn,
-            Permission::TimeReadManaged,
-            Permission::TimeReadAll
-        ]
-    );
+fn each_ceiling_is_the_research_table() {
+    use Permission::*;
+    let time_read = [TimeReadOwn, TimeReadManaged, TimeReadAll];
+    let time_write = [
+        TimeReadOwn,
+        TimeWriteOwn,
+        TimeReadManaged,
+        TimeWriteManaged,
+        TimeReadAll,
+        TimeWriteAll,
+    ];
+    let catalog_read = [
+        ProjectReadManaged,
+        ProjectReadAll,
+        ClientReadAll,
+        TaskReadAll,
+        PeopleReadManaged,
+        PeopleReadAll,
+    ];
+    for (scope, expected) in [
+        (Scope::TimeRead, &time_read[..]),
+        (Scope::TimeWrite, &time_write[..]),
+        (Scope::CatalogRead, &catalog_read[..]),
+    ] {
+        let mut ceiling: Vec<_> = ScopeSet::of(&[scope]).ceiling().iter().collect();
+        let mut expected = expected.to_vec();
+        ceiling.sort();
+        expected.sort();
+        assert_eq!(ceiling, expected, "{scope:?}");
+    }
+    let union: Vec<_> = time_write.iter().chain(&catalog_read).copied().collect();
+    for permission in ScopeSet::of(&Scope::ALL).ceiling().iter() {
+        assert!(union.contains(&permission), "{permission:?}");
+    }
 }
 
 #[test]
@@ -89,7 +116,8 @@ fn accepted_redirect_uris() {
         ("https://app.example.com/callback?x=1", Confidential),
         ("http://127.0.0.1/callback", Public),
         ("http://127.0.0.1:8123/callback", Public),
-        ("http://127.0.0.1", Public),
+        ("http://127.0.0.1/", Public),
+        ("org.example:/callback", Public),
         ("http://[::1]/callback", Public),
         ("http://[::1]:8123/callback", Public),
         ("com.example.app:/oauth/callback", Public),
@@ -121,9 +149,42 @@ fn refused_redirect_uris() {
         ("https://localhost/callback", Public, Localhost),
         ("http://app.example.com/callback", Public, HttpNotLoopback),
         ("http://10.0.0.1/callback", Public, HttpNotLoopback),
-        ("http://127.1/callback", Public, HttpNotLoopback),
         ("http://127.0.0.2/callback", Public, HttpNotLoopback),
+        ("https://localhost./callback", Public, Localhost),
         ("myapp:/callback", Public, Scheme),
+        ("a.:/callback", Public, Scheme),
+        (".a:/callback", Public, Invalid),
+        ("a..b:/callback", Public, Scheme),
+        (" https://example.com/cb", Public, Whitespace),
+        ("https://exa\tmple.com/cb", Public, Whitespace),
+        ("com.example.app:/cb\n", Public, Whitespace),
+        ("https://example.com/cb ", Public, Whitespace),
+        ("https://example.com/c\u{7}b", Public, Whitespace),
+        (
+            "https:/example.com/cb",
+            Public,
+            NotCanonical("https://example.com/cb".into()),
+        ),
+        (
+            "https:example.com/cb",
+            Public,
+            NotCanonical("https://example.com/cb".into()),
+        ),
+        (
+            "http://127.1/callback",
+            Public,
+            NotCanonical("http://127.0.0.1/callback".into()),
+        ),
+        (
+            "http://127.0.0.1",
+            Public,
+            NotCanonical("http://127.0.0.1/".into()),
+        ),
+        (
+            "https://APP.example.com/callback",
+            Public,
+            NotCanonical("https://app.example.com/callback".into()),
+        ),
         ("javascript:alert(1)", Public, Scheme),
         ("ftp://app.example.com/", Public, Scheme),
         ("/callback", Public, Invalid),
@@ -176,7 +237,12 @@ fn loopback_uri_matches_any_port() {
             format!("http://{address}:51234@evil.example/callback"),
             format!("http://{address}.evil.example/callback"),
             format!("http://{address}:123456/callback"),
+            format!("http://{address}:65536/callback"),
+            format!("http://{address}:0/callback"),
+            format!("http://{address}:00080/callback"),
             format!("http://{address}:/callback"),
+            format!("http://{address}:8080/call\tback"),
+            format!(" http://{address}:8080/callback"),
             format!("https://{address}/callback"),
             "http://localhost/callback".to_owned(),
         ] {
@@ -217,9 +283,10 @@ fn pkce_refuses_another_verifier() {
     assert!(!pkce::verify(&other, RFC_CHALLENGE));
 }
 
+/// `verify` knows only S256; refusing `code_challenge_method=plain` is the
+/// authorization endpoint's check (PR C, T023).
 #[test]
-fn pkce_refuses_the_plain_method() {
-    // `plain` would send the verifier itself as the challenge.
+fn verifier_is_not_its_own_challenge() {
     assert!(!pkce::verify(RFC_VERIFIER, RFC_VERIFIER));
 }
 
