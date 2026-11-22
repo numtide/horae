@@ -82,10 +82,25 @@ pub(crate) fn generate_client_id() -> String {
     )
 }
 
-/// Deletes authorization codes and access tokens that expired over a day ago.
-/// Refresh tokens stay: a used one must still be recognised if presented
-/// again, and the grant they belong to bounds their lifetime.
-pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64, sqlx::Error> {
+/// Deletes what can no longer be used or recognised:
+///
+/// - authorizations that ended (revoked or expired) over a day ago, with
+///   every code and token issued under them;
+/// - codes and access tokens that expired over a day ago;
+/// - refresh tokens used or idle-expired more than `refresh_idle` ago. A used
+///   one is kept that long so presenting it again is still caught as reuse,
+///   by which time every token after it has expired too.
+pub async fn delete_expired(
+    pool: &sqlx::PgPool,
+    refresh_idle: std::time::Duration,
+) -> Result<u64, sqlx::Error> {
+    let refresh_idle_seconds = i64::try_from(refresh_idle.as_secs()).unwrap_or(i64::MAX);
+    let grants = sqlx::query!(
+        "DELETE FROM oauth_grants
+         WHERE revoked_at < now() - interval '1 day' OR expires_at < now() - interval '1 day'"
+    )
+    .execute(pool)
+    .await?;
     let codes = sqlx::query!("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'")
         .execute(pool)
         .await?;
@@ -93,7 +108,18 @@ pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64, sqlx::Error> {
         sqlx::query!("DELETE FROM oauth_access_tokens WHERE expires_at < now() - interval '1 day'")
             .execute(pool)
             .await?;
-    Ok(codes.rows_affected() + tokens.rows_affected())
+    let refresh = sqlx::query!(
+        "DELETE FROM oauth_refresh_tokens
+         WHERE used_at < now() - make_interval(secs => $1)
+            OR idle_expires_at < now() - make_interval(secs => $1)",
+        refresh_idle_seconds as f64,
+    )
+    .execute(pool)
+    .await?;
+    Ok(grants.rows_affected()
+        + codes.rows_affected()
+        + tokens.rows_affected()
+        + refresh.rows_affected())
 }
 
 fn random_base64url<const N: usize>() -> String {

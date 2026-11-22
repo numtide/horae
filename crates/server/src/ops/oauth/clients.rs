@@ -2,7 +2,7 @@
 //! client of Horae's Android app that every organization has.
 
 use chrono::{DateTime, Utc};
-use horae_core::permissions::oauth::{ClientKind, RedirectUri, ScopeSet};
+use horae_core::permissions::oauth::{ClientKind, RedirectUri, Scope, ScopeSet};
 use uuid::Uuid;
 
 use super::audit::{self, Action};
@@ -13,6 +13,8 @@ use crate::ops::{Actor, Done, OpError, Tx};
 /// creates it, disabled, for every organization.
 pub const BUILT_IN_CLIENT_ID: &str = "horae-android";
 pub const BUILT_IN_REDIRECT_URI: &str = "dev.horae.android:/oauth/callback";
+pub const BUILT_IN_NAME: &str = "Horae for Android";
+pub const BUILT_IN_SCOPES: [Scope; 3] = Scope::ALL;
 
 const MAX_NAME: usize = 100;
 const MAX_REDIRECT_URIS: usize = 10;
@@ -65,12 +67,12 @@ pub struct ClientChanges {
 
 /// Every app of the organization, the built-in client first.
 pub async fn list(tx: &mut Tx, actor: &Actor) -> Result<Vec<OAuthClient>, OpError> {
-    actor.require_administrator()?;
+    require_signed_in_administrator(actor)?;
     fetch(tx, actor.org_id(), None).await
 }
 
 pub async fn get(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<OAuthClient, OpError> {
-    actor.require_administrator()?;
+    require_signed_in_administrator(actor)?;
     fetch_one(tx, actor.org_id(), id).await
 }
 
@@ -81,7 +83,7 @@ pub async fn register(
     actor: &Actor,
     input: NewClient,
 ) -> Result<Done<(OAuthClient, Option<Secret>)>, OpError> {
-    actor.require_administrator()?;
+    require_signed_in_administrator(actor)?;
     let name = valid_name(&input.name)?;
     let redirect_uris = valid_redirect_uris(&input.redirect_uris, input.kind)?;
     let scopes = valid_scopes(input.scopes)?;
@@ -123,7 +125,7 @@ pub async fn update(
     id: Uuid,
     changes: ClientChanges,
 ) -> Result<Done<OAuthClient>, OpError> {
-    actor.require_administrator()?;
+    require_signed_in_administrator(actor)?;
     let current = lock(tx, actor.org_id(), id).await?;
     let name = valid_name(&changes.name)?;
     let redirect_uris = valid_redirect_uris(&changes.redirect_uris, current.kind)?;
@@ -155,7 +157,7 @@ pub async fn set_enabled(
     id: Uuid,
     enabled: bool,
 ) -> Result<Done<OAuthClient>, OpError> {
-    actor.require_administrator()?;
+    require_signed_in_administrator(actor)?;
     let current = lock(tx, actor.org_id(), id).await?;
     if current.enabled != enabled {
         sqlx::query!(
@@ -184,7 +186,7 @@ pub async fn replace_secret(
     actor: &Actor,
     id: Uuid,
 ) -> Result<Done<(OAuthClient, Secret)>, OpError> {
-    actor.require_administrator()?;
+    require_signed_in_administrator(actor)?;
     let current = lock(tx, actor.org_id(), id).await?;
     if current.kind != ClientKind::Confidential {
         return Err(OpError::conflict(PUBLIC_NO_SECRET));
@@ -213,7 +215,7 @@ pub async fn replace_secret(
 /// Deletes an app with its authorizations, codes and tokens. The built-in
 /// client cannot be deleted.
 pub async fn delete(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<Done<()>, OpError> {
-    actor.require_administrator()?;
+    require_signed_in_administrator(actor)?;
     let current = lock(tx, actor.org_id(), id).await?;
     if current.built_in {
         return Err(OpError::conflict(BUILT_IN_KEPT));
@@ -223,6 +225,12 @@ pub async fn delete(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<Done<()>, Op
         .await?;
     audit::record(tx, actor, Action::ClientDeleted, id, details(&current)).await?;
     Ok(Done::new(()))
+}
+
+/// Apps are managed in the web app only, never through a token of any kind.
+fn require_signed_in_administrator(actor: &Actor) -> Result<(), OpError> {
+    actor.require_administrator()?;
+    actor.require_session()
 }
 
 /// What the audit log records about an app: never a secret or its digest.

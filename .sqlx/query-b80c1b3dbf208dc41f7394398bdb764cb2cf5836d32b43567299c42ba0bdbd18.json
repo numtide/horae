@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_refresh_tokens SET idle_expires_at = now() - $2::text::interval\n             WHERE grant_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b80c1b3dbf208dc41f7394398bdb764cb2cf5836d32b43567299c42ba0bdbd18"
+}

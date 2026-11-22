@@ -3,7 +3,7 @@
 //! permission state.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
-use horae_core::permissions::oauth::ScopeSet;
+use horae_core::permissions::oauth::{Scope, ScopeSet};
 use sqlx::PgConnection;
 
 use super::permissions::{PermissionStorageError, load_person_permissions};
@@ -21,7 +21,10 @@ pub enum Channel {
     Token { token_id: uuid::Uuid },
     /// An app's OAuth access token: the person, with their grants narrowed to
     /// what the token's scopes let through and never the Administrator
-    /// identity (spec 024 R-6).
+    /// identity (spec 024 R-6). The actor has no authority at all until the
+    /// adapter unlocks it for a scope the token holds
+    /// ([`Actor::unlock_scope`]), so an operation reached without a declared
+    /// scope refuses it like an inactive person.
     OAuth {
         grant_id: uuid::Uuid,
         token_id: uuid::Uuid,
@@ -42,10 +45,15 @@ pub struct Actor {
     /// The stored grants and administrator flag; `None` for a missing
     /// organization or a foreign or inactive person.
     permissions: Option<PersonPermissions>,
+    /// An OAuth actor's narrowed state, held back until
+    /// [`Actor::unlock_scope`] moves it into `permissions`.
+    locked: Option<PersonPermissions>,
 }
 
 const STATE_UNAVAILABLE: &str = "Permission state is unavailable";
 const ADMINISTRATOR_REQUIRED: &str = "Active administrator access required";
+const SESSION_REQUIRED: &str = "Sign in to the web app to do this";
+const SCOPE_REQUIRED: &str = "The token's scopes do not cover this request";
 
 #[derive(Clone, Copy)]
 enum Lock {
@@ -90,6 +98,7 @@ impl Actor {
             },
             channel: caller.channel,
             permissions: None,
+            locked: None,
         };
         let organization = match lock {
             Lock::Share => {
@@ -154,6 +163,8 @@ impl Actor {
             // administration.
             state.grants = state.grants.intersection(&scopes.ceiling());
             state.is_administrator = false;
+            actor.locked = Some(state);
+            return Ok(actor);
         }
         actor.identity.active = true;
         actor.permissions = Some(state);
@@ -206,6 +217,34 @@ impl Actor {
         match self.channel {
             Channel::OAuth { scopes, .. } => Some(scopes),
             _ => None,
+        }
+    }
+
+    /// Gives an OAuth actor its narrowed authority for a request whose
+    /// endpoint declares `scope`, if the token holds it (`time:write`
+    /// includes `time:read`). Until then the actor answers like an inactive
+    /// person. Every other channel is unaffected.
+    pub fn unlock_scope(&mut self, scope: Scope) -> Result<(), OpError> {
+        let Channel::OAuth { scopes, .. } = self.channel else {
+            return Ok(());
+        };
+        if !scopes.normalize().contains(scope) {
+            return Err(OpError::forbidden(SCOPE_REQUIRED));
+        }
+        if let Some(state) = self.locked.take() {
+            self.permissions = Some(state);
+            self.identity.active = true;
+        }
+        Ok(())
+    }
+
+    /// Refuses anyone but a signed-in person: the guard for managing tokens,
+    /// apps and authorizations, which only the web app does.
+    pub fn require_session(&self) -> Result<(), OpError> {
+        if self.channel == Channel::Session && self.is_active() {
+            Ok(())
+        } else {
+            Err(OpError::forbidden(SESSION_REQUIRED))
         }
     }
 

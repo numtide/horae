@@ -155,53 +155,126 @@ async fn an_administrator_revokes_anyones_authorization(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn cleanup_deletes_codes_and_access_tokens_a_day_after_expiry(pool: PgPool) {
-    let admin = seed(&pool, BuiltInProfile::Administrator).await;
-    let app_id = app(&pool, &admin).await;
-    let expired = grant(&pool, &admin, app_id).await;
-    let recent = grant(&pool, &admin, app_id).await;
-    for (grant_id, expired_at) in [(expired, "25 hours"), (recent, "23 hours")] {
-        sqlx::query!(
+/// Moves one of a grant's timestamps `ago` (an interval such as `25 hours`)
+/// into the past.
+async fn age(pool: &PgPool, grant_id: Uuid, column: &str, ago: &str) {
+    let query = match column {
+        "code" => sqlx::query!(
             "UPDATE oauth_codes SET expires_at = now() - $2::text::interval WHERE grant_id = $1",
             grant_id,
-            expired_at,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query!(
+            ago,
+        ),
+        "access" => sqlx::query!(
             "UPDATE oauth_access_tokens SET expires_at = now() - $2::text::interval
              WHERE grant_id = $1",
             grant_id,
-            expired_at,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
-    assert_eq!(crate::ops::oauth::delete_expired(&pool).await.unwrap(), 2);
-    let left = sqlx::query!(
-        r#"SELECT (SELECT count(*) FROM oauth_codes WHERE grant_id = $1) AS "expired_codes!",
-                  (SELECT count(*) FROM oauth_access_tokens WHERE grant_id = $1)
-                    AS "expired_tokens!",
-                  (SELECT count(*) FROM oauth_codes WHERE grant_id = $2) AS "recent_codes!",
-                  (SELECT count(*) FROM oauth_access_tokens WHERE grant_id = $2)
-                    AS "recent_tokens!",
-                  (SELECT count(*) FROM oauth_refresh_tokens) AS "refresh!""#,
-        expired,
-        recent,
+            ago,
+        ),
+        "refresh_used" => sqlx::query!(
+            "UPDATE oauth_refresh_tokens SET used_at = now() - $2::text::interval
+             WHERE grant_id = $1",
+            grant_id,
+            ago,
+        ),
+        "refresh_idle" => sqlx::query!(
+            "UPDATE oauth_refresh_tokens SET idle_expires_at = now() - $2::text::interval
+             WHERE grant_id = $1",
+            grant_id,
+            ago,
+        ),
+        "revoked" => sqlx::query!(
+            "UPDATE oauth_grants SET revoked_at = now() - $2::text::interval,
+                                     revoke_reason = 'person'
+             WHERE id = $1",
+            grant_id,
+            ago,
+        ),
+        "expires" => sqlx::query!(
+            "UPDATE oauth_grants SET expires_at = now() - $2::text::interval WHERE id = $1",
+            grant_id,
+            ago,
+        ),
+        other => panic!("{other}"),
+    };
+    query.execute(pool).await.unwrap();
+}
+
+async fn rows(pool: &PgPool, grant_id: Uuid) -> [i64; 4] {
+    let row = sqlx::query!(
+        r#"SELECT (SELECT count(*) FROM oauth_grants WHERE id = $1) AS "grants!",
+                  (SELECT count(*) FROM oauth_codes WHERE grant_id = $1) AS "codes!",
+                  (SELECT count(*) FROM oauth_access_tokens WHERE grant_id = $1) AS "access!",
+                  (SELECT count(*) FROM oauth_refresh_tokens WHERE grant_id = $1) AS "refresh!""#,
+        grant_id,
     )
-    .fetch_one(&pool)
+    .fetch_one(pool)
     .await
     .unwrap();
-    assert_eq!(
-        (left.expired_codes, left.expired_tokens),
-        (0, 0),
-        "expired a day ago"
-    );
-    assert_eq!((left.recent_codes, left.recent_tokens), (1, 1));
-    assert_eq!(left.refresh, 2);
+    [row.grants, row.codes, row.access, row.refresh]
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn cleanup_deletes_what_can_no_longer_be_used(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let app_id = app(&pool, &admin).await;
+    let refresh_idle = std::time::Duration::from_secs(3600);
+
+    let old_credentials = grant(&pool, &admin, app_id).await;
+    age(&pool, old_credentials, "code", "25 hours").await;
+    age(&pool, old_credentials, "access", "25 hours").await;
+    age(&pool, old_credentials, "refresh_used", "2 hours").await;
+
+    let recent_credentials = grant(&pool, &admin, app_id).await;
+    age(&pool, recent_credentials, "code", "23 hours").await;
+    age(&pool, recent_credentials, "access", "23 hours").await;
+    age(&pool, recent_credentials, "refresh_used", "30 minutes").await;
+
+    let idle_refresh = grant(&pool, &admin, app_id).await;
+    age(&pool, idle_refresh, "refresh_idle", "2 hours").await;
+
+    let revoked_long_ago = grant(&pool, &admin, app_id).await;
+    age(&pool, revoked_long_ago, "revoked", "25 hours").await;
+    let revoked_recently = grant(&pool, &admin, app_id).await;
+    age(&pool, revoked_recently, "revoked", "23 hours").await;
+    let expired_long_ago = grant(&pool, &admin, app_id).await;
+    age(&pool, expired_long_ago, "expires", "25 hours").await;
+
+    crate::ops::oauth::delete_expired(&pool, refresh_idle)
+        .await
+        .unwrap();
+
+    assert_eq!(rows(&pool, old_credentials).await, [1, 0, 0, 0]);
+    assert_eq!(rows(&pool, recent_credentials).await, [1, 1, 1, 1]);
+    assert_eq!(rows(&pool, idle_refresh).await, [1, 1, 1, 0]);
+    assert_eq!(rows(&pool, revoked_long_ago).await, [0, 0, 0, 0]);
+    assert_eq!(rows(&pool, revoked_recently).await, [1, 1, 1, 1]);
+    assert_eq!(rows(&pool, expired_long_ago).await, [0, 0, 0, 0]);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn no_token_lists_or_revokes_authorizations(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let app_id = app(&pool, &admin).await;
+    let id = grant(&pool, &admin, app_id).await;
+    let all = ScopeSet::of(&Scope::ALL);
+    for caller in [
+        Caller::token(admin.org_id, admin.user_id, Uuid::now_v7()),
+        Caller::oauth(admin.org_id, admin.user_id, id, Uuid::now_v7(), all),
+    ] {
+        let mut write = begin(&pool, caller).await.unwrap();
+        write.actor.unlock_scope(Scope::TimeWrite).unwrap();
+        let refused = |result: Result<_, OpError>| {
+            assert!(matches!(result, Err(OpError::Forbidden(_))), "{caller:?}");
+        };
+        refused(list_own(&mut write.tx, &write.actor).await.map(drop));
+        refused(
+            list_for_client(&mut write.tx, &write.actor, app_id)
+                .await
+                .map(drop),
+        );
+        refused(revoke(&mut write.tx, &write.actor, id).await.map(drop));
+    }
+    assert_eq!(revocation(&pool, id).await, (None, None));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

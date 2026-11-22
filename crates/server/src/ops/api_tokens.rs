@@ -35,9 +35,12 @@ fn require_active(actor: &Actor) -> Result<(), OpError> {
     }
 }
 
-/// The actor's own tokens, newest first.
+/// The actor's own tokens, newest first. Tokens are managed in the web app
+/// only, so no token of any kind reaches this or the other management
+/// operations: an OAuth token must never mint a personal one.
 pub async fn list_own(tx: &mut Tx, actor: &Actor) -> Result<Vec<ApiTokenRow>, OpError> {
     require_active(actor)?;
+    actor.require_session()?;
     Ok(sqlx::query_as!(
         ApiTokenRow,
         r#"SELECT t.id, t.user_id, u.name AS owner_name, t.name, t.display_prefix,
@@ -58,6 +61,7 @@ pub async fn list_own(tx: &mut Tx, actor: &Actor) -> Result<Vec<ApiTokenRow>, Op
 /// Every token in the actor's organization, for an administrator.
 pub async fn list_org(tx: &mut Tx, actor: &Actor) -> Result<Vec<ApiTokenRow>, OpError> {
     actor.require_administrator()?;
+    actor.require_session()?;
     Ok(sqlx::query_as!(
         ApiTokenRow,
         r#"SELECT t.id, t.user_id, u.name AS owner_name, t.name, t.display_prefix,
@@ -134,6 +138,7 @@ pub async fn create(
     expires_at: Option<DateTime<Utc>>,
 ) -> Result<Done<(Secret, ApiTokenRow)>, OpError> {
     require_active(actor)?;
+    actor.require_session()?;
     let name = name.trim();
     if name.is_empty() || name.chars().count() > MAX_NAME {
         return Err(OpError::invalid("name", NAME_LENGTH));
@@ -173,6 +178,7 @@ pub async fn create(
 /// token reads as not found, so a member learns nothing about it.
 pub async fn revoke(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<Done<ApiTokenRow>, OpError> {
     require_active(actor)?;
+    actor.require_session()?;
     let owner = sqlx::query_scalar!(
         "SELECT user_id FROM api_tokens WHERE id = $1 AND org_id = $2 FOR UPDATE",
         id,

@@ -20,6 +20,8 @@ pub struct AppState {
     pub harvest_api: bool,
     /// The running server's version label, set by the binary at startup.
     pub version: String,
+    /// OAuth credential lifetimes, for the scheduler's cleanup.
+    pub oauth: crate::config::OAuthConfig,
 }
 
 impl AppState {
@@ -33,7 +35,13 @@ impl AppState {
             mail: None,
             harvest_api: false,
             version: String::new(),
+            oauth: crate::config::OAuthConfig::default(),
         }
+    }
+
+    pub fn with_oauth(mut self, oauth: crate::config::OAuthConfig) -> Self {
+        self.oauth = oauth;
+        self
     }
 
     pub fn with_harvest_api(mut self, enabled: bool) -> Self {
@@ -110,6 +118,7 @@ pub async fn global_state() -> &'static AppState {
             AppState::new(pool, Arc::new(PluginRegistry::empty()))
                 .with_job_policy(cfg.job_policy)
                 .with_mail(cfg.mail)
+                .with_oauth(cfg.oauth)
         })
         .await
 }

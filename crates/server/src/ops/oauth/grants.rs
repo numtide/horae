@@ -8,7 +8,6 @@ use uuid::Uuid;
 use super::audit::{self, Action};
 use crate::ops::{Actor, Done, OpError, Tx};
 
-const ACTIVE_REQUIRED: &str = "An active account is required";
 const NOT_FOUND: &str = "Authorization not found";
 const APP_NOT_FOUND: &str = "App not found";
 
@@ -32,9 +31,7 @@ pub struct GrantRow {
 
 /// The actor's own authorizations, newest first.
 pub async fn list_own(tx: &mut Tx, actor: &Actor) -> Result<Vec<GrantRow>, OpError> {
-    if !actor.is_active() {
-        return Err(OpError::forbidden(ACTIVE_REQUIRED));
-    }
+    actor.require_session()?;
     fetch(tx, actor.org_id(), Some(actor.id()), None).await
 }
 
@@ -44,6 +41,7 @@ pub async fn list_for_client(
     actor: &Actor,
     app_id: Uuid,
 ) -> Result<Vec<GrantRow>, OpError> {
+    actor.require_session()?;
     actor.require_administrator()?;
     sqlx::query_scalar!(
         "SELECT id FROM oauth_clients WHERE id = $1 AND org_id = $2",
@@ -59,10 +57,10 @@ pub async fn list_for_client(
 /// Ends an authorization of the actor's, or anyone's for an administrator,
 /// and with it every token issued under it. Another person's authorization
 /// reads as not found for a member. Revoking an ended one changes nothing.
+/// Only a signed-in person revokes here; an app revokes its own token through
+/// the revocation endpoint.
 pub async fn revoke(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<Done<()>, OpError> {
-    if !actor.is_active() {
-        return Err(OpError::forbidden(ACTIVE_REQUIRED));
-    }
+    actor.require_session()?;
     let grant = sqlx::query!(
         "SELECT g.user_id, g.revoked_at IS NOT NULL AS \"revoked!\", g.scopes,
                 c.name AS app_name, c.client_id, u.name AS person_name

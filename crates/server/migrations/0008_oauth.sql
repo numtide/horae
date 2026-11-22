@@ -1,11 +1,14 @@
 -- OAuth 2.0 with PKCE (spec 024, data-model.md): apps, the authorizations
 -- people give them, and the credentials issued under each. Every credential is
 -- stored only as the SHA-256 digest of the whole string.
+--
+-- Scope lists are checked the same way in every table: at least one known
+-- scope, and `time:write` always with `time:read`, which it includes.
 
 CREATE TYPE oauth_client_kind AS ENUM ('public', 'confidential');
 
 CREATE TYPE oauth_revoke_reason AS ENUM (
-    'person', 'administrator', 'client', 'refresh_reuse', 'code_reuse', 'client_deleted'
+    'person', 'administrator', 'client', 'refresh_reuse', 'code_reuse'
 );
 
 CREATE TABLE oauth_clients (
@@ -20,11 +23,13 @@ CREATE TABLE oauth_clients (
     secret_prefix text,
     redirect_uris text[] NOT NULL CHECK (cardinality(redirect_uris) BETWEEN 1 AND 10),
     scopes text[] NOT NULL CHECK (
-        cardinality(scopes) >= 1 AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        cardinality(scopes) >= 1
+        AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        AND (NOT 'time:write' = ANY (scopes) OR 'time:read' = ANY (scopes))
     ),
     built_in boolean NOT NULL DEFAULT false,
     enabled boolean NOT NULL DEFAULT true,
-    created_by uuid REFERENCES users (id) ON DELETE SET NULL,
+    created_by uuid,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     -- A secret exactly for a confidential app, and its display prefix with it.
@@ -33,10 +38,15 @@ CREATE TABLE oauth_clients (
     -- The built-in client's id is the same fixed string in every organization.
     UNIQUE (org_id, client_id),
     UNIQUE (org_id, name),
-    UNIQUE (org_id, id)
+    UNIQUE (org_id, id),
+    FOREIGN KEY (org_id, created_by) REFERENCES users (org_id, id) ON DELETE SET NULL (created_by)
 );
 
 CREATE UNIQUE INDEX oauth_clients_one_built_in_idx ON oauth_clients (org_id) WHERE built_in;
+-- A registered app's random id is unique across organizations, so it alone
+-- names the app; only the built-in id needs its organization.
+CREATE UNIQUE INDEX oauth_clients_registered_client_id_idx ON oauth_clients (client_id)
+    WHERE NOT built_in;
 
 CREATE TRIGGER oauth_clients_set_updated_at BEFORE UPDATE ON oauth_clients
     FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*) EXECUTE FUNCTION set_updated_at();
@@ -47,23 +57,29 @@ CREATE TABLE oauth_grants (
     client_id uuid NOT NULL,
     user_id uuid NOT NULL,
     scopes text[] NOT NULL CHECK (
-        cardinality(scopes) >= 1 AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        cardinality(scopes) >= 1
+        AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        AND (NOT 'time:write' = ANY (scopes) OR 'time:read' = ANY (scopes))
     ),
     approved_at timestamptz NOT NULL DEFAULT now(),
     last_used_at timestamptz,
     expires_at timestamptz NOT NULL,
     revoked_at timestamptz,
-    revoked_by uuid REFERENCES users (id) ON DELETE SET NULL,
+    revoked_by uuid,
     revoke_reason oauth_revoke_reason,
     CHECK ((revoked_at IS NULL) = (revoke_reason IS NULL)),
     CHECK (revoked_by IS NULL OR revoked_at IS NOT NULL),
     FOREIGN KEY (org_id, client_id) REFERENCES oauth_clients (org_id, id) ON DELETE CASCADE,
     FOREIGN KEY (org_id, user_id) REFERENCES users (org_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (org_id, revoked_by) REFERENCES users (org_id, id) ON DELETE SET NULL (revoked_by),
     UNIQUE (org_id, id)
 );
 
 CREATE INDEX oauth_grants_org_user_idx ON oauth_grants (org_id, user_id);
 CREATE INDEX oauth_grants_client_idx ON oauth_grants (client_id);
+-- For the scheduler's cleanup of ended authorizations.
+CREATE INDEX oauth_grants_expires_idx ON oauth_grants (expires_at);
+CREATE INDEX oauth_grants_revoked_idx ON oauth_grants (revoked_at) WHERE revoked_at IS NOT NULL;
 
 CREATE TABLE oauth_codes (
     id uuid PRIMARY KEY,
@@ -79,6 +95,7 @@ CREATE TABLE oauth_codes (
 );
 
 CREATE INDEX oauth_codes_grant_idx ON oauth_codes (grant_id);
+CREATE INDEX oauth_codes_expires_idx ON oauth_codes (expires_at);
 
 CREATE TABLE oauth_access_tokens (
     id uuid PRIMARY KEY,
@@ -86,13 +103,16 @@ CREATE TABLE oauth_access_tokens (
     grant_id uuid NOT NULL,
     token_sha256 bytea NOT NULL UNIQUE CHECK (octet_length(token_sha256) = 32),
     scopes text[] NOT NULL CHECK (
-        cardinality(scopes) >= 1 AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        cardinality(scopes) >= 1
+        AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        AND (NOT 'time:write' = ANY (scopes) OR 'time:read' = ANY (scopes))
     ),
     expires_at timestamptz NOT NULL,
     FOREIGN KEY (org_id, grant_id) REFERENCES oauth_grants (org_id, id) ON DELETE CASCADE
 );
 
 CREATE INDEX oauth_access_tokens_grant_idx ON oauth_access_tokens (grant_id);
+CREATE INDEX oauth_access_tokens_expires_idx ON oauth_access_tokens (expires_at);
 
 CREATE TABLE oauth_refresh_tokens (
     id uuid PRIMARY KEY,
@@ -100,7 +120,9 @@ CREATE TABLE oauth_refresh_tokens (
     grant_id uuid NOT NULL,
     token_sha256 bytea NOT NULL UNIQUE CHECK (octet_length(token_sha256) = 32),
     scopes text[] NOT NULL CHECK (
-        cardinality(scopes) >= 1 AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        cardinality(scopes) >= 1
+        AND scopes <@ ARRAY['time:read', 'time:write', 'catalog:read']
+        AND (NOT 'time:write' = ANY (scopes) OR 'time:read' = ANY (scopes))
     ),
     idle_expires_at timestamptz NOT NULL,
     used_at timestamptz,
@@ -108,6 +130,9 @@ CREATE TABLE oauth_refresh_tokens (
 );
 
 CREATE INDEX oauth_refresh_tokens_grant_idx ON oauth_refresh_tokens (grant_id);
+CREATE INDEX oauth_refresh_tokens_idle_expires_idx ON oauth_refresh_tokens (idle_expires_at);
+CREATE INDEX oauth_refresh_tokens_used_idx ON oauth_refresh_tokens (used_at)
+    WHERE used_at IS NOT NULL;
 
 -- Every organization has exactly one built-in client for Horae's Android app,
 -- disabled until an administrator enables it (spec D-1). The trigger covers

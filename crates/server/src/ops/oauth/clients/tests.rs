@@ -105,8 +105,78 @@ async fn every_organization_has_one_disabled_built_in_client(pool: PgPool) {
     assert_eq!(android.client_id, BUILT_IN_CLIENT_ID);
     assert_eq!(android.kind, ClientKind::Public);
     assert_eq!(android.redirect_uris, [BUILT_IN_REDIRECT_URI]);
-    assert_eq!(android.scopes, ScopeSet::of(&Scope::ALL));
+    assert_eq!(android.name, BUILT_IN_NAME);
+    assert_eq!(android.scopes, ScopeSet::of(&BUILT_IN_SCOPES));
     assert_eq!(android.id.get_version_num(), 7);
+}
+
+/// The migration gives organizations that already exist their built-in
+/// client too, not only the trigger new ones.
+#[sqlx::test(migrations = false)]
+async fn the_migration_gives_existing_organizations_a_built_in_client(pool: PgPool) {
+    let at = crate::db::MIGRATOR
+        .iter()
+        .position(|migration| migration.description == "oauth")
+        .expect("the oauth migration");
+    let (before, oauth) = crate::db::MIGRATOR.migrations.split_at(at);
+    for migration in before {
+        sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+    }
+    let ids = crate::testing::seed_tenant(&pool).await;
+    sqlx::raw_sql(&oauth[0].sql).execute(&pool).await.unwrap();
+    let row = sqlx::query!(
+        r#"SELECT id, client_id, name, kind::text AS "kind!", redirect_uris, scopes, built_in,
+                  enabled
+           FROM oauth_clients WHERE org_id = $1"#,
+        ids.org_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.id.get_version_num(), 7);
+    assert_eq!(row.client_id, BUILT_IN_CLIENT_ID);
+    assert_eq!(row.name, BUILT_IN_NAME);
+    assert_eq!(row.kind, "public");
+    assert_eq!(row.redirect_uris, [BUILT_IN_REDIRECT_URI]);
+    assert_eq!(row.scopes, ScopeSet::of(&BUILT_IN_SCOPES).names());
+    assert!(row.built_in && !row.enabled);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn no_token_manages_apps(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let (app, _) = register_as(&pool, &admin, public_app("Widget"))
+        .await
+        .unwrap();
+    let all = ScopeSet::of(&Scope::ALL);
+    for caller in [
+        Caller::token(admin.org_id, admin.user_id, Uuid::now_v7()),
+        Caller::oauth(
+            admin.org_id,
+            admin.user_id,
+            Uuid::now_v7(),
+            Uuid::now_v7(),
+            all,
+        ),
+    ] {
+        let mut write = begin(&pool, caller).await.unwrap();
+        write.actor.unlock_scope(Scope::CatalogRead).unwrap();
+        let refused = |result: Result<_, OpError>| {
+            assert!(matches!(result, Err(OpError::Forbidden(_))), "{caller:?}");
+        };
+        refused(list(&mut write.tx, &write.actor).await.map(drop));
+        refused(
+            register(&mut write.tx, &write.actor, public_app("Mine"))
+                .await
+                .map(drop),
+        );
+        refused(
+            set_enabled(&mut write.tx, &write.actor, app.id, false)
+                .await
+                .map(drop),
+        );
+        refused(delete(&mut write.tx, &write.actor, app.id).await.map(drop));
+    }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

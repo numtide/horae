@@ -242,7 +242,8 @@ impl Default for OAuthConfig {
 
 impl OAuthConfig {
     /// Refuses lifetimes outside sane bounds: access 60 s to 1 day, refresh
-    /// idle 1 hour to 1 year, and the maximum at least the idle value.
+    /// idle 1 hour to 1 year, and the maximum between the idle value and 10
+    /// years.
     pub fn validate(self) -> anyhow::Result<Self> {
         let seconds = |duration: std::time::Duration| duration.as_secs();
         anyhow::ensure!(
@@ -257,6 +258,12 @@ impl OAuthConfig {
         anyhow::ensure!(
             self.refresh_max >= self.refresh_idle,
             "HORAE_OAUTH_REFRESH_MAX must be at least HORAE_OAUTH_REFRESH_IDLE"
+        );
+        // Bounded so adding it to a timestamp can never overflow.
+        anyhow::ensure!(
+            seconds(self.refresh_max) <= 10 * 365 * DAY,
+            "HORAE_OAUTH_REFRESH_MAX must be at most {} seconds (10 years)",
+            10 * 365 * DAY
         );
         Ok(self)
     }

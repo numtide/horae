@@ -407,3 +407,32 @@ async fn every_active_person_reads_the_harvest_account_id(pool: PgPool) {
     let refused = read.finish(result).await;
     assert!(matches!(refused, Err(OpError::Forbidden(_))), "{refused:?}");
 }
+
+/// Tokens are managed in the web app only: no personal or OAuth token, even
+/// an OAuth token with every scope, lists, mints or revokes one.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn no_token_manages_personal_tokens(pool: PgPool) {
+    use horae_core::permissions::oauth::{Scope, ScopeSet};
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let (_, row) = create_as(&pool, &ids, "script", None).await.unwrap();
+    let all = ScopeSet::of(&Scope::ALL);
+    for caller in [
+        Caller::token(ids.org_id, ids.user_id, row.id),
+        Caller::oauth(ids.org_id, ids.user_id, Uuid::now_v7(), Uuid::now_v7(), all),
+    ] {
+        let mut write = begin(&pool, caller).await.unwrap();
+        write.actor.unlock_scope(Scope::TimeWrite).unwrap();
+        let refused = |result: Result<_, OpError>| {
+            assert!(matches!(result, Err(OpError::Forbidden(_))), "{caller:?}");
+        };
+        refused(list_own(&mut write.tx, &write.actor).await.map(drop));
+        refused(list_org(&mut write.tx, &write.actor).await.map(drop));
+        refused(
+            create(&mut write.tx, &write.actor, "minted", None)
+                .await
+                .map(drop),
+        );
+        refused(revoke(&mut write.tx, &write.actor, row.id).await.map(drop));
+    }
+    assert_eq!(list_own_as(&pool, &ids).await.len(), 1);
+}

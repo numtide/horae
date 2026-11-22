@@ -254,6 +254,8 @@ fn bad_oauth_settings_refuse_to_start() {
         ("HORAE_OAUTH_REFRESH_IDLE", "3599"),
         ("HORAE_OAUTH_REFRESH_IDLE", "31536001"),
         ("HORAE_OAUTH_REFRESH_MAX", "3600"),
+        ("HORAE_OAUTH_REFRESH_MAX", "315360001"),
+        ("HORAE_OAUTH_REFRESH_MAX", "18446744073709551615"),
         ("HORAE_OAUTH_TOKEN_RATE_LIMIT", "30"),
         ("HORAE_OAUTH_TOKEN_RATE_LIMIT", "0/60"),
     ] {

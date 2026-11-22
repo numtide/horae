@@ -11,8 +11,8 @@ Read at start-up in `crates/server/src/config.rs`, like the other `HORAE_*` sett
 | Token endpoint limit | `HORAE_OAUTH_TOKEN_RATE_LIMIT` (`<requests>/<seconds>`) | `services.horae.oauth.tokenRateLimit` | `30/60` |
 
 A malformed value refuses to start, as for `HORAE_API_RATE_LIMIT`. Lifetimes outside sane bounds
-(access 60 s to 1 day; refresh idle 1 hour to 1 year; maximum at least the idle value) refuse to
-start too.
+(access 60 s to 1 day; refresh idle 1 hour to 1 year; maximum at least the idle value and at
+most 10 years, so adding it to a timestamp cannot overflow) refuse to start too.
 
 Under `DEV_LOGIN=1`, the dev stack's `process-compose.yaml` sets `HORAE_PUBLIC_URL` to
 `http://127.0.0.1:8080`, so the flow can be tried locally.
