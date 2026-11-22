@@ -178,6 +178,9 @@ tasks-activity-failed = Could not confirm the change. Refresh tasks to check whe
 tasks-access-changed = Your session or task permissions changed. Check your access before retrying.
 tasks-status-active = Active
 tasks-status-archived = Archived
+tasks-rate-none = No rate
+# A default rate stored without a currency, such as one imported from Harvest.
+tasks-rate-currency-not-set = { $amount } / h · currency not set
 
 ## Clients
 
