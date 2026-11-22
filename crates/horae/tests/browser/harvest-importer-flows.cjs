@@ -189,6 +189,8 @@ const longId = 'fixture'.repeat(40);
     await check('a CSV chosen from the keyboard opens its preview run with one primary action', async () => {
       await page.goto(`${base}/admin/importers/harvest/csv`);
       const file = page.getByTestId('csv-file');
+      // The server renders the form; it reacts only once the client has hydrated it.
+      await expect(file).toHaveAttribute('data-dioxus-id', /\d+/);
       await file.focus();
       await expect(file).toBeFocused();
       await file.setInputFiles({ name: 'fixture.csv', mimeType: 'text/csv', buffer: Buffer.from('Date,Hours\n2026-09-15,1\n') });
