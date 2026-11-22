@@ -39,8 +39,9 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
   let actor, project, initialRevision, fixtureStarted = false, restoreSeededStates, restoreEarlierDelegation;
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const history = page.getByRole('region', { name: 'Permission changes', exact: true });
-  const rows = history.locator('details.audit-row');
-  const receiptIds = () => history.locator('details .text-mono').filter({ hasText: /^Receipt / }).allTextContents();
+  const rows = history.locator('.audit-row');
+  const lines = history.locator('.audit-row-line');
+  const receiptIds = () => history.locator('.audit-row .text-mono').filter({ hasText: /^Receipt / }).allTextContents();
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
@@ -104,23 +105,40 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     await expect(rows).toHaveCount(25);
     assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt ${id}`));
     // Each row is a sentence; the newest is the no-op, then the last addition.
-    await expect(rows.nth(0).locator('summary')).toContainText(`saved the managers of ${projectName} without changes`);
-    await expect(rows.nth(1).locator('summary')).toContainText(`made ${actor.name} a manager of ${projectName}`);
-    await expect(rows.nth(2).locator('summary')).toContainText(`removed ${actor.name} as a manager of ${projectName}`);
-    await expect(rows.nth(1).locator('summary')).toContainText('Managers');
-    await expect(rows.nth(1).locator('summary')).toContainText('+1');
+    await expect(lines.nth(0)).toContainText(`saved the managers of ${projectName} without changes`);
+    await expect(lines.nth(1)).toContainText(`made ${actor.name} a manager of ${projectName}`);
+    await expect(lines.nth(2)).toContainText(`removed ${actor.name} as a manager of ${projectName}`);
+    await expect(lines.nth(1)).toContainText('Managers');
+    await expect(lines.nth(1)).toContainText('+1');
     // Times are local and grouped under a day heading.
     await expect(history.locator('h2.audit-day').first()).toHaveText('Today');
     await expect(page.getByText(/Times in your time zone \(UTC\)\./)).toBeVisible();
     // Names link: the person to the log filtered to them, the project to its page.
     await expect(rows.nth(1).getByRole('link', { name: projectName, exact: true })).toHaveAttribute('href', `/projects/${project}`);
     await expect(rows.nth(1).getByRole('link', { name: actor.name, exact: true }).first()).toHaveAttribute('href', `/admin/audit?person=${actor.id}`);
-    const summary = rows.nth(1).locator('summary');
-    await summary.focus();
+    // The links and the toggle are separate focus stops, in reading order:
+    // actor, person, project, then the toggle, which opens the detail.
+    const toggle = page.locator(`#audit-toggle-${ids[1]}`);
+    const detail = page.locator(`#audit-detail-${ids[1]}`);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(toggle).toHaveAttribute('aria-controls', `audit-detail-${ids[1]}`);
+    await expect(detail).toBeHidden();
+    await rows.nth(1).getByRole('link').first().focus();
+    const stops = [];
+    for (let stop = 0; stop < 4; stop++) {
+      stops.push(await page.evaluate(() => {
+        const el = document.activeElement;
+        return el.id || `${el.tagName.toLowerCase()}:${el.textContent.trim()}`;
+      }));
+      await page.keyboard.press('Tab');
+    }
+    assert.deepEqual(stops, [`a:${actor.name}`, `a:${actor.name}`, `a:${projectName}`, `audit-toggle-${ids[1]}`]);
+    await toggle.focus();
     await page.keyboard.press('Enter');
-    await expect(rows.nth(1)).toHaveAttribute('open', '');
-    await expect(rows.nth(1)).toContainText(`${actor.name} became a manager`);
-    await expect(rows.nth(1)).toContainText(`Receipt ${ids[1]}`);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText(`${actor.name} became a manager`);
+    await expect(detail).toContainText(`Receipt ${ids[1]}`);
 
     for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
       await page.setViewportSize({ width, height });

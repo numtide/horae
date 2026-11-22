@@ -297,6 +297,7 @@ audit-event-managers-added = <actor>{ $actor }</actor> made <person>{ $person }<
 audit-event-managers-removed = <actor>{ $actor }</actor> removed <person>{ $person }</person> as a manager of <project>{ $project }</project>
 audit-event-managers-changed = <actor>{ $actor }</actor> changed the managers of <project>{ $project }</project>
 audit-event-managers-unchanged = <actor>{ $actor }</actor> saved the managers of <project>{ $project }</project> without changes
+audit-details-label = Details
 audit-detail-label = What changed
 audit-detail-areas = Only the areas that changed.
 audit-detail-added = Now: { $permission }

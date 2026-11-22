@@ -1594,8 +1594,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ppl-content[aria-busy="true"],
 .audit-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
 
-/* Audit log: rows grouped by day; a row folds into time, kind, sentence,
-   "+2 −1" and a chevron, and unfolds into what changed. */
+/* Audit log: rows grouped by day. A row's line holds time, kind, sentence,
+   "+2 −1" and the toggle button that opens what changed below it. */
 .audit-log { border: 1px solid var(--color-border); border-radius: var(--radius-panel); overflow: hidden; }
 .audit-day {
   margin: 0; padding: var(--space-3) var(--space-5); background: var(--color-bg-secondary);
@@ -1603,25 +1603,23 @@ tbody tr:hover { background: var(--color-row-hover); }
   font-family: var(--font-family); font-size: var(--font-size-xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
 }
 .audit-row { border-bottom: 1px solid var(--color-border-light); }
-.audit-row[open] { background: var(--color-bg-secondary); }
-.audit-row-summary {
-  display: grid; grid-template-columns: 3.5rem 6rem minmax(0, 1fr) auto 1rem;
+.audit-row.open { background: var(--color-bg-secondary); }
+.audit-row-line {
+  display: grid; grid-template-columns: 3.5rem 6rem minmax(0, 1fr) auto auto;
   gap: var(--space-4); align-items: center; padding: var(--space-4) var(--space-5);
-  list-style: none; cursor: pointer;
 }
-.audit-row-summary::-webkit-details-marker { display: none; }
-.audit-row-summary:focus-visible { outline: none; box-shadow: var(--ring-inset); }
-.audit-row[open] .audit-chevron svg { transform: rotate(180deg); }
+.audit-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .audit-sentence { line-height: 1.5; overflow-wrap: anywhere; }
 .audit-detail {
   display: flex; flex-direction: column; gap: var(--space-3);
   padding: 0 var(--space-5) var(--space-5) calc(9.5rem + 2 * var(--space-4) + var(--space-5));
 }
+/* The class's display would otherwise override `hidden`. */
+.audit-detail[hidden] { display: none; }
 .audit-lines { margin: 0; padding-left: var(--space-5); list-style: disc; }
 @media (max-width: 768px) {
-  .audit-row-summary { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .audit-row-summary .audit-sentence { grid-column: 1 / -1; grid-row: 2; }
-  .audit-row-summary .audit-chevron { display: none; }
+  .audit-row-line { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .audit-row-line .audit-sentence { grid-column: 1 / -1; grid-row: 2; }
   .audit-detail { padding-left: var(--space-5); }
 }
 

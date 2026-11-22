@@ -2,6 +2,8 @@
 //! the viewer's time zone, each told as a sentence (`DESIGN.md`, *Audit log*).
 //! Only those who may read it get here; the server refuses everyone else.
 
+use std::collections::HashSet;
+
 use chrono::{Days, NaiveDate};
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
@@ -94,6 +96,8 @@ pub fn PermissionAudit(filter: AuditFilter) -> Element {
     let mut more = use_signal(|| None::<(AuditFilter, AuditCursor)>);
     let mut shown = use_signal(|| None::<Shown>);
     let mut requester = use_signal(|| None::<PermissionRequester>);
+    // The rows whose detail is open.
+    let open = use_signal(HashSet::<Uuid>::new);
     let mut history = use_resource(use_reactive!(|filter| async move {
         let after = continuation(filter, more(), shown.peek().as_ref());
         let pinned = *requester.peek();
@@ -136,9 +140,21 @@ pub fn PermissionAudit(filter: AuditFilter) -> Element {
         shown.as_ref(),
         current_failure(filter, answer.as_ref()),
         pending,
-        load_more,
-        retry,
+        Controls {
+            open,
+            load_more,
+            retry,
+        },
     )
+}
+
+/// The screen's handles: the rows whose detail is open, "Load more" and
+/// "Try again".
+#[derive(Clone, Copy)]
+struct Controls {
+    open: Signal<HashSet<Uuid>>,
+    load_more: Callback<MouseEvent>,
+    retry: Callback<()>,
 }
 
 /// The whole screen for one state of the log. `failure` says whether the
@@ -149,9 +165,13 @@ fn audit_log(
     shown: Option<&Shown>,
     failure: Option<(bool, &ServerFnError)>,
     pending: bool,
-    load_more: Callback<MouseEvent>,
-    retry: Callback<()>,
+    controls: Controls,
 ) -> Element {
+    let Controls {
+        open,
+        load_more,
+        retry,
+    } = controls;
     // Without access the screen keeps only its header and the state.
     if failure.is_some_and(|(_, error)| is_refusal(error)) {
         return rsx! {
@@ -207,9 +227,13 @@ fn audit_log(
                                 section { key: "{day}",
                                     h2 { class: "audit-day", {day_label(tr, day, shown.page.today)} }
                                     for entry in entries {
-                                        details { key: "{entry.id}", id: "audit-entry-{entry.id}", class: "audit-row",
-                                            {summary(tr, shown.filter, &shown.page, entry)}
-                                            div { class: "audit-detail", {detail(tr, &shown.page, entry)} }
+                                        div { key: "{entry.id}", id: "audit-entry-{entry.id}",
+                                            class: if open.read().contains(&entry.id) { "audit-row open" } else { "audit-row" },
+                                            {row_line(tr, shown.filter, &shown.page, entry, open)}
+                                            div { id: "audit-detail-{entry.id}", class: "audit-detail",
+                                                hidden: !open.read().contains(&entry.id),
+                                                {detail(tr, &shown.page, entry)}
+                                            }
                                         }
                                     }
                                 }
@@ -346,21 +370,31 @@ fn day_label(tr: Tr, day: NaiveDate, today: NaiveDate) -> String {
     }
 }
 
-/// The line a row shows folded: time, kind, sentence and the "+2 −1" summary.
-fn summary(tr: Tr, filter: AuditFilter, page: &AuditPage, entry: &AuditEntry) -> Element {
+/// The line a row always shows: time, kind, sentence, the "+2 −1" summary and
+/// the toggle for its detail. The toggle is a button of its own, beside the
+/// sentence, so the sentence's links are never inside an interactive control.
+fn row_line(
+    tr: Tr,
+    filter: AuditFilter,
+    page: &AuditPage,
+    entry: &AuditEntry,
+    open: Signal<HashSet<Uuid>>,
+) -> Element {
     let (variant, kind) = match entry.kind() {
         AuditKind::Person => ("success", tr.audit_kind_person()),
         AuditKind::Profile => ("warning", tr.audit_kind_profile()),
         AuditKind::Managers => ("neutral", tr.audit_kind_managers()),
     };
     let (added, removed) = counts(&entry.audit);
+    let id = entry.id;
+    let expanded = open.read().contains(&id);
     rsx! {
-        summary { class: "audit-row-summary",
+        div { class: "audit-row-line",
             time { class: "text-mono text-sm text-secondary", datetime: entry.created_at.to_rfc3339(),
                 {entry.local.format("%H:%M").to_string()}
             }
             span { Badge { variant, "{kind}" } }
-            span { class: "audit-sentence", {sentence(tr, filter, page, entry)} }
+            span { id: "audit-sentence-{id}", class: "audit-sentence", {sentence(tr, filter, page, entry)} }
             span { class: "text-mono text-xs whitespace-nowrap",
                 if added + removed > 0 {
                     span { class: "sr-only", {tr.audit_summary_label(added, removed)} }
@@ -371,7 +405,20 @@ fn summary(tr: Tr, filter: AuditFilter, page: &AuditPage, entry: &AuditEntry) ->
                     if removed > 0 { span { class: "text-danger", {tr.audit_removed(removed)} } }
                 }
             }
-            span { class: "audit-chevron text-secondary", aria_hidden: "true", NavIcon { name: "chevron-down" } }
+            button { id: "audit-toggle-{id}", r#type: "button", class: "btn btn-secondary btn-sm btn-icon audit-toggle",
+                aria_label: tr.audit_details_label(),
+                aria_describedby: "audit-sentence-{id}",
+                aria_expanded: if expanded { "true" } else { "false" },
+                aria_controls: "audit-detail-{id}",
+                onclick: move |_| {
+                    let mut open = open;
+                    let mut ids = open.write();
+                    if !ids.remove(&id) {
+                        ids.insert(id);
+                    }
+                },
+                NavIcon { name: "chevron-down" }
+            }
         }
     }
 }

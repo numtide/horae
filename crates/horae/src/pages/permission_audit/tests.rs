@@ -149,24 +149,24 @@ fn template(created: bool) -> HistoricalAudit {
 }
 
 /// What `audit_log` is rendered with.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct View {
     filter: AuditFilter,
     shown: Option<Shown>,
     failure: Option<(bool, ServerFnError)>,
     pending: bool,
+    /// The rows whose detail is open.
+    open: HashSet<Uuid>,
 }
 
 impl View {
     fn loaded(page: AuditPage) -> Self {
         Self {
-            filter: AuditFilter::default(),
             shown: Some(Shown {
                 filter: AuditFilter::default(),
                 page,
             }),
-            failure: None,
-            pending: false,
+            ..Self::default()
         }
     }
 }
@@ -183,14 +183,18 @@ fn Content() -> Element {
     let view = use_context::<View>();
     let load_more = use_callback(|_: MouseEvent| {});
     let retry = use_callback(|_| {});
+    let open = use_signal(|| view.open.clone());
     audit_log(
         Tr::default(),
         view.filter,
         view.shown.as_ref(),
         view.failure.as_ref().map(|(more, error)| (*more, error)),
         view.pending,
-        load_more,
-        retry,
+        Controls {
+            open,
+            load_more,
+            retry,
+        },
     )
 }
 
@@ -520,6 +524,7 @@ fn the_first_load_shows_grouped_skeleton_rows_under_live_filters() {
         shown: None,
         failure: None,
         pending: true,
+        ..View::default()
     });
     assert!(html.contains("Loading permission changes"), "{html}");
     assert!(html.contains("skeleton-group"), "{html}");
@@ -564,6 +569,7 @@ fn a_refusal_leaves_only_the_header_and_the_state() {
         shown: None,
         failure: Some((false, server(403))),
         pending: false,
+        ..View::default()
     });
     assert!(html.contains("Access unavailable"), "{html}");
     assert!(!html.contains("audit-kind-menu"), "{html}");
@@ -578,6 +584,7 @@ fn failures_name_what_to_do_without_private_details() {
             shown: None,
             failure: Some((false, server(code))),
             pending: false,
+            ..View::default()
         });
         assert!(html.contains(expected), "{html}");
         assert!(!html.contains("private diagnostic"), "{html}");
@@ -714,6 +721,7 @@ fn only_the_current_filters_failure_is_shown() {
         shown: None,
         failure: None,
         pending: true,
+        ..View::default()
     });
     assert!(html.contains("skeleton"), "{html}");
 }
@@ -758,4 +766,80 @@ fn created_at_is_kept_for_machines_while_people_read_local_time() {
     let html = render(View::loaded(page(vec![row], false)));
     assert!(html.contains(&format!("datetime=\"{utc}\"")), "{html}");
     assert!(text(&html).contains("23:30"));
+}
+
+/// The opening tag of the element whose `id` is `id`.
+fn tag_of<'a>(html: &'a str, id: &str) -> &'a str {
+    let at = html
+        .find(&format!("id=\"{id}\""))
+        .unwrap_or_else(|| panic!("{id}: {html}"));
+    let start = html[..at].rfind('<').unwrap();
+    &html[start..at + html[at..].find('>').unwrap() + 1]
+}
+
+/// The links and the toggle are separate focus stops: no link sits inside
+/// the toggle or any other control, and the toggle names what it opens.
+#[test]
+fn the_toggle_is_a_button_beside_the_sentence_and_its_links() {
+    let row = entry("2026-11-20T10:00:00", managers(&[JAMIE], &[]));
+    let id = row.id;
+    let html = render(View::loaded(page(vec![row], false)));
+    for gone in ["<details", "<summary"] {
+        assert!(!html.contains(gone), "{gone}: {html}");
+    }
+    let toggle = tag_of(&html, &format!("audit-toggle-{id}"));
+    assert!(toggle.starts_with("<button"), "{toggle}");
+    assert!(toggle.contains("aria-expanded=\"false\""), "{toggle}");
+    assert!(
+        toggle.contains(&format!("aria-controls=\"audit-detail-{id}\"")),
+        "{toggle}"
+    );
+    assert!(
+        toggle.contains(&format!("aria-describedby=\"audit-sentence-{id}\"")),
+        "{toggle}"
+    );
+    assert!(toggle.contains("aria-label=\"Details\""), "{toggle}");
+    // The detail it controls is there, closed.
+    assert!(
+        tag_of(&html, &format!("audit-detail-{id}")).contains("hidden"),
+        "{html}"
+    );
+    // The sentence's three links sit outside every button.
+    let sentence = tag_of(&html, &format!("audit-sentence-{id}"));
+    let start = html.find(sentence).unwrap();
+    let links: Vec<usize> = html
+        .match_indices("<a ")
+        .map(|(at, _)| at)
+        .filter(|at| *at > start)
+        .collect();
+    assert_eq!(links.len(), 3, "{html}");
+    for at in links {
+        let before = &html[..at];
+        assert_eq!(
+            before.matches("<button").count(),
+            before.matches("</button>").count(),
+            "{html}"
+        );
+    }
+}
+
+#[test]
+fn an_open_row_says_so_and_shows_its_detail() {
+    let row = entry("2026-11-20T10:00:00", time_change());
+    let id = row.id;
+    let mut view = View::loaded(page(vec![row], false));
+    view.open.insert(id);
+    let html = render(view);
+    assert!(
+        tag_of(&html, &format!("audit-toggle-{id}")).contains("aria-expanded=\"true\""),
+        "{html}"
+    );
+    assert!(
+        !tag_of(&html, &format!("audit-detail-{id}")).contains("hidden"),
+        "{html}"
+    );
+    assert!(
+        tag_of(&html, &format!("audit-entry-{id}")).contains("audit-row open"),
+        "{html}"
+    );
 }

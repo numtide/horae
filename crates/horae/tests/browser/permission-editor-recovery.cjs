@@ -483,17 +483,17 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     // The row's history is the log filtered to that person.
     await page.waitForURL(`${base}/admin/audit?person=${person}`);
     const history = page.getByRole('region', { name: 'Permission changes', exact: true });
-    const rows = history.locator('details.audit-row');
-    const receiptIds = () => history.locator('details .text-mono').filter({ hasText: /^Receipt / }).allTextContents();
+    const rows = history.locator('.audit-row');
+    const receiptIds = () => history.locator('.audit-row .text-mono').filter({ hasText: /^Receipt / }).allTextContents();
     await expect(rows.first()).toContainText(personName);
     await expect(page.locator('#audit-person-menu-trigger')).toContainText(personName);
     await page.goto(`${base}/admin/audit`);
     await expect(rows).toHaveCount(25);
     assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt ${id}`));
-    const summary = history.locator('summary').first();
-    await summary.focus();
+    const toggle = rows.first().locator('.audit-toggle');
+    await toggle.focus();
     await page.keyboard.press('Enter');
-    await expect(rows.first()).toHaveAttribute('open', '');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await expect(rows.first()).toContainText(`changed the permissions of ${personName}`);
     await expect(rows.first().locator('table')).toBeVisible();
     for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
@@ -516,8 +516,10 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(rows).toHaveCount(29);
     assert.deepEqual(await receiptIds(), historyIds.map(id => `Receipt ${id}`));
     await expect(page.locator('#audit-load-more')).toHaveCount(0);
-    await history.locator('summary').filter({ hasText: `deleted the profile ${templateName}` }).click();
-    await expect(history.locator('details[open]').filter({ hasText: `deleted the profile ${templateName}` })).toContainText('Receipt ');
+    const deleted = rows.filter({ has: page.locator('.audit-row-line', { hasText: `deleted the profile ${templateName}` }) });
+    await deleted.locator('.audit-toggle').click();
+    await expect(deleted.locator('.audit-detail')).toBeVisible();
+    await expect(deleted.locator('.audit-detail')).toContainText('Receipt ');
     assert.equal(sql(`SELECT count(*) FROM permission_templates WHERE id='${templateId}'`), '0');
 
     let releaseHistory;
