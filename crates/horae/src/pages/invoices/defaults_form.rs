@@ -137,23 +137,18 @@ pub(super) fn DefaultsFields(mut fields: Signal<InvoiceDefaultsInput>, disabled:
 #[component]
 pub(super) fn DraftDefaults(
     invoice: Invoice,
-    mut editing: Signal<bool>,
-    mut busy: Signal<bool>,
+    editing: Signal<bool>,
+    busy: Signal<bool>,
     onsaved: EventHandler<()>,
 ) -> Element {
     let storage = use_context::<super::recovery::RecoveryStorage>();
     if !storage.ready() {
         return rsx! {};
     }
+    // The header's "Actions" menu opens the editor.
     rsx! {
         if editing() {
             super::editing::DraftEditor { id: invoice.id, editing, busy, onsaved }
-        } else {
-            button { r#type: "button", class: "btn btn-secondary mb-6", disabled: busy(),
-                onclick: move |_| {
-                    if storage.ready() { editing.set(true); }
-                }, "Edit invoice values"
-            }
         }
     }
 }

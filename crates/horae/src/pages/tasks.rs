@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::money::format_cents;
 
+use crate::components::badge::Badge;
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{
     EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal, load_pinned,
@@ -9,6 +10,8 @@ use crate::models::permission_editor::PermissionRequester;
 use crate::models::task::{TaskActivity, TaskCatalogPage, TaskCursor};
 use crate::server_fns;
 
+#[path = "tasks/activity.rs"]
+mod activity;
 #[path = "tasks/editor.rs"]
 mod editor;
 
@@ -30,6 +33,9 @@ const TASK_GROUPS: [(bool, &str, &str, &str); 2] = [
 
 const FORBIDDEN: u16 = 403;
 const UNAUTHORIZED: u16 = 401;
+/// A rejected input or a conflicting change: the server's message says what to fix.
+const BAD_REQUEST: u16 = 400;
+const CONFLICT: u16 = 409;
 
 #[component]
 pub fn TaskCatalog() -> Element {
@@ -85,6 +91,40 @@ pub fn TaskCatalog() -> Element {
     let next = current
         .and_then(|result| result.as_ref().ok())
         .and_then(|page| page.next_after.clone());
+    let mut changing = use_signal(|| None::<activity::ActivityTarget>);
+    // The page the menus act on: who asks, and in which rate currency.
+    let context = current.and_then(|result| result.as_ref().ok()).map(|page| {
+        (
+            page.requester,
+            page.rate_currency.clone().filter(|_| page.can_edit_rates),
+        )
+    });
+    let requester_now = context.as_ref().map(|(requester, _)| *requester);
+    let on_edit = use_callback(move |task: crate::models::task::TaskCatalogEntry| {
+        if let Some((requester, rate_currency)) = context.clone() {
+            notice.set(None);
+            selected.set(Some(editor::Selection {
+                task: Some(task),
+                requester,
+                rate_currency,
+            }));
+        }
+    });
+    let activity_changed = use_callback(move |message: String| {
+        notice.set(Some(message));
+        catalog.restart();
+    });
+    let activity_denied = use_callback(move |()| {
+        selected.set(None);
+        notice.set(Some(tr.tasks_access_changed()));
+        catalog.restart();
+    });
+    let on_activity = use_callback(move |task: crate::models::task::TaskCatalogEntry| {
+        if let Some(requester) = requester_now {
+            notice.set(None);
+            changing.set(Some(activity::ActivityTarget { task, requester }));
+        }
+    });
     // Without access the screen keeps only its header and the state.
     let refused = failed.is_some_and(is_refusal);
 
@@ -158,23 +198,22 @@ pub fn TaskCatalog() -> Element {
                                 th { scope: "col", "Billable by default" }
                                 if page.can_read_rates { th { scope: "col", "Default hourly rate" } }
                                 th { scope: "col", "Status" }
-                                if page.can_edit { th { scope: "col", "Actions" } }
+                                if page.can_edit { th { scope: "col", class: "text-right", "Actions" } }
                             } }
                             tbody { for task in page.tasks.iter().filter(|task| task.is_default == common) {
                                 tr { key: "{task.id}",
                                     td { "{task.name}" }
                                     td { if task.billable_default { "Yes" } else { "No" } }
                                     if page.can_read_rates { td { class: "font-mono text-sm whitespace-nowrap", {rate_label(task.default_rate_cents, task.default_rate_currency.as_deref())} } }
-                                    td { if task.active { "Active" } else { "Archived" } }
-                                    if page.can_edit { td {
-                                        button { id: "tasks-edit-{task.id}", r#type: "button", class: "btn btn-secondary btn-sm",
-                                            aria_label: "Edit {task.name}",
-                                            onclick: {
-                                                let selection = editor::Selection { task: Some(task.clone()), requester: page.requester,
-                                                    rate_currency: page.rate_currency.clone().filter(|_| page.can_edit_rates) };
-                                                move |_| { notice.set(None); selected.set(Some(selection.clone())); }
-                                            }, "Edit"
+                                    td {
+                                        if task.active {
+                                            Badge { variant: "success", {tr.tasks_status_active()} }
+                                        } else {
+                                            Badge { variant: "neutral", {tr.tasks_status_archived()} }
                                         }
+                                    }
+                                    if page.can_edit { td { class: "text-right",
+                                        activity::TaskActions { task: task.clone(), on_edit, on_activity }
                                     } }
                                 }
                             } }
@@ -202,6 +241,7 @@ pub fn TaskCatalog() -> Element {
                 },
                 on_denied: move |_| { notice.set(Some("Your session or task permissions changed. The editor was closed; check your access before retrying.".into())); selected.set(None); catalog.restart(); }
             }
+            activity::ActivityDialog { target: changing, on_changed: activity_changed, on_denied: activity_denied }
         }
     }
 }

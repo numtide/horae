@@ -2,7 +2,6 @@ use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use horae_core::duration::format_hours2 as hours;
 
-use crate::components::badge::Badge;
 use crate::components::controls::Checkbox;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input, Select};
@@ -321,9 +320,9 @@ pub(super) fn ScopedReports(
                                     td { "{entry.user_name}" }
                                     td { class: "text-mono text-right", "{hours(i64::from(entry.minutes))}" }
                                     td { class: "text-mono text-right", "{hours(i64::from(entry.rounded_minutes))}" }
+                                    // A yes or no, not a status, so no badge.
                                     td { class: "text-center",
-                                        if entry.billable { Badge { variant: "success", "Yes" } }
-                                        else { Badge { variant: "neutral", "No" } }
+                                        if entry.billable { "Yes" } else { span { class: "text-muted", "No" } }
                                     }
                                     td { class: "wrap-anywhere", "{entry.notes.as_deref().unwrap_or(\"—\")}" }
                                 }

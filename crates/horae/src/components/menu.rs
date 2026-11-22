@@ -22,6 +22,10 @@ pub fn Menu(
     /// one "Actions" menu per table row.
     #[props(into)]
     aria_label: Option<String>,
+    /// An action chosen from this menu is still running; the trigger says so,
+    /// since the closed menu cannot.
+    #[props(default)]
+    busy: bool,
     children: Element,
 ) -> Element {
     let popover = if align_right {
@@ -38,6 +42,7 @@ pub fn Menu(
                 class: "btn btn-secondary btn-sm {trigger_class}",
                 disabled,
                 aria_label,
+                "aria-busy": busy.then_some("true"),
                 "aria-haspopup": "menu",
                 "aria-expanded": "false",
                 "aria-controls": "{id}",

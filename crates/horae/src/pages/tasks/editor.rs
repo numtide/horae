@@ -1,6 +1,5 @@
 use super::*;
 use crate::components::{
-    confirm_dialog::{ConfirmDialog, ConfirmTone},
     controls::Checkbox,
     form::{FormGroup, Input},
     modal::{Modal, ModalAction, ModalActions, ModalBody, ModalHeader},
@@ -47,7 +46,6 @@ fn TaskForm(
     on_saved: EventHandler<String>,
     on_denied: EventHandler<()>,
 ) -> Element {
-    let tr = crate::i18n::use_tr();
     let mut name = use_signal(|| {
         selection
             .task
@@ -73,37 +71,9 @@ fn TaskForm(
     });
     let mut amount = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
-    let mut confirm_activity = use_signal(|| false);
     let task_id = selection.task.as_ref().map(|task| task.id);
     let requester = selection.requester;
-    let active = selection.task.as_ref().is_none_or(|task| task.active);
     let currency = selection.rate_currency.clone();
-    let change_activity = use_callback(move |()| {
-        let Some(task_id) = task_id else {
-            return;
-        };
-        if busy() {
-            return;
-        }
-        busy.set(true);
-        error.set(None);
-        spawn(async move {
-            let result = server_fns::set_task_active(task_id.to_string(), !active, requester).await;
-            finish(
-                result,
-                busy,
-                error,
-                on_saved,
-                on_denied,
-                if active {
-                    "Task archived."
-                } else {
-                    "Task restored to the catalog. Restore it in each project where needed."
-                },
-            );
-        });
-    });
-    let keep_status = use_callback(move |()| confirm_activity.set(false));
     let primary = ModalAction::submit(
         if busy() { "Saving…" } else { "Save task" },
         "task-edit-form",
@@ -112,19 +82,6 @@ fn TaskForm(
     .disabled(busy());
     rsx! {
         ModalActions { primary }
-        // Archiving carries the task out of every project, so it asks first.
-        if task_id.is_some() {
-        ConfirmDialog { id: "task-activity-dialog", labelledby: "task-activity-title",
-            open: confirm_activity(), busy: busy(), tone: ConfirmTone::Neutral,
-            title: if active { tr.tasks_archive_title() } else { tr.tasks_restore_title() },
-            confirm_label: if active { "Confirm archive" } else { "Confirm restore" },
-            cancel_label: "Keep current status",
-            on_confirm: change_activity, on_dismiss: keep_status,
-            p {
-                if active { {tr.tasks_archive_body()} } else { {tr.tasks_restore_body()} }
-            }
-        }
-        }
         ModalHeader { id: "task-editor-title", title: if task_id.is_some() { "Edit task" } else { "New task" } }
         ModalBody {
         form { id: "task-edit-form", onsubmit: move |event| {
@@ -184,13 +141,6 @@ fn TaskForm(
                     }
                 }
         }
-        if task_id.is_some() {
-            div { class: "mt-6",
-                button { id: "task-activity", r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| confirm_activity.set(true),
-                    if active { "Archive task…" } else { "Restore task…" }
-                }
-            }
-        }
         }
     }
 }
@@ -207,7 +157,7 @@ fn finish(
     match result {
         Ok(_) => on_saved.call(message.into()),
         Err(ServerFnError::ServerError { code: UNAUTHORIZED | FORBIDDEN, .. }) => on_denied.call(()),
-        Err(ServerFnError::ServerError { code: 400 | 409, message, .. }) => error.set(Some(message)),
+        Err(ServerFnError::ServerError { code: BAD_REQUEST | CONFLICT, message, .. }) => error.set(Some(message)),
         Err(_) => error.set(Some("Could not confirm the save. Your inputs are kept. Refresh tasks to check whether it was saved before retrying.".into())),
     }
 }

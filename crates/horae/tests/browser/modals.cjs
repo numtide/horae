@@ -165,7 +165,7 @@ assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A
       await (await refreshed).finished();
       await visit('/timesheet/day/2027-10-04', 'load_timesheet_page');
       const row = page.locator('.ts-day-entry').filter({ hasText: notes });
-      const edit = row.getByRole('button', { name: 'Edit', exact: true });
+      const edit = row.getByRole('button', { name: /^Edit / });
       await edit.click();
       const editing = page.getByRole('dialog', { name: /Edit time entry/ });
       await expect(editing.getByRole('button', { name: 'Project', exact: true })).toBeEnabled();

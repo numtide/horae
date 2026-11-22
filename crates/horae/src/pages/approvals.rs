@@ -169,10 +169,50 @@ pub fn Approvals(week: String) -> Element {
         Some(Ok(first)) => week_bounds(today(), *first).map(|(start, _)| start),
         _ => None,
     };
+    // The submitted timesheets of the shown week that the viewer may approve.
+    let shown_start = selected().map(|(start, _)| start);
+    let pending_ids: Vec<String> = match &*approvals.read() {
+        Some(Some((loaded_start, Ok(rows)))) if Some(*loaded_start) == shown_start => rows
+            .iter()
+            .filter(|s| s.approval.state == EntryState::Submitted && may_decide(s.approval.user_id))
+            .map(|s| s.approval.id.to_string())
+            .collect(),
+        _ => Vec::new(),
+    };
+    let tr = crate::i18n::use_tr();
+    let approve_all = {
+        let ids = pending_ids.clone();
+        move |_| {
+            let Some(start) = shown_start else { return };
+            let ids = ids.clone();
+            let mut notice = notice;
+            spawn_action(
+                async move {
+                    let requested = ids.len();
+                    let approved = server_fns::approve_submissions(ids).await?;
+                    notice.set(Some((
+                        start,
+                        tr.approvals_approved_notice(approved as i64, requested as i64),
+                    )));
+                    Ok(())
+                },
+                refresh,
+                action_error,
+                busy,
+                notice,
+            )
+        }
+    };
 
     rsx! {
         div {
-            PageHeader { title: "Approvals", title_id: "approvals-heading" }
+            PageHeader { title: "Approvals", title_id: "approvals-heading",
+                actions: (!pending_ids.is_empty()).then(|| rsx! {
+                    button { class: "btn btn-primary", id: "approvals-approve-all", disabled: busy(), onclick: approve_all,
+                        {tr.approvals_approve_all()}
+                    }
+                }),
+            }
 
             // Until the session resolves, nobody is known to lack access.
             if me.read().is_none() || access.is_none() {
@@ -257,14 +297,6 @@ pub fn Approvals(week: String) -> Element {
                                     let bill_pct = if total > 0 { billable * 100 / total } else { 0 };
                                     let nonbill_pct = if total > 0 { 100 - bill_pct } else { 0 };
 
-                                    let pending_ids: Vec<String> = items
-                                        .iter()
-                                        .filter(|s| {
-                                            s.approval.state == EntryState::Submitted
-                                                && may_decide(s.approval.user_id)
-                                        })
-                                        .map(|s| s.approval.id.to_string())
-                                        .collect();
                                     let pending_count = pending_ids.len();
 
                                     rsx! {
@@ -339,6 +371,8 @@ pub fn Approvals(week: String) -> Element {
                                                                             div { class: "flex gap-2 justify-end",
                                                                                 button {
                                                                                     class: "btn btn-secondary btn-sm",
+                                                                                    id: "approvals-reopen-{aid}",
+                                                                                    aria_label: tr.approvals_reopen_for(name),
                                                                                     disabled: busy(),
                                                                                     onclick: {
                                                                                         let aid = aid.clone();
@@ -351,7 +385,9 @@ pub fn Approvals(week: String) -> Element {
                                                                                 }
                                                                                 if is_pending {
                                                                                     button {
-                                                                                        class: "btn btn-solid btn-sm",
+                                                                                        class: "btn btn-secondary btn-sm",
+                                                                                        id: "approvals-approve-{aid}",
+                                                                                        aria_label: tr.approvals_approve_for(name),
                                                                                         disabled: busy(),
                                                                                         onclick: {
                                                                                             let aid = aid.clone();
@@ -377,29 +413,8 @@ pub fn Approvals(week: String) -> Element {
                                         }
 
                                         if pending_count > 0 {
-                                            div { class: "flex items-center mt-5 gap-4",
-                                                span { class: "text-muted text-sm",
-                                                    "{pending_count} timesheet(s) awaiting your approval"
-                                                }
-                                                div { class: "flex-1" }
-                                                button {
-                                                    class: "btn btn-solid",
-                                                    disabled: busy(),
-                                                    onclick: move |_| {
-                                                        let ids = pending_ids.clone();
-                                                        let mut notice = notice;
-                                                        spawn_action(
-                                                            async move {
-                                                                let requested = ids.len();
-                                                                let approved = server_fns::approve_submissions(ids).await?;
-                                                                notice.set(Some((start, format!("Approved {approved} of {requested} timesheets"))));
-                                                                Ok(())
-                                                            },
-                                                            refresh, action_error, busy, notice,
-                                                        )
-                                                    },
-                                                    "Approve visible timesheets"
-                                                }
+                                            p { class: "text-muted text-sm mt-5",
+                                                {tr.approvals_awaiting(pending_count as i64)}
                                             }
                                         }
                                     }

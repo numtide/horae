@@ -56,21 +56,31 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await page.getByRole('searchbox', { name: 'Search clients by name' }).fill(name);
     const link = page.getByRole('link', { name, exact: true });
     await expect(link).toHaveCount(1);
-    const rowEdit = page.getByRole('row').filter({ has: link }).getByRole('button', { name: 'Edit', exact: true });
-    await rowEdit.click();
+    // Each row's actions are one "Actions" menu, named after its client.
+    const rowActions = page.getByRole('row').filter({ has: link }).getByRole('button', { name: `Actions for ${name}`, exact: true });
+    await expect(rowActions).toHaveAttribute('aria-haspopup', 'menu');
+    await rowActions.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
     await expect(field('Tax ID (optional)')).toHaveValue('TEST-VAT');
     await field('Tax ID (optional)').fill('TEST-VAT-2');
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(rowEdit).toBeFocused();
+    await expect(rowActions).toBeFocused();
     const detailPath = await link.getAttribute('href');
     assert.match(detailPath, /^\/clients\/[0-9a-f-]+$/);
     await page.reload();
     await page.getByRole('link', { name, exact: true }).click();
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Billing', exact: true })).toContainText('EUR 0.00 / h');
-    const edit = page.getByRole('button', { name: 'Edit client', exact: true });
-    await edit.click();
+    // Edit client is in the header's "Actions" menu; focus returns to its trigger.
+    const edit = page.locator('#client-actions-trigger');
+    const openEditor = async () => {
+      await edit.click();
+      await page.getByRole('menuitem', { name: 'Edit client', exact: true }).click();
+    };
+    await openEditor();
     await expect(field('Default rate')).toHaveValue('0.00');
     await expect(field('Billing address')).toHaveValue('Test street\nFloor 2');
     await field('Billing address').fill('Must not be saved');
@@ -79,7 +89,7 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await expect(edit).toBeFocused();
     await page.reload();
     await expect(page.getByRole('region', { name: 'Billing', exact: true })).toContainText('Test street');
-    await edit.click();
+    await openEditor();
     await dialog.getByRole('combobox', { name: 'Currency', exact: true }).selectOption('USD');
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText('Confirm the default rate');
@@ -181,6 +191,16 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     page.on('request', request => { if (request.url().includes('/api/set_client_active')) statusRequests++; });
     const search = page.getByRole('searchbox', { name: 'Search clients by name' });
     const rowFor = client => page.getByRole('row').filter({ has: page.getByRole('link', { name: client, exact: true }) });
+    // A row's "Actions" trigger, and its Archive/Restore item. The item's state
+    // is read while the menu is closed; choosing it opens the menu first.
+    const actionsFor = id => page.locator(`#client-actions-${id}-trigger`);
+    const activityFor = id => page.locator(`#client-activity-${id}`);
+    const choose = async id => { await actionsFor(id).click(); await activityFor(id).click(); };
+    const forceChoose = async id => {
+      await actionsFor(id).click();
+      await activityFor(id).click({ force: true });
+      await page.keyboard.press('Escape');
+    };
     const scopeTo = async label => {
       await page.locator('#client-scope-menu-trigger').click();
       await page.getByRole('menuitem', { name: new RegExp(`^${label}`) }).click();
@@ -190,19 +210,20 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await search.fill('Acme Corp');
     const acme = rowFor('Acme Corp');
     const acmeId = sql("SELECT id FROM clients WHERE name = 'Acme Corp'");
-    const acmeArchive = acme.getByRole('button', { name: 'Archive', exact: true });
+    const acmeArchive = activityFor(acmeId);
+    await expect(acmeArchive).toHaveText('Archive');
     for (const dismiss of ['Cancel', 'Escape']) {
-      await acmeArchive.click();
+      await choose(acmeId);
       await expect(archiveDialog('Acme Corp')).toBeVisible();
       await expect(archiveDialog('Acme Corp')).toContainText('Only the client is archived. Its projects must already be archived.');
       await expect(archiveDialog('Acme Corp')).not.toContainText(/\d+\s+projects?/);
       if (dismiss === 'Cancel') await archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true }).click();
       else await page.keyboard.press('Escape');
       await expect(archiveDialog('Acme Corp')).toBeHidden();
-      await expect(acmeArchive).toBeFocused();
+      await expect(actionsFor(acmeId)).toBeFocused();
     }
     assert.equal(statusRequests, 0, 'Cancel and Escape send nothing');
-    await acmeArchive.click();
+    await choose(acmeId);
     await archiveDialog('Acme Corp').getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(archiveDialog('Acme Corp').getByRole('alert')).toContainText("Archive this client's projects before archiving the client.");
     await expect(archiveDialog('Acme Corp').getByRole('alert')).not.toContainText(/\d/);
@@ -228,8 +249,8 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.fontSize = '200%';
         }, theme);
-        await acmeArchive.scrollIntoViewIfNeeded();
-        await acmeArchive.click();
+        await actionsFor(acmeId).scrollIntoViewIfNeeded();
+        await choose(acmeId);
         await expect(archiveDialog('Acme Corp')).toBeVisible();
         for (const name of ['Archive client', 'Cancel']) {
           const action = archiveDialog('Acme Corp').getByRole('button', { name, exact: true });
@@ -271,7 +292,7 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     const held = new Promise(resolve => { releaseArchive = resolve; });
     await page.route('**/api/set_client_active*', async route => { await held; await route.continue(); });
     statusRequests = 0;
-    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await choose(committedId);
     const confirm = archiveDialog(committedName).getByRole('button', { name: /^Archiv/ });
     await confirm.click();
     await expect(confirm).toBeDisabled();
@@ -298,30 +319,32 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     const heldRestore = new Promise(resolve => { releaseRestore = resolve; });
     await page.route('**/api/set_client_active*', async route => { await heldRestore; await route.continue(); });
     statusRequests = 0;
-    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
-    const restoringButton = committed.getByRole('button', { name: 'Restoring…', exact: true });
-    await expect(restoringButton).toBeDisabled();
-    await expect(restoringButton).toHaveAttribute('aria-busy', 'true');
-    await restoringButton.click({ force: true });
+    await choose(committedId);
+    // The closed menu's trigger shows the pending restore.
+    await expect(actionsFor(committedId)).toHaveAttribute('aria-busy', 'true');
+    await expect(actionsFor(committedId)).toContainText('Restoring…');
+    await expect(activityFor(committedId)).toHaveText('Restoring…');
+    await expect(activityFor(committedId)).toBeDisabled();
+    await forceChoose(committedId);
     releaseRestore();
     await expect(committed.getByText('Active', { exact: true })).toBeVisible();
     await page.unroute('**/api/set_client_active*');
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(committed.getByRole('button', { name: 'Archive', exact: true })).toBeFocused();
+    await expect(actionsFor(committedId)).toBeFocused();
     await expect(page.getByRole('status').filter({ hasText: `${committedName} restored` })).toBeVisible();
     assert.equal(statusRequests, 1, 'a pending restore is sent once');
     assert.equal(clientActive(committedId), 't');
     assert.equal(history(), before);
 
     // Focus the user moves while the reload is still pending stays there.
-    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await choose(committedId);
     await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
     let releaseReload;
     const heldReload = new Promise(resolve => { releaseReload = resolve; });
     await page.route('**/api/client_overview*', async route => { await heldReload; await route.continue(); }, { times: 1 });
     const reloadStarted = page.waitForRequest(request => request.url().includes('/api/client_overview'));
-    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await choose(committedId);
     await reloadStarted;
     await search.focus();
     releaseReload();
@@ -329,13 +352,14 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await expect(search).toBeFocused();
 
     // A failed restore keeps its alert; where focus lands is observed, not changed.
-    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await choose(committedId);
     await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
     await page.route('**/api/set_client_active*', route => route.abort('failed'), { times: 1 });
-    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await choose(committedId);
     await expect(page.getByRole('alert').filter({ hasText: 'Could not change client status' })).toBeVisible();
-    await expect(committed.getByRole('button', { name: 'Restore', exact: true })).toBeEnabled();
+    await expect(activityFor(committedId)).toHaveText('Restore');
+    await expect(activityFor(committedId)).toBeEnabled();
     console.log(`OBSERVE: focus after a failed list restore is ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}`);
     assert.equal(clientActive(committedId), 'f');
 
@@ -346,9 +370,9 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     const hold = () => { let release; gates.push(new Promise(resolve => { release = resolve; })); return release; };
     await page.route('**/api/set_client_active*', async route => { await gates.shift(); await route.continue(); });
     const releaseRestoreX = hold(), releaseArchiveY = hold();
-    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await choose(committedId);
     await search.fill('Acme Corp');
-    await acmeArchive.click();
+    await choose(acmeId);
     const acmeConfirm = archiveDialog('Acme Corp').getByRole('button', { name: /^Archiv/ });
     await acmeConfirm.click();
     await expect(acmeConfirm).toHaveText('Archiving client…');
@@ -367,7 +391,7 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     assert.equal(clientActive(acmeId), 't');
     // A different target opens with no error from the previous one.
     await search.fill(committedName);
-    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await choose(committedId);
     await expect(archiveDialog(committedName)).toBeVisible();
     await expect(archiveDialog(committedName).getByRole('alert')).toHaveCount(0);
     await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
@@ -382,9 +406,9 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     const releaseBusyRestore = busyHold(), releaseBusyArchive = busyHold();
     let releaseBusyReload;
     const heldBusyReload = new Promise(resolve => { releaseBusyReload = resolve; });
-    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await choose(committedId);
     await search.fill('Acme Corp');
-    await acmeArchive.click();
+    await choose(acmeId);
     await acmeConfirm.click();
     await expect(acmeConfirm).toHaveText('Archiving client…');
     await page.route('**/api/client_overview*', async route => { await heldBusyReload; await route.continue(); }, { times: 1 });
@@ -406,10 +430,10 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     // no confirmation appears for a new target.
     await page.locator('#clients-retry').click();
     await expect(acmeArchive).toBeDisabled();
-    await acmeArchive.click({ force: true });
+    await forceChoose(acmeId);
     await search.fill(committedName);
-    await expect(committed.getByRole('button', { name: 'Archive', exact: true })).toBeDisabled();
-    await committed.getByRole('button', { name: 'Archive', exact: true }).click({ force: true });
+    await expect(activityFor(committedId)).toBeDisabled();
+    await forceChoose(committedId);
     await expect(page.getByRole('dialog')).toHaveCount(0);
     // The old archive then settles; its late refusal reaches no confirmation.
     const lateRefusal = page.waitForResponse(response => response.url().includes('/api/set_client_active'));
@@ -417,16 +441,16 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     assert.equal((await lateRefusal).status(), 409);
     await page.unroute('**/api/set_client_active*');
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(committed.getByRole('button', { name: 'Archive', exact: true })).toBeEnabled();
+    await expect(activityFor(committedId)).toBeEnabled();
     await search.fill('Acme Corp');
     await expect(acmeArchive).toBeEnabled();
-    await acmeArchive.click();
+    await choose(acmeId);
     await expect(archiveDialog('Acme Corp')).toBeVisible();
     await expect(archiveDialog('Acme Corp').getByRole('alert')).toHaveCount(0);
     await archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true }).click();
     assert.equal(clientActive(acmeId), 't');
     await search.fill(committedName);
-    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await choose(committedId);
     await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
 
@@ -437,9 +461,9 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     const heldOverview = new Promise(resolve => { releaseOverview = resolve; });
     await page.route('**/api/set_client_active*', async route => { await heldOverlap; await route.continue(); }, { times: 1 });
     await page.route('**/api/client_overview*', async route => { await heldOverview; await route.continue(); }, { times: 1 });
-    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await choose(committedId);
     await search.fill('Acme Corp');
-    await acmeArchive.click();
+    await choose(acmeId);
     await expect(archiveDialog('Acme Corp')).toBeVisible();
     const reloadRequested = page.waitForRequest(request => request.url().includes('/api/client_overview'));
     const org = sql(`SELECT org_id FROM clients WHERE id = '${acmeId}'`);
@@ -453,9 +477,8 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
       releaseOverview();
       await expect(page.getByRole('alert').filter({ hasText: 'Could not load clients' })).toBeVisible();
       await expect(archiveDialog('Acme Corp')).toBeHidden();
-      for (const control of ['Archive', 'Restore', 'Archive client']) {
-        await expect(page.getByRole('button', { name: control, exact: true })).toHaveCount(0);
-      }
+      await expect(page.getByRole('button', { name: /^Actions for / })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Archive client', exact: true })).toHaveCount(0);
     } finally {
       restoreAuthority(org);
     }
@@ -465,7 +488,8 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
 
     // An edit that renames a client out of the current search refocuses the heading.
     await search.fill(committedName);
-    await committed.getByRole('button', { name: 'Edit', exact: true }).click();
+    await actionsFor(committedId).click();
+    await page.locator(`#client-edit-${committedId}`).click();
     await field('Client name').fill(`Renamed away ${Date.now()}`);
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -477,30 +501,35 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
 
     // Client Detail offers the same actions in its header.
     await page.goto(`${base}/clients/${committedId}`);
+    // Its record actions sit in the header's "Actions" menu.
     const status = page.locator('#client-status');
+    const headerActions = page.locator('#client-actions-trigger');
+    const chooseStatus = async () => { await headerActions.click(); await status.click(); };
     await expect(status).toHaveText('Archive client');
-    await status.click();
+    await chooseStatus();
     await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(archiveDialog(committedName)).toBeHidden();
     await expect(page.getByText('Archived', { exact: true })).toBeVisible();
     await expect(status).toHaveText('Restore client');
-    await expect(status).toBeFocused();
+    await expect(headerActions).toBeFocused();
     await expect(page.getByRole('status').filter({ hasText: `${committedName} archived` })).toBeVisible();
     let releaseDetail;
     const heldDetail = new Promise(resolve => { releaseDetail = resolve; });
     await page.route('**/api/set_client_active*', async route => { await heldDetail; await route.continue(); }, { times: 1 });
-    await status.click();
+    await chooseStatus();
     await expect(status).toHaveText('Restoring client…');
+    await expect(headerActions).toHaveAttribute('aria-busy', 'true');
+    await expect(headerActions).toContainText('Restoring client…');
     await expect(status).toBeDisabled();
     releaseDetail();
     await expect(status).toHaveText('Archive client');
     await expect(page.getByRole('status').filter({ hasText: `${committedName} restored` })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(status).toBeFocused();
+    await expect(headerActions).toBeFocused();
     assert.equal(clientActive(committedId), 't');
     assert.equal(history(), before);
     await page.goto(`${base}/clients/${acmeId}`);
-    await status.click();
+    await chooseStatus();
     await archiveDialog('Acme Corp').getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(archiveDialog('Acme Corp').getByRole('alert')).toContainText("Archive this client's projects before archiving the client.");
     await page.keyboard.press('Escape');

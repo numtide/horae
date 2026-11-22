@@ -105,7 +105,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     console.log('PASS: client identity and independent project/totals/invoice panels recover without false empty results');
 
     await page.route('**/api/get_client_details*', route => route.abort('failed'));
-    await page.getByRole('button', { name: 'Edit client', exact: true }).click();
+    await page.locator('#client-actions-trigger').click();
+    await page.getByRole('menuitem', { name: 'Edit client', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('alert')).toContainText('Could not load this client for editing');
     await page.unroute('**/api/get_client_details*');

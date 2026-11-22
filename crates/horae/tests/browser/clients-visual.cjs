@@ -91,8 +91,11 @@ if (output) fs.mkdirSync(output, { recursive: true });
         await expect(page.getByRole('link', { name: /^\[ACME-01\] / })).toBeVisible();
         await expect(page.getByRole('status')).toHaveCount(0);
         await capture(`${label}-detail`);
-        const edit = page.getByRole('button', { name: 'Edit client', exact: true });
+        // Edit client is the first item of the header's "Actions" menu.
+        const edit = page.locator('#client-actions-trigger');
         await edit.focus();
+        await page.keyboard.press('ArrowDown');
+        await expect(page.getByRole('menuitem', { name: 'Edit client', exact: true })).toBeFocused();
         await page.keyboard.press('Enter');
         const dialog = page.getByRole('dialog');
         const name = dialog.getByLabel('Client name', { exact: true });

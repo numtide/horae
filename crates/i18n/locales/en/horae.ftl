@@ -44,6 +44,13 @@
 
 ## Shared actions
 
+action-menu = Actions
+action-menu-for = Actions for { $name }
+action-edit = Edit
+action-archive = Archive
+action-restore = Restore
+action-restoring = Restoring…
+
 ## Common words
 
 common-session-ended = Your session has ended. Sign in again to continue.
@@ -156,10 +163,40 @@ tasks-archive-title = Archive this task?
 tasks-archive-body = It is archived in every project. Existing time is kept. Stop running timers using this task first.
 tasks-restore-title = Restore this task?
 tasks-restore-body = It returns to the catalog. To use it again in an existing project, restore it separately in that project's editor.
+tasks-archive-confirm = Confirm archive
+tasks-restore-confirm = Confirm restore
+tasks-activity-keep = Keep current status
+tasks-archived-notice = Task archived.
+tasks-restored-notice = Task restored to the catalog. Restore it in each project where needed.
+tasks-activity-failed = Could not confirm the change. Refresh tasks to check whether it was applied before retrying.
+tasks-access-changed = Your session or task permissions changed. Check your access before retrying.
+tasks-status-active = Active
+tasks-status-archived = Archived
 
 ## Clients
 
+clients-edit = Edit client
+clients-archive = Archive client
+clients-restore = Restore client
+clients-restoring = Restoring client…
+clients-archived-toast = { $name } archived
+clients-restored-toast = { $name } restored
+
 ## Invoices
+
+invoices-new = New invoice
+invoices-new-title = New invoice
+invoices-back = Back to Invoices
+invoices-permissions-failed = Could not check your invoice access
+invoices-edit-values = Edit invoice values
+invoices-void-ellipsis = Void…
+invoices-void-title = Void invoice { $number }?
+invoices-void-body = The invoice stays on record but can no longer be sent or paid, and its time becomes editable again. This cannot be undone.
+invoices-void-confirm = Void invoice
+invoices-status-draft = Draft
+invoices-status-sent = Sent
+invoices-status-paid = Paid
+invoices-status-void = Void
 
 ## Importers: connection
 
@@ -323,6 +360,18 @@ audit-clear-filters = Clear filters
 
 ## Approvals
 
+approvals-approve-all = Approve all
+approvals-awaiting = { $count ->
+    [one] { $count } timesheet awaiting your approval
+   *[other] { $count } timesheets awaiting your approval
+}
+approvals-approved-notice = { $requested ->
+    [one] Approved { $approved } of { $requested } timesheet
+   *[other] Approved { $approved } of { $requested } timesheets
+}
+approvals-approve-for = Approve { $name }'s week
+approvals-reopen-for = Reopen { $name }'s week
+
 ## Projects
 
 projects-title = Projects
@@ -330,6 +379,11 @@ projects-load-failed = Could not load projects
 projects-archive-failed = Could not archive the project. Try again, or refresh the page.
 
 ## Timesheet
+
+timesheet-submit-week = Submit week
+timesheet-submitted = Submitted
+timesheet-add-entry = Add entry
+timesheet-edit-entry = Edit { $project }, { $task }
 
 timesheet-delete-entry-title = Delete this time entry?
 timesheet-delete-entry-confirm = Delete entry
