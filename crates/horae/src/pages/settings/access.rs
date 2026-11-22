@@ -3,16 +3,18 @@
 //! afresh on the server.
 
 use dioxus::prelude::*;
-use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
+use uuid::Uuid;
 
+use crate::components::access_table::{AccessCell, AccessTable, OTHER, access_rows};
 use crate::components::card::MetricCard;
 use crate::components::page_header::PageHeader;
 use crate::components::permission_description::permission_description;
 use crate::components::screen_state::{ErrorState, LOAD_FAILED};
 use crate::components::session::use_session;
-use crate::components::table::DataTable;
 use crate::i18n::{Tr, split_tag};
 use crate::models::own_permissions::OwnPermissions;
+use crate::models::permission_audit::AuditFilter;
 use crate::route::Route;
 
 #[component]
@@ -21,14 +23,17 @@ pub fn SettingsAccess() -> Element {
     let session = use_session();
     let retry = use_callback(move |_| session.refresh());
     let pending = (session.refreshing)();
-    access_page(tr, &session.permissions.read(), retry, pending)
+    let me = session.me.read().id;
+    access_page(tr, &session.permissions.read(), me, retry, pending)
 }
 
 /// The header and body for the session's permission read. `pending` is true
-/// while a refresh runs, so "Try again" waits for it.
+/// while a refresh runs, so "Try again" waits for it. `me` is the signed-in
+/// person, whom the link to their history filters the audit log by.
 fn access_page(
     tr: Tr,
     response: &Result<OwnPermissions, ServerFnError>,
+    me: Uuid,
     retry: Callback<()>,
     pending: bool,
 ) -> Element {
@@ -58,7 +63,7 @@ fn access_page(
                 if let Some((class, label)) = badge { span { class, "{label}" } }
             },
         }
-        {access_content(tr, response, retry, pending)}
+        {access_content(tr, response, me, retry, pending)}
     }
 }
 
@@ -67,6 +72,7 @@ fn access_page(
 fn access_content(
     tr: Tr,
     response: &Result<OwnPermissions, ServerFnError>,
+    me: Uuid,
     retry: Callback<()>,
     pending: bool,
 ) -> Element {
@@ -95,7 +101,10 @@ fn access_content(
             };
         }
     };
-    let rows = access_rows(&own.grants);
+    let rows: Vec<_> = access_rows(&own.grants)
+        .into_iter()
+        .map(|(area, cells)| (area, cells.map(|now| AccessCell { now, was: None })))
+        .collect();
     let others: Vec<_> = OTHER
         .iter()
         .copied()
@@ -103,15 +112,18 @@ fn access_content(
         .collect();
     let administrator = tr.settings_access_administrator();
     let (people_before, people_link, people_after) = split_tag(&administrator, "link");
+    let history = AuditFilter {
+        person: Some(me),
+        ..AuditFilter::default()
+    };
     rsx! {
         div { class: "flex flex-col gap-5 wrap-anywhere",
             p { class: "text-secondary",
                 {tr.settings_access_intro()}
-                // Only administrators may read the audit log, and it has no
-                // filter by person yet.
+                // Only those who may read the audit log get a way into it.
                 if own.is_administrator {
                     {" "}
-                    Link { id: "access-history", to: Route::PermissionAudit {}, {tr.settings_access_history()} }
+                    Link { id: "access-history", to: Route::PermissionAudit { filter: history }, {tr.settings_access_history()} }
                 }
             }
             if own.is_administrator {
@@ -121,26 +133,7 @@ fn access_content(
                     "{people_after}"
                 }
             } else {
-                DataTable {
-                    table { aria_label: tr.settings_access_table_label(),
-                        thead { tr {
-                            th { scope: "col", {tr.settings_access_column_area()} }
-                            th { scope: "col", {tr.settings_access_column_view()} }
-                            th { scope: "col", {tr.settings_access_column_edit()} }
-                            th { scope: "col", {tr.settings_access_column_approve()} }
-                        } }
-                        tbody {
-                            for (area, cells) in rows {
-                                tr { key: "{area:?}",
-                                    th { scope: "row", class: "font-semibold", {area.label(tr)} }
-                                    for (column, cell) in ["view", "edit", "approve"].into_iter().zip(cells) {
-                                        td { key: "{column}", {scope_cell(tr, cell)} }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                AccessTable { label: tr.settings_access_table_label(), rows }
                 p { class: "text-xs text-muted", {tr.settings_access_legend()} }
                 if !others.is_empty() {
                     section { class: "card", aria_labelledby: "access-other-title",
@@ -160,212 +153,6 @@ fn access_content(
                 MetricCard { label: tr.settings_access_people_managed(), value: own.managed_person_ids.len().to_string() }
                 MetricCard { label: tr.settings_access_projects_managed(), value: own.managed_project_ids.len().to_string() }
             }
-        }
-    }
-}
-
-/// How far a grant reaches, narrowest first.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Scope {
-    Own,
-    Managed,
-    All,
-}
-
-/// A row of the table.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Area {
-    Time,
-    Expenses,
-    Projects,
-    Clients,
-    Tasks,
-    People,
-    BillableRates,
-    CostRates,
-    Invoices,
-    Estimates,
-    WorkspaceSettings,
-    AccountBilling,
-}
-
-impl Area {
-    fn label(self, tr: Tr) -> String {
-        match self {
-            Area::Time => tr.settings_access_area_time(),
-            Area::Expenses => tr.settings_access_area_expenses(),
-            Area::Projects => tr.settings_access_area_projects(),
-            Area::Clients => tr.settings_access_area_clients(),
-            Area::Tasks => tr.settings_access_area_tasks(),
-            Area::People => tr.settings_access_area_people(),
-            Area::BillableRates => tr.settings_access_area_billable_rates(),
-            Area::CostRates => tr.settings_access_area_cost_rates(),
-            Area::Invoices => tr.settings_access_area_invoices(),
-            Area::Estimates => tr.settings_access_area_estimates(),
-            Area::WorkspaceSettings => tr.settings_access_area_workspace_settings(),
-            Area::AccountBilling => tr.settings_access_area_account_billing(),
-        }
-    }
-}
-
-/// A cell of the table: `None` when the column does not apply to the area,
-/// `Some(None)` when no grant opens it.
-type Cell = Option<Option<Scope>>;
-
-type Grants = &'static [(Permission, Scope)];
-
-/// The table's areas, with the grants behind View, Edit and Approve, each
-/// listed widest first. An empty list means the column does not apply.
-const AREAS: [(Area, Grants, Grants, Grants); 12] = {
-    use Permission::*;
-    use Scope::*;
-    [
-        (
-            Area::Time,
-            &[
-                (TimeReadAll, All),
-                (TimeReadManaged, Managed),
-                (TimeReadOwn, Own),
-            ],
-            &[
-                (TimeWriteAll, All),
-                (TimeWriteManaged, Managed),
-                (TimeWriteOwn, Own),
-            ],
-            &[(TimeApproveAll, All), (TimeApproveManaged, Managed)],
-        ),
-        (
-            Area::Expenses,
-            &[
-                (ExpenseReadAll, All),
-                (ExpenseReadManaged, Managed),
-                (ExpenseReadOwn, Own),
-            ],
-            &[
-                (ExpenseWriteAll, All),
-                (ExpenseWriteManaged, Managed),
-                (ExpenseWriteOwn, Own),
-            ],
-            &[],
-        ),
-        (
-            Area::Projects,
-            &[(ProjectReadAll, All), (ProjectReadManaged, Managed)],
-            &[(ProjectWriteAll, All), (ProjectWriteManaged, Managed)],
-            &[],
-        ),
-        (
-            Area::Clients,
-            &[(ClientReadAll, All)],
-            &[(ClientWriteAll, All)],
-            &[],
-        ),
-        (
-            Area::Tasks,
-            &[(TaskReadAll, All)],
-            &[(TaskWriteAll, All)],
-            &[],
-        ),
-        (
-            Area::People,
-            &[(PeopleReadAll, All), (PeopleReadManaged, Managed)],
-            &[(PeopleWriteAll, All), (PeopleWriteManaged, Managed)],
-            &[],
-        ),
-        (
-            Area::BillableRates,
-            &[
-                (BillableRateReadAll, All),
-                (BillableRateReadManaged, Managed),
-            ],
-            &[
-                (BillableRateWriteAll, All),
-                (BillableRateWriteManaged, Managed),
-            ],
-            &[],
-        ),
-        (
-            Area::CostRates,
-            &[(CostRateReadAll, All)],
-            &[(CostRateWriteAll, All)],
-            &[],
-        ),
-        (
-            Area::Invoices,
-            &[(InvoiceReadAll, All), (InvoiceReadManaged, Managed)],
-            &[(InvoiceWriteAll, All), (InvoiceWriteManaged, Managed)],
-            &[],
-        ),
-        (
-            Area::Estimates,
-            &[(EstimateReadAll, All)],
-            &[(EstimateWriteAll, All)],
-            &[],
-        ),
-        (
-            Area::WorkspaceSettings,
-            &[(CompanyRead, All)],
-            &[(CompanyWrite, All)],
-            &[],
-        ),
-        (
-            Area::AccountBilling,
-            &[(BillingRead, All)],
-            &[(BillingWrite, All)],
-            &[],
-        ),
-    ]
-};
-
-/// Grants that fit no cell of the table, listed by their description.
-const OTHER: [Permission; 8] = {
-    use Permission::*;
-    [
-        ProjectCreateAll,
-        InvoiceDraftWriteManaged,
-        ApprovalWithdrawManaged,
-        ReportProfitabilityRead,
-        ReportContractorRead,
-        ReportInvoicingRead,
-        SavedReportReadInactive,
-        SavedReportWriteInactive,
-    ]
-};
-
-fn access_rows(grants: &[Permission]) -> Vec<(Area, [Cell; 3])> {
-    let cell = |column: Grants| -> Cell {
-        (!column.is_empty()).then(|| {
-            column
-                .iter()
-                .find(|(grant, _)| grants.contains(grant))
-                .map(|&(_, scope)| scope)
-        })
-    };
-    AREAS
-        .iter()
-        .map(|&(area, view, edit, approve)| (area, [cell(view), cell(edit), cell(approve)]))
-        .collect()
-}
-
-fn scope_cell(tr: Tr, cell: Cell) -> Element {
-    match cell {
-        None => {
-            // `aria-label` on a plain span is ignored, so the dash is hidden
-            // and the words are read instead.
-            rsx! {
-                span { class: "text-muted", aria_hidden: "true", "—" }
-                span { class: "sr-only", {tr.settings_access_not_applicable_label()} }
-            }
-        }
-        Some(None) => rsx! { span { class: "text-muted", {tr.settings_access_scope_none()} } },
-        Some(Some(Scope::All)) => {
-            rsx! { span { class: "badge badge-success badge-sm", {tr.settings_access_scope_all()} } }
-        }
-        Some(Some(Scope::Managed)) => {
-            rsx! { span { class: "badge badge-info badge-sm", {tr.settings_access_scope_managed()} } }
-        }
-        Some(Some(Scope::Own)) => {
-            rsx! { span { class: "badge badge-neutral badge-sm", {tr.settings_access_scope_own()} } }
         }
     }
 }

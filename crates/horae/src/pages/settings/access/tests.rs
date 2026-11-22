@@ -1,10 +1,13 @@
 use super::*;
+use crate::components::access_table::{AREAS, Area, Cell, Scope};
 use dioxus::history::{History, MemoryHistory};
 use dioxus::prelude::dioxus_fullstack::Loader;
 use dioxus::router::components::HistoryProvider;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use std::rc::Rc;
-use uuid::Uuid;
+
+/// The signed-in person the history link filters by.
+const ME: Uuid = Uuid::from_u128(0x0193_f2c4_0000_7000_8000_0000_0000_0001);
 
 fn member() -> OwnPermissions {
     OwnPermissions {
@@ -40,7 +43,7 @@ enum Host {
 fn Content() -> Element {
     let response = use_context::<Response>();
     let retry = use_callback(|_| {});
-    access_page(Tr::default(), &response, retry, false)
+    access_page(Tr::default(), &response, ME, retry, false)
 }
 
 fn render(response: Response) -> String {
@@ -121,7 +124,11 @@ fn an_administrator_sees_one_sentence_and_no_table() {
         "{html}"
     );
     assert!(html.contains("href=\"/people\""), "{html}");
-    assert!(html.contains("href=\"/admin/audit\""), "{html}");
+    // The link opens the log filtered to the person reading it.
+    assert!(
+        html.contains(&format!("href=\"/admin/audit?person={ME}\"")),
+        "{html}"
+    );
     assert!(html.contains("See changes to your access"), "{html}");
     assert!(html.contains("People you manage"), "{html}");
 }
@@ -251,7 +258,7 @@ fn Live() -> Element {
     })?;
     handle.set(Some((dioxus::core::current_scope_id(), access)));
     let retry = use_callback(move |_| access.restart());
-    access_page(Tr::default(), &access.read(), retry, pending())
+    access_page(Tr::default(), &access.read(), ME, retry, pending())
 }
 
 struct LiveHarness {

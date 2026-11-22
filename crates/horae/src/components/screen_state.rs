@@ -321,17 +321,22 @@ pub fn Loading(
 /// arrives. Only the data region is replaced; headers and filters stay live.
 /// `columns` is the number of cells per row; the first one is the widest. The
 /// rows are busy and hidden from assistive technology; `label` is announced as
-/// visually hidden status text instead.
+/// visually hidden status text instead. `grouped` puts a group heading above
+/// the rows, for a listing grouped by day.
 #[component]
 pub fn Skeleton(
     #[props(default = 6)] rows: usize,
     #[props(default = 4)] columns: usize,
+    #[props(default)] grouped: bool,
     #[props(into, default = "Loading…".to_string())] label: String,
 ) -> Element {
     rsx! {
         div { class: "skeleton",
             p { class: "sr-only", role: "status", "{label}" }
             div { aria_busy: "true", aria_hidden: "true",
+                if grouped {
+                    div { class: "skeleton-group", span { class: "skeleton-bar" } }
+                }
                 for row in 0..rows {
                     div { key: "{row}", class: "skeleton-row",
                         for cell in 0..columns {

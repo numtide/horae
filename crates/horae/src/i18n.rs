@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 // The UI tests include this module whole and use only part of it.
 #[allow(unused_imports)]
-pub(crate) use horae_i18n::{Lang, Tr, split_tag};
+pub(crate) use horae_i18n::{Lang, Tr, split_tag, split_tags};
 
 /// Call once in the app shell. The language is English until the language
 /// setting exists; it will then come from the server before the first render,

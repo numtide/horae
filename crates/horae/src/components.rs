@@ -1,3 +1,4 @@
+pub mod access_table;
 pub mod admin_shell;
 pub mod avatar;
 pub mod back_link;

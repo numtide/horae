@@ -103,6 +103,11 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
         "plugin" => rsx! {
             path { d: "M3 6 H6 V4.8 A1.4 1.4 0 0 1 8.8 4.8 V6 H12 V9 H10.8 A1.4 1.4 0 0 0 10.8 11.8 H12 V14 H3 Z" }
         },
+        "history" => rsx! {
+            path { d: "M2 8 A6 6 0 1 0 4 3.5" }
+            path { d: "M2 2.7 V6 H5.3" }
+            path { d: "M8 4.7 V8 L10 9.3" }
+        },
         "import" => rsx! {
             line { x1: "8", y1: "2", x2: "8", y2: "9" }
             line { x1: "5", y1: "6", x2: "8", y2: "9" }

@@ -41,7 +41,7 @@ pub(super) fn PeopleDirectory(
     today: NaiveDate,
     on_saved: EventHandler<bool>,
     on_view_timesheet: Callback<(Uuid, NaiveDate)>,
-    on_view_history: Option<Callback<()>>,
+    on_view_history: Option<Callback<Uuid>>,
 ) -> Element {
     let tr = use_tr();
     let this_week = horae_core::week::week_start(today, first_day).unwrap_or(today);
@@ -270,7 +270,7 @@ fn Listing(
     can_edit_permissions: bool,
     busy: bool,
     on_view_timesheet: Callback<(Uuid, NaiveDate)>,
-    on_view_history: Option<Callback<()>>,
+    on_view_history: Option<Callback<Uuid>>,
     on_rates: Callback<(Uuid, String)>,
     on_permissions: Callback<Uuid>,
     on_set_active: Callback<(Uuid, bool)>,
@@ -477,7 +477,7 @@ fn PersonRow(
     can_edit_permissions: bool,
     busy: bool,
     on_view_timesheet: Callback<(Uuid, NaiveDate)>,
-    on_view_history: Option<Callback<()>>,
+    on_view_history: Option<Callback<Uuid>>,
     on_rates: Callback<(Uuid, String)>,
     on_permissions: Callback<Uuid>,
     on_set_active: Callback<(Uuid, bool)>,
@@ -494,7 +494,7 @@ fn PersonRow(
     let edit_rates = use_callback(move |_: MouseEvent| on_rates.call((id, name.clone())));
     let view_history = use_callback(move |_: MouseEvent| {
         if let Some(history) = on_view_history {
-            history.call(());
+            history.call(id);
         }
     });
     let toggle_active = use_callback(move |_: MouseEvent| on_set_active.call((id, !active)));

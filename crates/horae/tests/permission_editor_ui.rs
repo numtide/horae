@@ -72,6 +72,7 @@ mod models {
     pub use super::people_model as people;
     pub use super::permission_editor_model as permission_editor;
     pub use super::user_model as user;
+    pub use horae_types::permission_audit;
 }
 #[path = "../src/pages/people/add_person.rs"]
 mod add_person;
@@ -158,8 +159,8 @@ mod route {
         People {},
         #[route("/timesheet/:view/:date/:span/:user")]
         Timesheet { view: ViewMode, date: Anchor, span: CalSpan, user: String },
-        #[route("/admin/audit")]
-        PermissionAudit {},
+        #[route("/admin/audit?:..filter")]
+        PermissionAudit { filter: horae_types::permission_audit::AuditFilter },
     }
 
     #[component]
@@ -169,7 +170,8 @@ mod route {
     }
 
     #[component]
-    fn PermissionAudit() -> Element {
+    fn PermissionAudit(filter: horae_types::permission_audit::AuditFilter) -> Element {
+        let _ = filter;
         rsx! {}
     }
 }
@@ -230,6 +232,7 @@ struct Probe {
     people_queries: Rc<RefCell<Vec<PeopleQuery>>>,
     archives: Rc<RefCell<Vec<(Uuid, bool)>>>,
     timesheets: Rc<RefCell<Vec<(Uuid, chrono::NaiveDate)>>>,
+    histories: Rc<RefCell<Vec<Uuid>>>,
     open_person: bool,
     editor: PermissionEditor,
     previews: Rc<RefCell<Vec<ProfileDraft>>>,
@@ -264,6 +267,7 @@ impl Probe {
             people_queries: Default::default(),
             archives: Default::default(),
             timesheets: Default::default(),
+            histories: Default::default(),
             open_person: true,
             editor: PermissionEditor {
                 requester: PermissionRequester {
@@ -381,7 +385,8 @@ fn app(probe: Probe) -> Element {
     let view_timesheet = use_callback(move |view: (Uuid, chrono::NaiveDate)| {
         timesheets.borrow_mut().push(view);
     });
-    let view_history = use_callback(|()| {});
+    let histories = probe.histories.clone();
+    let view_history = use_callback(move |person: Uuid| histories.borrow_mut().push(person));
     if probe.page_access.is_some() {
         return rsx! { PeoplePageHost {} };
     }
@@ -1212,6 +1217,19 @@ async fn view_timesheet_opens_the_persons_shown_week() {
         *probe.timesheets.borrow(),
         vec![(probe.editor.user_id, WEEK)]
     );
+}
+
+#[tokio::test]
+async fn permission_history_opens_the_log_filtered_to_the_person() {
+    let mut probe = Probe::new();
+    probe.directory = Some(false);
+    probe.view_history = true;
+    directory_reply(&probe)
+        .send(Ok(directory_page(&probe)))
+        .unwrap();
+    let mut ui = Ui::new(probe.clone());
+    ui.click(&format!("person-history-{}", probe.editor.user_id));
+    assert_eq!(*probe.histories.borrow(), vec![probe.editor.user_id]);
 }
 
 #[tokio::test]

@@ -138,13 +138,12 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.waitForURL(`${base}/`);
     await readsFinished();
     await page.goto(`${base}/admin/audit`);
-    await expect(page.getByText('No permission events recorded yet', { exact: false })).toBeVisible();
+    await expect(page.getByText('No permission changes yet', { exact: false })).toBeVisible();
     await expect.poll(() => page.evaluate(() => ({
       hasTheme: getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() !== '',
       utility: getComputedStyle(document.querySelector('[aria-labelledby="audit-title"] .flex')).display,
     }))).toEqual({ hasTheme: true, utility: 'flex' });
-    await expect(page.locator('#audit-older')).toBeDisabled();
-    await expect(page.locator('#audit-newest')).toBeDisabled();
+    await expect(page.locator('#audit-load-more')).toHaveCount(0);
     // Directory reads are independent from explicit Administrator identity.
     let readStart = requests.length;
     await page.goto(`${base}/people`);
@@ -481,21 +480,27 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     // People has no admin subnavigation; a row's Permission history opens the log.
     await actions(personName).click();
     await page.getByRole('menuitem', { name: 'Permission history', exact: true }).click();
-    await page.waitForURL(`${base}/admin/audit`);
-    const history = page.getByRole('table', { name: 'Permission change history', exact: true });
-    const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();
-    await expect(history.locator('tbody tr')).toHaveCount(25);
-    assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt: ${id}`));
-    const summary = history.locator('summary').first();
-    await summary.focus();
+    // The row's history is the log filtered to that person.
+    await page.waitForURL(`${base}/admin/audit?person=${person}`);
+    const history = page.getByRole('region', { name: 'Permission changes', exact: true });
+    const rows = history.locator('.audit-row');
+    const receiptIds = () => history.locator('.audit-row .text-mono').filter({ hasText: /^Receipt / }).allTextContents();
+    await expect(rows.first()).toContainText(personName);
+    await expect(page.locator('#audit-person-menu-trigger')).toContainText(personName);
+    await page.goto(`${base}/admin/audit`);
+    await expect(rows).toHaveCount(25);
+    assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt ${id}`));
+    const toggle = rows.first().locator('.audit-toggle');
+    await toggle.focus();
     await page.keyboard.press('Enter');
-    await expect(history.locator('details').first()).toHaveAttribute('open', '');
-    await expect(history.getByText(`Person: ${person}`, { exact: true }).first()).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(rows.first()).toContainText(`changed the permissions of ${personName}`);
+    await expect(rows.first().locator('table')).toBeVisible();
     for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
       await resizeViewport(width, height);
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'history must not widen the viewport');
-      for (const id of ['audit-refresh', 'audit-newest', 'audit-older']) {
+      for (const id of ['audit-kind-menu-trigger', 'audit-person-menu-trigger', 'audit-period-menu-trigger', 'audit-load-more']) {
         const box = await page.locator(`#${id}`).boundingBox();
         assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, `${id} must remain within the viewport`);
       }
@@ -505,17 +510,17 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     }
     await resizeViewport(1440, 900);
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
-    await page.locator('#audit-older').focus();
+    // "Load more" appends the older rows below the ones on screen.
+    await page.locator('#audit-load-more').focus();
     await page.keyboard.press('Enter');
-    await expect(history.locator('tbody tr')).toHaveCount(4);
-    assert.deepEqual(await receiptIds(), historyIds.slice(25).map(id => `Receipt: ${id}`));
-    await expect(page.locator('#audit-older')).toBeDisabled();
-    await expect(page.getByText('No more permission events.', { exact: true })).toBeVisible();
-    await history.locator('summary').filter({ hasText: 'Custom profile deleted' }).click();
-    await expect(history.getByText(`Before: ${templateName}`, { exact: true })).toBeVisible();
+    await expect(rows).toHaveCount(29);
+    assert.deepEqual(await receiptIds(), historyIds.map(id => `Receipt ${id}`));
+    await expect(page.locator('#audit-load-more')).toHaveCount(0);
+    const deleted = rows.filter({ has: page.locator('.audit-row-line', { hasText: `deleted the profile ${templateName}` }) });
+    await deleted.locator('.audit-toggle').click();
+    await expect(deleted.locator('.audit-detail')).toBeVisible();
+    await expect(deleted.locator('.audit-detail')).toContainText('Receipt ');
     assert.equal(sql(`SELECT count(*) FROM permission_templates WHERE id='${templateId}'`), '0');
-    await page.locator('#audit-newest').click();
-    await expect(history.locator('tbody tr')).toHaveCount(25);
 
     let releaseHistory;
     let historyIntercepted = false;
@@ -527,32 +532,33 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     };
     await page.route('**/api/list_permission_audit*', holdHistory);
     try {
-      await page.locator('#audit-refresh').click();
+      // A new filter keeps the rows on screen, dimmed, until its answer arrives.
+      await page.locator('#audit-kind-menu-trigger').click();
+      await page.getByRole('menuitem', { name: 'Changes to a person', exact: true }).click();
       await expect.poll(() => historyIntercepted).toBe(true);
-      await expect(page.getByText('Loading permission history…', { exact: true })).toBeVisible();
-      await expect(history).not.toBeVisible();
-      await expect(page.locator('#audit-refresh')).toBeDisabled();
-      await expect(page.locator('#audit-older')).toBeDisabled();
+      await expect(rows).toHaveCount(29);
+      await expect(page.locator('.audit-content')).toHaveAttribute('aria-busy', 'true');
     } finally {
       releaseHistory();
       await page.unroute('**/api/list_permission_audit*', holdHistory);
     }
-    await expect(history.locator('tbody tr')).toHaveCount(25);
+    await expect(page.locator('.audit-content')).not.toHaveAttribute('aria-busy', 'true');
+    await expect(page.locator('#audit-kind-menu-trigger')).toContainText('Changes to a person');
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
-    await page.locator('#audit-refresh').click();
+    await page.reload();
     await expect(page.getByRole('alert')).toContainText('Access unavailable');
     await expect(history).not.toBeVisible();
     sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
-    await page.reload();
-    await expect(history.locator('tbody tr')).toHaveCount(25);
-    assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt: ${id}`));
+    await page.goto(`${base}/admin/audit`);
+    await expect(rows).toHaveCount(25);
+    assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt ${id}`));
 
     await page.goto(`${base}/settings/access`);
     await page.getByRole('link', { name: 'See changes to your access', exact: true }).click();
-    await page.waitForURL(`${base}/admin/audit`);
-    await expect(history.locator('tbody tr')).toHaveCount(25);
+    await page.waitForURL(`${base}/admin/audit?person=${actor.id}`);
+    await expect(rows).toHaveCount(25);
     await page.goto(`${base}/people`);
-    console.log('PASS: real permission history supports empty state, keyboard details, stable paging, deleted profiles, refresh/revocation and canonical access');
+    console.log('PASS: real permission history supports empty state, keyboard details, filters in the URL, load more, deleted profiles, dimmed reloads, revocation and canonical access');
 
     // Self-demotion makes any second server send forbidden; cleanup must stay local.
     await openEditor(actor.name);
