@@ -11,7 +11,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
-/// The five Harvest/Horae entity levels the importer creates, in FK-safe order.
+/// The Harvest/Horae entity levels the importer creates, in FK-safe order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityType {
@@ -19,26 +19,29 @@ pub enum EntityType {
     Project,
     Task,
     Person,
+    Invoice,
     TimeEntry,
 }
 
 impl EntityType {
-    pub const ALL: [EntityType; 5] = [
+    pub const ALL: [EntityType; 6] = [
         EntityType::Client,
         EntityType::Project,
         EntityType::Task,
         EntityType::Person,
+        EntityType::Invoice,
         EntityType::TimeEntry,
     ];
 
     /// The lowercase token used in the `harvest_import_map.harvest_entity_type`
-    /// enum column (`client|project|task|person|time_entry`).
+    /// enum column (`client|project|task|person|invoice|time_entry`).
     pub fn as_str(self) -> &'static str {
         match self {
             EntityType::Client => "client",
             EntityType::Project => "project",
             EntityType::Task => "task",
             EntityType::Person => "person",
+            EntityType::Invoice => "invoice",
             EntityType::TimeEntry => "time_entry",
         }
     }
@@ -119,9 +122,11 @@ pub struct SourceRow {
     pub hours: String,
     pub notes: Option<String>,
     pub billable: bool,
-    /// Harvest's invoiced flag — informational only, never couples to a Horae
-    /// invoice (FR-016).
+    /// Harvest's billed flag ("Invoiced?" in the CSV). A billed entry whose
+    /// invoice Horae does not have is invoiced with no invoice (spec 025).
     pub invoiced: bool,
+    /// The Harvest invoice that billed the entry (API source only).
+    pub harvest_invoice_id: Option<i64>,
     /// A Harvest timer still running: its hours are partial, so it is reported
     /// and left for a later sync instead of imported (API source only).
     pub running: bool,
@@ -256,7 +261,21 @@ impl EntityCounts {
     }
 }
 
-/// Counts for each of the five entity types.
+/// What the run did to entries' billing (spec 025).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkCounts {
+    /// Newly linked or relinked to an imported invoice.
+    pub linked: u64,
+    /// Reopened because Harvest no longer bills them.
+    pub unlinked: u64,
+    /// Invoiced with no invoice: billed in Harvest on an invoice Horae does
+    /// not have, or "Invoiced?" yes in a CSV.
+    pub billed_without_invoice: u64,
+    /// Billed in Harvest but already on a Horae invoice or submitted in Horae.
+    pub conflicts: u64,
+}
+
+/// Counts for each entity type.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportSummary {
     pub clients: EntityCounts,
@@ -265,7 +284,12 @@ pub struct ImportSummary {
     /// Absent from reports written before people were imported.
     #[serde(default)]
     pub people: EntityCounts,
+    /// Absent from reports written before invoices were imported.
+    #[serde(default)]
+    pub invoices: EntityCounts,
     pub time_entries: EntityCounts,
+    #[serde(default)]
+    pub links: LinkCounts,
 }
 
 impl ImportSummary {
@@ -276,6 +300,7 @@ impl ImportSummary {
             EntityType::Project => &mut self.projects,
             EntityType::Task => &mut self.tasks,
             EntityType::Person => &mut self.people,
+            EntityType::Invoice => &mut self.invoices,
             EntityType::TimeEntry => &mut self.time_entries,
         }
     }
@@ -286,6 +311,7 @@ impl ImportSummary {
             EntityType::Project => &self.projects,
             EntityType::Task => &self.tasks,
             EntityType::Person => &self.people,
+            EntityType::Invoice => &self.invoices,
             EntityType::TimeEntry => &self.time_entries,
         }
     }
@@ -396,7 +422,60 @@ pub struct RowError {
     pub person: Option<PersonError>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entry_kind: Option<EntryErrorKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invoice_kind: Option<InvoiceErrorKind>,
 }
+
+/// Why a Harvest invoice was not imported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InvoiceErrorKind {
+    /// An invoice made in Horae already has the number (Q8).
+    NumberTaken,
+    /// The lines, discount and taxes do not give the total exactly.
+    AmountsMismatch,
+    /// An amount has more decimals than the currency, or Horae, keeps.
+    AmountPrecision,
+    UnknownCurrency,
+    NegativeTotal,
+    /// The invoice's client was not imported.
+    ClientMissing,
+    UnknownState,
+}
+
+/// An entry Harvest billed that keeps what Horae made of it (FR-010).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkConflict {
+    /// Where the entry came from: a Harvest id, or a CSV record.
+    pub source_location: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harvest_time_entry_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harvest_invoice_id: Option<i64>,
+    pub kind: LinkConflictKind,
+    /// The Horae invoice the entry is on, for `billed_in_horae`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub horae_invoice_number: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LinkConflictKind {
+    BilledInHorae,
+    SubmittedInHorae,
+}
+
+/// How the run read time entries: in full, or only those changed since the
+/// last run. The first run with invoices reads in full whatever was asked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryScan {
+    Full,
+    Incremental,
+}
+
+/// Conflicts a report keeps, as for [`ID_NOTICES_KEPT`]; the rest are counted.
+pub const LINK_CONFLICTS_KEPT: usize = 20;
 
 /// A record created from Harvest that could not take its Harvest id as its id
 /// in the Harvest-compatible API (because another record has it, or a native
@@ -435,6 +514,20 @@ pub struct ImportReport {
     /// Notices past [`ID_NOTICES_KEPT`].
     #[serde(default, skip_serializing_if = "is_zero")]
     pub omitted_id_notices: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub link_conflicts: Vec<LinkConflict>,
+    /// Conflicts past [`LINK_CONFLICTS_KEPT`].
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub omitted_link_conflicts: u64,
+    /// Harvest drafts read and left out (Q1).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub invoices_skipped_drafts: u64,
+    /// Imported invoices Harvest no longer lists, left as they are (FR-014).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub invoices_no_longer_listed: u64,
+    /// API runs only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invoice_scan: Option<EntryScan>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error_archive: Option<ErrorArchive>,
 }
@@ -463,6 +556,16 @@ struct ImportReportWire {
     id_notices: Vec<IdNotice>,
     #[serde(default)]
     omitted_id_notices: u64,
+    #[serde(default)]
+    link_conflicts: Vec<LinkConflict>,
+    #[serde(default)]
+    omitted_link_conflicts: u64,
+    #[serde(default)]
+    invoices_skipped_drafts: u64,
+    #[serde(default)]
+    invoices_no_longer_listed: u64,
+    #[serde(default)]
+    invoice_scan: Option<EntryScan>,
     error_archive: Option<ErrorArchive>,
 }
 
@@ -491,6 +594,11 @@ impl TryFrom<ImportReportWire> for ImportReport {
             people: wire.people,
             id_notices: wire.id_notices,
             omitted_id_notices: wire.omitted_id_notices,
+            link_conflicts: wire.link_conflicts,
+            omitted_link_conflicts: wire.omitted_link_conflicts,
+            invoices_skipped_drafts: wire.invoices_skipped_drafts,
+            invoices_no_longer_listed: wire.invoices_no_longer_listed,
+            invoice_scan: wire.invoice_scan,
             error_archive: wire.error_archive,
         };
         if !report.reconciles() {
@@ -511,8 +619,40 @@ impl ImportReport {
             people: Vec::new(),
             id_notices: Vec::new(),
             omitted_id_notices: 0,
+            link_conflicts: Vec::new(),
+            omitted_link_conflicts: 0,
+            invoices_skipped_drafts: 0,
+            invoices_no_longer_listed: 0,
+            invoice_scan: None,
             error_archive: None,
         }
+    }
+
+    pub fn note_conflict(&mut self, conflict: LinkConflict) {
+        self.summary.links.conflicts += 1;
+        if self.link_conflicts.len() < LINK_CONFLICTS_KEPT {
+            self.link_conflicts.push(conflict);
+        } else {
+            self.omitted_link_conflicts += 1;
+        }
+    }
+
+    /// Count a Harvest invoice that was not imported, with its detail.
+    pub fn record_invoice_error(
+        &mut self,
+        source_location: String,
+        reason: String,
+        kind: Option<InvoiceErrorKind>,
+    ) {
+        self.summary.invoices.errored += 1;
+        self.row_errors.push(RowError {
+            source_location,
+            entity: EntityType::Invoice,
+            reason,
+            person: None,
+            entry_kind: None,
+            invoice_kind: kind,
+        });
     }
 
     pub fn note_id(&mut self, mut notice: IdNotice) {
@@ -543,6 +683,7 @@ impl ImportReport {
                 reason: reason.clone(),
                 person: person.clone(),
                 entry_kind: *entry_kind,
+                invoice_kind: None,
             });
         }
     }
@@ -652,6 +793,52 @@ mod tests {
         assert_eq!(report.id_notices.len(), ID_NOTICES_KEPT);
         assert_eq!(report.id_notices[0], notice(0));
         assert_eq!(report.omitted_id_notices, 2);
+    }
+
+    #[test]
+    fn a_report_stored_before_invoices_still_loads() {
+        let count = r#"{"created":1,"updated":0,"skipped":0,"errored":0}"#;
+        let stored = format!(
+            r#"{{"version":1,"source":"harvest_api","mode":"Commit","row_errors":[],
+                "summary":{{"clients":{count},"projects":{count},"tasks":{count},
+                            "people":{count},"time_entries":{count}}}}}"#
+        );
+        let report: ImportReport = serde_json::from_str(&stored).unwrap();
+        assert_eq!(report.summary.invoices, EntityCounts::default());
+        assert_eq!(report.summary.links, LinkCounts::default());
+        assert!(report.link_conflicts.is_empty());
+        assert_eq!(report.invoice_scan, None);
+    }
+
+    #[test]
+    fn invoice_errors_and_conflicts_are_counted_and_bounded() {
+        let mut report = ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit);
+        report.record_invoice_error(
+            "invoice 9 (1042)".into(),
+            "number taken".into(),
+            Some(InvoiceErrorKind::NumberTaken),
+        );
+        assert_eq!(report.summary.invoices.errored, 1);
+        assert_eq!(
+            report.row_errors[0].invoice_kind,
+            Some(InvoiceErrorKind::NumberTaken)
+        );
+        assert!(report.reconciles());
+        for id in 0..LINK_CONFLICTS_KEPT as i64 + 3 {
+            report.note_conflict(LinkConflict {
+                source_location: format!("time_entry {id}"),
+                harvest_time_entry_id: Some(id),
+                harvest_invoice_id: Some(9),
+                kind: LinkConflictKind::BilledInHorae,
+                horae_invoice_number: None,
+            });
+        }
+        assert_eq!(report.link_conflicts.len(), LINK_CONFLICTS_KEPT);
+        assert_eq!(report.omitted_link_conflicts, 3);
+        assert_eq!(report.summary.links.conflicts, LINK_CONFLICTS_KEPT as u64 + 3);
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["row_errors"][0]["invoice_kind"], "number_taken");
+        assert_eq!(json["link_conflicts"][0]["kind"], "billed_in_horae");
     }
 
     #[test]

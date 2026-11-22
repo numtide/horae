@@ -16,6 +16,7 @@ sqlx = { version = "0.8", features = ["postgres"], optional = true }
 
 [dev-dependencies]
 proptest = { version = "1", default-features = false, features = ["std"] }
+serde_json = "1"
 
 [lints.rust]
 # Kani proof harnesses (`cargo kani -p horae-core`) live behind `cfg(kani)`.

@@ -54,6 +54,9 @@ pub enum InvoiceStatus {
     Sent,
     Paid,
     Void,
+    /// Written off: no longer due, never paid, and its time stays invoiced.
+    /// Only invoices imported from Harvest reach it.
+    Closed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,6 +113,7 @@ impl_display!(InvoiceStatus,
     InvoiceStatus::Sent  => "sent",
     InvoiceStatus::Paid  => "paid",
     InvoiceStatus::Void  => "void",
+    InvoiceStatus::Closed => "closed",
 );
 
 impl_display!(RoundDir,
@@ -165,6 +169,7 @@ from_str!(InvoiceStatus,
     "sent"  => InvoiceStatus::Sent,
     "paid"  => InvoiceStatus::Paid,
     "void"  => InvoiceStatus::Void,
+    "closed" => InvoiceStatus::Closed,
 );
 
 from_str!(RoundDir,
@@ -258,6 +263,7 @@ mod sqlx_impls {
         InvoiceStatus::Sent  => "sent",
         InvoiceStatus::Paid  => "paid",
         InvoiceStatus::Void  => "void",
+        InvoiceStatus::Closed => "closed",
     );
 
     pg_enum!(ProjectRole, "project_role",
@@ -280,6 +286,20 @@ mod tests {
         ] {
             assert_eq!(kind.to_string(), s);
             assert_eq!(s.parse::<BudgetKind>().unwrap(), kind);
+        }
+    }
+
+    #[test]
+    fn invoice_status_wire_strings_match_db_enum() {
+        for (status, s) in [
+            (InvoiceStatus::Draft, "draft"),
+            (InvoiceStatus::Sent, "sent"),
+            (InvoiceStatus::Paid, "paid"),
+            (InvoiceStatus::Void, "void"),
+            (InvoiceStatus::Closed, "closed"),
+        ] {
+            assert_eq!(status.to_string(), s);
+            assert_eq!(s.parse::<InvoiceStatus>().unwrap(), status);
         }
     }
 }

@@ -130,7 +130,7 @@ pub fn format_major_units(cents: i64, currency: &str) -> String {
 }
 
 /// ISO 4217 minor-unit digits; every currency not listed has two.
-fn currency_decimals(currency: &str) -> u8 {
+pub(crate) fn currency_decimals(currency: &str) -> u8 {
     match currency.trim() {
         "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => 3,
         "BIF" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF" | "UGX"
