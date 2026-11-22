@@ -123,7 +123,7 @@ crates/harvest-api/src/                           # horae-harvest-api: router, m
 ├── absent.rs            # step 4: empty lists for kinds Horae lacks
 ├── client_reads.rs, project_reads.rs, task_reads.rs, user_access.rs
 ├── company.rs, project_assignments.rs, time_entry_writes.rs   # step 3
-├── assignments.rs, users.rs, tags.rs, invoices.rs, reports.rs # step 5
+├── assignments.rs, users.rs, invoices.rs, reports.rs  # step 5
 ├── catalogue_writes.rs  # step 6
 ├── api_tests.rs, api_tests/   # router tests, one file per area
 └── pagination_tests.rs, pagination_tests/

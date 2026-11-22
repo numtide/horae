@@ -90,7 +90,7 @@ integers only.
 | 3 | `GET /users/me/project_assignments` | the pairs the Timesheet lets the caller track, grouped by project, with nested `task_assignments`; rates, budgets and timestamps `null`. An assignment's `id` is its project's id and a task assignment's `id` its task's id (decided 2026-11-19): Horae numbers neither, and an administrator tracks without an assignment row. They are unique within the list but not across people, a known gap against FR-015. Step 5 closes it (*Step 5* below) |
 | 5 | `GET /users/{id}/project_assignments` | *Step 5* below |
 | 4 | all list fidelity above | |
-| 5 | `GET /users/{id}`, `/users/{id}/teammates`, `/user_assignments`, `/task_assignments` (account-wide), `/projects/{id}/user_assignments[/{id}]`, `/projects/{id}/task_assignments[/{id}]`, `/tags`, `/invoices`, `/invoices/{id}`, `/invoices/{id}/payments`, `/reports/time/{clients,projects,tasks,team}`, `/reports/uninvoiced`, `/reports/project_budget` | *Step 5* below |
+| 5 | `GET /users/{id}`, `/users/{id}/teammates`, `/user_assignments`, `/task_assignments` (account-wide), `/projects/{id}/user_assignments[/{id}]`, `/projects/{id}/task_assignments[/{id}]`, `/invoices`, `/invoices/{id}`, `/invoices/{id}/payments`, `/reports/time/{clients,projects,tasks,team}`, `/reports/uninvoiced`, `/reports/project_budget` | *Step 5* below |
 | 6 | `POST/PATCH/DELETE` for clients, projects, tasks, user and task assignments; `POST/PATCH /users`; invoice status changes Horae supports (draft, sent, closed) | administrators and managers, per their grants |
 | 7 | OAuth2 authorize, token and `GET /accounts` on Horae's own identity paths | OQ-1 |
 
@@ -142,16 +142,15 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   documents), `null` when the row does not exist (an administrator without an assignment, or a
   task removed from the project since).
 
-### Users, teammates and tags
+### Users and teammates
 
 - `GET /users/{id}`: the users list's object and visibility for one person; someone the caller
   may not see is 404.
 - `GET /users/{id}/teammates`: the people that user manages (`person_management_assignments`),
   with `id`, `first_name`, `last_name` and `email`; the caller needs `PeopleReadAll` or to be
   that user.
-- `GET /tags`: the organization's project tags (`project_tags`) with `id`, `name`,
-  `created_at`, `updated_at`, for anyone who may read projects. Check the public reference's
-  tag shape in T062 before release: the tags resource is in beta there.
+- Tags are not in step 5. FR-044 item 4 lists them, but the public API v2 reference has no tags
+  resource (checked 2026-11-22), so there is no documented shape to serve.
 
 ### Invoices
 
@@ -208,9 +207,11 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 
 ### Reports
 
-- Every report requires `from` and `to`, accepts `YYYYMMDD` and `YYYY-MM-DD`, and refuses a
-  range over 365 days with 422. Reports are paged by `page` and `per_page` only (no cursor, no
-  `updated_since`), in the order the operation returns.
+- The time reports and the uninvoiced report require `from` and `to`, accept `YYYYMMDD` and
+  `YYYY-MM-DD`, and refuse a range over 365 days with 422. The project budget report takes no
+  dates. Every report is paged by `page` and `per_page` only (1–2000, default 2000; no cursor,
+  no `updated_since`), in the order the operation returns. Checked against the public
+  reference on 2026-11-22.
 - Totals are integer minutes and minor units until the response (FR-045). Hours are the
   organization's rounded minutes, which billable amounts are priced on.
 - `/reports/time/clients`, `/projects`, `/tasks`, `/team`: one row per group and currency from
@@ -225,11 +226,14 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   the eligibility of the Uninvoiced view (PR #453: billable, stopped, not invoiced, open or
   approved). Fields: `client_id`, `client_name`, `project_id`, `project_name`, `currency`,
   `total_hours` (all of the project's time in the range), `uninvoiced_hours`,
-  `uninvoiced_expenses` 0, `uninvoiced_amount`. Fees are not included: Harvest's report covers
-  time and expenses. Who reads it: the invoice read and preparation grants, as the Uninvoiced
+  `uninvoiced_expenses` 0, `uninvoiced_amount`. `include_fixed_fee` (default true, as on
+  Harvest) adds a fixed-fee project's uninvoiced fee to its `uninvoiced_amount` when the range
+  is on or after the project's start date, and 0 otherwise; the fee due is what the Uninvoiced
+  view counts for that project. With `include_fixed_fee=false` the amount is time only. Who
+  reads it: the invoice read and preparation grants, as the Uninvoiced
   view.
 - `/reports/project_budget`: one row per project with a budget, from
-  `ops::projects::budget_progress`, filtered by `is_active`. Fields: `project_id`,
+  `ops::projects::budget_progress`. Its only parameters are `page`, `per_page` and `is_active`. Fields: `project_id`,
   `project_name`, `client_id`, `client_name`, `is_active`, `budget_is_monthly` (monthly reset),
   `budget_by` (`project` for project hours, `project_cost` for project money, `task` and
   `task_fees` for task budgets in hours and money, `person` for person budgets), `budget`,
@@ -244,7 +248,7 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 
 | Routes | Scope |
 | --- | --- |
-| project assignments, user and task assignments, `/users/{id}`, teammates, `/tags` | `catalog:read` |
+| project assignments, user and task assignments, `/users/{id}`, teammates | `catalog:read` |
 | invoices, invoice payments, `/reports/*` | none: OAuth tokens are refused with `insufficient_scope` (024 FR-063) |
 
 Personal access tokens and session reads are unaffected (024 FR-064).
