@@ -110,11 +110,18 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await expect(page.locator('#inv-client')).toHaveCount(0);
     }
     await page.goto(`${base}/clients/${tech}`);
+    // A client's New invoice opens step 2 for that client; Change client goes
+    // back to step 1, which hands the chosen client to step 2.
     await page.getByRole('link', { name: 'New invoice', exact: true }).click();
-    await expect(page.locator('#inv-client')).toHaveValue(tech);
-    await page.locator('#inv-client').selectOption(acme);
-    await page.locator('#inv-from').fill('2026-09-01');
-    await expect(page.locator('#inv-client')).toHaveValue(acme);
+    await expect(page).toHaveURL(`${base}/invoices/new/client/${tech}`);
+    await expect(page.locator('main')).toContainText('TechStart Inc');
+    await page.getByRole('link', { name: 'Change client', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/invoices/new`);
+    await page.locator('#inv-client').click();
+    await page.getByRole('option', { name: 'Acme Corp', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/invoices/new/client/${acme}`);
+    await expect(page.locator('main')).toContainText('Acme Corp');
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
     // A client band leads to that client's record. Its assignment fixture

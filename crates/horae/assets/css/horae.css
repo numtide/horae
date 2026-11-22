@@ -1050,6 +1050,10 @@ tbody td, tbody th {
   text-align: left;
 }
 tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
+/* Totals inside a table line up with its rows, set off by one rule. */
+tfoot td, tfoot th { padding: var(--space-2) var(--space-5); color: var(--color-text); }
+tfoot tr:first-child td, tfoot tr:first-child th { padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
+tfoot tr:last-child td, tfoot tr:last-child th { padding-bottom: var(--space-4); }
 tbody tr:hover { background: var(--color-row-hover); }
 /* A row that opens a record: its first link stretches over the whole row. */
 tr.row-link { position: relative; }

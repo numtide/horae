@@ -67,7 +67,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(approveAll).toHaveCount(0);
     console.log('PASS: Approvals approves all from its header and keeps the row decisions inline');
 
-    // Invoices: "New invoice" opens its own screen, whose one Primary is "Generate draft".
+    // Invoices: "New invoice" opens step 1, whose one Primary is "Continue".
     await page.goto(`${base}/invoices`);
     const create = header.getByRole('link', { name: 'New invoice', exact: true });
     await expect(create).toHaveClass(/btn-primary/);
@@ -75,53 +75,52 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page).toHaveURL(`${base}/invoices/new`);
     await expect(page.getByRole('heading', { name: 'New invoice', exact: true })).toBeVisible();
     await expect(header.getByRole('button')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Generate draft', exact: true })).toHaveClass(/btn-primary/);
+    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toHaveClass(/btn-primary/);
     await expect(page.locator('main .btn-primary:visible')).toHaveCount(1);
     // The detail checks need a draft. The invoice suites before this one leave
-    // several; on a fresh database, prepare one from the seeded week.
+    // several; on a fresh database, create one from the seeded time.
     let id = sql(`SELECT i.id FROM invoices i JOIN clients c ON c.id = i.client_id
       WHERE i.status = 'draft' AND c.active ORDER BY i.created_at DESC LIMIT 1`);
-    if (id) {
-      await page.goto(`${base}/invoices/${id}`);
-    } else {
-      const seeded = sql(`SELECT c.name FROM time_entries e JOIN projects p ON p.id = e.project_id
+    if (!id) {
+      const seeded = sql(`SELECT c.id FROM time_entries e JOIN projects p ON p.id = e.project_id
         JOIN clients c ON c.id = p.client_id
         WHERE e.spent_date BETWEEN '${week}'::date AND '${week}'::date + 6 AND e.billable
-        GROUP BY c.name ORDER BY count(*) DESC LIMIT 1`);
-      await page.getByLabel('Client', { exact: true }).selectOption({ label: seeded });
-      await page.getByLabel('Period from', { exact: true }).fill(week);
-      await page.getByLabel('Period to', { exact: true }).fill(sql(`SELECT ('${week}'::date + 6)::text`));
-      await page.getByRole('button', { name: 'Review invoice', exact: true }).click();
-      const generate = page.getByRole('button', { name: 'Generate draft', exact: true });
-      await expect(generate).toBeEnabled();
-      await generate.click();
-      await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}$/);
-      id = page.url().split('/').pop();
+        GROUP BY c.id ORDER BY count(*) DESC LIMIT 1`);
+      await page.goto(`${base}/invoices/new/client/${seeded}`);
+      const draft = page.getByRole('button', { name: 'Create draft', exact: true });
+      await expect(draft).toBeEnabled();
+      await draft.click();
+      await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]{36}\/edit$/);
+      id = page.url().split('/').at(-2);
     }
+    await page.goto(`${base}/invoices/${id}`);
     const number = sql(`SELECT number FROM invoices WHERE id = '${id}'`);
     const client = sql(`SELECT client_id FROM invoices WHERE id = '${id}'`);
     const clientName = sql(`SELECT name FROM clients WHERE id = '${client}'`);
 
-    // Invoice detail: Mark Sent is the Primary; Edit and Void sit in "Actions", Void last.
-    await expect(header.getByRole('button', { name: 'Mark Sent', exact: true })).toHaveClass(/btn-primary/);
+    // Invoice detail: Mark as sent is the Primary; Edit draft, Duplicate and
+    // Void… sit in "More", Void last.
+    await expect(header.getByRole('button', { name: 'Mark as sent', exact: true })).toHaveClass(/btn-primary/);
     await onePrimary();
     const actions = page.locator('#invoice-actions-trigger');
     await actions.focus();
     await page.keyboard.press('ArrowDown');
-    await expect(page.getByRole('menuitem', { name: 'Edit invoice values', exact: true })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Edit draft', exact: true })).toBeFocused();
     await page.keyboard.press('End');
     const voidItem = page.getByRole('menuitem', { name: 'Void…', exact: true });
     await expect(voidItem).toBeFocused();
     await expect(voidItem).toHaveClass(/danger/);
     await page.keyboard.press('Escape');
     await expect(actions).toBeFocused();
-    // "Edit invoice values" moves focus into the editor; cancelling returns it to the menu.
+    // "Edit draft" opens the editor screen; its back link returns to the invoice.
     await page.keyboard.press('ArrowDown');
-    await expect(page.getByRole('menuitem', { name: 'Edit invoice values', exact: true })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Edit draft', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-editor-kind="invoice"]'))).toBe(true);
-    await page.getByRole('button', { name: 'Cancel changes', exact: true }).first().click();
-    await expect(actions).toBeFocused();
+    await expect(page).toHaveURL(`${base}/invoices/${id}/edit`);
+    await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toHaveClass(/btn-primary/);
+    await expect(page.locator('main .btn-primary:visible')).toHaveCount(1);
+    await page.getByRole('link', { name: 'Back to invoice', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/invoices/${id}`);
     await actions.click();
     await voidItem.click();
     const confirm = page.getByRole('dialog', { name: `Void invoice ${number}?`, exact: true });
@@ -135,12 +134,15 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await confirm.getByRole('button', { name: 'Void invoice', exact: true }).click();
     await expect(confirm).toBeHidden();
     await expect(page.locator('main .badge').filter({ hasText: 'Void' })).toBeVisible();
-    await expect(actions).toHaveCount(0);
-    // The menu that opened the dialog is gone, so focus lands on the title.
+    // A void invoice can still be duplicated, and nothing else.
+    await expect(page.locator('#invoice-void')).toHaveCount(0);
+    await expect(page.locator('#invoice-edit')).toHaveCount(0);
+    await expect(page.locator('#invoice-duplicate')).toHaveCount(1);
+    // The item that opened the dialog is gone, so focus lands on the title.
     await expect(page.locator('#invoice-heading')).toBeFocused();
-    await expect(header.getByRole('button', { name: 'Mark Sent', exact: true })).toHaveCount(0);
+    await expect(header.getByRole('button', { name: 'Mark as sent', exact: true })).toHaveCount(0);
     assert.equal(sql(`SELECT status FROM invoices WHERE id = '${id}'`), 'void');
-    console.log('PASS: invoice detail offers Mark Sent as its Primary, Edit and Void… in its Actions menu, and voids only after confirming');
+    console.log('PASS: invoice detail offers Mark as sent as its Primary, Edit draft and Void… in its More menu, and voids only after confirming');
 
     // Invoice list: the whole row opens the invoice; there is no Actions column.
     await page.goto(`${base}/invoices`);

@@ -183,7 +183,7 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
             if !inv.subject.is_empty() {
                 div { class: "mt-4",
                     div { class: "text-sm text-muted", {tr.invoices_subject()} }
-                    p { class: "wrap-anywhere", "{inv.subject}" }
+                    div { class: "wrap-anywhere", "{inv.subject}" }
                 }
             }
         }

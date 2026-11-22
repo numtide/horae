@@ -193,8 +193,7 @@ pub(super) fn InvoiceListContent() -> Element {
                             focus_on_recovery: INVOICES_HEADING }
                     },
                     Some(Ok(list)) => rsx! {
-                        InvoicesTable { list: list.clone(), stale: invoices.state()() != UseResourceState::Ready,
-                            can_prepare: prepares && storage.ready() }
+                        InvoicesTable { list: list.clone(), stale: invoices.state()() != UseResourceState::Ready }
                     },
                 }
             }
@@ -249,7 +248,7 @@ fn Summary(list: Vec<InvoiceListItem>, ready_clients: Option<usize>) -> Element 
 }
 
 #[component]
-fn InvoicesTable(list: Vec<InvoiceListItem>, stale: bool, can_prepare: bool) -> Element {
+fn InvoicesTable(list: Vec<InvoiceListItem>, stale: bool) -> Element {
     let tr = use_tr();
     let mut status = use_signal(|| StatusFilter::Any);
     let mut client = use_signal(String::new);
@@ -265,14 +264,9 @@ fn InvoicesTable(list: Vec<InvoiceListItem>, stale: bool, can_prepare: bool) -> 
     let pick_client = use_callback(move |value: String| client.set(value));
 
     if list.is_empty() {
+        // The header already holds "New invoice", the screen's one Primary.
         return rsx! {
-            EmptyState { icon: "invoices", title: tr.invoices_empty_title(), body: tr.invoices_empty_body(),
-                actions: rsx! {
-                    if can_prepare {
-                        Link { to: Route::NewInvoice {}, class: "btn btn-primary", {tr.invoices_new()} }
-                    }
-                },
-            }
+            EmptyState { icon: "invoices", title: tr.invoices_empty_title(), body: tr.invoices_empty_body() }
         };
     }
 

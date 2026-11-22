@@ -328,8 +328,13 @@ invoices-preview-dates = { $count ->
     [one] Issued { $issued } · due { $due } · 1 line
    *[other] Issued { $issued } · due { $due } · { $count } lines
 }
-invoices-fee-balance = Agreed { $agreed } · already invoiced, drafts included, { $invoiced } · left { $remaining }
+invoices-fee-agreed = Agreed: { $amount }
+invoices-fee-invoiced = Invoiced (including drafts): { $amount }
+invoices-fee-available = Available: { $amount }
+invoices-fee-over = Over-invoiced: { $amount }
+invoices-fee-net = Proposed net before tax: { $amount }
 invoices-refresh-fees = Reload fee sources
+invoices-preview-retry = Try again
 invoices-create-draft = Create draft
 invoices-retry-create = Retry creating the draft
 invoices-request-not-sent = { $reason } No invoice request was sent.

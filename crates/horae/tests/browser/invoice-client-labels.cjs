@@ -44,9 +44,12 @@ sql(`BEGIN;
       await expect(page.locator('main').getByText(name, { exact: true })).toBeVisible();
       await page.goto(`${base}/invoices`);
       await page.getByRole('link', { name: 'New invoice', exact: true }).click();
-      const picker = page.getByLabel('Client', { exact: true });
-      await expect(picker).toBeVisible();
-      await expect(picker.locator(`option[value="${clientId}"]`)).toHaveCount(active ? 1 : 0);
+      // Step 1's client picker offers active clients only.
+      await page.locator('#inv-client').click();
+      const options = page.getByRole('listbox', { name: 'Choose Client' });
+      await expect(options).toBeVisible();
+      await expect(options.getByRole('option', { name, exact: true })).toHaveCount(active ? 1 : 0);
+      await page.keyboard.press('Escape');
     }
     assert.deepEqual(errors, []);
     console.log('invoice client labels: active/inactive list, detail, reload and creation picker passed');

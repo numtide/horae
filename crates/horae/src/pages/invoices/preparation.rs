@@ -274,6 +274,7 @@ fn Prepare(sources: Sources) -> Element {
     let mut loaded = use_signal(|| None::<InvoiceRequest>);
     let mut preview = use_signal(|| None::<(InvoiceRequest, InvoicePreparation)>);
     let mut preview_error = use_signal(|| None::<String>);
+    let mut attempt = use_signal(|| 0_u32);
     let mut previewing = use_signal(|| false);
     let busy = use_signal(|| false);
     let mut uncertain = use_signal(|| false);
@@ -333,6 +334,8 @@ fn Prepare(sources: Sources) -> Element {
     let waiting = use_hook(|| Rc::new(Cell::new(None::<Task>)));
     let wanted = current.clone();
     use_effect(use_reactive!(|wanted| {
+        // A retry, or a request the server refused, asks again for the same values.
+        let _ = attempt();
         if let Some(task) = waiting.take() {
             task.cancel();
             previewing.set(false);
@@ -485,6 +488,8 @@ fn Prepare(sources: Sources) -> Element {
                             error.set(Some(format!("{failure}. {message}")));
                         }
                         busy.set(false);
+                        // What the server refused is out of date: preview again.
+                        attempt += 1;
                     } else {
                         error.set(Some(tr.invoices_generation_uncertain()));
                         uncertain.set(true);
@@ -505,11 +510,21 @@ fn Prepare(sources: Sources) -> Element {
     let generate_excess = use_callback(move |()| generate.call(true));
     let keep_preparing = use_callback(move |()| confirm.set(false));
     let choose_preset = use_callback(move |value: Preset| {
+        let was = *preset.peek();
         preset.set(value);
-        if let Some((start, end)) = value.range(today) {
+        // Custom dates start from this month rather than the open start.
+        let range = match value {
+            Preset::Custom if was == Preset::UpToToday => Preset::ThisMonth.range(today),
+            other => other.range(today),
+        };
+        if let Some((start, end)) = range {
             from.set(start.to_string());
             to.set(end.to_string());
         }
+    });
+    let retry_preview = use_callback(move |_: MouseEvent| {
+        preview_error.set(None);
+        attempt += 1;
     });
     let set_from = use_callback(move |value: String| from.set(value));
     let set_to = use_callback(move |value: String| to.set(value));
@@ -636,10 +651,8 @@ fn Prepare(sources: Sources) -> Element {
         if let Some(message) = preview_error() {
             div { class: "alert alert-danger mb-5", role: "alert",
                 p { "{message}" }
-                if same_sources && !fees.read().is_empty() {
-                    button { r#type: "button", class: "btn btn-secondary btn-sm mt-3", disabled: busy() || previewing(),
-                        onclick: refresh_fees, {tr.invoices_refresh_fees()} }
-                }
+                button { r#type: "button", class: "btn btn-secondary btn-sm mt-3", disabled: busy() || previewing(),
+                    onclick: retry_preview, {tr.invoices_preview_retry()} }
             }
         }
 
@@ -691,6 +704,10 @@ fn Prepare(sources: Sources) -> Element {
         if same_sources && !fees.read().is_empty() {
             section { class: "card p-5 mb-6",
                 fees::FeeFields { fees, disabled: busy() }
+                // Fees changed elsewhere (a new schedule, another draft) since
+                // this list was loaded: reload them, keeping the edits.
+                button { r#type: "button", class: "btn btn-secondary btn-sm", disabled: busy() || previewing(),
+                    onclick: refresh_fees, {tr.invoices_refresh_fees()} }
             }
         }
 
@@ -835,7 +852,18 @@ fn PreparedLines(estimate: InvoicePreparation) -> Element {
                                 "{line.description}"
                                 if let Some(balance) = line.fee_balance {
                                     div { class: "text-sm text-muted mt-2 wrap-anywhere",
-                                        {tr.invoices_fee_balance(money(balance.agreed_cents, &currency), money(balance.invoiced_cents, &currency), money(balance.remaining_cents, &currency))}
+                                        p { {tr.invoices_fee_agreed(money(balance.agreed_cents, &currency))} }
+                                        p { {tr.invoices_fee_invoiced(money(balance.invoiced_cents, &currency))} }
+                                        p {
+                                            if balance.remaining_cents < 0 {
+                                                {tr.invoices_fee_over(money(balance.remaining_cents, &currency))}
+                                            } else {
+                                                {tr.invoices_fee_available(money(balance.remaining_cents, &currency))}
+                                            }
+                                        }
+                                        if let Some(net) = line.net_before_tax_cents {
+                                            p { {tr.invoices_fee_net(money(net, &currency))} }
+                                        }
                                     }
                                 }
                             }
