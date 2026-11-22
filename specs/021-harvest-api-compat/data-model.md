@@ -93,6 +93,54 @@ most 0.56 s.
 
 The migration snapshot tests compare whole rows; the new columns are excluded there.
 
+## Step 5: numbers for assignments, tags and invoices
+
+Step 5 exposes six more kinds, and FR-015 needs each record to have its own number. It reuses
+step 1's design: a `harvest_id bigint` column, a global sequence per kind, the
+`harvest_id_assign` trigger in the creating transaction, and unique `(org_id, harvest_id)`.
+
+| Table | API kind | `harvest_entity_type` | Missing today |
+| --- | --- | --- | --- |
+| `assignments` | user assignment | `user_assignment` | `org_id`, `harvest_id`, `updated_at` |
+| `project_tasks` | task assignment | `task_assignment` | `org_id`, `harvest_id`, `created_at`, `updated_at` (and a UUID: its key is `(project_id, task_id)`) |
+| `project_tags` | tag | `tag` | `harvest_id`, `created_at`, `updated_at` |
+| `invoices` | invoice | `invoice` (spec 025 adds it) | `harvest_id`, `updated_at` |
+| `invoice_line_items` | invoice line item | `invoice_line` | `org_id`, `harvest_id` |
+| `harvest_invoice_lines` (spec 025) | invoice line item | `invoice_line` | `harvest_id` |
+
+- **Enum values** go in their own migration before the rest: PostgreSQL refuses to use an enum
+  value in the transaction that adds it.
+- **`org_id`** is added where missing, backfilled from the parent (project or invoice), `NOT NULL`
+  with a foreign key to `organizations`. A `BEFORE INSERT` trigger fills it from the parent when
+  the insert leaves it out, so the existing inserts (operations, importer, seed and many tests)
+  need no change; the `harvest_id` trigger runs after it and reads `NEW.org_id`.
+- **Invoice lines** are one kind in two tables. Both use one sequence, and their trigger checks
+  both tables and `harvest_import_map` before taking a number, so a native and an imported line
+  never share one. Line items have no timestamps on Harvest, so neither table gains any.
+- **Imported records** follow step 1's rule. The invoice import (spec 025) passes the Harvest
+  invoice id and each line's Harvest id as `harvest_id` when no record of the kind in the
+  organization has it and it is more than 10,000 above the sequence; otherwise the trigger
+  numbers the record and the report gets an `IdNotice`. The importer creates assignments and
+  project tasks from time entries without reading Harvest's assignment ids, so those are always
+  numbered by the trigger. Tags are not imported.
+- **Update times** use `set_updated_at`, stamped at write time (step 4's
+  `0006_updated_at_at_write.sql`). An invoice's `updated_at` also moves when one of its lines is
+  inserted, changed or deleted, because the lines are part of the invoice object. As in step 4,
+  a name shown from another record (a project's name on an assignment) does not move the time.
+  Backfilled `created_at` and `updated_at` take the migration's time where the table has no
+  earlier one (`project_tasks`, `project_tags`) and `created_at` elsewhere.
+- **Backfill** numbers rows in creation order (`id`, UUID v7; `project_tasks` by
+  `(project_id, task_id)`, having no creation time), imported invoices first with their Harvest
+  ids from `harvest_import_map`, and imported lines with `harvest_line_id`. The unique indexes
+  are built after the backfill, for the reason step 1 found (an `UPDATE` of a column in a unique
+  index waits for the foreign-key locks of concurrent inserts). These tables are small next to
+  `time_entries` except `invoice_line_items`, which has one row per invoiced entry; time the
+  migration on a copy with 1,000,000 invoiced entries and record it here. If the line backfill
+  holds writes for more than about a second, batch it as step 1's backfill did.
+- **Keys for cursors.** `assignments`, `project_tags` and `invoices` are keyed by their UUID like
+  step 4's lists. `project_tasks` has no UUID, so task assignment lists are keyed by
+  `harvest_id`, which also never changes.
+
 ## Domain changes (no schema)
 
 - `TimesheetCommand::RestartTimer { entry_id }` (FR-032). Allowed when the entry belongs to the
