@@ -210,6 +210,7 @@ invoices-status-sent = Sent
 invoices-status-overdue = Overdue
 invoices-status-paid = Paid
 invoices-status-void = Void
+invoices-status-closed = Written off
 invoices-status-any = Any status
 invoices-client-any = Any client
 invoices-period-any = Any time
@@ -272,6 +273,15 @@ invoices-mark-sent = Mark as sent
 invoices-mark-paid = Mark as paid
 invoices-marked-sent = Invoice marked as sent
 invoices-marked-paid = Invoice marked as paid
+invoices-write-off = Write off
+invoices-written-off = Invoice written off
+invoices-imported = From Harvest
+invoices-imported-note = This invoice was imported from Harvest. It can be marked as paid, written off or voided here, but not edited.
+invoices-paid = Paid
+invoices-amount-due = Amount due
+invoices-paid-on = Paid on
+invoices-column-quantity = Quantity
+invoices-column-unit-price = Unit price
 invoices-edit-draft = Edit draft
 invoices-duplicate = Duplicate
 invoices-terms = Payment terms
@@ -441,6 +451,23 @@ harvest-client-change-title = Change the client ID?
 harvest-client-change-confirm = Save and disconnect
 
 ## Importers: runs
+
+harvest-billing-title = Billed time
+harvest-billing-preview-title = Billed time it will mark
+harvest-billing-linked = Linked to an imported invoice
+harvest-billing-unlinked = No longer billed, open again
+harvest-billing-without-invoice = Billed with no invoice in Horae
+harvest-billing-without-invoice-hint = Harvest billed this time on an invoice that was not imported. It stays out of new invoices.
+harvest-billing-conflicts = Already billed or submitted in Horae
+harvest-billing-drafts = Draft invoices left out: { $count }
+harvest-billing-no-longer-listed = Imported invoices Harvest no longer lists: { $count }
+harvest-billing-full-scan = Every time entry was read again, to match it with Harvest's invoices.
+harvest-billing-conflict-billed = { $entry } is on Horae invoice { $number }
+harvest-billing-conflict-submitted = { $entry } is submitted for approval in Horae
+harvest-billing-conflicts-more = { $count ->
+    [one] and one more
+   *[other] and { $count } more
+}
 
 ## People and permissions
 

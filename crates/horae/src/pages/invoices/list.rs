@@ -85,7 +85,7 @@ fn totals<'a>(
         let sum = sums
             .entry(item.invoice.currency.trim().to_owned())
             .or_default();
-        *sum = sum.checked_add(item.invoice.total_cents)?;
+        *sum = sum.checked_add(item.due_cents())?;
     }
     let sums = sums
         .into_iter()
@@ -562,7 +562,25 @@ mod tests {
             },
             client_name: "Acme".into(),
             overdue,
+            imported: None,
         }
+    }
+
+    #[test]
+    fn an_imported_invoice_counts_for_what_is_still_due() {
+        let mut partly_paid = item("EUR", 1000, InvoiceStatus::Sent, true);
+        partly_paid.imported = Some(crate::models::invoice::ImportedInvoice {
+            due_cents: 400,
+            paid_on: None,
+            discount_rate: None,
+            tax1_rate: None,
+            tax2_rate: None,
+            period_start: None,
+            period_end: None,
+        });
+        let list = [partly_paid, item("EUR", 100, InvoiceStatus::Sent, false)];
+        let (sums, count) = totals(list.iter()).unwrap();
+        assert_eq!((amounts(&sums).as_str(), count), ("EUR 5.00", 2));
     }
 
     #[test]

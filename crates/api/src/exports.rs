@@ -637,6 +637,7 @@ pub async fn export_invoice_pdf(
         crate::render::render_invoice_pdf(
             &document.invoice,
             &document.lines,
+            document.imported(),
             &document.client_name,
             document.client_address.as_deref(),
             document.client_tax_id.as_deref(),

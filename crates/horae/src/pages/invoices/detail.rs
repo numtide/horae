@@ -8,6 +8,7 @@ use super::{
     money, prepares_invoices,
 };
 use crate::components::back_link::BackLink;
+use crate::components::badge::Badge;
 use crate::components::button::Button;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
@@ -64,8 +65,16 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
     let currency = inv.currency.trim().to_owned();
     let shown = Shown::of(inv.status, data.overdue);
     let open = matches!(inv.status, InvoiceStatus::Draft | InvoiceStatus::Sent);
-    let edits = prepares && inv.status == InvoiceStatus::Draft;
+    // An invoice imported from Harvest is read only, apart from its status.
+    let imported = data.imported.clone();
+    let edits = prepares && inv.status == InvoiceStatus::Draft && imported.is_none();
+    let duplicates = prepares && imported.is_none();
     let voids = manages && open;
+    let writes_off = manages && imported.is_some() && inv.status == InvoiceStatus::Sent;
+    let breakdown = match &imported {
+        Some(imported) => imported.breakdown(&inv),
+        None => inv.breakdown(),
+    };
 
     // Moves the invoice on; a failed void stays inside its confirmation.
     let change = use_callback(move |target: InvoiceStatus| {
@@ -81,6 +90,7 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
                 InvoiceStatus::Paid => "paid",
                 InvoiceStatus::Void => "void",
                 InvoiceStatus::Draft => "draft",
+                InvoiceStatus::Closed => "closed",
             };
             match server_fns::update_invoice_status(id.to_string(), wire.to_owned()).await {
                 Ok(_) => {
@@ -88,10 +98,11 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
                     notice.set(Some(match target {
                         InvoiceStatus::Sent => tr.invoices_marked_sent(),
                         InvoiceStatus::Paid => tr.invoices_marked_paid(),
+                        InvoiceStatus::Closed => tr.invoices_written_off(),
                         _ => tr.invoices_voided(),
                     }));
-                    if target == InvoiceStatus::Void {
-                        // Voiding removes the menu that held it.
+                    if matches!(target, InvoiceStatus::Void | InvoiceStatus::Closed) {
+                        // Voiding or writing off removes the menu that held it.
                         focus_soon(INVOICE_HEADING);
                     }
                     onchanged.call(());
@@ -106,6 +117,7 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
     });
     let mark_sent = use_callback(move |_: MouseEvent| change.call(InvoiceStatus::Sent));
     let mark_paid = use_callback(move |_: MouseEvent| change.call(InvoiceStatus::Paid));
+    let write_off = use_callback(move |_: MouseEvent| change.call(InvoiceStatus::Closed));
     let void = use_callback(move |()| change.call(InvoiceStatus::Void));
     let ask_void = use_callback(move |_: MouseEvent| {
         void_error.set(None);
@@ -130,18 +142,26 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
 
     rsx! {
         PageHeader { title: tr.invoices_detail_title(inv.number.clone()), title_id: INVOICE_HEADING,
-            meta: rsx! { StatusBadge { shown } },
+            meta: rsx! {
+                StatusBadge { shown }
+                if imported.is_some() {
+                    Badge { variant: "neutral", {tr.invoices_imported()} }
+                }
+            },
             actions: rsx! {
-                if prepares || voids {
+                if duplicates || voids {
                     Menu { id: "invoice-actions", label: tr.invoices_more(), align_right: true, trigger_class: "text-sm py-3 px-5",
                         if edits {
                             MenuItem { id: "invoice-edit", disabled: busy(), onclick: edit, {tr.invoices_edit_draft()} }
                         }
-                        if prepares {
+                        if duplicates {
                             MenuItem { id: "invoice-duplicate", disabled: busy(), onclick: duplicate, {tr.invoices_duplicate()} }
                         }
+                        if writes_off {
+                            MenuItem { id: "invoice-write-off", disabled: busy(), onclick: write_off, {tr.invoices_write_off()} }
+                        }
                         if voids {
-                            if prepares { MenuDivider {} }
+                            if duplicates || writes_off { MenuDivider {} }
                             MenuItem { id: "invoice-void", danger: true, disabled: busy(), onclick: ask_void, {tr.invoices_void_ellipsis()} }
                         }
                     }
@@ -179,6 +199,18 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
                     Fact { label: tr.invoices_po_number(), value: inv.po_number.clone() }
                 }
                 Fact { label: tr.invoices_total(), value: money(inv.total_cents, &currency), mono: true }
+                if let Some(imported) = &imported {
+                    Fact { label: tr.invoices_amount_due(), value: money(imported.due_cents, &currency), mono: true }
+                    if let Some(paid_on) = imported.paid_on {
+                        Fact { label: tr.invoices_paid_on(), value: date(paid_on), mono: true }
+                    }
+                    if let (Some(from), Some(to)) = (imported.period_start, imported.period_end) {
+                        Fact { label: tr.invoices_period(), value: tr.invoices_period_range(date(from), date(to)), mono: true }
+                    }
+                }
+            }
+            if imported.is_some() {
+                p { class: "text-sm text-muted mt-4", {tr.invoices_imported_note()} }
             }
             if !inv.subject.is_empty() {
                 div { class: "mt-4",
@@ -190,6 +222,27 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
 
         DataTable {
             table {
+                if imported.is_some() {
+                    thead { tr {
+                        th { scope: "col", {tr.invoices_column_description()} }
+                        th { scope: "col", class: "text-right", {tr.invoices_column_quantity()} }
+                        th { scope: "col", class: "text-right", {tr.invoices_column_unit_price()} }
+                        th { scope: "col", class: "text-right", {tr.invoices_column_amount()} }
+                    } }
+                    tbody {
+                        for (position, line) in data.imported_lines.iter().enumerate() {
+                            tr { key: "{position}",
+                                td { class: "wrap-anywhere",
+                                    div { "{line.description}" }
+                                    div { class: "text-sm text-muted", "{line.kind}" }
+                                }
+                                td { class: "text-mono text-right", "{line.quantity}" }
+                                td { class: "text-mono text-right", {money(line.unit_price_cents, &currency)} }
+                                td { class: "text-mono text-right", {money(line.amount_cents, &currency)} }
+                            }
+                        }
+                    }
+                } else {
                 thead { tr {
                     th { scope: "col", {tr.invoices_column_description()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_hours()} }
@@ -210,8 +263,9 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
                         }
                     }
                 }
+                }
                 tfoot {
-                    for (label, cents) in inv.breakdown() {
+                    for (label, cents) in breakdown {
                         tr { key: "{label}",
                             th { scope: "row", colspan: "3", class: "text-right wrap-anywhere", {breakdown_label(tr, &label)} }
                             td { class: if label == "Total" { "text-mono text-right font-semibold" } else { "text-mono text-right" },

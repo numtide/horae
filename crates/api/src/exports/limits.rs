@@ -2,7 +2,7 @@ use axum::http::StatusCode;
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::models::invoice::InvoiceLine;
+use crate::models::invoice::{ImportedInvoice, ImportedInvoiceLine, InvoiceLine};
 use crate::models::{Invoice, OrgBranding};
 
 use super::ProjectExportRow;
@@ -152,6 +152,16 @@ pub(super) struct PdfInvoice {
     pub client_address: Option<String>,
     pub client_tax_id: Option<String>,
     pub branding: OrgBranding,
+    /// Harvest's values and lines, for an imported invoice.
+    pub imported: Option<(ImportedInvoice, Vec<ImportedInvoiceLine>)>,
+}
+
+impl PdfInvoice {
+    pub fn imported(&self) -> Option<crate::render::Imported<'_>> {
+        self.imported
+            .as_ref()
+            .map(|(invoice, lines)| crate::render::Imported { invoice, lines })
+    }
 }
 
 pub(super) async fn pdf(
@@ -204,6 +214,11 @@ async fn read_pdf(
     let branding = crate::ops::organization::fetch_branding_from(&mut *tx, org_id)
         .await
         .map_err(database_error)?;
+    // shortcut: imported lines are not counted against the PDF limits; Harvest
+    // invoices are bounded by Harvest. Count them if a limit is ever reached.
+    let imported = crate::ops::invoices::fetch_imported(&mut *tx, org_id, invoice_id)
+        .await
+        .map_err(database_error)?;
     Ok(PdfInvoice {
         invoice,
         lines,
@@ -211,6 +226,7 @@ async fn read_pdf(
         client_address: client.address,
         client_tax_id: client.tax_id,
         branding,
+        imported,
     })
 }
 
@@ -277,7 +293,7 @@ mod tests {
             assert_text_cell(&workbook, &format!("H{row}"), "21");
             assert_text_cell(&workbook, &format!("I{row}"), "PO &lt;123&gt;");
         }
-        let text = crate::render::invoice_text(inv, &document.lines, &document.branding);
+        let text = crate::render::invoice_text(inv, &document.lines, None, &document.branding);
         for expected in [
             "Subtotal",
             "EUR 100.01",
@@ -308,7 +324,7 @@ mod tests {
         for cell in ["C2", "D2", "D3", "D4"] {
             assert_text_cell(&workbook, cell, "92233720368547758.07");
         }
-        let text = crate::render::invoice_text(inv, &document.lines, &document.branding);
+        let text = crate::render::invoice_text(inv, &document.lines, None, &document.branding);
         assert!(text.contains("92233720368547758.07"), "{text}");
     }
 
@@ -709,6 +725,7 @@ mod tests {
                 crate::render::render_invoice_pdf(
                     &document.invoice,
                     &document.lines,
+                document.imported(),
                     &document.client_name,
                     document.client_address.as_deref(),
                     document.client_tax_id.as_deref(),
@@ -762,6 +779,7 @@ mod tests {
                 crate::render::render_invoice_pdf(
                     &document.invoice,
                     &document.lines,
+                document.imported(),
                     &document.client_name,
                     document.client_address.as_deref(),
                     document.client_tax_id.as_deref(),
@@ -814,6 +832,7 @@ mod tests {
             crate::render::render_invoice_pdf(
                 &document.invoice,
                 &document.lines,
+                document.imported(),
                 &document.client_name,
                 document.client_address.as_deref(),
                 document.client_tax_id.as_deref(),

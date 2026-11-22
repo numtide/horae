@@ -18,6 +18,8 @@ mod connect_outcome;
 mod connection_card;
 #[path = "harvest/credentials_hint.rs"]
 mod credentials_hint;
+#[path = "harvest/billing.rs"]
+mod billing;
 #[path = "harvest/csv.rs"]
 mod csv;
 #[path = "harvest/entity_table.rs"]
@@ -121,6 +123,7 @@ fn entity_label(e: EntityType) -> &'static str {
         EntityType::Project => "Projects",
         EntityType::Task => "Tasks",
         EntityType::Person => "People",
+        EntityType::Invoice => "Invoices",
         EntityType::TimeEntry => "Time entries",
     }
 }
