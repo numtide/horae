@@ -31,7 +31,8 @@ use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
 use crate::models::invoice::{
-    InvoiceDefaults, InvoiceDetailView, InvoiceDuplicate, InvoiceLine, InvoiceListItem,
+    ImportedInvoice, ImportedInvoiceLine, InvoiceDefaults, InvoiceDetailView, InvoiceDuplicate,
+    InvoiceLine, InvoiceListItem,
 };
 use crate::models::{Invoice, InvoiceWithLines};
 use crate::plugin::AppEvent;
@@ -140,6 +141,8 @@ pub async fn list_items(
     let invoices = list(tx, org_id, status, None).await?;
     let client_ids: Vec<_> = invoices.iter().map(|invoice| invoice.client_id).collect();
     let names = client_names(tx, org_id, &client_ids).await?;
+    let ids: Vec<_> = invoices.iter().map(|invoice| invoice.id).collect();
+    let mut imported = imported(tx, org_id, &ids).await?;
     let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
     invoices
         .into_iter()
@@ -150,11 +153,81 @@ pub async fn list_items(
                 .ok_or_else(|| OpError::not_found("Invoice client not found"))?;
             Ok(InvoiceListItem {
                 overdue: is_overdue(invoice.status, invoice.due_on, today),
+                imported: imported.remove(&invoice.id),
                 invoice,
                 client_name,
             })
         })
         .collect()
+}
+
+/// The Harvest values of the invoices among `ids` that were imported.
+async fn imported(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    ids: &[Uuid],
+) -> Result<std::collections::HashMap<Uuid, ImportedInvoice>, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"SELECT invoice_id, due_cents, paid_on AS "paid_on: chrono::NaiveDate",
+                  discount_rate::text AS "discount_rate?",
+                  tax1_rate::text AS "tax1_rate?", tax2_rate::text AS "tax2_rate?",
+                  period_start AS "period_start: chrono::NaiveDate",
+                  period_end AS "period_end: chrono::NaiveDate"
+           FROM harvest_invoices WHERE org_id = $1 AND invoice_id = ANY($2)"#,
+        org_id,
+        ids,
+    )
+    .fetch_all(connection)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            (
+                row.invoice_id,
+                ImportedInvoice {
+                    due_cents: row.due_cents,
+                    paid_on: row.paid_on,
+                    discount_rate: row.discount_rate,
+                    tax1_rate: row.tax1_rate,
+                    tax2_rate: row.tax2_rate,
+                    period_start: row.period_start,
+                    period_end: row.period_end,
+                },
+            )
+        })
+        .collect())
+}
+
+/// The Harvest values and lines of an imported invoice; `None` for an
+/// invoice made in Horae. Callers authorize, as for [`fetch_invoice_from`].
+pub async fn fetch_imported(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    invoice_id: Uuid,
+) -> Result<Option<(ImportedInvoice, Vec<ImportedInvoiceLine>)>, sqlx::Error> {
+    let Some(invoice) = imported(connection, org_id, &[invoice_id])
+        .await?
+        .remove(&invoice_id)
+    else {
+        return Ok(None);
+    };
+    Ok(Some((invoice, imported_lines(connection, invoice_id).await?)))
+}
+
+/// An imported invoice's lines, in Harvest's order.
+pub async fn imported_lines(
+    connection: &mut PgConnection,
+    invoice_id: Uuid,
+) -> Result<Vec<ImportedInvoiceLine>, sqlx::Error> {
+    sqlx::query_as!(
+        ImportedInvoiceLine,
+        r#"SELECT kind, description, quantity::text AS "quantity!", unit_price_cents,
+                  amount_cents, taxed, taxed2, project_id
+           FROM harvest_invoice_lines WHERE invoice_id = $1 ORDER BY position"#,
+        invoice_id,
+    )
+    .fetch_all(connection)
+    .await
 }
 
 /// One invoice with its lines and client name.
@@ -173,11 +246,17 @@ pub async fn detail(
         .remove(&invoice.client_id)
         .ok_or_else(|| OpError::not_found("Invoice client not found"))?;
     let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
+    let (imported, imported_lines) = match fetch_imported(tx, org_id, invoice_id).await? {
+        Some((imported, lines)) => (Some(imported), lines),
+        None => (None, Vec::new()),
+    };
     Ok(InvoiceDetailView {
         overdue: is_overdue(invoice.status, invoice.due_on, today),
         invoice,
         lines,
         client_name,
+        imported,
+        imported_lines,
     })
 }
 
@@ -193,6 +272,7 @@ pub async fn duplicate(
     authorize_read(actor, READ)?;
     authorize_read(actor, PREPARE)?;
     let org_id = actor.org_id();
+    refuse_imported(tx, org_id, invoice_id).await?;
     let invoice = fetch_invoice_metadata(&mut **tx, invoice_id, org_id)
         .await?
         .ok_or_else(|| OpError::not_found("Invoice not found"))?;
@@ -227,6 +307,24 @@ pub async fn duplicate(
             tax2_bps: invoice.tax2_bps,
         },
     })
+}
+
+pub(crate) const IMPORTED_READ_ONLY: &str = "Invoices imported from Harvest cannot be edited";
+
+/// Refuses an invoice imported from Harvest: it is read only, apart from the
+/// status changes [`set_status`] allows (spec 025, Q3).
+async fn refuse_imported(tx: &mut Tx, org_id: Uuid, id: Uuid) -> Result<(), OpError> {
+    let imported = sqlx::query_scalar!(
+        r#"SELECT source = 'harvest' AS "imported!" FROM invoices WHERE id = $1 AND org_id = $2"#,
+        id,
+        org_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+    if imported == Some(true) {
+        return Err(OpError::conflict(IMPORTED_READ_ONLY));
+    }
+    Ok(())
 }
 
 async fn client_names(
@@ -264,8 +362,8 @@ pub async fn set_status(
 
     // Validate under the same row lock as the transition: payment and void
     // must not both accept a previously observed 'sent' state.
-    let current_status: InvoiceStatus = sqlx::query_scalar!(
-        r#"SELECT status as "status: InvoiceStatus"
+    let current = sqlx::query!(
+        r#"SELECT status as "status: InvoiceStatus", source = 'harvest' AS "imported!"
            FROM invoices WHERE id = $1 AND org_id = $2 FOR UPDATE"#,
         id,
         org_id,
@@ -273,15 +371,28 @@ pub async fn set_status(
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| OpError::not_found("Invoice not found"))?;
+    let current_status = current.status;
 
-    // Enforce state machine: draft->sent, sent->paid, draft|sent->void
-    let valid = matches!(
-        (current_status, target),
-        (InvoiceStatus::Draft, InvoiceStatus::Sent)
-            | (InvoiceStatus::Sent, InvoiceStatus::Paid)
-            | (InvoiceStatus::Draft, InvoiceStatus::Void)
-            | (InvoiceStatus::Sent, InvoiceStatus::Void)
-    );
+    // Horae's own: draft->sent, sent->paid, draft|sent->void. An invoice
+    // imported from Harvest was sent there, and can only be paid, written
+    // off (closed) or voided here.
+    let valid = if current.imported {
+        matches!(
+            (current_status, target),
+            (
+                InvoiceStatus::Sent,
+                InvoiceStatus::Paid | InvoiceStatus::Closed | InvoiceStatus::Void
+            )
+        )
+    } else {
+        matches!(
+            (current_status, target),
+            (InvoiceStatus::Draft, InvoiceStatus::Sent)
+                | (InvoiceStatus::Sent, InvoiceStatus::Paid)
+                | (InvoiceStatus::Draft, InvoiceStatus::Void)
+                | (InvoiceStatus::Sent, InvoiceStatus::Void)
+        )
+    };
     if !valid {
         return Err(OpError::conflict(format!(
             "Cannot transition invoice from {} to {}",
@@ -297,6 +408,18 @@ pub async fn set_status(
                SET invoice_id = NULL, state = 'open', rounded_minutes = NULL
                WHERE invoice_id = $1"#,
             id,
+        )
+        .execute(&mut **tx)
+        .await?;
+    }
+    if current.imported && target == InvoiceStatus::Paid {
+        let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
+        sqlx::query!(
+            "UPDATE harvest_invoices SET due_cents = 0, paid_on = $3
+             WHERE invoice_id = $1 AND org_id = $2",
+            id,
+            org_id,
+            today as chrono::NaiveDate,
         )
         .execute(&mut **tx)
         .await?;
@@ -339,7 +462,8 @@ pub async fn set_status(
             org_id,
             invoice: payload,
         }),
-        InvoiceStatus::Draft => None,
+        // There is no closed event (spec 025, R-15).
+        InvoiceStatus::Draft | InvoiceStatus::Closed => None,
     };
     Ok(match event {
         Some(event) => Done::new(invoice).with(event),

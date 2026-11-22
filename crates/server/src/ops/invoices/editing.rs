@@ -14,6 +14,7 @@ async fn snapshot(
     org_id: Uuid,
     id: Uuid,
 ) -> Result<(Invoice, i64, Vec<balances::BalanceLine>), OpError> {
+    super::refuse_imported(tx, org_id, id).await?;
     let invoice = super::fetch_invoice_metadata(&mut **tx, id, org_id)
         .await?
         .ok_or_else(|| OpError::not_found("Invoice not found"))?;

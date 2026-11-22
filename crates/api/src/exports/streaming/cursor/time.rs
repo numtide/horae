@@ -36,7 +36,7 @@ pub(in crate::exports::streaming) async fn declare_entries(
              SELECT te.id,te.user_id,te.project_id,te.spent_date,p.name project_name,t.name task_name,
                     u.name user_name,te.minutes,
                     effective_minutes(te.minutes,te.rounded_minutes,o.round_minutes,o.round_dir) rounded_minutes,
-                    (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'
+                    (te.billable AND (te.state = 'invoiced' OR (p.project_type <> 'non_billable'
                       AND COALESCE(pt.billable,t.billable_default)))) billable,te.notes
              FROM time_entries te JOIN organizations o ON o.id=te.org_id
              JOIN projects p ON p.id=te.project_id AND p.org_id=te.org_id
@@ -53,7 +53,7 @@ pub(in crate::exports::streaming) async fn declare_entries(
                    WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.project_id=te.project_id))))
                AND te.spent_date BETWEEN $3 AND $4
                AND (NOT $10::bool OR p.active)
-               AND ($11::bool IS NULL OR $11 = (te.billable AND (te.invoice_id IS NOT NULL
+               AND ($11::bool IS NULL OR $11 = (te.billable AND (te.state = 'invoiced'
                  OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)))))
                AND (cardinality($5::uuid[])=0 OR p.client_id=ANY($5))
                AND (cardinality($6::uuid[])=0 OR te.project_id=ANY($6))
