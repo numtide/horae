@@ -1,7 +1,13 @@
 //! The invoice phase of an API import (spec 025): after the catalog, before
-//! time entries. Each Harvest invoice is created, updated, skipped or reported
-//! in its own savepoint, and the run cache remembers what became of it so the
-//! entries that follow can be linked.
+//! time entries. Each Harvest invoice is created, updated, skipped or reported,
+//! and the run cache remembers what became of it so the entries that follow
+//! can be linked.
+//!
+//! Every check runs before an invoice's first write, so a reported invoice
+//! leaves nothing behind without a savepoint of its own. A savepoint per
+//! invoice made every later lookup of the same transaction slower: with 2,000
+//! of them, a 15,000-entry import took two thirds longer (SC-006). A database
+//! error still fails the run, as the transaction cannot continue after it.
 //!
 //! Imported invoices raise no plugin events (FR-023): they were sent and paid
 //! in Harvest.
@@ -11,21 +17,26 @@ use horae_core::importers::harvest::convert::{self, MoneyError};
 use horae_core::importers::harvest::invoice::{self, Amounts, AmountsError, Mapped};
 use horae_core::importers::harvest::types::{EntityType, InvoiceErrorKind, RowOutcome};
 use horae_core::types::InvoiceStatus;
-use sqlx::{Acquire, PgConnection, Postgres, Transaction};
+use sqlx::{PgConnection, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::api_source::{ApiInvoice, HarvestData, decimal};
 use super::report::ImportReport;
 use super::resolve::{InvoiceSlot, RunCache};
 
-struct Failure {
-    kind: Option<InvoiceErrorKind>,
-    reason: String,
+enum Failure {
+    /// The invoice is reported and nothing of it written.
+    Invoice {
+        kind: Option<InvoiceErrorKind>,
+        reason: String,
+    },
+    /// The transaction is aborted: the run fails.
+    Database(sqlx::Error),
 }
 
 impl Failure {
     fn new(kind: InvoiceErrorKind, reason: impl Into<String>) -> Self {
-        Self {
+        Self::Invoice {
             kind: Some(kind),
             reason: reason.into(),
         }
@@ -34,12 +45,13 @@ impl Failure {
 
 impl From<sqlx::Error> for Failure {
     fn from(error: sqlx::Error) -> Self {
-        Self {
-            kind: None,
-            reason: format!("database error: {error}"),
-        }
+        Self::Database(error)
     }
 }
+
+/// The longest purchase order and subject an invoice keeps (the columns'
+/// checks), refused before anything is written.
+const MAX_TEXT: usize = 200;
 
 impl From<MoneyError> for Failure {
     fn from(error: MoneyError) -> Self {
@@ -94,15 +106,13 @@ pub(super) async fn apply_batch(
             }
         };
         let existing = existing(tx, org_id, source.id).await?;
-        let mut sp = tx.begin().await?;
-        match apply_one(&mut sp, cache, org_id, source, status, existing).await {
+        match apply_one(tx, cache, org_id, source, status, existing).await {
             Ok((outcome, slot)) => {
-                sp.commit().await?;
                 cache.set_invoice(source.id, slot);
                 report.record(EntityType::Invoice, &outcome);
             }
-            Err(failure) => {
-                sp.rollback().await?;
+            Err(Failure::Database(error)) => return Err(error.into()),
+            Err(Failure::Invoice { kind, reason }) => {
                 // An invoice imported by an earlier run keeps its links.
                 cache.set_invoice(
                     source.id,
@@ -113,7 +123,7 @@ pub(super) async fn apply_batch(
                         }
                     }),
                 );
-                report.record_invoice_error(location, failure.reason, failure.kind);
+                report.record_invoice_error(location, reason, kind);
             }
         }
     }
@@ -175,8 +185,48 @@ struct Line {
     project_id: Option<Uuid>,
 }
 
+/// What the columns would refuse, refused first: an over-long purchase order
+/// or subject, a NUL character, or a quantity or rate that is no plain decimal.
+fn check_texts(source: &ApiInvoice, lines: &[Line]) -> Result<(), Failure> {
+    let refuse = |reason: String| Err(Failure::Invoice { kind: None, reason });
+    let po_number = source.purchase_order.as_deref().unwrap_or_default();
+    let subject = source.subject.as_deref().unwrap_or_default();
+    for (what, text) in [("purchase order", po_number), ("subject", subject)] {
+        if text.chars().count() > MAX_TEXT {
+            return refuse(format!("the {what} is longer than {MAX_TEXT} characters"));
+        }
+    }
+    let texts = [Some(source.number.as_str()), Some(po_number), Some(subject)]
+        .into_iter()
+        .chain([source.notes.as_deref()])
+        .flatten()
+        .chain(
+            lines
+                .iter()
+                .flat_map(|l| [l.kind.as_str(), l.description.as_str()]),
+        );
+    if texts.into_iter().any(|text| text.contains('\0')) {
+        return refuse("a text contains a NUL character".into());
+    }
+    let plain = |text: &str| {
+        let digits = text.strip_prefix('-').unwrap_or(text);
+        !digits.is_empty()
+            && digits.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+            && digits.bytes().filter(|&b| b == b'.').count() <= 1
+    };
+    let rates = [&source.discount, &source.tax, &source.tax2]
+        .into_iter()
+        .flatten()
+        .map(decimal);
+    let quantities = lines.iter().map(|line| line.quantity.clone());
+    if let Some(bad) = rates.chain(quantities).find(|text| !plain(text)) {
+        return refuse(format!("{bad} is not a decimal number"));
+    }
+    Ok(())
+}
+
 async fn apply_one(
-    sp: &mut Transaction<'_, Postgres>,
+    tx: &mut Transaction<'_, Postgres>,
     cache: &RunCache,
     org_id: Uuid,
     source: &ApiInvoice,
@@ -241,6 +291,7 @@ async fn apply_one(
     }
     let line_amounts: Vec<i64> = lines.iter().map(|line| line.amount_cents).collect();
     invoice::check_amounts(&line_amounts, amounts)?;
+    check_texts(source, &lines)?;
 
     let id = existing.map_or_else(Uuid::now_v7, |(id, _, _)| id);
     let taken = sqlx::query_scalar!(
@@ -249,7 +300,7 @@ async fn apply_one(
         source.number,
         id,
     )
-    .fetch_optional(&mut **sp)
+    .fetch_optional(&mut **tx)
     .await?;
     if taken.is_some() {
         return Err(Failure::new(
@@ -289,13 +340,13 @@ async fn apply_one(
             amounts.tax2,
             subject,
         )
-        .execute(&mut **sp)
+        .execute(&mut **tx)
         .await?;
         sqlx::query!(
             "DELETE FROM harvest_invoice_lines WHERE invoice_id = $1",
             id
         )
-        .execute(&mut **sp)
+        .execute(&mut **tx)
         .await?;
     } else {
         sqlx::query!(
@@ -319,7 +370,7 @@ async fn apply_one(
             amounts.tax2,
             subject,
         )
-        .execute(&mut **sp)
+        .execute(&mut **tx)
         .await?;
     }
     sqlx::query!(
@@ -345,7 +396,7 @@ async fn apply_one(
         source.period_end as Option<NaiveDate>,
         source.updated_at as DateTime<Utc>,
     )
-    .execute(&mut **sp)
+    .execute(&mut **tx)
     .await?;
     let ids: Vec<Uuid> = lines.iter().map(|_| Uuid::now_v7()).collect();
     let positions: Vec<i32> = lines.iter().map(|line| line.position).collect();
@@ -381,10 +432,10 @@ async fn apply_one(
         &taxed2,
         &projects as &[Option<Uuid>],
     )
-    .execute(&mut **sp)
+    .execute(&mut **tx)
     .await?;
     super::provenance::upsert(
-        &mut **sp,
+        &mut **tx,
         org_id,
         EntityType::Invoice,
         source.id,

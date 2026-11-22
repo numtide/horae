@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.number FROM time_entries te JOIN invoices i ON i.id = te.invoice_id\n                 WHERE te.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5c05f01456d3e39436191b3c2a78837cc88a048bf6940fbbf0e55a9f3779babf"
+}

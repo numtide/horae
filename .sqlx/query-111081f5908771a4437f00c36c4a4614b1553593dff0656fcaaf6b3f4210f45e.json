@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT te.state AS \"state: EntryState\", te.invoice_id,\n                  i.source = 'harvest' AS \"imported?\", i.number AS \"number?\"\n           FROM time_entries te LEFT JOIN invoices i ON i.id = te.invoice_id\n           WHERE te.id = $1",
+  "query": "SELECT te.state AS \"state: EntryState\", te.invoice_id,\n                          i.source = 'harvest' AS \"imported?\"\n                   FROM time_entries te LEFT JOIN invoices i ON i.id = te.invoice_id\n                   WHERE te.id = $1",
   "describe": {
     "columns": [
       {
@@ -29,11 +29,6 @@
         "ordinal": 2,
         "name": "imported?",
         "type_info": "Bool"
-      },
-      {
-        "ordinal": 3,
-        "name": "number?",
-        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -44,9 +39,8 @@
     "nullable": [
       false,
       true,
-      null,
-      false
+      null
     ]
   },
-  "hash": "b10377a3bbec778abffda187eb66118f5ef9d9ab0a86034a1797bf3d71b9e622"
+  "hash": "111081f5908771a4437f00c36c4a4614b1553593dff0656fcaaf6b3f4210f45e"
 }

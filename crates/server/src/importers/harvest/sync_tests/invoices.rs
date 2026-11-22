@@ -632,12 +632,15 @@ async fn invoice_errors_name_the_reason_and_leave_their_time_billed(pool: PgPool
     currency["currency"] = json!("usd");
     let mut client = invoice(203, "2003", "open", &["10.00"], "10.00", "0");
     client["client"] = json!({"id": 77});
+    let mut long_subject = invoice(206, "2006", "open", &["10.00"], "10.00", "0");
+    long_subject["subject"] = json!("s".repeat(201));
     source.invoices = serde_json::from_value(json!([
         precise,
         currency,
         client,
         invoice(204, "2004", "open", &["-10.00"], "-10.00", "0"),
         invoice(205, "2005", "sent", &["10.00"], "10.00", "0"),
+        long_subject,
     ]))
     .unwrap();
     source.time_entries =
@@ -646,7 +649,8 @@ async fn invoice_errors_name_the_reason_and_leave_their_time_billed(pool: PgPool
     let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
         .await
         .unwrap();
-    assert_eq!(report.summary.invoices.errored, 5);
+    assert_eq!(report.summary.invoices.errored, 6);
+    assert!(report.row_errors[5].reason.contains("subject is longer"));
     assert_eq!(
         report
             .row_errors
@@ -659,6 +663,7 @@ async fn invoice_errors_name_the_reason_and_leave_their_time_billed(pool: PgPool
             Some(InvoiceErrorKind::ClientMissing),
             Some(InvoiceErrorKind::NegativeTotal),
             Some(InvoiceErrorKind::UnknownState),
+            None,
         ]
     );
     assert_eq!(

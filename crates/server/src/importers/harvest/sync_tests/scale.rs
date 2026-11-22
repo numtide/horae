@@ -78,6 +78,15 @@ fn scale_server(records: u64) -> Server {
 }
 
 fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server {
+    scale_server_with_invoices(records, invalid_every, 0)
+}
+
+/// Entries billed per invoice in the invoice scale fixture.
+const BILLED_PER_INVOICE: u64 = 7;
+
+/// `invoices` open invoices of 7.00 each, invoice `k` billing entries
+/// `7k..7k+7`, paged by 100 like the entries.
+fn scale_server_with_invoices(records: u64, invalid_every: u64, invoices: u64) -> Server {
     let start = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
     Server::start(move |url| {
         let collection = url.path().rsplit('/').next().unwrap();
@@ -95,10 +104,29 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
             "tasks" => json!([{"id":3,"name":"Task"}]),
             // Person 5 is not listed, so each of their entries is an error.
             "users" => json!([{"id":4,"email":"known@example.com"}]),
-            "invoices" => json!([]),
+            "invoices" => json!(
+                (offset..(offset + 100).min(invoices))
+                    .map(|k| {
+                        json!({
+                            "id": 500_000 + k, "client": {"id": 1}, "number": format!("S-{k}"),
+                            "purchase_order": null, "amount": 7, "due_amount": 7,
+                            "tax": null, "tax_amount": 0, "tax2": null, "tax2_amount": 0,
+                            "discount": null, "discount_amount": 0, "subject": null, "notes": null,
+                            "currency": "USD", "state": "open", "period_start": null,
+                            "period_end": null, "issue_date": "2025-12-31", "due_date": null,
+                            "paid_date": null, "updated_at": day(3),
+                            "line_items": [{"id": k, "kind": "Service", "description": "Hours",
+                                            "quantity": 7, "unit_price": 1, "amount": 7,
+                                            "taxed": false, "taxed2": false, "project": {"id": 2}}]
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            ),
             "time_entries" => json!(
                 (offset..(offset + 100).min(records))
                     .map(|n| {
+                        let invoice = n / BILLED_PER_INVOICE;
+                        let billed = invoice < invoices;
                         json!({
                             "id": 1_000_000 + n,
                             "spent_date": start + chrono::Duration::days((n % 365) as i64),
@@ -107,6 +135,8 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
                             "project": {"id": 2},
                             "task": {"id": 3},
                             "user": {"id": if n % invalid_every == 0 { 5 } else { 4 }},
+                            "is_billed": billed,
+                            "invoice": billed.then(|| json!({"id": 500_000 + invoice})),
                             "updated_at": day(3)
                         })
                     })
@@ -114,7 +144,12 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
             ),
             _ => panic!("unexpected collection {collection}"),
         };
-        let next = if collection == "time_entries" && offset + 100 < records {
+        let total = match collection {
+            "time_entries" => records,
+            "invoices" => invoices,
+            _ => 0,
+        };
+        let next = if offset + 100 < total {
             let mut next = url.clone();
             next.query_pairs_mut()
                 .clear()
@@ -175,7 +210,8 @@ async fn measured_apply(
     };
     assert_eq!(
         server.count.load(Ordering::Acquire) - requests_before,
-        RECORDS as usize / 100 + 4
+        // The entry pages, then clients, projects, tasks, people and invoices.
+        RECORDS as usize / 100 + 5
     );
     eprintln!(
         "apply_complete mode={mode:?} durable={durable} elapsed_s={:.3} {}",
@@ -287,6 +323,65 @@ async fn measured_job(pool: &PgPool, org: Uuid, server: &Server, mode: ImportMod
     assert_eq!(complete.status, "succeeded");
     assert_eq!(complete.report, status.report);
     serde_json::from_value(complete.report.unwrap()).unwrap()
+}
+
+/// SC-006: 2,000 invoices on 15,000 entries add at most a fifth to the
+/// import's run time measured without invoices. Each scenario imports into a
+/// fresh organization of the same database, without invoices first.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[ignore = "invoice scale measurement (SC-006); run explicitly with --release --nocapture"]
+async fn api_15k_entries_with_2k_invoices(pool: PgPool) {
+    require_release();
+    const ENTRIES: u64 = 15_000;
+    const INVOICES: u64 = 2_000;
+    // Fastest of two alternating runs each: a shared machine slows single
+    // runs by a fifth or more.
+    let mut fastest = [f64::MAX; 2];
+    for (scenario, invoices) in [(0, 0), (1, INVOICES), (0, 0), (1, INVOICES)] {
+        let org = setup(&pool).await;
+        let server = scale_server_with_invoices(ENTRIES, ENTRIES + 1, invoices);
+        let started = Instant::now();
+        let report = run_api_import_with_http(
+            &pool,
+            org,
+            "USD",
+            &config(),
+            ImportMode::Commit,
+            SyncScope::Full,
+            ApiHttp::local(server.base.clone()),
+            None,
+        )
+        .await
+        .unwrap();
+        let seconds = started.elapsed().as_secs_f64();
+        eprintln!(
+            "invoices={invoices} elapsed_s={seconds:.3} {}",
+            memory_status()
+        );
+        // Entry 0 belongs to the unlisted person, as in every scale fixture.
+        assert_eq!(report.error_count(), 1, "{:?}", report.row_errors);
+        assert_eq!(report.summary.time_entries.created, ENTRIES - 1);
+        assert_eq!(report.summary.invoices.created, invoices);
+        assert_eq!(
+            report.summary.links.linked,
+            (invoices * BILLED_PER_INVOICE).min(ENTRIES) - u64::from(invoices > 0)
+        );
+        fastest[scenario] = fastest[scenario].min(seconds);
+        // The next organization's person has the same email.
+        sqlx::query!(
+            "UPDATE users SET email = id || '@done.example' WHERE org_id = $1",
+            org
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let ratio = fastest[1] / fastest[0];
+    eprintln!("SC-006 ratio={ratio:.3} (at most 1.200)");
+    assert!(
+        ratio <= 1.2,
+        "invoices made the import {ratio:.3} times as long"
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

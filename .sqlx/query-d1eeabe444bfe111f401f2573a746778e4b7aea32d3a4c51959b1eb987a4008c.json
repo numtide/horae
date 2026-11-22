@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH written AS (\n               UPDATE time_entries AS te\n                  SET invoice_id = $2,\n                      state = CASE WHEN $3 THEN 'invoiced'::entry_state ELSE 'open'::entry_state END,\n                      rounded_minutes = CASE WHEN $3 THEN effective_minutes(\n                          te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) END\n                 FROM organizations AS o\n                WHERE te.id = $1 AND o.id = te.org_id\n            RETURNING te.updated_at)\n             UPDATE harvest_import_map\n                SET horae_updated_at = (SELECT updated_at FROM written)\n              WHERE org_id = $4 AND harvest_entity_type = 'time_entry'::harvest_entity_type\n                AND horae_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d1eeabe444bfe111f401f2573a746778e4b7aea32d3a4c51959b1eb987a4008c"
+}
