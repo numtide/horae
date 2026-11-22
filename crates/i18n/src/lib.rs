@@ -91,9 +91,66 @@ pub fn split_tag<'a>(text: &'a str, tag: &str) -> (&'a str, &'a str, &'a str) {
     }
 }
 
+/// Splits a message into its plain runs and its `<tag>…</tag>` runs, in order,
+/// for a sentence with several tagged parts: `[(Some("actor"), "Ana"), (None,
+/// " made "), …]`. A `<` that opens no complete tag stays text.
+///
+/// Format the message with placeholders for the values people typed, split
+/// it, then put the values back: a name containing `<b>` or `</actor>` is then
+/// never read as markup.
+pub fn split_tags(text: &str) -> Vec<(Option<&str>, &str)> {
+    let mut parts = Vec::new();
+    let mut rest = text;
+    let mut plain = 0;
+    while let Some(open) = rest[plain..].find('<').map(|at| plain + at) {
+        let tagged = rest[open + 1..].split_once('>').and_then(|(tag, after)| {
+            let well_formed = !tag.is_empty() && tag.chars().all(|c| c.is_ascii_lowercase());
+            let (inner, tail) = after.split_once(&format!("</{tag}>"))?;
+            well_formed.then_some((tag, inner, tail))
+        });
+        let Some((tag, inner, tail)) = tagged else {
+            plain = open + 1;
+            continue;
+        };
+        if open > 0 {
+            parts.push((None, &rest[..open]));
+        }
+        parts.push((Some(tag), inner));
+        rest = tail;
+        plain = 0;
+    }
+    if !rest.is_empty() {
+        parts.push((None, rest));
+    }
+    parts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tags_split_a_sentence_into_runs() {
+        assert_eq!(
+            split_tags("<actor>Ana</actor> made <person>Bo</person> a manager"),
+            vec![
+                (Some("actor"), "Ana"),
+                (None, " made "),
+                (Some("person"), "Bo"),
+                (None, " a manager"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_stray_angle_bracket_stays_text() {
+        assert_eq!(
+            split_tags("1 < 2 and <actor>Ana</actor>"),
+            vec![(None, "1 < 2 and "), (Some("actor"), "Ana")]
+        );
+        assert_eq!(split_tags("no tags < here"), vec![(None, "no tags < here")]);
+        assert_eq!(split_tags("<actor>open"), vec![(None, "<actor>open")]);
+    }
 
     #[test]
     fn a_tag_splits_a_sentence() {

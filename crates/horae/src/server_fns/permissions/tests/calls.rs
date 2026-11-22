@@ -144,7 +144,7 @@ pub(crate) mod templates {
 
 pub(crate) mod audit {
     use super::*;
-    use crate::models::permission_audit::{AuditCursor, AuditEntry, AuditPage};
+    use crate::models::permission_audit::{AuditCursor, AuditEntry, AuditFilter, AuditPage};
     pub(crate) use crate::ops::permissions::audit::{INVALID_DOCUMENT, UNSUPPORTED_FORMAT, decode};
 
     pub(crate) async fn page(
@@ -154,7 +154,18 @@ pub(crate) mod audit {
         after: Option<&AuditCursor>,
         expected: Option<PermissionRequester>,
     ) -> Result<AuditPage, OpError> {
-        crate::server_fns::audit_page(pool, caller(org, actor), after, expected).await
+        filtered(pool, org, actor, &AuditFilter::default(), after, expected).await
+    }
+
+    pub(crate) async fn filtered(
+        pool: &PgPool,
+        org: Uuid,
+        actor: Uuid,
+        filter: &AuditFilter,
+        after: Option<&AuditCursor>,
+        expected: Option<PermissionRequester>,
+    ) -> Result<AuditPage, OpError> {
+        crate::server_fns::audit_page(pool, caller(org, actor), filter, after, expected).await
     }
 
     pub(crate) async fn read(

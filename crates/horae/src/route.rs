@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
+use crate::models::permission_audit::AuditFilter;
 use crate::pages::{
     admin::{AdminApiTokens, WorkspaceSettings},
     approvals::Approvals,
@@ -115,8 +116,9 @@ pub enum Route {
     HarvestRuns { before: RunsCursor },
     #[route("/admin/importers/harvest/runs/:id")]
     HarvestRun { id: Uuid },
-    #[route("/admin/audit")]
-    PermissionAudit {},
+    // The filters are the whole query, so a filtered view can be shared.
+    #[route("/admin/audit?:..filter")]
+    PermissionAudit { filter: AuditFilter },
     #[route("/admin/api-tokens")]
     AdminApiTokens {},
     #[end_layout]

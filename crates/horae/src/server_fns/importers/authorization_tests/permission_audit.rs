@@ -7,7 +7,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 const NAME: &str = "list_permission_audit";
 
 fn first_page() -> Value {
-    json!({"after":null,"expected_requester":null})
+    json!({"filter":{},"after":null,"expected_requester":null})
 }
 
 /// The wire entry for `receipt` on the first history page.
@@ -220,7 +220,7 @@ async fn check_browsing(
     .execute(pool)
     .await
     .unwrap();
-    let body = json!({"after":null,"expected_requester":null});
+    let body = json!({"filter":{},"after":null,"expected_requester":null});
     let name = "list_permission_audit";
     assert_eq!(
         api.call(name, body.clone(), None, false).await.status(),
@@ -233,7 +233,7 @@ async fn check_browsing(
         (first.requester.org_id, first.requester.user_id),
         (ids.org_id, ids.user_id)
     );
-    let next = json!({"after":first.next_after,"expected_requester":first.requester});
+    let next = json!({"filter":{},"after":first.next_after,"expected_requester":first.requester});
     let second: AuditPage =
         serde_json::from_value(api.json(name, next.clone(), cookie).await).unwrap();
     assert_eq!(second.entries.len(), 3);
@@ -267,7 +267,7 @@ async fn check_browsing(
             .status(),
         StatusCode::FORBIDDEN
     );
-    let forged=api.json(name,json!({"after":first.next_after,"expected_requester":null,"org_id":ids.org_id,"user_id":ids.user_id}),&foreign_cookie).await;
+    let forged=api.json(name,json!({"filter":{},"after":first.next_after,"expected_requester":null,"org_id":ids.org_id,"user_id":ids.user_id}),&foreign_cookie).await;
     assert_eq!(forged["entries"], json!([]));
     assert_eq!(forged["requester"]["org_id"], json!(foreign.org_id));
     sqlx::query!(

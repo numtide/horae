@@ -103,7 +103,8 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     await expect(main).toContainText('You can see and change everything here');
     await expect(table).toHaveCount(0);
     await expect(main.getByText('Administrator', { exact: true })).toBeVisible();
-    await expect(main.getByRole('link', { name: 'See changes to your access', exact: true })).toHaveAttribute('href', '/admin/audit');
+    // The link opens the log filtered to the person reading it.
+    await expect(main.getByRole('link', { name: 'See changes to your access', exact: true })).toHaveAttribute('href', `/admin/audit?person=${actor.id}`);
 
     sql(`UPDATE person_permission_states SET catalog_version=2 WHERE id='${stateId}'`);
     await reread();
