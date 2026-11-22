@@ -11,6 +11,7 @@ use tower_sessions::{MemoryStore, Session};
 
 mod client_permissions;
 mod project_permissions;
+mod sync;
 mod task_permissions;
 mod user_permissions;
 
@@ -62,7 +63,7 @@ pub(super) async fn page(app: &Router, uri: &str) -> Value {
 fn query_pairs(link: &str) -> Vec<(String, String)> {
     form_urlencoded::parse(link.split_once('?').unwrap().1.as_bytes())
         .into_owned()
-        .filter(|(key, _)| key != "page" && key != "per_page")
+        .filter(|(key, _)| !matches!(key.as_str(), "page" | "per_page" | "cursor"))
         .collect()
 }
 
@@ -92,7 +93,7 @@ async fn walk(pool: &PgPool, app: &Router, resource: &str, query: &str, expected
         seen.push(*expected_id);
         for key in ["first", "last", "next", "previous"] {
             if let Some(link) = body["links"][key].as_str() {
-                assert!(link.starts_with(&format!("/harvest/v2/{resource}?")));
+                assert!(link.starts_with(&format!("http://localhost/harvest/v2/{resource}?")));
                 assert_eq!(query_pairs(link), filters, "{resource}: {key}");
             }
         }
@@ -138,8 +139,8 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
         .unwrap();
         sqlx::query!("INSERT INTO users (id, org_id, name, email, active) VALUES ($1, $2, 'Test User', $3, $4)", id, ids.org_id, format!("{id}@example.test"), active).execute(&pool).await.unwrap();
     }
-    // Reinsert the original rows into the heap after the new rows. Name-only
-    // ordering must not accidentally pass because insertion order matches UUIDs.
+    // A save that changes nothing keeps a row's update time, so its place in
+    // the list.
     sqlx::query!(
         "UPDATE clients SET name = name WHERE id = $1",
         ids.client_id
@@ -169,8 +170,7 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
         ("tasks", ids.task_id),
         ("users", ids.user_id),
     ] {
-        let mut expected = [first, second];
-        expected.sort();
+        let expected = [first, second];
         let mut query = "is_active=true&updated_since=2020-01-01T00%3A00%3A00%2B01%3A00&tag=caf%C3%A9%26a%3Db&tag=two+words".to_owned();
         if resource == "projects" {
             query.push_str(&format!("&client_id={}", ids.client_id));
@@ -182,15 +182,7 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
             &format!("/harvest/v2/{resource}?updated_since=2100-01-01T00%3A00%3A00Z"),
         )
         .await;
-        // Catalog timestamp limitations are part of the documented subset.
-        assert_eq!(
-            future["total_entries"],
-            if matches!(resource, "tasks" | "users") {
-                3
-            } else {
-                0
-            }
-        );
+        assert_eq!(future["total_entries"], 0);
     }
     let no_client_projects = page(&app, &format!("/harvest/v2/projects?client_id={second}")).await;
     assert_eq!(no_client_projects["total_entries"], 0);
@@ -255,7 +247,7 @@ async fn harvest_pagination_rejects_invalid_windows_on_every_collection(pool: Pg
             ("page=-1", StatusCode::UNPROCESSABLE_ENTITY),
             ("per_page=0", StatusCode::UNPROCESSABLE_ENTITY),
             ("per_page=-1", StatusCode::UNPROCESSABLE_ENTITY),
-            ("per_page=101", StatusCode::UNPROCESSABLE_ENTITY),
+            ("per_page=2001", StatusCode::UNPROCESSABLE_ENTITY),
             (
                 "page=9223372036854775807&per_page=100",
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -354,7 +346,7 @@ async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool:
         }
         let first = page(&app, &format!("/harvest/v2/{resource}")).await;
         assert_eq!(first["page"], 1);
-        assert_eq!(first["per_page"], 100);
+        assert_eq!(first["per_page"], 2000);
         let beyond = page(&app, &format!("/harvest/v2/{resource}?page=2")).await;
         assert!(beyond[resource].as_array().unwrap().is_empty());
         assert_eq!(beyond["total_entries"], first["total_entries"]);
@@ -618,7 +610,8 @@ async fn harvest_task_access_follows_the_task_catalog_grant(pool: PgPool) {
         &app,
         "tasks",
         "is_active=true",
-        &[ids.task_id, hidden],
+        // The rate change above moved the seeded task after `hidden`.
+        &[hidden, ids.task_id],
     )
     .await;
     for body in [
@@ -654,7 +647,7 @@ async fn harvest_task_access_follows_the_task_catalog_grant(pool: PgPool) {
             profile == BuiltInProfile::Administrator,
         )
         .await;
-        walk(&pool, &app, "tasks", "", &[ids.task_id, hidden]).await;
+        walk(&pool, &app, "tasks", "", &[hidden, ids.task_id]).await;
         assert_eq!(
             page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await["default_hourly_rate"],
             12.34

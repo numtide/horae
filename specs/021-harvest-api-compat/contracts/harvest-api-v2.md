@@ -72,6 +72,32 @@ integers only.
 - Kinds Horae does not have return an empty list with the full envelope (D-2), and
   `GET /company` reports their feature flags as off.
 
+As implemented in step 4:
+
+- Catalogue lists served today (clients, projects, tasks, users) are ordered by update time, then
+  id, so a page walk and a cursor walk visit the same records in the same order. `links.next`
+  and `links.previous` carry a `cursor`; `first` and `last` carry page numbers. A cursor is the
+  signed `(updated_at, id)` position of the row a page continues after (or ends before); one the
+  server did not sign is 400. A cursor wins over `page`. Time entries and my project assignments
+  are paged by number only.
+- A record edited during a walk moves to the end of the order, so a cursor walk can return it
+  twice (with its new content) but never skips it.
+- Update times: a project, client or task changes on any edit of its own row; a user also when
+  their stored permission state (which holds `is_admin`) changes. A save that changes nothing
+  keeps the time. Names shown from another record (a project's client, a time entry's project
+  or task) do not move the showing record's time; a sync picks them up from that record's list.
+- Time-entry filters: `user_id`, `client_id`, `project_id`, `task_id`, `is_billed`,
+  `is_running`, `approval_status` (`unsubmitted`, `submitted`, `approved`, where approved
+  includes invoiced), `from`, `to`, `updated_since`. `external_reference_id` matches nothing,
+  because Horae keeps no external references. Time entries also carry `hours_without_timer` (the
+  stored hours) and `user_assignment`, `task_assignment`, `invoice` and `external_reference`
+  (null until Horae numbers those records).
+- `GET /users/me/project_assignments` refuses `updated_since` with 422: assignments have no
+  update time, and ignoring the filter would widen the answer (FR-042).
+- Empty lists: `expenses`, `expense_categories`, `estimates`, `estimate_item_categories`,
+  `contacts`, `invoice_item_categories` and `roles`. Invoice payments arrive with invoices
+  (step 5), since they are listed under an invoice.
+
 ## Rate limits (FR-050)
 
 100 requests per 15 seconds per token; 100 per 15 minutes for `/reports/*`. Exceeding it is 429.

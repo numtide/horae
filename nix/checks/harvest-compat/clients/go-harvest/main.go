@@ -93,6 +93,7 @@ func main() {
 		len(assignments.ProjectAssignments), project, task)
 
 	writes(ctx, client, project, task)
+	sync(ctx, client)
 }
 
 // Time workflow through the library's write calls: log a duration, edit it,

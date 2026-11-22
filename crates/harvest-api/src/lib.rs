@@ -5,11 +5,13 @@
 // (`time_entry_writes`). The contract is
 // specs/021-harvest-api-compat/contracts/harvest-api-v2.md.
 
+mod absent;
 mod auth;
 mod client_reads;
 mod company;
 mod errors;
 pub(crate) mod ids;
+mod pagination;
 mod project_assignments;
 mod project_reads;
 mod task_reads;
@@ -27,7 +29,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, OriginalUri, Path, Query, State},
+    extract::{FromRef, Path, Query, State},
     http::StatusCode,
     routing::{MethodRouter, any, get, patch},
 };
@@ -43,6 +45,7 @@ use auth::AuthUser;
 use errors::ApiError;
 use horae_harvest::v2::compat::*;
 use ids::Kind;
+use pagination::{Key, ListRequest, Listed, Window};
 
 // The backend lives in `horae-server`; keep the `crate::ops` (…) paths.
 #[cfg(test)]
@@ -125,8 +128,9 @@ fn serve(v1: V1State) -> Router {
         ("/tasks/{id}", get(get_task)),
         ("/users", get(list_users)),
     ];
+    let absent = absent::KINDS.map(|(path, kind)| (path, absent::list(kind)));
     let mut api = Router::new();
-    for (path, handler) in routes {
+    for (path, handler) in routes.into_iter().chain(absent) {
         // A `.json` suffix is served like the bare path (FR-026). Ids drop it
         // themselves (`ids::resolve`), so only paths ending in a fixed segment
         // need a twin.
@@ -258,61 +262,64 @@ fn scoped_user_filter(
     }
 }
 
-// ── Pagination ──────────────────────────────────────────────────────────────
-
-/// Numbered pagination shared by all list endpoints, with a bounded page size
-/// and a checked PostgreSQL bigint offset. Returns `(page, per_page, offset)`.
-fn page_window(page: Option<i64>, per_page: Option<i64>) -> Result<(i64, i64, i64), ApiError> {
-    let page = page.unwrap_or(1);
-    let per_page = per_page.unwrap_or(100);
-    if page < 1 || !(1..=100).contains(&per_page) {
-        return Err(ApiError::unprocessable(
-            "page must be positive and per_page must be between 1 and 100",
-        ));
-    }
-    let offset = (page - 1)
-        .checked_mul(per_page)
-        .ok_or_else(|| ApiError::unprocessable("Pagination offset is too large"))?;
-    Ok((page, per_page, offset))
-}
-
 // ── /users/me ───────────────────────────────────────────────────────────────
 
 async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<HarvestUser> {
     // Everyone reads their own identity; rates follow the same rule as /users.
     let mut access = user_access::begin(&db, &user).await?;
-    let row = sqlx::query_as!(
-        UserRow,
-        r#"SELECT u.harvest_id AS id, u.name, u.email, u.active,
-         COALESCE(p.is_administrator, false) AS "is_admin!",
-         u.cost_rate_cents, u.billable_rate_cents,
-         (SELECT default_currency FROM organizations o WHERE o.id = u.org_id) AS "org_currency!",
-         u.created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM users u
-         LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
-         WHERE u.id = $1"#,
-        user.user_id,
+    let filters = UserFilters::default();
+    let listed = user_rows(
+        &mut access.read,
+        &user,
+        &filters,
+        Some(user.user_id),
+        &Window::one(),
     )
-    .fetch_one(&mut *access.read.tx)
-    .await
-    .map_err(internal);
-    let row = finish_read(access.read, row).await?;
+    .await;
+    let listed = finish_read(access.read, listed).await?;
+    let row = listed.rows.first().ok_or_else(not_found)?;
 
-    Ok(Json(user_row_to_harvest(&row, access.rates)))
+    Ok(Json(user_row_to_harvest(row, access.rates)))
 }
 
 // ── Time Entries ────────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub(crate) struct TimeEntryFilters {
     pub user_id: Option<String>,
+    pub client_id: Option<String>,
     pub project_id: Option<String>,
+    pub task_id: Option<String>,
+    /// Horae keeps no external references, so any value matches nothing.
+    pub external_reference_id: Option<String>,
+    pub is_billed: Option<bool>,
+    pub is_running: Option<bool>,
+    pub approval_status: Option<ApprovalStatus>,
     pub from: Option<NaiveDate>,
     pub to: Option<NaiveDate>,
-    pub is_running: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
     pub updated_since: Option<DateTime<Utc>>,
+}
+
+/// The `approval_status` filter's values. Invoiced entries count as approved.
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ApprovalStatus {
+    Unsubmitted,
+    Submitted,
+    Approved,
+}
+
+impl ApprovalStatus {
+    /// The entry states the value covers.
+    fn states(self) -> &'static [&'static str] {
+        match self {
+            Self::Unsubmitted => &["open"],
+            Self::Submitted => &["submitted"],
+            Self::Approved => &["approved", "invoiced"],
+        }
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -389,6 +396,7 @@ fn time_entry_row_to_harvest(
         id: row.id,
         spent_date: row.spent_date.to_string(),
         hours,
+        hours_without_timer: hours,
         rounded_hours,
         started_time,
         ended_time,
@@ -428,17 +436,20 @@ fn time_entry_row_to_harvest(
             name: row.task_name.clone(),
         },
         approval_status: approval_status.to_string(),
+        user_assignment: None,
+        task_assignment: None,
+        invoice: None,
+        external_reference: None,
     }
 }
 
 async fn list_time_entries(
     user: AuthUser,
     State(db): State<PgPool>,
-    OriginalUri(uri): OriginalUri,
+    list: ListRequest,
     Query(filters): Query<TimeEntryFilters>,
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
-    let Json(page) = time_entries_page(&db, &user, filters).await?;
-    Ok(Json(page.with_query(uri.query())))
+    time_entries_page(&db, &user, filters, &list).await
 }
 
 /// The entries the caller's `TimeRead*` grants cover. Billable rates need
@@ -448,32 +459,22 @@ async fn time_entries_page(
     db: &PgPool,
     caller: &AuthUser,
     filters: TimeEntryFilters,
+    list: &ListRequest,
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
-    let requested_user =
-        ids::filter(db, caller.org_id, Kind::User, filters.user_id.as_deref()).await?;
-    let project_id = ids::filter(
-        db,
-        caller.org_id,
-        Kind::Project,
-        filters.project_id.as_deref(),
-    )
-    .await?;
+    let window = list.window(filters.page, filters.per_page, None)?;
+    let org = caller.org_id;
+    let records = RecordFilters {
+        user: ids::filter(db, org, Kind::User, filters.user_id.as_deref()).await?,
+        client: ids::filter(db, org, Kind::Client, filters.client_id.as_deref()).await?,
+        project: ids::filter(db, org, Kind::Project, filters.project_id.as_deref()).await?,
+        task: ids::filter(db, org, Kind::Task, filters.task_id.as_deref()).await?,
+    };
     let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
         .await
         .map_err(internal)?;
     // Count and rows are read under the grants held for the whole read.
     let mut read = begin_read(db, caller, "Time entry").await?;
-    let result = time_entry_rows(
-        &mut read,
-        caller,
-        requested_user,
-        project_id,
-        &filters,
-        per_page,
-        offset,
-    )
-    .await;
+    let result = time_entry_rows(&mut read, caller, records, &filters, &window).await;
     let (total_entries, rows) = finish_read(read, result).await?;
 
     let entries: Vec<HarvestTimeEntry> = rows
@@ -481,31 +482,37 @@ async fn time_entries_page(
         .map(|r| time_entry_row_to_harvest(r, round_min, round_dir))
         .collect();
 
-    Ok(Json(HarvestPagination::new(
+    Ok(Json(list.pages(
         "time_entries",
         entries,
-        page,
-        per_page,
+        &window,
         total_entries,
-        "/harvest/v2/time_entries",
     )))
+}
+
+/// The records a time-entry list is filtered to, resolved from their ids.
+struct RecordFilters {
+    user: Option<Uuid>,
+    client: Option<Uuid>,
+    project: Option<Uuid>,
+    task: Option<Uuid>,
 }
 
 /// The entry count and page in the caller's time scope, read under `read`.
 async fn time_entry_rows(
     read: &mut ops::ReadTx,
     caller: &AuthUser,
-    requested_user: Option<Uuid>,
-    project_id: Option<Uuid>,
+    records: RecordFilters,
     filters: &TimeEntryFilters,
-    per_page: i64,
-    offset: i64,
+    window: &Window,
 ) -> Result<(i64, Vec<TimeEntryRow>), ApiError> {
     let view = TimeView::of(&read.actor);
-    let user_id_filter = scoped_user_filter(caller, view, requested_user)?;
+    let user_id_filter = scoped_user_filter(caller, view, records.user)?;
+    let states = filters.approval_status.map(ApprovalStatus::states);
 
     let total_entries = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM time_entries te
+         JOIN projects p ON p.id = te.project_id
          CROSS JOIN LATERAL (SELECT
            EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
              AND m.manager_id = $8 AND m.managed_user_id = te.user_id) AS person,
@@ -518,10 +525,15 @@ async fn time_entry_rows(
            AND ($4::date IS NULL OR te.spent_date >= $4::date)
            AND ($5::date IS NULL OR te.spent_date <= $5::date)
            AND ($6::bool IS NULL OR te.is_running = $6)
-           AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)",
+           AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
+           AND ($12::uuid IS NULL OR p.client_id = $12)
+           AND ($13::uuid IS NULL OR te.task_id = $13)
+           AND ($14::bool IS NULL OR (te.invoice_id IS NOT NULL) = $14)
+           AND ($15::text[] IS NULL OR te.state::text = ANY($15))
+           AND $16::text IS NULL",
         caller.org_id,
         user_id_filter,
-        project_id,
+        records.project,
         filters.from as Option<NaiveDate>,
         filters.to as Option<NaiveDate>,
         filters.is_running,
@@ -530,6 +542,11 @@ async fn time_entry_rows(
         view.own,
         view.managed,
         view.all,
+        records.client,
+        records.task,
+        filters.is_billed,
+        states as Option<&[&str]>,
+        filters.external_reference_id,
     )
     .fetch_one(&mut *read.tx)
     .await
@@ -587,17 +604,22 @@ async fn time_entry_rows(
            AND ($5::date IS NULL OR te.spent_date <= $5::date)
            AND ($6::bool IS NULL OR te.is_running = $6)
            AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
+           AND ($19::uuid IS NULL OR p.client_id = $19)
+           AND ($20::uuid IS NULL OR te.task_id = $20)
+           AND ($21::bool IS NULL OR (te.invoice_id IS NOT NULL) = $21)
+           AND ($22::text[] IS NULL OR te.state::text = ANY($22))
+           AND $23::text IS NULL
          ORDER BY te.spent_date DESC, te.created_at DESC, te.id DESC
          LIMIT $8 OFFSET $9"#,
         caller.org_id,
         user_id_filter,
-        project_id,
+        records.project,
         filters.from as Option<NaiveDate>,
         filters.to as Option<NaiveDate>,
         filters.is_running,
         filters.updated_since as Option<DateTime<Utc>>,
-        per_page,
-        offset,
+        window.per_page,
+        window.offset,
         caller.user_id,
         view.own,
         view.managed,
@@ -607,6 +629,11 @@ async fn time_entry_rows(
         view.cost_rates,
         view.projects_managed,
         view.projects_all,
+        records.client,
+        records.task,
+        filters.is_billed,
+        states as Option<&[&str]>,
+        filters.external_reference_id,
     )
     .fetch_all(&mut *read.tx)
     .await
@@ -718,10 +745,12 @@ pub(crate) struct ProjectFilters {
     pub client_id: Option<String>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
+    pub cursor: Option<String>,
     pub updated_since: Option<DateTime<Utc>>,
 }
 
 struct ProjectRow {
+    key: Key,
     id: i64,
     name: String,
     code: Option<String>,
@@ -771,7 +800,7 @@ fn project_row_to_harvest(row: &ProjectRow) -> HarvestProject {
         starts_on: row.starts_on.map(|d| d.to_string()),
         ends_on: row.ends_on.map(|d| d.to_string()),
         created_at: row.created_at.to_rfc3339(),
-        updated_at: row.created_at.to_rfc3339(), // projects table has no updated_at
+        updated_at: row.key.at.to_rfc3339(),
         client: HarvestRef {
             id: row.client_id,
             name: row.client_name.clone(),
@@ -782,23 +811,19 @@ fn project_row_to_harvest(row: &ProjectRow) -> HarvestProject {
 async fn list_projects(
     user: AuthUser,
     State(db): State<PgPool>,
-    OriginalUri(uri): OriginalUri,
+    list: ListRequest,
     Query(filters): Query<ProjectFilters>,
 ) -> ApiResult<HarvestPagination<HarvestProject>> {
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
-    let (total, rows) = project_reads::read(&db, &user, &filters, None, per_page, offset).await?;
-    let items = rows.iter().map(project_row_to_harvest).collect();
-    Ok(Json(
-        HarvestPagination::new(
-            "projects",
-            items,
-            page,
-            per_page,
-            total,
-            "/harvest/v2/projects",
-        )
-        .with_query(uri.query()),
-    ))
+    let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
+    let listed = project_reads::read(&db, &user, &filters, None, &window).await?;
+    let items = listed.rows.iter().map(project_row_to_harvest).collect();
+    Ok(Json(list.catalogue(
+        "projects",
+        &listed,
+        |row| row.key,
+        items,
+        &window,
+    )))
 }
 
 async fn get_project(
@@ -807,9 +832,15 @@ async fn get_project(
     Path(id): Path<String>,
 ) -> ApiResult<HarvestProject> {
     let id = ids::path(&db, user.org_id, Kind::Project, &id).await?;
-    let (_, rows) =
-        project_reads::read(&db, &user, &ProjectFilters::default(), Some(id), 1, 0).await?;
-    let row = rows.first().ok_or_else(not_found)?;
+    let listed = project_reads::read(
+        &db,
+        &user,
+        &ProjectFilters::default(),
+        Some(id),
+        &Window::one(),
+    )
+    .await?;
+    let row = listed.rows.first().ok_or_else(not_found)?;
     Ok(Json(project_row_to_harvest(row)))
 }
 
@@ -820,11 +851,12 @@ pub(crate) struct ClientFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
+    pub cursor: Option<String>,
     pub updated_since: Option<DateTime<Utc>>,
 }
 
-#[derive(sqlx::FromRow)]
 struct ClientRow {
+    key: Key,
     id: i64,
     name: String,
     active: bool,
@@ -841,33 +873,26 @@ fn client_row_to_harvest(row: &ClientRow) -> HarvestClient {
         address: row.address.clone(),
         currency: row.currency.clone(),
         created_at: row.created_at.to_rfc3339(),
-        updated_at: row.created_at.to_rfc3339(), // no updated_at column
+        updated_at: row.key.at.to_rfc3339(),
     }
 }
 
 async fn list_clients(
     user: AuthUser,
     State(db): State<PgPool>,
-    OriginalUri(uri): OriginalUri,
+    list: ListRequest,
     Query(filters): Query<ClientFilters>,
 ) -> ApiResult<HarvestPagination<HarvestClient>> {
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
-
-    let (total, rows) = client_reads::read(&db, &user, &filters, None, per_page, offset).await?;
-
-    let items: Vec<HarvestClient> = rows.iter().map(client_row_to_harvest).collect();
-
-    Ok(Json(
-        HarvestPagination::new(
-            "clients",
-            items,
-            page,
-            per_page,
-            total,
-            "/harvest/v2/clients",
-        )
-        .with_query(uri.query()),
-    ))
+    let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
+    let listed = client_reads::read(&db, &user, &filters, None, &window).await?;
+    let items = listed.rows.iter().map(client_row_to_harvest).collect();
+    Ok(Json(list.catalogue(
+        "clients",
+        &listed,
+        |row| row.key,
+        items,
+        &window,
+    )))
 }
 
 async fn get_client(
@@ -876,9 +901,15 @@ async fn get_client(
     Path(id): Path<String>,
 ) -> ApiResult<HarvestClient> {
     let id = ids::path(&db, user.org_id, Kind::Client, &id).await?;
-    let (_, rows) =
-        client_reads::read(&db, &user, &ClientFilters::default(), Some(id), 1, 0).await?;
-    let row = rows.first().ok_or_else(not_found)?;
+    let listed = client_reads::read(
+        &db,
+        &user,
+        &ClientFilters::default(),
+        Some(id),
+        &Window::one(),
+    )
+    .await?;
+    let row = listed.rows.first().ok_or_else(not_found)?;
 
     Ok(Json(client_row_to_harvest(row)))
 }
@@ -890,15 +921,13 @@ pub(crate) struct TaskFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-    #[expect(
-        dead_code,
-        reason = "Harvest v2 ignores updated_since for tasks and users"
-    )]
-    pub updated_since: Option<String>,
+    pub cursor: Option<String>,
+    pub updated_since: Option<DateTime<Utc>>,
 }
 
-#[derive(sqlx::FromRow)]
 struct TaskRow {
+    key: Key,
+    created_at: DateTime<Utc>,
     id: i64,
     name: String,
     active: bool,
@@ -917,27 +946,27 @@ fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
         default_hourly_rate: row
             .default_rate_cents
             .map(|cents| Amount::new(cents, row.default_rate_currency.as_deref().unwrap_or(""))),
-        created_at: String::new(), // tasks table has no created_at
-        updated_at: String::new(),
+        created_at: row.created_at.to_rfc3339(),
+        updated_at: row.key.at.to_rfc3339(),
     }
 }
 
 async fn list_tasks(
     user: AuthUser,
     State(db): State<PgPool>,
-    OriginalUri(uri): OriginalUri,
+    list: ListRequest,
     Query(filters): Query<TaskFilters>,
 ) -> ApiResult<HarvestPagination<HarvestTask>> {
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
-
-    let (total, rows) = task_reads::read(&db, &user, &filters, None, per_page, offset).await?;
-
-    let items: Vec<HarvestTask> = rows.iter().map(task_row_to_harvest).collect();
-
-    Ok(Json(
-        HarvestPagination::new("tasks", items, page, per_page, total, "/harvest/v2/tasks")
-            .with_query(uri.query()),
-    ))
+    let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
+    let listed = task_reads::read(&db, &user, &filters, None, &window).await?;
+    let items = listed.rows.iter().map(task_row_to_harvest).collect();
+    Ok(Json(list.catalogue(
+        "tasks",
+        &listed,
+        |row| row.key,
+        items,
+        &window,
+    )))
 }
 
 async fn get_task(
@@ -946,28 +975,34 @@ async fn get_task(
     Path(id): Path<String>,
 ) -> ApiResult<HarvestTask> {
     let id = ids::path(&db, user.org_id, Kind::Task, &id).await?;
-    let (_, rows) = task_reads::read(&db, &user, &TaskFilters::default(), Some(id), 1, 0).await?;
-    let row = rows.first().ok_or_else(not_found)?;
+    let listed = task_reads::read(
+        &db,
+        &user,
+        &TaskFilters::default(),
+        Some(id),
+        &Window::one(),
+    )
+    .await?;
+    let row = listed.rows.first().ok_or_else(not_found)?;
 
     Ok(Json(task_row_to_harvest(row)))
 }
 
 // ── Users ───────────────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub(crate) struct UserFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-    #[expect(
-        dead_code,
-        reason = "Harvest v2 ignores updated_since for tasks and users"
-    )]
-    pub updated_since: Option<String>,
+    pub cursor: Option<String>,
+    pub updated_since: Option<DateTime<Utc>>,
 }
 
-#[derive(sqlx::FromRow)]
 struct UserRow {
+    /// Updated when the person or their stored permission state (which
+    /// holds `is_admin`) changes.
+    key: Key,
     id: i64,
     name: String,
     email: String,
@@ -1006,18 +1041,17 @@ fn user_row_to_harvest(row: &UserRow, rates: user_access::RateView) -> HarvestUs
             .filter(|_| rates.billable)
             .map(|cents| Amount::new(cents, &row.org_currency)),
         created_at: row.created_at.to_rfc3339(),
-        updated_at: row.created_at.to_rfc3339(), // no updated_at column
+        updated_at: row.key.at.to_rfc3339(),
     }
 }
 
 async fn list_users(
     user: AuthUser,
     State(db): State<PgPool>,
-    OriginalUri(uri): OriginalUri,
+    list: ListRequest,
     Query(filters): Query<UserFilters>,
 ) -> ApiResult<HarvestPagination<HarvestUser>> {
-    let Json(page) = users_page(&db, &user, filters).await?;
-    Ok(Json(page.with_query(uri.query())))
+    users_page(&db, &user, filters, &list).await
 }
 
 /// The org's people, with the rates the caller may read and the others
@@ -1027,66 +1061,116 @@ async fn users_page(
     db: &PgPool,
     caller: &AuthUser,
     filters: UserFilters,
+    list: &ListRequest,
 ) -> ApiResult<HarvestPagination<HarvestUser>> {
     let mut access = user_access::begin(db, caller).await?;
     let result = async {
         if !access.list {
             return Err(forbidden("Listing users requires people access"));
         }
-
-        let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
-
-        let total = sqlx::query_scalar!(
-            "SELECT COUNT(*) FROM users
-         WHERE org_id = $1
-           AND ($2::bool IS NULL OR active = $2)",
-            caller.org_id,
-            filters.is_active,
-        )
-        .fetch_one(&mut *access.read.tx)
-        .await
-        .map_err(internal)?
-        .unwrap_or(0);
-
-        let rows = sqlx::query_as!(
-            UserRow,
-            r#"SELECT u.harvest_id AS id, u.name, u.email, u.active,
-         COALESCE(p.is_administrator, false) AS "is_admin!",
-         u.cost_rate_cents, u.billable_rate_cents,
-         (SELECT default_currency FROM organizations o WHERE o.id = u.org_id) AS "org_currency!",
-         u.created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM users u
-         LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
-         WHERE u.org_id = $1
-           AND ($2::bool IS NULL OR u.active = $2)
-         ORDER BY u.name, u.id
-         LIMIT $3 OFFSET $4"#,
-            caller.org_id,
-            filters.is_active,
-            per_page,
-            offset,
-        )
-        .fetch_all(&mut *access.read.tx)
-        .await
-        .map_err(internal)?;
-        Ok((page, per_page, total, rows))
+        let window = list.window(filters.page, filters.per_page, filters.cursor.as_deref())?;
+        let listed = user_rows(&mut access.read, caller, &filters, None, &window).await?;
+        Ok((window, listed))
     }
     .await;
-    let (page, per_page, total, rows) = finish_read(access.read, result).await?;
-
-    let items: Vec<HarvestUser> = rows
+    let (window, listed) = finish_read(access.read, result).await?;
+    let items = listed
+        .rows
         .iter()
         .map(|row| user_row_to_harvest(row, access.rates))
         .collect();
-
-    Ok(Json(HarvestPagination::new(
+    Ok(Json(list.catalogue(
         "users",
+        &listed,
+        |row| row.key,
         items,
-        page,
-        per_page,
-        total,
-        "/harvest/v2/users",
+        &window,
     )))
+}
+
+/// The organization's people in list order, or the one `user_id` names.
+async fn user_rows(
+    read: &mut ops::ReadTx,
+    caller: &AuthUser,
+    filters: &UserFilters,
+    user_id: Option<Uuid>,
+    window: &Window,
+) -> Result<Listed<UserRow>, ApiError> {
+    let (cursor_at, cursor_id, before) = window.position();
+    let records = sqlx::query!(
+        r#"WITH visible AS MATERIALIZED (
+             SELECT u.id,u.harvest_id,u.name,u.email,u.active,
+                    COALESCE(p.is_administrator, false) is_admin,
+                    u.cost_rate_cents,u.billable_rate_cents,u.created_at,
+                    GREATEST(u.updated_at, p.updated_at) updated_at
+             FROM users u
+             LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+             WHERE u.org_id = $1
+               AND ($2::bool IS NULL OR u.active = $2)
+               AND ($3::uuid IS NULL OR u.id = $3)
+           ), changed AS MATERIALIZED (
+             SELECT * FROM visible WHERE $4::timestamptz IS NULL OR updated_at >= $4
+           ), totals AS (
+             SELECT COUNT(*) total, CASE WHEN $7::timestamptz IS NULL THEN $6
+               WHEN $9 THEN GREATEST(COUNT(*) FILTER (WHERE (updated_at,id) < ($7,$8::uuid)) - $5, 0)
+               ELSE COUNT(*) FILTER (WHERE (updated_at,id) <= ($7,$8::uuid)) END start
+             FROM changed
+           ), page AS (
+             SELECT * FROM changed ORDER BY updated_at,id LIMIT $5 OFFSET (SELECT start FROM totals)
+           )
+           SELECT totals.total AS "total!",totals.start AS "start!",u.id AS "uuid?",
+                  u.harvest_id AS "id?",u.name AS "name?",u.email AS "email?",u.active AS "active?",
+                  u.is_admin AS "is_admin?",u.cost_rate_cents,u.billable_rate_cents,
+                  (SELECT default_currency FROM organizations o WHERE o.id = $1) AS "org_currency!",
+                  u.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
+                  u.updated_at AS "updated_at?: chrono::DateTime<chrono::Utc>"
+           FROM totals LEFT JOIN page u ON true ORDER BY u.updated_at,u.id"#,
+        caller.org_id,
+        filters.is_active,
+        user_id,
+        filters.updated_since as Option<DateTime<Utc>>,
+        window.per_page,
+        window.offset,
+        cursor_at as Option<DateTime<Utc>>,
+        cursor_id,
+        before,
+    )
+    .fetch_all(&mut *read.tx)
+    .await
+    .map_err(internal)?;
+    let first = records
+        .first()
+        .ok_or_else(|| internal("Missing user count"))?;
+    let (total, start) = (first.total, first.start);
+    let mut rows = Vec::with_capacity(records.len());
+    for record in records {
+        // Only the row of an empty page has no id.
+        let Some(uuid) = record.uuid else { continue };
+        rows.push(UserRow {
+            key: Key {
+                at: record
+                    .updated_at
+                    .ok_or_else(|| internal("Missing user update time"))?,
+                id: uuid,
+            },
+            id: record.id.ok_or_else(|| internal("Missing api number"))?,
+            name: record.name.ok_or_else(|| internal("Missing user name"))?,
+            email: record.email.ok_or_else(|| internal("Missing user email"))?,
+            active: record
+                .active
+                .ok_or_else(|| internal("Missing user activity"))?,
+            is_admin: record
+                .is_admin
+                .ok_or_else(|| internal("Missing administrator flag"))?,
+            cost_rate_cents: record.cost_rate_cents,
+            billable_rate_cents: record.billable_rate_cents,
+            org_currency: record.org_currency,
+            created_at: record
+                .created_at
+                .ok_or_else(|| internal("Missing user creation time"))?,
+        });
+    }
+    Ok(Listed { total, start, rows })
 }
 
 #[cfg(test)]
@@ -1096,22 +1180,6 @@ mod tests {
     use crate::testing::{SeedIds, seed};
     use horae_core::permissions::catalog::BuiltInProfile;
     use horae_core::types::EntryState;
-
-    #[test]
-    fn page_window_defaults_and_checked_offsets() {
-        // Defaults: first page of 100.
-        assert_eq!(page_window(None, None).unwrap(), (1, 100, 0));
-        assert!(page_window(Some(0), None).is_err());
-        assert!(page_window(None, Some(0)).is_err());
-        assert!(page_window(None, Some(500)).is_err());
-        // A later page offsets by the preceding pages.
-        assert_eq!(page_window(Some(3), Some(25)).unwrap(), (3, 25, 50));
-        assert_eq!(
-            page_window(Some(i64::MAX), Some(1)).unwrap(),
-            (i64::MAX, 1, i64::MAX - 1)
-        );
-        assert!(page_window(Some(i64::MAX), Some(100)).is_err());
-    }
 
     // ── Authorization ───────────────────────────────────────────────────────
     // This API rides the same session cookie as the SPA, so these assert that it
@@ -1123,6 +1191,10 @@ mod tests {
         Amount::new(cents, "EUR")
     }
 
+    fn list() -> ListRequest {
+        ListRequest::test()
+    }
+
     fn caller(ids: &SeedIds) -> AuthUser {
         AuthUser {
             user_id: ids.user_id,
@@ -1132,16 +1204,7 @@ mod tests {
     }
 
     fn no_time_entry_filters() -> TimeEntryFilters {
-        TimeEntryFilters {
-            user_id: None,
-            project_id: None,
-            from: None,
-            to: None,
-            is_running: None,
-            page: None,
-            per_page: None,
-            updated_since: None,
-        }
+        TimeEntryFilters::default()
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -1168,7 +1231,7 @@ mod tests {
             .execute(&pool).await.unwrap();
         let member = caller(&ids);
         let Json(entry) = time_entry_by_id(&pool, &member, id).await.unwrap();
-        let Json(page) = time_entries_page(&pool, &member, no_time_entry_filters())
+        let Json(page) = time_entries_page(&pool, &member, no_time_entry_filters(), &list())
             .await
             .unwrap();
         assert_eq!((entry.billable_rate, entry.cost_rate), (None, None));
@@ -1213,7 +1276,7 @@ mod tests {
             assert_eq!(report.error_count(), 0, "{report:?}");
         }
         let caller = caller(&ids);
-        let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+        let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters(), &list())
             .await
             .unwrap();
         let entries = &page.data["time_entries"];
@@ -1281,7 +1344,7 @@ mod tests {
             .await
             .unwrap();
             let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
-            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters(), &list())
                 .await
                 .unwrap();
             assert_eq!(
@@ -1359,7 +1422,7 @@ mod tests {
             .await
             .unwrap();
             let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
-            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters(), &list())
                 .await
                 .unwrap();
             assert_eq!(entry.billable_rate, Some(expected.clone()));
@@ -1379,7 +1442,7 @@ mod tests {
         .await
         .unwrap();
         let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
-        let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+        let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters(), &list())
             .await
             .unwrap();
         assert_eq!(entry.billable_rate, Some(eur(1234)));
@@ -1403,7 +1466,7 @@ mod tests {
             .unwrap();
             let caller = caller(&ids);
             let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
-            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters(), &list())
                 .await
                 .unwrap();
             assert!(!entry.billable);
@@ -1443,7 +1506,7 @@ mod tests {
                 id,
             ).fetch_one(&pool).await.unwrap();
             let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
-            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters(), &list())
                 .await
                 .unwrap();
             assert_eq!(entry.hours, Hours(8));
@@ -1456,12 +1519,7 @@ mod tests {
     }
 
     fn no_user_filters() -> UserFilters {
-        UserFilters {
-            is_active: None,
-            page: None,
-            per_page: None,
-            updated_since: None,
-        }
+        UserFilters::default()
     }
 
     /// The status a refused call answered with. `expect_err` would demand
@@ -1526,7 +1584,7 @@ mod tests {
             );
         };
         let status = refused(
-            users_page(&pool, &caller(&ids), no_user_filters()).await,
+            users_page(&pool, &caller(&ids), no_user_filters(), &list()).await,
             "users",
         );
         assert_eq!(status, StatusCode::FORBIDDEN);
@@ -1536,7 +1594,7 @@ mod tests {
             ..no_time_entry_filters()
         };
         let status = refused(
-            time_entries_page(&pool, &caller(&ids), filters).await,
+            time_entries_page(&pool, &caller(&ids), filters, &list()).await,
             "time entries",
         );
         assert_eq!(status, StatusCode::FORBIDDEN);
@@ -1552,10 +1610,16 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        let refusal = task_reads::read(&pool, &caller(&ids), &TaskFilters::default(), None, 1, 0)
-            .await
-            .err()
-            .expect("an inactive person read the tasks");
+        let refusal = task_reads::read(
+            &pool,
+            &caller(&ids),
+            &TaskFilters::default(),
+            None,
+            &Window::one(),
+        )
+        .await
+        .err()
+        .expect("an inactive person read the tasks");
         assert_eq!(refusal.status, StatusCode::FORBIDDEN);
         released("begin_read");
     }
@@ -1566,7 +1630,7 @@ mod tests {
         colleague(&pool, &ids).await;
 
         let status = refused(
-            users_page(&pool, &caller(&ids), no_user_filters()).await,
+            users_page(&pool, &caller(&ids), no_user_filters(), &list()).await,
             "a member read the org's pay rates",
         );
 
@@ -1586,7 +1650,7 @@ mod tests {
         .unwrap();
 
         provision(&pool, &ids, &[Permission::PeopleReadAll], false).await;
-        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters(), &list())
             .await
             .expect("people access was refused the user list");
         let users = &page.data["users"];
@@ -1604,7 +1668,7 @@ mod tests {
             false,
         )
         .await;
-        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters(), &list())
             .await
             .unwrap();
         let users = &page.data["users"];
@@ -1622,7 +1686,7 @@ mod tests {
             false,
         )
         .await;
-        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters(), &list())
             .await
             .unwrap();
         let users = &page.data["users"];
@@ -1636,7 +1700,7 @@ mod tests {
         colleague(&pool, &ids).await;
         let Json(me) = users_me(caller(&ids), State(pool.clone())).await.unwrap();
         assert!(me.is_admin);
-        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters(), &list())
             .await
             .unwrap();
         let admins: Vec<bool> = page.data["users"].iter().map(|u| u.is_admin).collect();
@@ -1670,7 +1734,7 @@ mod tests {
         insert_entry(&pool, &ids, ids.user_id, "mine").await;
         insert_entry(&pool, &ids, other, "theirs").await;
 
-        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
+        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters(), &list())
             .await
             .expect("a member was refused their own entries");
 
@@ -1693,7 +1757,7 @@ mod tests {
         insert_entry(&pool, &ids, ids.user_id, "mine").await;
         insert_entry(&pool, &ids, other, "theirs").await;
 
-        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
+        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters(), &list())
             .await
             .expect("a manager was refused the org's entries");
 
@@ -1712,7 +1776,7 @@ mod tests {
             ..no_time_entry_filters()
         };
         let status = refused(
-            time_entries_page(&pool, &caller(&ids), filters).await,
+            time_entries_page(&pool, &caller(&ids), filters, &list()).await,
             "a member read a colleague's entries by filter",
         );
 
@@ -1779,7 +1843,7 @@ mod tests {
     /// `(notes, billable_rate, cost_rate)` for every listed entry, checked
     /// against the detail endpoint for the same entry.
     async fn rates(pool: &PgPool, ids: &SeedIds) -> Vec<(String, Option<Amount>, Option<Amount>)> {
-        let Json(page) = time_entries_page(pool, &caller(ids), no_time_entry_filters())
+        let Json(page) = time_entries_page(pool, &caller(ids), no_time_entry_filters(), &list())
             .await
             .unwrap();
         let mut seen = Vec::new();
@@ -1883,7 +1947,7 @@ mod tests {
         // time stays visible; the stranger is out of scope.
         let only_managed_people = vec![("managed".into(), None, None), ("mine".into(), None, None)];
         assert_eq!(rates(&pool, &ids).await, only_managed_people);
-        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
+        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters(), &list())
             .await
             .unwrap();
         assert_eq!(page.total_entries, 2);
@@ -1966,7 +2030,7 @@ mod tests {
             user_id: Some(stranger.to_string()),
             ..no_time_entry_filters()
         };
-        let Json(page) = time_entries_page(&pool, &caller(&ids), filters)
+        let Json(page) = time_entries_page(&pool, &caller(&ids), filters, &list())
             .await
             .unwrap();
         assert_eq!(page.total_entries, 0);

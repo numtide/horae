@@ -5,9 +5,8 @@ pub(super) async fn read(
     caller: &AuthUser,
     filters: &ProjectFilters,
     project_id: Option<Uuid>,
-    limit: i64,
-    offset: i64,
-) -> Result<(i64, Vec<ProjectRow>), ApiError> {
+    window: &Window,
+) -> Result<Listed<ProjectRow>, ApiError> {
     let client_id = ids::filter(
         db,
         caller.org_id,
@@ -16,10 +15,7 @@ pub(super) async fn read(
     )
     .await?;
     let mut read = begin_read(db, caller, "Project").await?;
-    let result = visible_projects(
-        &mut read, caller, filters, client_id, project_id, limit, offset,
-    )
-    .await;
+    let result = visible_projects(&mut read, caller, filters, client_id, project_id, window).await;
     finish_read(read, result).await
 }
 
@@ -29,9 +25,9 @@ async fn visible_projects(
     filters: &ProjectFilters,
     client_id: Option<Uuid>,
     project_id: Option<Uuid>,
-    limit: i64,
-    offset: i64,
-) -> Result<(i64, Vec<ProjectRow>), ApiError> {
+    window: &Window,
+) -> Result<Listed<ProjectRow>, ApiError> {
+    let (cursor_at, cursor_id, before) = window.position();
     // Count and page must use the same visible set, including out-of-range pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -41,7 +37,8 @@ async fn visible_projects(
                       THEN p.budget_amount_cents END budget_amount_cents,
                     CASE WHEN p.budget_kind='hours' THEN p.budget_minutes END budget_minutes,
                     p.currency::text currency,
-                    p.starts_on,p.ends_on,p.created_at,p.client_id,c.harvest_id client_harvest_id,c.name client_name
+                    p.starts_on,p.ends_on,p.created_at,p.updated_at,p.client_id,
+                    c.harvest_id client_harvest_id,c.name client_name
              FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
              LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
                AND management.project_id=p.id AND management.manager_id=$2
@@ -51,33 +48,49 @@ async fn visible_projects(
                  OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members'))
                AND ($3::boolean IS NULL OR p.active=$3)
                AND ($4::uuid IS NULL OR p.client_id=$4)
-               AND ($5::timestamptz IS NULL OR p.created_at >= $5)
+               AND ($5::timestamptz IS NULL OR p.updated_at >= $5)
                AND ($6::uuid IS NULL OR p.id=$6)
-           ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
-             SELECT * FROM visible ORDER BY name,id LIMIT $7 OFFSET $8
+           ), totals AS (
+             SELECT COUNT(*) total, CASE WHEN $13::timestamptz IS NULL THEN $8
+               WHEN $15 THEN GREATEST(COUNT(*) FILTER (WHERE (updated_at,id) < ($13,$14::uuid)) - $7, 0)
+               ELSE COUNT(*) FILTER (WHERE (updated_at,id) <= ($13,$14::uuid)) END start
+             FROM visible
+           ), page AS (
+             SELECT * FROM visible ORDER BY updated_at,id LIMIT $7 OFFSET (SELECT start FROM totals)
            )
-           SELECT totals.total AS "total!",p.harvest_id AS "id?",p.name AS "name?",p.code,
+           SELECT totals.total AS "total!",totals.start AS "start!",p.id AS "uuid?",
+                  p.harvest_id AS "id?",p.name AS "name?",p.code,
                   p.project_type AS "project_type?",p.active AS "active?",p.budget_kind AS "budget_kind?",
                   p.budget_amount_cents,p.budget_minutes,p.currency AS "currency?",p.starts_on AS "starts_on?: chrono::NaiveDate",
                   p.ends_on AS "ends_on?: chrono::NaiveDate",p.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
+                  p.updated_at AS "updated_at?: chrono::DateTime<chrono::Utc>",
                   p.client_harvest_id AS "client_id?",p.client_name AS "client_name?"
-           FROM totals LEFT JOIN page p ON true ORDER BY p.name,p.id"#,
+           FROM totals LEFT JOIN page p ON true ORDER BY p.updated_at,p.id"#,
         caller.org_id, caller.user_id, filters.is_active, client_id,
-        filters.updated_since as Option<DateTime<Utc>>, project_id, limit, offset,
+        filters.updated_since as Option<DateTime<Utc>>, project_id, window.per_page, window.offset,
         read.actor.has(Permission::ProjectReadAll), read.actor.has(Permission::ProjectReadManaged),
         read.actor.has(Permission::BillableRateReadAll), read.actor.has(Permission::BillableRateReadManaged),
+        cursor_at as Option<DateTime<Utc>>, cursor_id, before,
     ).fetch_all(&mut *read.tx).await.map_err(internal)?;
-    let total = records
+    let first = records
         .first()
-        .ok_or_else(|| internal("Missing project count"))?
-        .total;
+        .ok_or_else(|| internal("Missing project count"))?;
+    let (total, start) = (first.total, first.start);
     let mut rows = Vec::with_capacity(records.len());
     for record in records {
-        // Only the row of an empty page has no name.
-        let Some(name) = record.name else { continue };
+        // Only the row of an empty page has no id.
+        let Some(uuid) = record.uuid else { continue };
         rows.push(ProjectRow {
+            key: Key {
+                at: record
+                    .updated_at
+                    .ok_or_else(|| internal("Missing project update time"))?,
+                id: uuid,
+            },
             id: record.id.ok_or_else(|| internal("Missing api number"))?,
-            name,
+            name: record
+                .name
+                .ok_or_else(|| internal("Missing project name"))?,
             code: record.code,
             project_type: record
                 .project_type
@@ -106,5 +119,5 @@ async fn visible_projects(
                 .ok_or_else(|| internal("Missing client name"))?,
         });
     }
-    Ok((total, rows))
+    Ok(Listed { total, start, rows })
 }

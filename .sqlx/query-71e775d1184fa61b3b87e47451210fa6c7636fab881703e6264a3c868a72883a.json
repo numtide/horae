@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET updated_at = '2026-01-01T00:00:03Z' WHERE org_id = $1 AND name IN ('Client 4', 'Client 5')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71e775d1184fa61b3b87e47451210fa6c7636fab881703e6264a3c868a72883a"
+}
