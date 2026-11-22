@@ -179,6 +179,7 @@ tasks-access-changed = Your session or task permissions changed. Check your acce
 tasks-status-active = Active
 tasks-status-archived = Archived
 tasks-rate-none = No rate
+tasks-rate-per-hour = { $amount } / h
 # A default rate stored without a currency, such as one imported from Harvest.
 tasks-rate-currency-not-set = { $amount } / h · currency not set
 

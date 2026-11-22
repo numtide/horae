@@ -263,8 +263,8 @@ async fn an_archived_task_offers_restore_and_shows_an_archived_badge() {
 #[tokio::test]
 async fn a_rate_shows_its_currency_or_says_it_has_none() {
     for (cents, currency, shown) in [
-        (Some(8000), Some("USD"), "USD 80.00"),
-        (Some(8000), None, "80.00 / h · currency not set"),
+        (Some(8000), Some("USD"), "USD 80.00 / h"),
+        (Some(123_456), None, "1,234.56 / h · currency not set"),
         (None, None, "No rate"),
     ] {
         let probe = Probe::default();

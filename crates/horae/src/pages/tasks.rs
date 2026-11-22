@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use horae_core::money::{format_cents, format_cents_plain};
+use horae_core::money::format_cents;
 
 use crate::i18n::Tr;
 
@@ -250,9 +250,12 @@ pub fn TaskCatalog() -> Element {
 
 fn rate_label(tr: Tr, cents: Option<i64>, currency: Option<&str>) -> String {
     match (cents, currency) {
-        (Some(cents), Some(currency)) => format_cents(cents, currency),
+        (Some(cents), Some(currency)) => tr.tasks_rate_per_hour(format_cents(cents, currency)),
         // Harvest task rates arrive without a currency, and none is invented.
-        (Some(cents), None) => tr.tasks_rate_currency_not_set(format_cents_plain(cents)),
+        // An empty code leaves the grouped amount after a leading space.
+        (Some(cents), None) => {
+            tr.tasks_rate_currency_not_set(format_cents(cents, "").trim_start().to_owned())
+        }
         (None, _) => tr.tasks_rate_none(),
     }
 }

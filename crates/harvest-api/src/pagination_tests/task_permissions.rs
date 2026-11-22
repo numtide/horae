@@ -49,6 +49,25 @@ async fn task_api_rechecks_global_rate_access_independently_of_catalog(pool: PgP
     .unwrap();
     let uri = format!("/harvest/v2/tasks/{}", ids.task_id);
     assert_eq!(page(&app, &uri).await["default_hourly_rate"], 9.99);
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = NULL WHERE id = $1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        page(&app, &uri).await["default_hourly_rate"],
+        0.0,
+        "a rate reader gets Harvest's 0 for a task without a rate"
+    );
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = 999 WHERE id = $1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     selection(
         &pool,
         ids.user_id,
