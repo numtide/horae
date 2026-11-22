@@ -3,8 +3,8 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md),
 [data-model.md](data-model.md), [contracts/](contracts/), [quickstart.md](quickstart.md)
 
-**Prerequisites**: PR-I1 (`design/invoices-ui`) merged; the maintainer's answers to Q1–Q3. Tasks that
-depend on an answer name it; a different answer changes only those tasks.
+**Prerequisites**: PR-I1 (`design/invoices-ui`) merged. Q1 to Q8 are decided (spec, Clarifications,
+2026-11-22); tasks that implement a decision name it.
 
 **Tests**: required. The constitution requires `horae-core` tests and `#[sqlx::test]` integration
 tests for correctness-critical changes, and this feature changes billing. Write each test first and
@@ -102,12 +102,14 @@ ______________________________________________________________________
 - [ ] T019 [US1] Carry `harvest_invoice_id` from `ApiTimeEntry.invoice` onto `SourceRow` in
   `api_source.rs`
 - [ ] T020 [US1] New `crates/server/src/importers/harvest/invoices.rs`: apply one invoice in a
-  savepoint (resolve client and line projects, convert, check, insert `invoices` + `harvest_invoices`
-  - lines + provenance) and record its outcome in `RunCache` (`resolve.rs`); run it after
-    `parents.rs`, before entries
+  savepoint (resolve client and line projects, convert, check, insert the `invoices` and
+  `harvest_invoices` rows, the lines and the provenance; a Horae number collision is an error, Q8) and
+  record its outcome in `RunCache` (`resolve.rs`); run it after
+  `parents.rs`, before entries
 - [ ] T021 [US1] Link step in `apply.rs` after an entry is created or matched: read the entry's
   current state and invoice source, call `link::decide`, apply the action (freeze or clear rounding
-  with `effective_minutes`), count it
+  with `effective_minutes`), count it; time on a failed or unlisted invoice becomes invoiced with no
+  invoice (Q4)
 - [ ] T022 [US1] Watermark: store the `invoice` key on commit and force a full entry scan when it is
   absent, in `credentials.rs` and the job planner
 - [ ] T023 [US1] Refuse the draft editor, draft save, Duplicate and line changes for
@@ -130,8 +132,8 @@ ______________________________________________________________________
   conflict; a Horae status change survives a run where Harvest did not change the invoice
 - [ ] T027 [US3] Update path in `invoices.rs`: compare `harvest_updated_at`, rewrite the invoice, its
   details and lines when it moved, count updated or skipped; a vanished invoice is left and reported
-- [ ] T028 [US3] Unlink and relink actions in the link step, and the `link_conflicts` list in
-  `report.rs`
+- [ ] T028 [US3] Unlink and reopen (Q7, import-made links only) and relink actions in the link step,
+  and the `link_conflicts` list in `report.rs`
 
 ______________________________________________________________________
 

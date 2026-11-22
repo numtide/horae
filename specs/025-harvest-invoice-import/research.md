@@ -66,7 +66,7 @@ decimal, never a float) and are display-only.
 
 ## R-5 Status mapping and Closed
 
-**Decision** (pending Q1, Q2): open → `sent`, paid → `paid`, closed → new `closed`; drafts are read
+**Decision** (Q1, Q2, decided 2026-11-22): open → `sent`, paid → `paid`, closed → new `closed`; drafts are read
 but not imported. `invoice_status` gains `closed`; `horae_core::types::InvoiceStatus` gains `Closed`.
 `set_status` accepts Sent → Paid, Sent → Closed and Sent → Void for imported invoices, and keeps its
 current transitions for Horae invoices (Closed is not offered for them in this feature).

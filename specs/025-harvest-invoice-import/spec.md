@@ -12,7 +12,7 @@ time entry Harvest billed to its imported invoice, so Horae never offers to bill
 Harvest already billed."
 
 Amends [004 Harvest Importer](../004-harvest-importer/spec.md) FR-016 ("never `invoiced` from
-Harvest"), which this feature replaces for the API source and, if Q3 is accepted, for the CSV source.
+Harvest"), which this feature replaces for the API source and for the CSV source.
 Builds on 005 (durable jobs), 006 (jobs CLI), 007 (account switch), 008 (import UX) and 019 (people,
 the Harvest section).
 
@@ -33,24 +33,24 @@ Harvest's line items do not say which time entries they cover; only the entry po
 
 ## Clarifications
 
-Open. The spec is written with the recommended answer to each question below; Q1 to Q3 change scope
-and are marked where they apply.
+### Session 2026-11-22
 
-- Q1: Import Harvest drafts, or skip them and leave their time open? Recommended: skip (FR-001).
+- Q1: Import Harvest drafts, or skip them and leave their time open? → A: Skip; their time stays open
+  (FR-001).
 - Q2: Map Harvest's closed (written off) state to a new Closed status, to Void with its time kept
-  invoiced, or to Paid? Recommended: a new Closed status (FR-002).
-- Q3: Are imported invoices fully read only, or read only apart from Mark paid, Close and Void?
-  Recommended: the status changes are allowed (FR-016).
-- Q4: Should time Harvest billed on an invoice Horae could not import be invoiced with no invoice, or
-  left open and reported? Recommended: invoiced with no invoice (FR-011).
+  invoiced, or to Paid? → A: A new Closed status, for imported invoices only (FR-002).
+- Q3: Are imported invoices fully read only, or read only apart from Mark paid, Close and Void? → A:
+  Read only apart from Mark paid, Close and Void (FR-016).
+- Q4: Time Harvest billed on an invoice Horae could not import: invoiced with no invoice, or left
+  open and reported? → A: Invoiced with no invoice, and reported (FR-011).
 - Q5: Should the CSV import mark entries whose "Invoiced?" column says yes as invoiced with no
-  invoice, changing 004's FR-016 for CSV too? Recommended: yes (FR-022).
+  invoice, changing 004's FR-016 for CSV too? → A: Yes (FR-022).
 - Q6: Store payments as records now, or only the amount due and the paid date until Invoices step 3?
-  Recommended: only the amount due and paid date (Assumptions).
+  → A: Only the amount due and the paid date (Assumptions).
 - Q7: When a later run finds an entry no longer billed in Harvest, unlink and reopen it, or only
-  report it? Recommended: unlink and reopen, for import-made links only (FR-012).
+  report it? → A: Unlink and reopen, for links the import made only (FR-012).
 - Q8: A Harvest number already used by a Horae invoice: report the Harvest invoice as an error, or
-  import it under a suffixed number? Recommended: error (FR-015).
+  import it under a suffixed number? → A: Error (FR-015).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -112,7 +112,7 @@ with the fixture.
 1. **Given** an imported invoice, **When** its PDF is downloaded, **Then** it contains the same lines
    and amounts as the detail.
 1. **Given** an imported invoice, **When** an administrator opens the draft editor, duplicates it or
-   edits its lines, **Then** Horae refuses (Q2): imported invoices are read only, apart from the
+   edits its lines, **Then** Horae refuses (Q3): imported invoices are read only, apart from the
    status changes in FR-016.
 
 ______________________________________________________________________
@@ -210,12 +210,10 @@ state of their entries.
 
 - **FR-001**: An API import MUST read every Harvest invoice of the connected account, of every state,
   and import those in the open, paid and closed states. Draft invoices MUST NOT be imported, and the
-  time Harvest attached to a draft MUST stay open in Horae. \[NEEDS CLARIFICATION: Q1, import Harvest
-  drafts or skip them? Recommended: skip.\]
+  time Harvest attached to a draft MUST stay open in Horae.
 - **FR-002**: Harvest's states MUST map as open → Sent, paid → Paid, closed → Closed, where Closed is
   a new invoice status meaning written off: no longer due, not paid, and its time stays invoiced.
-  \[NEEDS CLARIFICATION: Q2, a new Closed status, or Void that keeps its time, or Paid? Recommended:
-  new Closed.\]
+  Closed MUST exist only for imported invoices in this feature.
 - **FR-003**: An incremental import MUST read the invoices Harvest changed since the last run, with
   the same watermark as the other records; a full import reads them all.
 
@@ -272,8 +270,8 @@ state of their entries.
   The only status changes allowed are Sent → Paid, Sent → Closed and Sent → Void; voiding an imported
   invoice reopens its time as voiding a Horae invoice does. A status change made in Horae MUST be
   kept by later imports only until Harvest changes the invoice again (Harvest stays the source while
-  it is in use). \[NEEDS CLARIFICATION: Q3, read only with these status changes, or fully read only?
-  Recommended: as written.\]
+  it is in use). Marking an imported invoice Paid MUST set its amount due to zero and its paid date
+  to the organization's today.
 - **FR-017**: An imported invoice MUST render to PDF with the same template as Horae's invoices,
   showing its imported lines, Harvest's rates as written and its stored amounts.
 

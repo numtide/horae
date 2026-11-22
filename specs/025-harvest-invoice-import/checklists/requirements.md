@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,7 @@
 
 ## Notes
 
-- Three markers remain (FR-001 drafts, FR-002 closed state, FR-016 read only). They are the
-  maintainer's decisions; the spec, plan and tasks follow the recommended answers, and the tasks that
-  depend on each answer name it.
+- The three markers (FR-001 drafts, FR-002 closed state, FR-016 read only) were resolved on
+  2026-11-22 with Q4 to Q8; the answers are in the spec's Clarifications.
 - The spec names Harvest's states and fields because the feature is an importer of that service;
   that is the subject, not an implementation choice.
