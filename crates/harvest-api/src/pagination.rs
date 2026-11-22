@@ -110,7 +110,7 @@ pub(crate) struct Listed<T> {
 /// now). A client that takes the latest `updated_at` it saw as its next
 /// `updated_since` then misses nothing that commits late; those rows show up
 /// once their transaction ends. Stamps are taken at write time
-/// (`0005_updated_at_at_write.sql`), so a transaction that has not written
+/// (`0006_updated_at_at_write.sql`), so a transaction that has not written
 /// yet can only stamp later than this. `pg_stat_activity` shows other
 /// sessions' transactions only for the same role, which every Horae writer
 /// uses.
