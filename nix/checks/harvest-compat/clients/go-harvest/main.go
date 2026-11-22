@@ -1,7 +1,8 @@
 // Read and write workflows through github.com/becoded/go-harvest, unmodified,
 // against a Horae server: who am I, the project picker, the time entries with
 // one fetched by id, the company and the person's project assignments, then
-// the time workflow (log, edit, start, stop, restart, delete). Typed decoding
+// the time workflow (log, edit, start, stop, restart, delete) and the sync
+// workflow (sync.go). Typed decoding
 // is the point: integer ids and numeric hours must parse into the library's
 // own structs.
 //

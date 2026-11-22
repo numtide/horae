@@ -153,6 +153,6 @@ messages that send email) stays out of scope (spec *Out of scope*).
 Measured by the `harvest-compat` check; clients and pins are in
 `nix/checks/harvest-compat/clients/README.md`.
 
-| Client | Identity and picker | Time workflow |
-| --- | --- | --- |
-| becoded/go-harvest (Go library) | passes: `users/me`, `projects`, `company`, `users/me/project_assignments` | passes: log, edit, start and end times, start (stopping the running timer), stop, restart, delete |
+| Client | Identity and picker | Time workflow | Sync |
+| --- | --- | --- | --- |
+| becoded/go-harvest (Go library) | passes: `users/me`, `projects`, `company`, `users/me/project_assignments` | passes: log, edit, start and end times, start (stopping the running timer), stop, restart, delete | passes: time entries, clients, projects, tasks and users by page and by `links.next` (cursors on the catalogue lists); `updated_since` after one edit |
