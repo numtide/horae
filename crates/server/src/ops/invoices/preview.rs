@@ -53,6 +53,9 @@ pub async fn prepare(
         SourceRead::Preview,
     )
     .await?;
+    let awaiting_approval_minutes =
+        entries::awaiting_approval_minutes(tx, org_id, client_id, (from, to), selected.as_deref())
+            .await?;
     let mut lines = Vec::with_capacity(entries.len());
     for entry in entries {
         lines.push(entry.preview()?);
@@ -147,6 +150,7 @@ pub async fn prepare(
         subtotal_cents,
         amounts,
         excess,
+        awaiting_approval_minutes,
     })
 }
 

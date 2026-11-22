@@ -84,6 +84,47 @@ pub(super) async fn read(
     Ok(entries)
 }
 
+/// Minutes of billable time in the period that [`read`] leaves out only
+/// because they wait for an approval decision. Open time is invoiceable, so
+/// it is not counted.
+pub(super) async fn awaiting_approval_minutes(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
+    selected: Option<&[uuid::Uuid]>,
+) -> Result<i64, OpError> {
+    // Keep these conditions in step with `read`, apart from the state.
+    Ok(sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)), 0)::bigint AS "minutes!"
+           FROM time_entries te
+           JOIN projects p ON p.id = te.project_id
+           LEFT JOIN project_settings ps ON ps.project_id = p.id
+           JOIN tasks t ON t.id = te.task_id
+           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
+           JOIN organizations o ON o.id = te.org_id
+           WHERE te.org_id = $1
+             AND p.client_id = $2
+             AND te.billable = true
+             AND p.project_type <> 'non_billable'
+             AND (ps.project_id IS NULL OR p.project_type = 'time_and_materials')
+             AND COALESCE(pt.billable, t.billable_default)
+             AND NOT te.is_running
+             AND te.invoice_id IS NULL
+             AND te.state = 'submitted'
+             AND te.spent_date >= $3
+             AND te.spent_date <= $4
+             AND ($5::uuid[] IS NULL OR p.id = ANY($5))"#,
+        org_id,
+        client_id,
+        from as chrono::NaiveDate,
+        to as chrono::NaiveDate,
+        selected,
+    )
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
 impl EntryWithRates {
     pub(super) fn preview(&self) -> Result<crate::models::invoice::InvoicePreviewLine, OpError> {
         use crate::models::invoice::{InvoicePreviewLine, InvoiceSource};

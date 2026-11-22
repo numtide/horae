@@ -2,9 +2,9 @@
 
 use super::*;
 use crate::models::invoice::{
-    InvoiceDefaults, InvoiceDetailView, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview,
-    InvoiceEditor, InvoiceFeeSelection, InvoiceGenerationRequest, InvoiceListItem,
-    InvoicePreparation,
+    InvoiceDefaults, InvoiceDetailView, InvoiceDraftEdit, InvoiceDraftSave, InvoiceDuplicate,
+    InvoiceEditReview, InvoiceEditor, InvoiceFeeSelection, InvoiceGenerationRequest,
+    InvoiceListItem, InvoicePreparation, UninvoicedClient,
 };
 
 /// A snapshot read: every statement sees the state the actor's authority was
@@ -125,6 +125,27 @@ pub async fn prepare_invoice(
         fees.as_deref(),
     )
     .await;
+    read.finish(result).await.map_err(op_error)
+}
+
+/// Clients with unbilled time or fees due up to today.
+#[server]
+pub async fn list_uninvoiced_clients() -> Result<Vec<UninvoicedClient>, ServerFnError> {
+    let caller = session_caller().await?;
+    let state = crate::state::global_state().await;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
+    let result = crate::ops::invoices::uninvoiced::list(&mut read.tx, &read.actor).await;
+    read.finish(result).await.map_err(op_error)
+}
+
+/// What Duplicate copies from an invoice into a new one.
+#[server]
+pub async fn get_invoice_duplicate(invoice_id: String) -> Result<InvoiceDuplicate, ServerFnError> {
+    let caller = session_caller().await?;
+    let state = crate::state::global_state().await;
+    let id = parse_uuid(&invoice_id, "invoice_id")?;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
+    let result = crate::ops::invoices::duplicate(&mut read.tx, &read.actor, id).await;
     read.finish(result).await.map_err(op_error)
 }
 

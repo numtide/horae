@@ -21,6 +21,8 @@ pub mod button;
 pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/date_field.rs"]
+pub mod date_field;
 #[path = "../src/components/date_picker.rs"]
 pub mod date_picker;
 #[path = "../src/components/debounce.rs"]
@@ -45,7 +47,7 @@ pub mod select_field;
 pub mod today;
 mod components {
     pub use super::{
-        avatar, back_link, confirm_dialog, controls, date_picker, debounce, form, icons, modal,
+        avatar, back_link, confirm_dialog, controls, date_field, debounce, form, icons, modal,
         page_header, screen_state, select_field, today,
     };
 }

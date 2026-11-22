@@ -25,6 +25,8 @@ pub struct Invoice {
     pub tax1_cents: i64,
     pub tax2_cents: i64,
     pub notes: Option<String>,
+    /// One optional line naming what the invoice is for; empty when unset.
+    pub subject: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -70,6 +72,8 @@ pub struct InvoiceWithLines {
 pub struct InvoiceListItem {
     pub invoice: Invoice,
     pub client_name: String,
+    /// Sent, unpaid and past due on the organization's today.
+    pub overdue: bool,
 }
 
 /// Invoice detail and client identity materialized under the same read authority.
@@ -78,6 +82,41 @@ pub struct InvoiceDetailView {
     pub invoice: Invoice,
     pub lines: Vec<InvoiceLine>,
     pub client_name: String,
+    /// Sent, unpaid and past due on the organization's today.
+    pub overdue: bool,
+}
+
+/// An amount in one currency.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CurrencyAmount {
+    pub currency: String,
+    pub cents: i64,
+}
+
+/// A client with unbilled time or fees due up to today, as preparing an
+/// invoice for it would find them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UninvoicedClient {
+    pub client_id: Uuid,
+    pub client_name: String,
+    pub unbilled_minutes: i64,
+    /// Unbilled time priced at today's billable rates, per currency.
+    pub time: Vec<CurrencyAmount>,
+    /// Fees due and not yet invoiced, per currency.
+    pub fees: Vec<CurrencyAmount>,
+}
+
+/// What Duplicate copies from an invoice into a new one: its client, the
+/// projects it billed and its values. Its subject and notes are copied when
+/// the new draft is created (`InvoiceGenerationRequest::duplicate_of`); its
+/// lines and time never are.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceDuplicate {
+    pub source_id: Uuid,
+    pub source_number: String,
+    pub client_id: Uuid,
+    pub project_ids: Vec<Uuid>,
+    pub defaults: InvoiceDefaults,
 }
 
 /// Editable invoice values, copied from projects rather than linked to them.
@@ -119,6 +158,10 @@ pub struct InvoicePreparation {
     pub amounts: Option<horae_core::invoice::InvoiceAmounts>,
     /// Exact source-level excesses computed by the server for this review.
     pub excess: Vec<InvoiceSourceExcess>,
+    /// Billable time in the period still waiting for approval. It stays out
+    /// of the invoice until it is approved.
+    #[serde(default)]
+    pub awaiting_approval_minutes: i64,
 }
 
 impl InvoicePreparation {
@@ -234,6 +277,10 @@ pub struct InvoiceGenerationRequest {
     pub request_id: Uuid,
     pub review: InvoicePreparation,
     pub confirmed_excess: Vec<InvoiceSourceExcess>,
+    /// The invoice this one duplicates: the new draft takes its subject and
+    /// notes. It must belong to the same client.
+    #[serde(default)]
+    pub duplicate_of: Option<Uuid>,
 }
 
 impl InvoicePreparation {
@@ -266,6 +313,8 @@ pub struct InvoiceDraftEdit {
     pub revision: i64,
     pub defaults: InvoiceDefaults,
     pub fees: Vec<InvoiceFeeEdit>,
+    #[serde(default)]
+    pub subject: String,
 }
 
 /// Availability excludes this draft's old contribution before replacement.

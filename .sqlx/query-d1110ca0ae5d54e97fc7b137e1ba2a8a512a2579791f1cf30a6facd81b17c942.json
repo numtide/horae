@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.name FROM clients c\n           WHERE c.org_id = $1 AND (\n             EXISTS (SELECT 1 FROM time_entries te JOIN projects p ON p.id = te.project_id\n                     WHERE p.client_id = c.id AND te.org_id = $1 AND te.invoice_id IS NULL\n                       AND te.billable AND te.state IN ('open', 'approved') AND te.spent_date <= $2)\n             OR EXISTS (SELECT 1 FROM projects p JOIN project_settings s ON s.project_id = p.id\n                        WHERE p.client_id = c.id AND p.project_type = 'fixed_fee'\n                          AND s.fee_mode IS NOT NULL))\n           ORDER BY c.name, c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d1110ca0ae5d54e97fc7b137e1ba2a8a512a2579791f1cf30a6facd81b17c942"
+}

@@ -149,6 +149,17 @@ pub fn resolve_rate(
 /// # Errors
 /// Returns an error if the final amount cannot fit in `i64`. The intermediate
 /// product of an `i64` rate and `i32` duration always fits in `i128`.
+/// Whether an invoice is overdue on `today`: sent, still unpaid, and past its
+/// due date. Overdue is computed, never stored as a status.
+#[must_use]
+pub fn is_overdue(
+    status: crate::types::InvoiceStatus,
+    due_on: chrono::NaiveDate,
+    today: chrono::NaiveDate,
+) -> bool {
+    status == crate::types::InvoiceStatus::Sent && due_on < today
+}
+
 pub fn line_amount_cents(rate_cents: i64, minutes: i32) -> Result<i64, std::num::TryFromIntError> {
     ((i128::from(rate_cents) * i128::from(minutes) + 30) / 60).try_into()
 }
@@ -156,6 +167,18 @@ pub fn line_amount_cents(rate_cents: i64, minutes: i32) -> Result<i64, std::num:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_sent_invoice_past_its_due_date_is_overdue() {
+        use crate::types::InvoiceStatus::{Draft, Paid, Sent, Void};
+        let due = chrono::NaiveDate::from_ymd_opt(2026, 11, 20).unwrap();
+        let after = due.succ_opt().unwrap();
+        assert!(is_overdue(Sent, due, after));
+        assert!(!is_overdue(Sent, due, due), "due today is not overdue yet");
+        for status in [Draft, Paid, Void] {
+            assert!(!is_overdue(status, due, after), "{status:?}");
+        }
+    }
 
     #[test]
     fn discounted_fee_contribution_leaves_discount_available() {

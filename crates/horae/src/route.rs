@@ -13,7 +13,10 @@ use crate::pages::{
         ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
         ImporterIndex, RunsCursor, SecretFocus,
     },
-    invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoice, NewInvoiceForClient},
+    invoices::{
+        DuplicateInvoice, EditInvoice, InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoice,
+        NewInvoiceForClient,
+    },
     new_project::{EditProject, NewProject, NewProjectForClient},
     people::People,
     permission_audit::PermissionAudit,
@@ -94,10 +97,16 @@ pub enum Route {
     InvoiceList {},
     #[route("/invoices/new")]
     NewInvoice {},
+    // `duplicate` names an invoice whose values and projects step 2 starts from.
     #[route("/invoices/new/client/:client")]
     NewInvoiceForClient { client: String },
+    // A new invoice that starts from invoice `source`'s values and projects.
+    #[route("/invoices/new/client/:client/from/:source")]
+    DuplicateInvoice { client: String, source: Uuid },
     #[route("/invoices/settings")]
     InvoiceSettings {},
+    #[route("/invoices/:id/edit")]
+    EditInvoice { id: Uuid },
     #[route("/invoices/:id")]
     InvoiceDetail { id: Uuid },
     #[layout(AdminShell)]
@@ -163,7 +172,9 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
                 Route::InvoiceList {},
                 Route::NewInvoice {}
                     | Route::NewInvoiceForClient { .. }
+                    | Route::DuplicateInvoice { .. }
                     | Route::InvoiceSettings {}
+                    | Route::EditInvoice { .. }
             )
             | (
                 Route::ImporterIndex {},

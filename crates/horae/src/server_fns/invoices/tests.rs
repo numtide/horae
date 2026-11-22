@@ -3,6 +3,7 @@ use crate::testing::{seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
+mod additions;
 mod authority;
 mod financial_fields;
 mod imported_rates;

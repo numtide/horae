@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, NoAccess};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, NoAccess};
 use crate::models::invoice::{InvoiceDefaults, InvoiceDraftSave, InvoiceGenerationRequest};
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -227,18 +227,16 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
         };
     }
     // A failed check leaves the page usable without invoice actions, as before.
+    // While it runs, the screen shows as it is and its actions wait, so nothing
+    // sits above the page header.
     rsx! {
-        if !loaded() {
-            if loading_error().is_some() {
-                ErrorState {
-                    title: "Could not open invoices",
-                    body: LOAD_FAILED,
-                    onretry: retry,
-                    retry_disabled: checking(),
-                    focus_on_recovery: "invoices-heading",
-                }
-            } else {
-                Loading { label: "Checking invoice recovery…" }
+        if !loaded() && loading_error().is_some() {
+            ErrorState {
+                title: "Could not open invoices",
+                body: LOAD_FAILED,
+                onretry: retry,
+                retry_disabled: checking(),
+                focus_on_recovery: "invoices-heading",
             }
         }
         {children}

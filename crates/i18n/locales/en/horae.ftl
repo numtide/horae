@@ -190,19 +190,177 @@ clients-restored-toast = { $name } restored
 
 ## Invoices
 
+invoices-title = Invoices
+invoices-invoice = Invoice
 invoices-new = New invoice
+invoices-new-for = New invoice for { $client }
 invoices-new-title = New invoice
 invoices-back = Back to Invoices
+invoices-back-to-invoice = Back to invoice
+invoices-more = More
+invoices-settings = Invoice settings
 invoices-permissions-failed = Could not check your invoice access
-invoices-edit-values = Edit invoice values
 invoices-void-ellipsis = Void…
 invoices-void-title = Void invoice { $number }?
 invoices-void-body = The invoice stays on record but can no longer be sent or paid, and its time becomes editable again. This cannot be undone.
 invoices-void-confirm = Void invoice
+invoices-voided = Invoice voided
 invoices-status-draft = Draft
 invoices-status-sent = Sent
+invoices-status-overdue = Overdue
 invoices-status-paid = Paid
 invoices-status-void = Void
+invoices-status-any = Any status
+invoices-client-any = Any client
+invoices-period-any = Any time
+invoices-period-this-month = This month
+invoices-period-last-month = Last month
+invoices-period-this-year = This year
+invoices-period-last-year = Last year
+invoices-period-up-to-today = Everything up to today
+invoices-period-custom = Custom dates
+invoices-period-up-to = Everything up to { $date }
+invoices-period-range = { $from } – { $to }
+invoices-period = Period
+invoices-period-from = From
+invoices-period-to = To
+invoices-period-invalid = Choose a period that ends on or after its start.
+invoices-pick-date = Pick a date
+invoices-search-label = Search by number or client
+invoices-clear-filters = Clear filters
+invoices-none-match = No invoices match these filters
+invoices-empty-title = No invoices yet
+invoices-empty-body = An invoice is made from a client's unbilled time and project fees.
+invoices-loading = Loading invoices…
+invoices-what = invoices
+invoices-view-invoices = Invoices
+invoices-view-uninvoiced = Uninvoiced
+invoices-summary-label = Summary
+invoices-summary-outstanding = Outstanding
+invoices-summary-overdue = Overdue
+invoices-summary-ready = Ready to invoice
+invoices-summary-count = { $count ->
+    [one] 1 invoice
+   *[other] { $count } invoices
+}
+invoices-summary-ready-clients = { $count ->
+    [one] 1 client with unbilled work
+   *[other] { $count } clients with unbilled work
+}
+invoices-column-number = Number
+invoices-column-client = Client
+invoices-column-issued = Issued
+invoices-column-due = Due
+invoices-column-amount = Amount
+invoices-column-status = Status
+invoices-column-project = Project
+invoices-column-description = Description
+invoices-column-hours = Hours
+invoices-column-rate = Rate
+invoices-column-unbilled-time = Unbilled time
+invoices-column-unbilled-amount = Unbilled amount
+invoices-column-fees-due = Fees due
+invoices-uninvoiced-loading = Loading unbilled work…
+invoices-uninvoiced-what = unbilled work
+invoices-uninvoiced-empty-title = Nothing left to invoice
+invoices-uninvoiced-empty-body = Every client's billable time and due fees are on an invoice.
+invoices-detail-title = Invoice { $number }
+invoices-detail-loading = Loading the invoice…
+invoices-detail-what = this invoice
+invoices-download-pdf = Download PDF
+invoices-mark-sent = Mark as sent
+invoices-mark-paid = Mark as paid
+invoices-marked-sent = Invoice marked as sent
+invoices-marked-paid = Invoice marked as paid
+invoices-edit-draft = Edit draft
+invoices-duplicate = Duplicate
+invoices-terms = Payment terms
+invoices-terms-days = { $days ->
+    [0] Due on receipt
+    [one] 1 day
+   *[other] { $days } days
+}
+invoices-terms-on-receipt = Due on receipt
+invoices-terms-net = Net { $days }
+invoices-terms-custom = Custom days
+invoices-terms-days-label = Days until payment is due
+invoices-terms-days-hint = From 0 to 365 days after the invoice date.
+invoices-po-number = PO number
+invoices-optional = Optional
+invoices-tax = Tax (%)
+invoices-tax-hint = Optional, up to two decimal places
+invoices-second-tax-name = Second tax name
+invoices-second-tax = Second tax (%)
+invoices-second-tax-add = Add a second tax
+invoices-second-tax-remove = Remove second tax
+invoices-discount = Discount (%)
+invoices-discount-hint = Applied before tax. Both taxes use the discounted subtotal, without compounding.
+invoices-subtotal = Subtotal
+invoices-total = Total
+invoices-subject = Subject
+invoices-subject-hint = Optional. One line saying what the invoice is for, shown on the invoice.
+invoices-subject-too-long = The subject can have at most 200 characters.
+invoices-notes = Notes
+invoices-step = Step { $step } of { $steps }
+invoices-step-client-title = Who is it for?
+invoices-step-client-hint = Next you choose the period and the projects. Lines come from the client's unbilled time and project fees.
+invoices-continue = Continue
+invoices-clients-loading = Loading clients…
+invoices-clients-what = clients for invoicing
+invoices-client-unavailable = Client unavailable
+invoices-client-unavailable-body = This client cannot be invoiced. It may be archived, or the link may be wrong.
+invoices-choose-client = Choose a client
+invoices-change-client = Change client
+invoices-preparing = Loading the client's projects…
+invoices-duplicating = Starting from invoice { $number }: its values, subject and notes are copied, and its projects are selected. Time already on an invoice is never copied.
+invoices-projects = Projects
+invoices-all-projects = All projects
+invoices-project-archived = { $name } (archived)
+invoices-projects-none = Select at least one project.
+invoices-awaiting-approval = { $duration } of billable time in this period is waiting for approval. It stays out of this invoice until it is approved. <link>Open Approvals</link>
+invoices-defaults-conflict = These projects have different invoice values. Use one project's values, or enter the values below.
+invoices-use-defaults-from = Use the values of { $project }
+invoices-values = Invoice values
+invoices-preview = Preview
+invoices-preview-loading = Loading the preview…
+invoices-preview-updating = Updating the preview…
+invoices-preview-dates = { $count ->
+    [one] Issued { $issued } · due { $due } · 1 line
+   *[other] Issued { $issued } · due { $due } · { $count } lines
+}
+invoices-fee-balance = Agreed { $agreed } · already invoiced, drafts included, { $invoiced } · left { $remaining }
+invoices-refresh-fees = Reload fee sources
+invoices-create-draft = Create draft
+invoices-retry-create = Retry creating the draft
+invoices-request-not-sent = { $reason } No invoice request was sent.
+invoices-recovery-not-cleared = The invoice is saved, but its recovery record could not be cleared: { $reason }
+invoices-generation-uncertain = The draft may have been created. Retry the same request to recover it without creating another.
+invoices-excess-title = Confirm over-invoicing
+invoices-excess-cancel = Cancel over-invoicing
+invoices-excess-create = Confirm excess and create
+invoices-excess-create-body = Creating this draft exceeds the agreed fees by the amounts below, before tax. Cancelling creates nothing.
+invoices-excess-save = Confirm excess and save
+invoices-excess-save-body = Saving exceeds the agreed fees by the amounts below. Cancelling changes nothing.
+invoices-excess-line = { $source } · excess { $amount }
+invoices-edit-title = Edit invoice { $number }
+invoices-editor-loading = Loading the draft…
+invoices-editor-what = this draft
+invoices-details = Details
+invoices-fee-lines = Fee lines
+invoices-fee-lines-hint = Changes apply to this draft only. Agreed fees, time entries and other invoices stay as they are.
+invoices-fee-description = Fee description
+invoices-fee-amount = Fee amount ({ $currency })
+invoices-fee-description-invalid = Fee descriptions need 1 to 1,000 characters.
+invoices-fee-amount-invalid = Enter an exact fee amount with at most two decimal places.
+invoices-fee-amount-negative = Fee amounts cannot be negative.
+invoices-fee-edit-balance = Agreed { $agreed } · on other invoices { $other } · left after this one { $remaining }
+invoices-over-invoiced = Over-invoiced
+invoices-totals = Totals
+invoices-save-draft = Save draft
+invoices-retry-save = Retry saving
+invoices-discard-changes = Discard changes
+invoices-draft-saved = Draft saved
+invoices-save-uncertain = The draft may have been saved. Retry the same changes to recover the result safely.
 
 ## Importers: connection
 

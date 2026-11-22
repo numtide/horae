@@ -2,8 +2,9 @@ use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
 use horae_core::project::Percentage;
 
-use crate::components::form::{FormGroup, Input, Select};
-use crate::models::invoice::{Invoice, InvoiceDefaults};
+use crate::components::form::{FormGroup, Input};
+use crate::components::select_field::SelectField;
+use crate::models::invoice::InvoiceDefaults;
 use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
 
 pub(super) fn fields_from(defaults: &InvoiceDefaults) -> InvoiceDefaultsInput {
@@ -71,6 +72,7 @@ pub(super) fn parse_fields(fields: &InvoiceDefaultsInput) -> Result<InvoiceDefau
 #[component]
 pub(super) fn DefaultsFields(mut fields: Signal<InvoiceDefaultsInput>, disabled: bool) -> Element {
     const TERMS: [&str; 5] = ["0", "15", "30", "45", "60"];
+    let tr = crate::i18n::use_tr();
     let mut custom = use_signal(|| false);
     let custom_terms = custom() || !TERMS.contains(&fields.read().terms_days.as_str());
     let options = TERMS
@@ -79,76 +81,62 @@ pub(super) fn DefaultsFields(mut fields: Signal<InvoiceDefaultsInput>, disabled:
             (
                 days.to_string(),
                 if *days == "0" {
-                    "Due on receipt".into()
+                    tr.invoices_terms_on_receipt()
                 } else {
-                    format!("Net {days}")
+                    tr.invoices_terms_net(*days)
                 },
             )
         })
-        .chain(std::iter::once(("custom".into(), "Custom days".into())))
+        .chain(std::iter::once((
+            "custom".into(),
+            tr.invoices_terms_custom(),
+        )))
         .collect();
+    let pick_terms = use_callback(move |value: String| {
+        custom.set(value == "custom");
+        if value != "custom" {
+            fields.write().terms_days = value;
+        }
+    });
     rsx! {
-        fieldset { class: "border-0 p-0 m-0 min-w-0", disabled, aria_label: "Invoice values",
-            FormGroup { label: "Payment terms", id: "inv-terms",
-                Select { id: "inv-terms", options,
+        fieldset { class: "border-0 p-0 m-0 min-w-0", disabled, aria_label: tr.invoices_values(),
+            FormGroup { label: tr.invoices_terms(), id: "inv-terms",
+                SelectField { id: "inv-terms", label: tr.invoices_terms(), options,
                     selected: if custom_terms { "custom".into() } else { fields.read().terms_days.clone() },
-                    onchange: move |event: FormEvent| {
-                        let value = event.value();
-                        custom.set(value == "custom");
-                        if value != "custom" { fields.write().terms_days = value; }
-                    }
+                    onselect: pick_terms,
                 }
             }
             if custom_terms {
-                FormGroup { label: "Days until payment is due", id: "inv-terms-days", hint: "From 0 to 365 days after the invoice date.",
+                FormGroup { label: tr.invoices_terms_days_label(), id: "inv-terms-days", hint: tr.invoices_terms_days_hint(),
                     Input { id: "inv-terms-days", value: fields.read().terms_days.clone(), oninput: move |event: FormEvent| fields.write().terms_days = event.value() }
                 }
             }
-            FormGroup { label: "PO number", id: "inv-po-number", hint: "Optional",
+            FormGroup { label: tr.invoices_po_number(), id: "inv-po-number", hint: tr.invoices_optional(),
                 Input { id: "inv-po-number", value: fields.read().po_number.clone(), oninput: move |event: FormEvent| fields.write().po_number = event.value() }
             }
-            FormGroup { label: "Tax (%)", id: "inv-tax", hint: "Optional · up to two decimal places",
+            FormGroup { label: tr.invoices_tax(), id: "inv-tax", hint: tr.invoices_tax_hint(),
                 Input { id: "inv-tax", value: fields.read().tax.clone(), oninput: move |event: FormEvent| fields.write().tax = event.value() }
             }
             if let Some(tax) = fields.read().second_tax.clone() {
                 div { class: "grid md:grid-cols-2 gap-3",
-                    FormGroup { label: "Second tax name", id: "inv-second-tax-name",
+                    FormGroup { label: tr.invoices_second_tax_name(), id: "inv-second-tax-name",
                         Input { id: "inv-second-tax-name", value: tax.name, oninput: move |event: FormEvent| {
                             if let Some(tax) = &mut fields.write().second_tax { tax.name = event.value(); }
                         } }
                     }
-                    FormGroup { label: "Second tax (%)", id: "inv-second-tax",
+                    FormGroup { label: tr.invoices_second_tax(), id: "inv-second-tax",
                         Input { id: "inv-second-tax", value: tax.percentage, oninput: move |event: FormEvent| {
                             if let Some(tax) = &mut fields.write().second_tax { tax.percentage = event.value(); }
                         } }
                     }
                 }
-                button { r#type: "button", class: "btn btn-ghost btn-sm mb-4", onclick: move |_| fields.write().second_tax = None, "Remove second tax" }
+                button { r#type: "button", class: "btn btn-ghost btn-sm mb-4", onclick: move |_| fields.write().second_tax = None, {tr.invoices_second_tax_remove()} }
             } else {
-                button { r#type: "button", class: "btn btn-ghost btn-sm mb-4", onclick: move |_| fields.write().second_tax = Some(SecondTaxInput { name: String::new(), percentage: String::new() }), "Add a second tax" }
+                button { r#type: "button", class: "btn btn-ghost btn-sm mb-4", onclick: move |_| fields.write().second_tax = Some(SecondTaxInput { name: String::new(), percentage: String::new() }), {tr.invoices_second_tax_add()} }
             }
-            FormGroup { label: "Discount (%)", id: "inv-discount", hint: "Discount is applied before tax. Both taxes use the discounted subtotal without compounding.",
+            FormGroup { label: tr.invoices_discount(), id: "inv-discount", hint: tr.invoices_discount_hint(),
                 Input { id: "inv-discount", value: fields.read().discount.clone(), oninput: move |event: FormEvent| fields.write().discount = event.value() }
             }
-        }
-    }
-}
-
-#[component]
-pub(super) fn DraftDefaults(
-    invoice: Invoice,
-    editing: Signal<bool>,
-    busy: Signal<bool>,
-    onsaved: EventHandler<()>,
-) -> Element {
-    let storage = use_context::<super::recovery::RecoveryStorage>();
-    if !storage.ready() {
-        return rsx! {};
-    }
-    // The header's "Actions" menu opens the editor.
-    rsx! {
-        if editing() {
-            super::editing::DraftEditor { id: invoice.id, editing, busy, onsaved }
         }
     }
 }
