@@ -1,5 +1,27 @@
 <!--
 Sync Impact Report
+- Version change: 7.0.0 → 7.1.0
+- Bump rationale: MINOR. Principle IV's "Token-authenticated APIs" clause gains one bounded
+  exception: the OAuth2 token and revocation endpoints may redeem codes and refresh tokens and
+  revoke tokens without a session. No principle is removed or redefined. Approved by the
+  maintainer on 2026-11-22 (specs/024-oauth-pkce/constitution-amendment.md, applied verbatim).
+- Modified principles:
+  - IV. Mutations Through Shared Operations: the last bullet of "Token-authenticated APIs" now
+    lets the OAuth2 token and revocation endpoints call the shared OAuth operations with the
+    presented credential as their authority, and bounds what they may write. The rationale
+    gains one sentence.
+- Added sections: none
+- Removed sections: none
+- Templates checked:
+  - .specify/templates/plan-template.md: Constitution Check takes its gates from this file ✅ (no change)
+  - .specify/templates/spec-template.md, tasks-template.md: no principle-driven change ✅
+  - AGENTS.md: the Auth paragraph gains a sentence on OAuth with the 024 PR that adds the
+    endpoints, not with this amendment ⚠ pending
+  - README.md: links the constitution only ✅ (no change)
+- Follow-up: none
+-->
+<!--
+Sync Impact Report (7.0.0)
 - Version change: 6.0.0 → 7.0.0
 - Bump rationale: MAJOR. Principle IV is renamed, and its API clause is redefined from one named
   surface to the class of Horae's token-authenticated HTTP APIs. Approved by the maintainer on
@@ -257,7 +279,15 @@ as a hash, and bound to one person in one organization.
 - A token MUST NOT grant more than its owner could do in the web app at the moment of the
   request.
 - A request authenticated only by a session cookie MUST NOT mutate.
-- Token issue and revocation are themselves mutations and go through server functions.
+- Token issue and revocation are themselves mutations and go through server functions, with one
+  bounded exception for OAuth2. Horae's OAuth2 token and revocation endpoints MAY invoke the
+  shared OAuth operations, without a session, to exchange an authorization code for tokens,
+  exchange a refresh token for new tokens, and revoke a token, with the presented credential as
+  their authority: a single-use code together with its PKCE verifier, a single-use refresh
+  token, or a client's secret. They MUST NOT create or widen an authorization (only a person's
+  approval through a server function does), MUST NOT issue a token with more scopes than that
+  approval, MUST NOT write anything but OAuth credential and authorization state and its audit
+  records, and MUST store every credential only as a hash.
 
 Other additional surfaces (exports, health, plugin hosts) are permitted but MUST NOT mutate.
 
@@ -302,7 +332,9 @@ can bind or create the account that the session will belong to; its authority is
 token together with the operator's own configuration, and it is limited to the least-privileged
 account Horae has. The token-authenticated APIs serve clients that cannot call server functions.
 Letting them call the same operations, rather than their own SQL, keeps authorization and
-validation in one place, which is what this principle protects.
+validation in one place, which is what this principle protects. OAuth2 clients redeem codes and
+refresh tokens without a session by design; bounding what those endpoints may write keeps the
+authorization a person gave as the only source of a token's authority.
 
 ### V. Reproducible Builds & Formatting Gate
 
@@ -344,4 +376,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 7.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-18
+**Version**: 7.1.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-22
