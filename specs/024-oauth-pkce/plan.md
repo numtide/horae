@@ -3,8 +3,8 @@
 **Branch**: `spec/oauth-pkce` (spec, plan and tasks); each PR below lands as its own branch and
 pull request | **Date**: 2026-11-22 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/024-oauth-pkce/spec.md`, with the recommended answers
-to its open questions OQ-1 to OQ-6 until the maintainer decides.
+**Input**: Feature specification from `specs/024-oauth-pkce/spec.md`, with the maintainer's
+decisions D-1 to D-7 (2026-11-22).
 
 ## Summary
 
@@ -15,7 +15,7 @@ them in My settings; administrators register apps and revoke anyone's authorizat
 work on `/api/v1` and on the Harvest-compatible API when it is on, beside personal access tokens,
 narrowed by three scopes that only ever subtract from the person's permissions. Everything runs
 through new shared operations in `ops::oauth`; the token and revocation endpoints need a bounded
-constitution amendment (OQ-3). Seven pull requests, A to G.
+constitution amendment, which the maintainer approved (D-3). Seven pull requests, A to G.
 
 ## Technical Context
 
@@ -56,9 +56,10 @@ addition (022 FR-050); no network in Nix checks
 
 *GATE: checked before Phase 0 and after Phase 1. Checked against constitution 7.0.0.*
 
-**Status: PASS with one gated item.** The token and revocation endpoints (PR C) issue and revoke
-credentials outside server functions, which Principle IV's API clause does not allow. PR A carries
-the amendment (OQ-3 (a)); C depends on A.
+**Status: PASS, with one item that depends on PR A.** The token and revocation endpoints (PR C)
+issue and revoke credentials outside server functions, which Principle IV's API clause in 7.0.0
+does not allow. The maintainer approved the amendment (D-3); PR A applies it as 7.1.0, and C
+depends on A.
 
 - **I. Exactness**: Pass. No durations or money are introduced. Token lifetimes are durations of
   time but not domain quantities; they are `interval`/`timestamptz` values, never floats.
@@ -74,9 +75,10 @@ the amendment (OQ-3 (a)); C depends on A.
     APIs keep calling the same operations; a token never grants more than its person (R-6). Pass.
   - Cookie-only requests still cannot mutate; an OAuth token is not a cookie. Pass.
   - Code exchange, refresh and revocation at `/oauth/token` and `/oauth/revoke`: they issue and
-    revoke credentials without a session, so not through server functions. **Gated on PR A**
-    ([constitution-amendment.md](constitution-amendment.md)). Until approved, the deviation is
-    recorded in *Complexity Tracking*.
+    revoke credentials without a session, so not through server functions. Allowed by the
+    amendment the maintainer approved (D-3,
+    [constitution-amendment.md](constitution-amendment.md)); **PR C waits for PR A** to apply it.
+    Until then the deviation stays in *Complexity Tracking*.
   - `GET /oauth/authorize` writes only to the session (the pending request), like
     `/auth/oidc/start`; no datastore mutation. Pass.
   - The `return_to` session value set by `login_redirect_guard` is session state, not domain data.
@@ -101,7 +103,7 @@ specs/024-oauth-pkce/
 ├── research.md                 # Phase 0
 ├── data-model.md               # Phase 1
 ├── quickstart.md               # Phase 1
-├── constitution-amendment.md   # draft for OQ-3
+├── constitution-amendment.md   # approved text (D-3), applied by PR A
 ├── contracts/
 │   ├── oauth-endpoints.md      # /oauth/authorize, /oauth/token, /oauth/revoke, metadata
 │   ├── server-functions.md     # approval, apps, authorizations
@@ -150,13 +152,13 @@ pages and server functions in `horae`. New modules use the `foo.rs` + `foo/` lay
 
 | PR | Content | Depends on | Stories |
 | --- | --- | --- | --- |
-| A | Constitution amendment (text approved by the maintainer, applied verbatim) | OQ-3 | |
+| A | Constitution amendment (text approved by the maintainer in D-3, applied verbatim) | | |
 | B | Core and storage: `horae-core` scopes, ceiling, redirect and PKCE rules; migration; `ops::oauth` clients and grants operations; `Channel::OAuth` and the narrowed actor; audit writes; configuration | | US3 (ops) |
 | C | Authorization server: `/oauth/authorize`, `return_to`, approval page and its server functions, `/oauth/token`, `/oauth/revoke`, metadata, frame headers, token endpoint limiter | A, B | US1, US2 |
 | D | Administration: apps list, register, edit, secret, enable/disable, delete; per-app authorizations with revoke; built-in Android client | B | US3, US4 (admin) |
 | E | `/api/v1`: OAuth bearer, scope map from the document, `insufficient_scope`, `Me` addition, rate limit per grant, OpenAPI security scheme and snapshot | B (C for end-to-end tests) | US1, US2 |
 | F | My settings "Connected apps" page; Harvest API OAuth tokens with scopes | B, E | US4, US5 |
-| G | Audit log "Apps" kind (OQ-4 (a)); the `oauth-flow` Nix check; docs and NixOS options | C, D, E | US6 |
+| G | Audit log "Apps" kind (D-4); the `oauth-flow` Nix check; docs and NixOS options | C, D, E | US6 |
 
 C and D can be reviewed in parallel after B. The first usable slice for the Android app is
 A + B + C + D + E.
@@ -165,5 +167,5 @@ A + B + C + D + E.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
-| Token and revocation endpoints issue and revoke credentials outside server functions (Principle IV, "token issue and revocation … go through server functions") | OAuth clients have no Horae session and cannot call server functions; RFC 6749 defines these as plain HTTP endpoints | Issuing tokens on the approval page and handing them through the redirect is the implicit grant, which RFC 9700 forbids and the spec excludes (FR-020). Resolved by the amendment in PR A if OQ-3 (a) is chosen; this row stays only under OQ-3 (b) |
+| Token and revocation endpoints issue and revoke credentials outside server functions (Principle IV, "token issue and revocation … go through server functions") | OAuth clients have no Horae session and cannot call server functions; RFC 6749 defines these as plain HTTP endpoints | Issuing tokens on the approval page and handing them through the redirect is the implicit grant, which RFC 9700 forbids and the spec excludes (FR-020). The maintainer approved the amendment (D-3); this row goes once PR A applies it |
 | `return_to` added to sign-in redirects | The person must come back to the approval request after signing in (FR-023) | Encoding the request in the provider's `state` would put client parameters in the identity provider's logs and change the OIDC flow; limited to `/oauth/` paths so sign-in otherwise behaves as before |

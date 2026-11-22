@@ -2,8 +2,8 @@
 
 Compiled 2026-11-22 for [spec.md](spec.md) on branch `spec/oauth-pkce` (master `58d5ad4e`). Part
 1 records what the code does today. Part 2 records each planning decision with what else was
-weighed. Decisions that depend on an open question of the spec say so and use its recommended
-answer.
+weighed. Decisions that follow from one of the maintainer's decisions in the spec (D-1 to D-7)
+cite it. R-19 compares the design with Harvest's public OAuth documentation.
 
 ## 1. Horae today (checked in the code)
 
@@ -150,12 +150,12 @@ answer.
   | Credential | Prefix | Lifetime |
   | --- | --- | --- |
   | Access token | `horae_oat_` | 1 hour |
-  | Refresh token | `horae_ort_` | single use; idle 30 days, absolute 1 year (OQ-2 (a)) |
+  | Refresh token | `horae_ort_` | single use; idle 30 days, absolute 1 year (D-2) |
   | Authorization code | `horae_oac_` | 60 seconds, single use |
   | Client secret | `horae_ocs_` | until replaced |
 
   Client ids are `horae_app_` plus 16 random bytes in base64url (public, not secret, not
-  sequential). The built-in Android client's id is the fixed string `horae-android` (OQ-1 (a)).
+  sequential). The built-in Android client's id is the fixed string `horae-android` (D-1).
   A confidential client's secret is compared by digest with `subtle::ConstantTimeEq`.
 
 - **Rationale**: personal tokens already use this scheme (022 R-6), and SHA-256 is enough for
@@ -264,7 +264,7 @@ answer.
 | Forged approval (CSRF on Allow) | server function, `SameSite=Lax`, session-bound request id | FR-025 | Allow without the session's request id fails |
 | Client impersonation of a public client | consent every time, app name as registered, built-in vs organization label | FR-024, FR-025 | |
 | Refresh token theft | rotation, reuse ends the grant, idle and absolute expiry | FR-043, FR-044 | |
-| Access token theft | 1 hour lifetime, header only (no query, OQ-5), revocation immediate | FR-040, FR-070, FR-071 | query parameter refused |
+| Access token theft | 1 hour lifetime, header only (no query, D-5), revocation immediate | FR-040, FR-070, FR-071 | query parameter refused |
 | Token leakage through logs | secrets never logged; `Debug` prints prefixes; `Cache-Control: no-store` | FR-046, FR-051 | |
 | Brute force at the token endpoint | 256-bit secrets; per-client rate limit | FR-050, FR-081 | |
 | Database theft | only digests stored | FR-050 | |
@@ -278,7 +278,7 @@ Residual risks: a malicious app that claims the built-in client's scheme on a de
 flow and, if the person clicks Allow on a page that names Horae's own app, get tokens. The verifier
 protects codes from *other* flows, not a flow the attacker starts itself. RFC 8252 §8.6 accepts
 this for private-use schemes; claimed `https` redirects (App Links) close it but cannot be
-verified for arbitrary self-hosted hosts (spec OQ-1). The approval page names the app and the
+verified for arbitrary self-hosted hosts (spec D-1). The approval page names the app and the
 person, which is the mitigation.
 
 ### R-12 Token endpoint client authentication
@@ -311,13 +311,12 @@ person, which is the mitigation.
   or `oauth_grant`, `action` one of `client_registered`, `client_updated`, `client_enabled`,
   `client_disabled`, `client_deleted`, `client_secret_replaced`, `grant_approved`,
   `grant_revoked`, `refresh_reused`, `code_reused`, with `data` holding names, scopes and the
-  revocation reason, never a credential. Showing them on `/admin/audit` (OQ-4 (a)) adds an "Apps"
+  revocation reason, never a credential. Showing them on `/admin/audit` (D-4) adds an "Apps"
   kind to `AuditFilter` and a second source in `ops::permissions::audit::page`, merged by time.
+  The page keeps its existing permission check, so only people who may read the log see them.
 - **Rationale**: `audit_log` exists for exactly this and is already written by the Harvest
   client settings; permission receipts are a separate, typed history that should not take
   unrelated events.
-- **Open**: if the maintainer picks OQ-4 (b), only the writes ship and the page change is dropped
-  from the tasks.
 
 ### R-16 Constitution
 
@@ -325,15 +324,16 @@ person, which is the mitigation.
   a hash, and bound to one person in one organization" on the token-authenticated APIs (7.0.0).
   What it does not allow is issuing and revoking tokens outside server functions, which the token
   and revocation endpoints must do. A MINOR amendment adds a bounded clause for them
-  ([constitution-amendment.md](constitution-amendment.md), OQ-3 (a)). It is a draft; the
-  constitution is not edited by this feature's planning.
+  ([constitution-amendment.md](constitution-amendment.md), D-3). The maintainer approved the
+  text on 2026-11-22; PR A applies it, and this feature's planning does not edit the
+  constitution.
 
 ### R-17 Harvest-shaped OAuth (021 US6)
 
-- **Decision**: not in this feature (OQ-6 (a)). Harvest OAuth clients can use the standard
+- **Decision**: not in this feature (D-6). Harvest OAuth clients can use the standard
   endpoints once their identity host and client id are changed, which they need anyway (021
-  OQ-1). What they lack is Harvest's account list; if the maintainer wants it, it is one read
-  endpoint under the Harvest API, added later without touching the authorization server.
+  OQ-1). What they lack is Harvest's account list, which would be one read endpoint under the
+  Harvest API, added later without touching the authorization server.
 
 ### R-18 Discovery and the OpenAPI document
 
@@ -345,3 +345,38 @@ person, which is the mitigation.
   operations as a change. Adding an alternative (OR) keeps every existing request valid, so it is
   not breaking; the first task of PR F checks oasdiff's verdict and, if it flags it, records the
   baseline refresh as the deliberate exception.
+
+### R-19 How Harvest's OAuth differs, and why Horae does not follow it
+
+Harvest's public API documentation, as summarized in
+[021 research](../021-harvest-api-compat/research.md) (*Authentication*), describes this:
+
+| Harvest | Horae (this feature) | Why Horae differs |
+| --- | --- | --- |
+| Authorization code access tokens last 14 days | 1 hour (D-2) | A stolen access token works until it expires or someone revokes the grant, and a theft is rarely noticed. With refresh tokens available, a short access token costs the app one refresh an hour. |
+| A refresh token comes with the access token, with no rotation described | Refresh tokens rotate, and a replay ends the grant (D-2, FR-043) | Public clients cannot keep a secret, so RFC 9700 §4.14.2 requires rotation or sender-constrained tokens for them. Rotation is the one that needs no client key management. |
+| The implicit flow is offered | Not offered (FR-020) | The implicit grant puts the access token in the redirect URI, where it leaks through history and logs; RFC 9700 §2.1.2 says not to use it. |
+| Scopes name accounts: `harvest:{ACCOUNT_ID}`, `harvest:all`, `all` | Scopes name access to Horae's data (`time:read`, `time:write`, `catalog:read`), and a token is bound to one person in one organization | Horae has one organization per instance today, so an account scope would select nothing. Harvest's scopes do not narrow what a token may do inside an account; Horae's do (FR-060 to FR-063). |
+| Authorize, token and account-list endpoints on a separate identity host (`id.getharvest.com`) | The endpoints are on the instance itself, under `/oauth/` (R-2) | A self-hosted instance is its own issuer (`HORAE_PUBLIC_URL`). A second host would add deployment work and gain nothing for a single instance. |
+| No PKCE | PKCE `S256` required for every client, public and confidential, with no exception (D-7, FR-021) | PKCE binds the code to the app that started the flow, which protects against code interception and injection (RFC 9700 §2.1.1, RFC 8252 §8.1). Requiring it for confidential clients as well costs them one parameter and keeps a single rule. |
+
+A client built for Harvest's OAuth therefore does not work against Horae unchanged: besides the
+host and the client id it would need PKCE. If such clients are ever supported, 021's delivery
+step 7 (OAuth2 provider) decides how. That decision must not relax D-7 on Horae's own endpoints.
+
+### R-20 Alternatives weighed for the maintainer's decisions
+
+The spec's planning draft listed D-1 to D-6 as open questions. The options not chosen:
+
+- **D-1**: a built-in client enabled by default (works on install, but leaves an enabled public
+  client on every instance, including those that never use the app); no built-in client, with each
+  administrator registering the app by hand.
+- **D-2**: idle expiry of 30 days with no absolute limit (an app used monthly never asks again);
+  idle 14 days and absolute 90 days (people re-approve each quarter).
+- **D-3**: no amendment, with the deviation repeated in the Complexity Tracking of every plan that
+  touches the token or revocation endpoints.
+- **D-4**: record the events now and show them in the audit log in a later change.
+- **D-5**: accept OAuth tokens in the Harvest API's `access_token` query parameter, as for
+  personal tokens.
+- **D-6**: an account-list endpoint in Harvest's shape under the Harvest-compatible API in this
+  feature.

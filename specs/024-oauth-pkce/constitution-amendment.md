@@ -1,12 +1,10 @@
-# Constitution amendment for 024 OAuth 2.0 with PKCE (draft)
+# Constitution amendment for 024 OAuth 2.0 with PKCE
 
-**Status**: Draft for the maintainer (spec OQ-3). Nothing here is applied; PR A applies the
-approved text to `.specify/memory/constitution.md` with a Sync Impact Report.
+**Status**: Approved by the maintainer on 2026-11-22 (spec D-3), as drafted. Not applied yet: PR A
+applies this text to `.specify/memory/constitution.md` with a Sync Impact Report.
 
 **Version change**: 7.0.0 → 7.1.0 (MINOR: materially expanded guidance inside Principle IV; no
-principle is removed or redefined). If the maintainer reads the new clause as a third exception to
-the opening rule rather than an expansion of the API clause, it is MAJOR (8.0.0) under the
-governance rule; the text is the same either way.
+principle is removed or redefined). The maintainer chose MINOR.
 
 ## Why
 

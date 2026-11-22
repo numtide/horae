@@ -80,7 +80,7 @@ curl -s http://127.0.0.1:8080/oauth/token -d grant_type=refresh_token -d client_
 
 Expected: the first call returns a new refresh token; the second answers `invalid_grant`, and every
 token of the authorization now answers 401. Administration → Audit log, kind "Apps", shows the
-reuse (OQ-4 (a)).
+reuse (D-4).
 
 ## 6. Revoke (US4)
 

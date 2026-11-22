@@ -14,7 +14,7 @@ Query parameters (RFC 6749 §4.1.1, RFC 7636 §4.3):
 | `response_type` | yes | `code` |
 | `client_id` | yes | an enabled client of the organization |
 | `redirect_uri` | yes | matches a registered URI (exact, or loopback with any port) |
-| `code_challenge` | yes | 43–128 characters base64url |
+| `code_challenge` | yes, for public and confidential clients (D-7) | 43–128 characters base64url |
 | `code_challenge_method` | yes | `S256` |
 | `state` | recommended | echoed unchanged, at most 1,024 characters |
 | `scope` | no | space-separated; defaults to the client's scopes |
@@ -135,4 +135,4 @@ Public, `Cache-Control: max-age=3600`:
 | `tokens::authenticate(pool, token) -> Option<Caller>` | both APIs | digest lookup joined with grant, client and person; stamps `last_used_at` once a minute; returns `Channel::OAuth` |
 
 The token endpoint's operations have no `Actor`: their authority is the presented code with its
-verifier, the refresh token, or the client secret (constitution amendment draft).
+verifier, the refresh token, or the client secret (constitution amendment, approved in D-3).

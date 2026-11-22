@@ -10,7 +10,7 @@ an addition (022 FR-050).
 | Prefix | `horae_pat_` | `horae_oat_` |
 | `/api/v1`, `Authorization: Bearer` | yes | yes |
 | Harvest API, `Authorization: Bearer` | yes | yes |
-| Harvest API, `access_token` query parameter | yes | **no**, 401 (OQ-5 (a)) |
+| Harvest API, `access_token` query parameter | yes | **no**, 401 (D-5) |
 | Scopes apply | no (full authority of the person) | yes |
 | Rate limit key | token | grant |
 | `Harvest-Account-Id` check | yes | yes |

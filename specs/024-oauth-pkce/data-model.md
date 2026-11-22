@@ -18,7 +18,7 @@ never edited. Credentials are stored as SHA-256 digests only (FR-050), like `api
 | `redirect_uris` | text[] | 1–10 entries, each valid for `kind` (FR-011, checked in `horae-core`) |
 | `scopes` | text[] | non-empty subset of `time:read`, `time:write`, `catalog:read` |
 | `built_in` | boolean | true only for the shipped Android client; its `client_id`, `kind` and `redirect_uris` cannot change |
-| `enabled` | boolean | built-in client starts `false` (OQ-1 (a)); registered apps start `true` |
+| `enabled` | boolean | built-in client starts `false` (D-1); registered apps start `true` |
 | `created_by` | uuid NULL FK `users` | the registering administrator; NULL for the built-in client |
 | `created_at`, `updated_at` | timestamptz | `set_updated_at()` trigger |
 
@@ -40,7 +40,7 @@ tokens. The built-in client cannot be deleted, only disabled.
 | `scopes` | text[] | what the person approved; subset of the client's scopes at approval |
 | `approved_at` | timestamptz | `now()` |
 | `last_used_at` | timestamptz NULL | stamped at most once a minute by authentication or refresh (FR-053) |
-| `expires_at` | timestamptz | `approved_at` + absolute refresh limit (1 year, OQ-2 (a)) |
+| `expires_at` | timestamptz | `approved_at` + absolute refresh limit (1 year, D-2) |
 | `revoked_at` | timestamptz NULL | set once |
 | `revoked_by` | uuid NULL | the person or administrator; NULL when the app or Horae revoked |
 | `revoke_reason` | `oauth_revoke_reason` NULL | `person`, `administrator`, `client`, `refresh_reuse`, `code_reuse`, `client_deleted` |
@@ -94,7 +94,7 @@ Expired rows are deleted by the scheduler after a day. No `revoked_at`: revocati
 | `grant_id` | uuid FK `oauth_grants` ON DELETE CASCADE | |
 | `token_sha256` | bytea UNIQUE | |
 | `scopes` | text[] | carried into the next access token |
-| `idle_expires_at` | timestamptz | issue + 30 days (OQ-2 (a)); never after the grant's `expires_at` |
+| `idle_expires_at` | timestamptz | issue + 30 days (D-2); never after the grant's `expires_at` |
 | `used_at` | timestamptz NULL | set when exchanged; a token with `used_at` set that is presented again revokes the grant (R-8) |
 
 ## Session data (no table)

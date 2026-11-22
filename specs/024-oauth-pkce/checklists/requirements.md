@@ -36,8 +36,7 @@
 - The spec names protocol elements (RFC parameter names, error codes, the metadata path) and the
   two existing API paths. These are the externally visible contract that clients must follow, not
   implementation choices, so the "no implementation details" items pass.
-- Six decisions belong to the maintainer and are recorded as OQ-1 to OQ-6 with recommendations
-  instead of `[NEEDS CLARIFICATION]` markers. Requirements that depend on one name it, and the plan
-  uses the recommended answer until the maintainer decides.
+- The maintainer's decisions (2026-11-22) are recorded in the spec as D-1 to D-7, in place of
+  `[NEEDS CLARIFICATION]` markers. Requirements that follow from one cite it.
 - SC-002 names AppAuth as an example of a conforming library; the criterion is conformance to
   RFC 8252 and PKCE, not that library.

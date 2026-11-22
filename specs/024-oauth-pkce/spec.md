@@ -4,8 +4,8 @@
 
 **Created**: 2026-11-22
 
-**Status**: Draft. The open questions (OQ-1 to OQ-6) wait for the maintainer; the requirements
-that depend on one are marked with it and use the recommended answer until it is settled.
+**Status**: Ready for implementation. The maintainer settled the open questions on 2026-11-22
+(*Decisions* D-1 to D-7); requirements that follow from one cite it.
 
 **Input**: User description: "OAuth 2.0 authorization code with PKCE for Horae's APIs (`/api/v1`
 and the optional Harvest-compatible API), so native and third-party clients act for a person
@@ -50,58 +50,40 @@ sign-in in the browser and get back a token.
 - **C-6 Mutations go through shared operations** (constitution IV). A token never grants more than
   its owner could do in the web app at the moment of the request.
 
-## Open questions for the maintainer
+## Decisions (maintainer, 2026-11-22)
 
-Each has a recommendation, which the rest of this document uses until the maintainer decides.
+The planning drafts listed these as open questions with recommendations. The maintainer chose
+the following; the alternatives that were weighed are in research R-20.
 
-- **OQ-1: How does a published app get a client registration on every Horae instance?** A store
-  app is built once and used against many self-hosted instances, each with its own administrator.
-  App Links cannot be verified for hosts unknown when the app is built, so its redirect must be a
-  private-use URI scheme or a loopback address.
-  - (a) *Built-in first-party client, off until an administrator turns it on* (recommended):
-    Horae ships one public client for its own Android app, with a fixed client id and redirect
-    URI. It appears in the administrators' app list, disabled by default; one switch enables it.
-  - (b) *Built-in and on by default*: works on install with no administrator step, at the cost of
-    an enabled public client on every instance, including those that never use the app.
-  - (c) *No built-in client*: each administrator registers the app by hand with the id and
-    redirect URI from the app's documentation.
-- **OQ-2: Refresh token lifetime.** Access tokens last one hour (FR-040).
-  - (a) *Idle expiry of 30 days, absolute limit of 1 year* (recommended): an app used at least
-    monthly stays signed in for a year, then the person signs in again.
-  - (b) *Idle expiry of 30 days, no absolute limit*: an app used monthly never asks again; only
-    revocation or deactivation ends it.
-  - (c) *Idle 14 days, absolute 90 days*: closer to strict enterprise defaults; people re-approve
-    each quarter.
-- **OQ-3: The token endpoint issues credentials outside a server function.** Principle IV says
-  "token issue and revocation are themselves mutations and go through server functions". The
-  token and revocation endpoints are called by programs that have no session, so they cannot. A
-  draft amendment is in [constitution-amendment.md](constitution-amendment.md).
-  - (a) *Amend Principle IV with a bounded OAuth clause* (recommended): the token and revocation
-    endpoints may run the shared OAuth operations, authorized by a code with its PKCE verifier, a
-    refresh token or a client secret, and nothing else.
-  - (b) *Record the deviation in the plan's Complexity Tracking only*: no amendment; every later
-    plan that touches these endpoints repeats the justification.
-- **OQ-4: Does the audit log show app events in this feature?** The log at `/admin/audit` shows
-  permission changes only. App registrations, approvals, revocations and refresh token reuse are
-  recorded either way (FR-100).
-  - (a) *Record now, show in the audit log in this feature* (recommended): a new "Apps" kind in the
-    log's filter, with one sentence per event.
-  - (b) *Record now, show later*: the records wait in storage for a later change to the log.
-- **OQ-5: May the Harvest-compatible API accept an OAuth access token in the `access_token` query
-  parameter?** Harvest clients send personal tokens there, and 022 kept it for them. The OAuth
-  security best practice (RFC 9700) forbids access tokens in query strings.
-  - (a) *Header only for OAuth tokens on both APIs* (recommended): the query parameter keeps
-    working for personal access tokens on the Harvest-compatible API and refuses OAuth tokens.
-  - (b) *Accept both on the Harvest-compatible API*, as for personal tokens.
-- **OQ-6: Does this feature also offer the Harvest-shaped OAuth endpoints of 021 US6** (Harvest's
-  authorize, token and account-list request and response shapes at Harvest-like paths), so
-  Harvest OAuth clients work with only a host change?
-  - (a) *No; 021 US6 stays a later step on top of this feature* (recommended): Harvest OAuth
-    clients already need a source change for their embedded client id and identity host, and the
-    standard endpoints here serve them once they are pointed at Horae. The account list is the
-    one piece they would miss.
-  - (b) *Yes*: add an account-list endpoint in Harvest's shape under the Harvest-compatible API, on
-    when it is on.
+- **D-1 Client registration for the store app.** A store app is built once and used against many
+  self-hosted instances, and App Links cannot be verified for hosts unknown when it is built, so
+  its redirect is a private-use URI scheme or a loopback address. Horae ships one built-in public
+  client for its own Android app, `horae-android`, with a fixed redirect URI. It appears in the
+  administrators' app list and stays disabled until an administrator enables it (FR-005).
+- **D-2 Token lifetimes.** Access tokens last one hour. Refresh tokens rotate, stop working after
+  30 days without use, and stop one year after the authorization was approved (FR-040, FR-043,
+  FR-044).
+- **D-3 Constitution.** Principle IV says "token issue and revocation are themselves mutations and
+  go through server functions", and the token and revocation endpoints are called by programs with
+  no session. The maintainer approved the bounded clause in
+  [constitution-amendment.md](constitution-amendment.md) (7.1.0): those endpoints may run the
+  shared OAuth operations, authorized by a code with its PKCE verifier, a refresh token or a client
+  secret, and nothing else. PR A of the plan applies it.
+- **D-4 Audit log.** App registrations, approvals, revocations and code or refresh token reuse are
+  recorded (FR-100) and shown in this feature, as an "Apps" kind in the audit log's filter with one
+  sentence per event. Only people who may read the log see them (FR-101, C-4).
+- **D-5 Query parameter.** OAuth access tokens are accepted in the `Authorization` header only, on
+  both APIs (RFC 9700). On the Harvest-compatible API the `access_token` query parameter keeps
+  working for personal access tokens and refuses OAuth tokens (FR-071).
+- **D-6 No Harvest-shaped OAuth endpoints.** This feature offers only the standard endpoints.
+  Harvest OAuth clients already need a source change for their embedded client id and identity
+  host, and the standard endpoints serve them once they point at Horae; Harvest's account list is
+  the one piece they would miss, and 021 US6 stays a later step on top of this feature.
+- **D-7 PKCE for every client.** Every authorization request carries a PKCE `S256` challenge,
+  from public and confidential clients alike, with no exception (FR-021). Harvest's OAuth does not
+  use PKCE; if clients built for Harvest's OAuth are ever supported, 021's step 7 decides how, and
+  this rule does not bend for them. Research R-19 records how Harvest's public auth documentation
+  differs.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -169,7 +151,7 @@ idle past its expiry and check that it is refused.
    **Then** the request is refused and every access and refresh token of that authorization stops
    working at once.
 1. **Given** an authorization unused for longer than the idle expiry, or older than the absolute
-   limit (OQ-2), **When** its refresh token is used, **Then** it is refused and the app must send the
+   limit (D-2), **When** its refresh token is used, **Then** it is refused and the app must send the
    person through the browser again.
 1. **Given** the person is deactivated, **When** the app uses any of its tokens, **Then** they are
    refused; reactivation restores tokens that have not expired.
@@ -187,7 +169,7 @@ the secret once. Later the administrator edits the redirect addresses, issues a 
 disables the app, which stops all its tokens.
 
 **Why this priority**: No flow can start without a registered client, and Horae has no dynamic
-registration (FR-012). The built-in Android client of OQ-1 (a) is one entry in the same list.
+registration (FR-012). The built-in Android client of D-1 is one entry in the same list.
 
 **Independent Test**: Register a public and a confidential app, run User Story 1 with each,
 disable one and see its tokens refused; as a member, try to open the page and see it refused.
@@ -259,7 +241,7 @@ set, and compare with the same calls made with a personal token.
 1. **Given** an access token without time write access, **When** a tool creates a time entry,
    **Then** it is refused for insufficient scope and nothing changes.
 1. **Given** an OAuth access token in the `access_token` query parameter, **When** it reaches the
-   Harvest-compatible API, **Then** it is refused (OQ-5 (a)).
+   Harvest-compatible API, **Then** it is refused (D-5).
 1. **Given** the Harvest-compatible API off, **When** a request with an OAuth token reaches its
    paths, **Then** it answers 404 as for any unknown path.
 
@@ -280,7 +262,7 @@ as a member.
 
 1. **Given** app registrations, approvals, revocations and a refresh token reuse, **When** an
    administrator reads the audit log, **Then** each appears once, with who acted, which app and
-   which person, and no token or secret (OQ-4).
+   which person, and no token or secret (D-4).
 1. **Given** a member, **When** they look for any of these records, **Then** there is no view or
    link that shows them.
 
@@ -351,7 +333,7 @@ ______________________________________________________________________
 - **FR-004**: Each app MUST have a client id that is unique, public and not guessable from another.
 - **FR-005**: Horae MUST ship a built-in public client for its own Android app, with a fixed client
   id and redirect URI, listed with the other apps and disabled until an administrator enables it
-  (OQ-1 (a)). Administrators can disable it again but not delete it or edit its id, redirect URI
+  (D-1). Administrators can disable it again but not delete it or edit its id, redirect URI
   or type.
 
 #### Redirect URIs
@@ -372,7 +354,8 @@ ______________________________________________________________________
   (`response_type=code`) only. The implicit grant and the resource owner password grant MUST NOT
   be offered.
 - **FR-021**: Every authorization request MUST carry a PKCE `code_challenge` with method `S256`,
-  for public and confidential clients alike. A missing challenge or the `plain` method is refused.
+  for public and confidential clients alike, with no exception for any client (D-7). A missing
+  challenge or the `plain` method is refused.
 - **FR-022**: An unknown client, a disabled client, or a redirect URI that does not match the
   registration MUST be reported on Horae's own page without redirecting. Any other error MUST be
   returned to the client's redirect URI with an `error` code, the client's `state`, and `iss`.
@@ -410,7 +393,7 @@ ______________________________________________________________________
 - **FR-043**: Refresh tokens MUST rotate: each one works once. Presenting a refresh token that has
   already been exchanged MUST end the whole authorization (all its access and refresh tokens).
 - **FR-044**: A refresh token MUST stop working after 30 days without use or one year after the
-  authorization was approved, whichever comes first (OQ-2 (a)). Both values are operator settings.
+  authorization was approved, whichever comes first (D-2). Both values are operator settings.
 - **FR-045**: A refresh request MAY ask for a subset of the granted scopes, never more.
 - **FR-046**: Token endpoint errors MUST use the OAuth 2.0 error response (RFC 6749 §5.2:
   `invalid_request`, `invalid_client`, `invalid_grant`, `unauthorized_client`,
@@ -458,7 +441,7 @@ ______________________________________________________________________
   `error="invalid_token"` or `error="insufficient_scope"`.
 - **FR-071**: When enabled, the Harvest-compatible API MUST accept OAuth access tokens in the
   `Authorization` header with the same `Harvest-Account-Id` check as personal tokens. It MUST refuse
-  them in the `access_token` query parameter (OQ-5 (a)). Its session-cookie reads are unchanged.
+  them in the `access_token` query parameter (D-5). Its session-cookie reads are unchanged.
 - **FR-072**: `/api/v1/me` MUST say, for an OAuth token, which app and which scopes it carries, as
   a backward-compatible addition (022 FR-050).
 - **FR-073**: The published OpenAPI document MUST describe the OAuth flow (authorization and token
@@ -485,7 +468,7 @@ ______________________________________________________________________
 - **FR-094**: Registering, editing and disabling apps, replacing a secret, approving and revoking
   authorizations from the web app are mutations and MUST go through shared operations called by
   server functions (constitution IV). The code exchange, refresh and revocation endpoints MUST go
-  through shared operations too, under the amendment of OQ-3.
+  through shared operations too, under the amendment approved in D-3.
 
 #### Discovery
 
@@ -499,8 +482,8 @@ ______________________________________________________________________
   replaced a secret, each authorization approved, each authorization revoked and by whom (person,
   administrator, the app itself, or Horae after a reuse), and each refresh token or code reuse.
   Records carry ids and names, never a credential.
-- **FR-101**: Only administrators MAY read these records. In this feature they appear in the audit
-  log under their own kind (OQ-4 (a)).
+- **FR-101**: Only people who may read the audit log MAY read these records. In this feature they
+  appear in the audit log under their own kind, "Apps" (D-4).
 
 ### Key Entities
 
@@ -561,7 +544,7 @@ ______________________________________________________________________
 Harvest-compatible API. This feature builds the provider once, in the standard shapes, for both
 APIs. 021 FR-060 (registration) and FR-062 (people see and revoke) are met here; FR-061's
 standard parts (approval screen, code exchange, refresh, rotation, hashed storage) are met here,
-and its Harvest-shaped account list stays with 021 (OQ-6).
+and its Harvest-shaped account list stays with 021 (D-6).
 
 ## Out of scope
 
@@ -576,4 +559,5 @@ and its Harvest-shaped account list stays with 021 (OQ-6).
 - Push notifications, device registration, idempotency keys and conflict control for offline writes,
   which the Android study lists after OAuth.
 - The Android app itself.
-- Harvest-shaped OAuth endpoints (OQ-6 (a)).
+- Harvest-shaped OAuth endpoints (D-6), and any exception to PKCE for clients built for Harvest's
+  OAuth (D-7).

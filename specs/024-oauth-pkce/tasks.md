@@ -11,8 +11,8 @@ spec's success criteria (SC-003, SC-005, SC-006, SC-007, SC-008) are measured by
 **Organization**: one phase per pull request (plan.md *PR split*), as in 022, in an order that
 respects the dependencies. Each task carries the user story it serves (`[US1]`–`[US6]`) when it
 serves one; infrastructure tasks carry none. Each PR ends with a checkpoint that it passes
-`nix flake check` on its own. Tasks marked *(OQ-n)* follow the recommended answer and change if
-the maintainer picks another.
+`nix flake check` on its own. Tasks marked *(D-n)* carry out one of the maintainer's decisions in
+the spec.
 
 ## Format: `[ID] [P?] [Story?] Description with file path`
 
@@ -24,7 +24,7 @@ the maintainer picks another.
 
 | PR | Depends on | Can start with |
 | --- | --- | --- |
-| A | maintainer's answer to OQ-3 | B |
+| A | — (text approved, D-3) | B |
 | B | — | A |
 | C | A, B | D |
 | D | B | C |
@@ -34,13 +34,13 @@ the maintainer picks another.
 
 ______________________________________________________________________
 
-## Phase 1: PR A — Constitution amendment *(OQ-3)*
+## Phase 1: PR A — Constitution amendment *(D-3)*
 
 **Goal**: Principle IV allows the token and revocation endpoints, within bounds.
 
-**Independent test**: the constitution reads 7.1.0 (or 8.0.0) with the approved clause.
+**Independent test**: the constitution reads 7.1.0 with the approved clause.
 
-- [ ] T001 [US1] Apply the approved text of `specs/024-oauth-pkce/constitution-amendment.md` to `.specify/memory/constitution.md`: replace the last bullet of the *Token-authenticated APIs* clause, append the rationale sentence, add the Sync Impact Report and bump the version line (MINOR or MAJOR as the maintainer decides)
+- [ ] T001 [US1] Apply the approved text of `specs/024-oauth-pkce/constitution-amendment.md` to `.specify/memory/constitution.md`: replace the last bullet of the *Token-authenticated APIs* clause, append the rationale sentence, add the Sync Impact Report and bump the version line to 7.1.0 (MINOR, as approved)
 - [ ] T002 Checkpoint: `nix fmt -- --ci` clean; PR A opened
 
 ______________________________________________________________________
@@ -63,8 +63,8 @@ an actor loaded with `Channel::OAuth` has `grants ∩ ceiling` and no administra
 ### Implementation
 
 - [ ] T007 [US1] Add `crates/core/src/permissions/oauth.rs` (module root, registered in `crates/core/src/permissions.rs`) with `Scope`, `ScopeSet`, `ceiling()` (research R-6 table), `RedirectUri`, `ClientKind` and `pkce::verify` (constant-time comparison with `subtle`, or a local constant-time loop if `horae-core` must stay free of the dependency)
-- [ ] T008 Write `crates/server/migrations/0005_oauth.sql` (next free number) with the enums `oauth_client_kind` and `oauth_revoke_reason`, the five tables, checks, indexes and cascades of `data-model.md`, the `set_updated_at()` trigger on `oauth_clients`, and one disabled built-in Android client per existing organization (constants in `contracts/configuration.md`) *(OQ-1)*
-- [ ] T009 Create the built-in client for a new organization in the organization creation path used by `init` and the test fixtures (`crates/server/src/init.rs` and `crates/server/src/testing.rs`) *(OQ-1)*
+- [ ] T008 Write `crates/server/migrations/0005_oauth.sql` (next free number) with the enums `oauth_client_kind` and `oauth_revoke_reason`, the five tables, checks, indexes and cascades of `data-model.md`, the `set_updated_at()` trigger on `oauth_clients`, and one disabled built-in Android client per existing organization (constants in `contracts/configuration.md`) *(D-1)*
+- [ ] T009 Create the built-in client for a new organization in the organization creation path used by `init` and the test fixtures (`crates/server/src/init.rs` and `crates/server/src/testing.rs`) *(D-1)*
 - [ ] T010 Add `Channel::OAuth { grant_id, token_id, scopes }` in `crates/server/src/ops/actor.rs`; in `Actor::load_with` treat it as a person channel, intersect the loaded grants with `scopes.ceiling()`, make `administrator()` false for it, and add `Actor::scopes()`; add `Caller::oauth(…)` in `crates/server/src/ops.rs`
 - [ ] T011 Update every `match` on `Channel` for the new variant: `ops::people::add` refuses it like `Token` (`crates/server/src/ops/people.rs`), `ops::api_tokens::identity` answers not found for it (`crates/server/src/ops/api_tokens.rs`)
 - [ ] T012 [P] Tests for the narrowed actor (member and administrator with each scope set; deactivated person; missing organization) in `crates/server/src/ops/actor/tests.rs`
@@ -74,7 +74,7 @@ an actor loaded with `Channel::OAuth` has `grants ∩ ceiling` and no administra
 - [ ] T016 Implement `crates/server/src/ops/oauth/audit.rs` writing `audit_log` rows for every action of research R-15, with names, scopes and reasons in `data` and no credential
 - [ ] T017 [P] [US3] Tests for client operations (validation, administrator only, built-in rules, disable keeps grants, delete cascades, secret replaced once) in `crates/server/src/ops/oauth/clients/tests.rs`
 - [ ] T018 [P] [US4] Tests for grant listing and revocation by person and administrator, with audit rows asserted, in `crates/server/src/ops/oauth/grants/tests.rs`
-- [ ] T019 Add `PublicUrl` and `OAuthConfig` (access TTL, refresh idle, refresh max, token endpoint limit) to `crates/server/src/config.rs` with the bounds and errors of `contracts/configuration.md`, and tests beside the existing config tests *(OQ-2)*
+- [ ] T019 Add `PublicUrl` and `OAuthConfig` (access TTL, refresh idle, refresh max, token endpoint limit) to `crates/server/src/config.rs` with the bounds and errors of `contracts/configuration.md`, and tests beside the existing config tests *(D-2)*
 - [ ] T020 Add the expired-row cleanup for `oauth_codes` and `oauth_access_tokens` (older than a day) to the scheduler's periodic work in `crates/server/src/scheduler.rs`
 - [ ] T021 Regenerate `.sqlx/` (AGENTS.md *sqlx query cache*), exclude the new tables from the migration snapshot tests if they compare whole schemas, and run `cargo clippy -p horae-server --all-targets`
 - [ ] T022 Checkpoint: `nix flake check` passes; PR B opened
@@ -90,7 +90,7 @@ of research R-11 pass.
 
 ### Tests first
 
-- [ ] T023 [P] [US1] Router tests for `GET /oauth/authorize`: every check of `contracts/oauth-endpoints.md` in order (page error vs redirect error), `iss` and `state` on redirects, the security headers, `Cache-Control: no-store`, session storage of the request (max 5, 10-minute expiry), in `crates/api/src/oauth/authorize/tests.rs`
+- [ ] T023 [P] [US1] Router tests for `GET /oauth/authorize`: every check of `contracts/oauth-endpoints.md` in order (page error vs redirect error), a missing or `plain` challenge refused for a public and for a confidential client alike *(D-7)*, `iss` and `state` on redirects, the security headers, `Cache-Control: no-store`, session storage of the request (max 5, 10-minute expiry), in `crates/api/src/oauth/authorize/tests.rs`
 - [ ] T024 [P] [US1] Router tests for `POST /oauth/token` with `authorization_code`: success shape, wrong verifier, missing verifier, verifier for another challenge, code of another client, other `redirect_uri`, expired code, replayed code revokes the grant, public client with a secret, confidential client without or with a wrong secret (Basic and post), in `crates/api/src/oauth/token/tests.rs`
 - [ ] T025 [P] [US2] Router tests for `refresh_token`: rotation, replay revokes the whole grant, concurrent double use (one success, grant revoked), idle expiry, absolute expiry, narrower scope, wider scope refused, grant revoked, client disabled, person deactivated, in `crates/api/src/oauth/token/refresh_tests.rs`
 - [ ] T026 [P] [US4] Router tests for `POST /oauth/revoke` (access token, refresh token, unknown, twice, another client's token is not revoked and still answers 200) in `crates/api/src/oauth/revoke/tests.rs`
@@ -164,7 +164,7 @@ ______________________________________________________________________
 - [ ] T063 [US4] Add the route `SettingsApps` (`/settings/apps`) in the SETTINGS group after API tokens in `crates/horae/src/route.rs` and the settings side menu, and the page `crates/horae/src/pages/settings/apps.rs` per `contracts/server-functions.md`
 - [ ] T064 [P] [US4] Catalog entries for the page under `## Apps` in `crates/i18n/locales/en/horae.ftl`
 - [ ] T065 [P] [US4] UI tests for the page (list, revoke through `ConfirmDialog`, empty state, no audit link) in `crates/horae/tests/oauth_settings_ui.rs`
-- [ ] T066 [US5] In `crates/harvest-api/src/auth.rs`, accept `horae_oat_` tokens from the header only (OQ-5 (a)), refuse them from `access_token`, keep the `Harvest-Account-Id` check, and key the limiter by grant
+- [ ] T066 [US5] In `crates/harvest-api/src/auth.rs`, accept `horae_oat_` tokens from the header only (D-5), refuse them from `access_token`, keep the `Harvest-Account-Id` check, and key the limiter by grant
 - [ ] T067 [US5] Add a scope column to the route table in `crates/harvest-api/src/lib.rs` per `contracts/api-changes.md`, enforce it for OAuth callers with 403 and `WWW-Authenticate`, and add a test that every route names a scope
 - [ ] T068 [P] [US5] Tests: OAuth reads and writes per scope against the personal-token results, query parameter refused, switch off answers 404, in `crates/harvest-api/src/oauth_tests.rs`
 - [ ] T069 Checkpoint: `nix flake check` passes; PR F opened
@@ -177,13 +177,13 @@ ______________________________________________________________________
 
 **Independent test**: quickstart step 5's audit part; `nix build .#checks.x86_64-linux.oauth-flow`.
 
-- [ ] T070 [US6] Add an "Apps" kind to `AuditFilter` (`crates/types/src/permission_audit.rs`) and read `audit_log` rows of `entity_type` `oauth_client`/`oauth_grant` as a second source merged by time in `crates/server/src/ops/permissions/audit.rs` *(OQ-4)*
-- [ ] T071 [US6] Render one sentence per app event in `crates/horae/src/pages/permission_audit.rs` with catalog messages under `## Audit log`, and extend DESIGN.md *Audit log* *(OQ-4)*
-- [ ] T072 [P] [US6] Tests: each event appears once with actor, app and person; members get nothing, in `crates/server/src/ops/permissions/audit/tests.rs` and `crates/horae/src/pages/permission_audit/tests.rs` *(OQ-4)*
+- [ ] T070 [US6] Add an "Apps" kind to `AuditFilter` (`crates/types/src/permission_audit.rs`) and read `audit_log` rows of `entity_type` `oauth_client`/`oauth_grant` as a second source merged by time in `crates/server/src/ops/permissions/audit.rs` *(D-4)*
+- [ ] T071 [US6] Render one sentence per app event in `crates/horae/src/pages/permission_audit.rs` with catalog messages under `## Audit log`, and extend DESIGN.md *Audit log* *(D-4)*
+- [ ] T072 [P] [US6] Tests: each event appears once with actor, app and person; members get nothing, in `crates/server/src/ops/permissions/audit/tests.rs` and `crates/horae/src/pages/permission_audit/tests.rs` *(D-4)*
 - [ ] T073 Add `nix/checks/oauth-flow.nix`: start PostgreSQL and the server as `nix/checks/tests.nix` does with `HORAE_PUBLIC_URL` and `DEV_LOGIN=1`, register a public client through the seed, drive the approval with `curl` and the session cookie, then run quickstart steps 3 to 7 with `curl` and `jq`; register it in the flake checks
 - [ ] T074 [P] Add `services.horae.publicUrl` and `services.horae.oauth.*` to `nix/modules/nixos/horae.nix` with descriptions, passing the variables of `contracts/configuration.md`
 - [ ] T075 [P] Update AGENTS.md (*Auth* paragraph, the HTTP surfaces list) and README.md with the authorization server and its settings
-- [ ] T076 Mark 021 FR-060 and FR-062 as met by 024 and FR-061 as met except the account list, with a link, in `specs/021-harvest-api-compat/spec.md` *(OQ-6)*
+- [ ] T076 Mark 021 FR-060 and FR-062 as met by 024 and FR-061 as met except the account list, with a link, in `specs/021-harvest-api-compat/spec.md` *(D-6)*
 - [ ] T077 Checkpoint: `nix flake check` passes; PR G opened
 
 ______________________________________________________________________
@@ -197,7 +197,7 @@ ______________________________________________________________________
 
 ## Implementation strategy
 
-1. Get the maintainer's answers to OQ-1 to OQ-6. Only OQ-3 blocks a PR (C needs A).
+1. Land A first: C needs the approved amendment applied.
 1. MVP for the Android app: A, B, C, D, E. At that point a registered or built-in public client
    can sign a person in and use `/api/v1`.
 1. Then F (people manage their own apps; Harvest tools) and G (audit, the Nix check, docs).
