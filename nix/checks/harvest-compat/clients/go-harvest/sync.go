@@ -37,13 +37,14 @@ func ids[T any](items []*T, id func(*T) *int64) []int64 {
 }
 
 // follow fetches an absolute link the server handed out and decodes it.
-func follow[L any](ctx context.Context, client *harvest.APIClient, link string, list *L) error {
+func follow[L any](ctx context.Context, client *harvest.APIClient, link string) (*L, error) {
+	var list L
 	req, err := client.NewRequest(ctx, http.MethodGet, link, nil)
 	if err != nil {
-		return err
+		return &list, err
 	}
-	_, err = client.Do(ctx, req, list)
-	return err
+	_, err = client.Do(ctx, req, &list)
+	return &list, err
 }
 
 func syncedLists(ctx context.Context, client *harvest.APIClient) []syncedList {
@@ -71,8 +72,8 @@ func syncedLists(ctx context.Context, client *harvest.APIClient) []syncedList {
 				return timeEntries(l), err
 			},
 			byLink: func(link string) (listing, error) {
-				var l harvest.TimeEntryList
-				return timeEntries(&l), follow(ctx, client, link, &l)
+				l, err := follow[harvest.TimeEntryList](ctx, client, link)
+				return timeEntries(l), err
 			},
 			since: func(mark time.Time) (listing, error) {
 				l, _, err := client.Timesheet.List(ctx, &harvest.TimeEntryListOptions{UpdatedSince: &mark})
@@ -86,8 +87,8 @@ func syncedLists(ctx context.Context, client *harvest.APIClient) []syncedList {
 				return clients(l), err
 			},
 			byLink: func(link string) (listing, error) {
-				var l harvest.ClientList
-				return clients(&l), follow(ctx, client, link, &l)
+				l, err := follow[harvest.ClientList](ctx, client, link)
+				return clients(l), err
 			},
 			since: func(mark time.Time) (listing, error) {
 				l, _, err := client.Client.List(ctx, &harvest.ClientListOptions{UpdatedSince: mark})
@@ -101,8 +102,8 @@ func syncedLists(ctx context.Context, client *harvest.APIClient) []syncedList {
 				return projects(l), err
 			},
 			byLink: func(link string) (listing, error) {
-				var l harvest.ProjectList
-				return projects(&l), follow(ctx, client, link, &l)
+				l, err := follow[harvest.ProjectList](ctx, client, link)
+				return projects(l), err
 			},
 			since: func(mark time.Time) (listing, error) {
 				l, _, err := client.Project.List(ctx, &harvest.ProjectListOptions{UpdatedSince: mark})
@@ -116,8 +117,8 @@ func syncedLists(ctx context.Context, client *harvest.APIClient) []syncedList {
 				return tasks(l), err
 			},
 			byLink: func(link string) (listing, error) {
-				var l harvest.TaskList
-				return tasks(&l), follow(ctx, client, link, &l)
+				l, err := follow[harvest.TaskList](ctx, client, link)
+				return tasks(l), err
 			},
 			since: func(mark time.Time) (listing, error) {
 				l, _, err := client.Task.List(ctx, &harvest.TaskListOptions{UpdatedSince: mark})
@@ -131,8 +132,8 @@ func syncedLists(ctx context.Context, client *harvest.APIClient) []syncedList {
 				return users(l), err
 			},
 			byLink: func(link string) (listing, error) {
-				var l harvest.UserList
-				return users(&l), follow(ctx, client, link, &l)
+				l, err := follow[harvest.UserList](ctx, client, link)
+				return users(l), err
 			},
 			since: func(mark time.Time) (listing, error) {
 				l, _, err := client.User.List(ctx, &harvest.UserListOptions{UpdatedSince: mark})
