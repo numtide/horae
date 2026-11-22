@@ -7,9 +7,12 @@
 
 use std::collections::HashMap;
 
-use horae_core::importers::harvest::types::SourceRow;
+use chrono::{DateTime, Utc};
+use horae_core::importers::harvest::types::{EntryScan, SourceRow};
 pub(super) use horae_harvest::http;
-pub use horae_harvest::v2::{ApiClient, ApiProject, ApiTask, ApiTimeEntry, ApiUser};
+pub use horae_harvest::v2::{
+    ApiClient, ApiInvoice, ApiInvoiceLine, ApiProject, ApiTask, ApiTimeEntry, ApiUser,
+};
 use serde::{Deserialize, Serialize};
 
 use super::RowSource;
@@ -22,6 +25,12 @@ pub struct HarvestData {
     pub projects: Vec<ApiProject>,
     pub tasks: Vec<ApiTask>,
     pub users: Vec<ApiUser>,
+    /// Absent from checkpoints saved before invoices were imported.
+    #[serde(default)]
+    pub invoices: Vec<ApiInvoice>,
+    /// How an inline run's download reads time entries, for its report.
+    #[serde(skip)]
+    pub entry_scan: Option<EntryScan>,
     #[cfg(test)]
     #[serde(skip)]
     pub time_entries: Vec<ApiTimeEntry>,
@@ -65,6 +74,37 @@ pub(super) fn decimal(n: &serde_json::Number) -> String {
         }
         format!("{sign}{digits}")
     }
+}
+
+/// Whether an incremental run may read only the time entries changed since
+/// `since`. Billing an entry in Harvest is assumed, not verified, to move the
+/// entry's `updated_at` (spec 025, T002), so every entry is read again until
+/// invoices were imported once (`invoice_mark`), and whenever an invoice
+/// changed since that run.
+pub(super) fn entry_scan(
+    since: Option<DateTime<Utc>>,
+    invoice_mark: Option<DateTime<Utc>>,
+    invoices: &[ApiInvoice],
+) -> (EntryScan, Option<DateTime<Utc>>) {
+    match (since, invoice_mark) {
+        (Some(since), Some(mark)) if invoices.iter().all(|i| i.updated_at <= mark) => {
+            (EntryScan::Incremental, Some(since))
+        }
+        _ => (EntryScan::Full, None),
+    }
+}
+
+/// The invoice watermark a committed run stores: the newest invoice it read,
+/// or the start of the run when the account has none.
+pub(super) fn invoice_mark(
+    invoices: &[ApiInvoice],
+    captured_at: DateTime<Utc>,
+) -> Option<DateTime<Utc>> {
+    invoices
+        .iter()
+        .map(|invoice| invoice.updated_at)
+        .max()
+        .or_else(|| captured_at.checked_sub_signed(chrono::Duration::seconds(1)))
 }
 
 /// Join the fetched collections into `SourceRow`s — one per time entry, carrying
@@ -140,6 +180,7 @@ impl<'a> RowLookup<'a> {
             notes: te.notes.clone(),
             billable: te.billable,
             invoiced: te.is_billed,
+            harvest_invoice_id: te.invoice.as_ref().map(|invoice| invoice.id),
             running: te.is_running,
 
             billable_rate: te.billable_rate.as_ref().map(decimal),
@@ -214,6 +255,7 @@ mod tests {
             tasks,
             users,
             time_entries,
+            ..HarvestData::default()
         }
     }
 

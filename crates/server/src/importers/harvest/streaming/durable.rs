@@ -2,7 +2,7 @@
 
 use anyhow::{Context, bail, ensure};
 use chrono::{DateTime, Utc};
-use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceKind, SyncScope};
+use horae_core::importers::harvest::types::{ImportMode, SourceKind, SyncScope};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sqlx::{Acquire, PgConnection, Postgres, Transaction, pool::PoolConnection};
 use tokio::sync::mpsc;
@@ -10,11 +10,12 @@ use uuid::Uuid;
 
 use super::super::api_source::http::{ApiHttp, PageCursor};
 use super::super::api_source::{
-    ApiClient, ApiProject, ApiSource, ApiTask, ApiTimeEntry, ApiUser, HarvestData, RowLookup,
+    ApiClient, ApiInvoice, ApiProject, ApiSource, ApiTask, ApiTimeEntry, ApiUser, HarvestData,
+    RowLookup,
 };
 use super::super::report::ImportReport;
 use super::super::resolve::{OrgDefaults, RunCache, preview::forget_lost_people};
-use super::super::{apply_rows, credentials, parents};
+use super::super::{apply_rows, parents};
 use super::{IncompleteDownload, Page, Settings, begin_transaction};
 use crate::jobs::JobLease;
 
@@ -30,6 +31,10 @@ pub(in crate::importers::harvest) struct Request {
     pub sync: SyncScope,
     #[serde(deserialize_with = "Option::deserialize")]
     pub since: Option<DateTime<Utc>>,
+    /// The invoice watermark when the run was requested; absent from
+    /// requests saved before invoices were imported.
+    #[serde(default)]
+    pub invoice_mark: Option<DateTime<Utc>>,
     pub captured_at: DateTime<Utc>,
 }
 
@@ -40,6 +45,7 @@ enum Collection {
     Projects,
     Tasks,
     Users,
+    Invoices,
     TimeEntries,
 }
 
@@ -50,6 +56,7 @@ impl Collection {
             Self::Projects => "projects",
             Self::Tasks => "tasks",
             Self::Users => "users",
+            Self::Invoices => "invoices",
             Self::TimeEntries => "time_entries",
         }
     }
@@ -59,7 +66,8 @@ impl Collection {
             Self::Clients => Some(Self::Projects),
             Self::Projects => Some(Self::Tasks),
             Self::Tasks => Some(Self::Users),
-            Self::Users => Some(Self::TimeEntries),
+            Self::Users => Some(Self::Invoices),
+            Self::Invoices => Some(Self::TimeEntries),
             Self::TimeEntries => None,
         }
     }
@@ -93,6 +101,7 @@ impl Checkpoint {
             + self.catalog.projects.len()
             + self.catalog.tasks.len()
             + self.catalog.users.len()
+            + self.catalog.invoices.len()
     }
 
     async fn save(
@@ -141,6 +150,7 @@ enum Rows {
     Projects(Vec<ApiProject>),
     Tasks(Vec<ApiTask>),
     Users(Vec<ApiUser>),
+    Invoices(Vec<ApiInvoice>),
     Entries(Vec<ApiTimeEntry>),
 }
 
@@ -216,22 +226,34 @@ pub(in crate::importers::harvest) async fn run(
     };
     let download = checkpoint.download.clone();
     let account = checkpoint.request.account_id.clone();
-    let since = checkpoint.request.since;
+    let entries = EntryWindow {
+        since: checkpoint.request.since,
+        invoice_mark: checkpoint.request.invoice_mark,
+        // Invoice pages saved before a resume are not downloaded again.
+        invoices: checkpoint.catalog.invoices.clone(),
+    };
     super::run_inner(
         connection,
         org_id,
         Settings::Durable(Box::new(checkpoint)),
-        move |pages| fetch(http, &access, &account, since, download, pages),
+        move |pages| fetch(http, &access, &account, entries, download, pages),
         Some(lease),
     )
     .await
+}
+
+/// What decides how time entries are read once the invoices are in.
+struct EntryWindow {
+    since: Option<DateTime<Utc>>,
+    invoice_mark: Option<DateTime<Utc>>,
+    invoices: Vec<ApiInvoice>,
 }
 
 fn fetch(
     mut http: ApiHttp,
     access: &str,
     account: &str,
-    since: Option<DateTime<Utc>>,
+    mut entries: EntryWindow,
     mut download: Download,
     pages: &mpsc::Sender<Page>,
 ) -> anyhow::Result<()> {
@@ -265,6 +287,16 @@ fn fetch(
                 pages,
                 Rows::Users,
             )?,
+            Collection::Invoices => fetch_pages(
+                &mut http,
+                (access, account),
+                &mut download,
+                pages,
+                |page: Vec<ApiInvoice>| {
+                    entries.invoices.extend(page.iter().cloned());
+                    Rows::Invoices(page)
+                },
+            )?,
             Collection::TimeEntries => fetch_pages(
                 &mut http,
                 (access, account),
@@ -276,21 +308,24 @@ fn fetch(
         let Some(collection) = download.collection.next() else {
             return Ok(());
         };
-        download = Download {
-            collection,
-            page: http.cursor(
-                collection.name(),
-                if collection == Collection::TimeEntries {
-                    since
-                } else {
-                    None
-                },
-            )?,
-        };
         if collection == Collection::TimeEntries {
+            let (scan, since) = super::super::api_source::entry_scan(
+                entries.since,
+                entries.invoice_mark,
+                &entries.invoices,
+            );
+            download = Download {
+                collection,
+                page: http.cursor(collection.name(), since)?,
+            };
             pages
-                .blocking_send(Page::CatalogReady(Box::new(download.clone())))
+                .blocking_send(Page::CatalogReady(Box::new(download.clone()), scan))
                 .context("Harvest import cancelled")?;
+        } else {
+            download = Download {
+                collection,
+                page: http.cursor(collection.name(), None)?,
+            };
         }
     }
 }
@@ -300,7 +335,7 @@ fn fetch_pages<T: DeserializeOwned>(
     (access, account): (&str, &str),
     download: &mut Download,
     pages: &mpsc::Sender<Page>,
-    rows: fn(Vec<T>) -> Rows,
+    mut rows: impl FnMut(Vec<T>) -> Rows,
 ) -> anyhow::Result<()> {
     let collection = download.collection;
     http.pages_from(
@@ -338,6 +373,7 @@ pub(super) async fn apply(
                     Rows::Projects(rows) => checkpoint.catalog.projects.extend(rows),
                     Rows::Tasks(rows) => checkpoint.catalog.tasks.extend(rows),
                     Rows::Users(rows) => checkpoint.catalog.users.extend(rows),
+                    Rows::Invoices(rows) => checkpoint.catalog.invoices.extend(rows),
                     Rows::Entries(_) => bail!("API entries preceded catalog completion"),
                 }
                 checkpoint.download = batch.next;
@@ -351,7 +387,10 @@ pub(super) async fn apply(
                     .await?;
                 tx.commit().await?;
             }
-            Page::CatalogReady(next) => checkpoint.download = *next,
+            Page::CatalogReady(next, scan) => {
+                checkpoint.download = *next;
+                checkpoint.report.invoice_scan = Some(scan);
+            }
             _ => return Err(IncompleteDownload.into()),
         }
     }
@@ -458,16 +497,15 @@ pub(super) async fn apply(
         }
     }
     let mut tx = begin_transaction(connection, org_id).await?;
-    if checkpoint.report.mode == ImportMode::Commit
-        && checkpoint.report.error_count() == 0
-        && !checkpoint.missing_timestamp
-        && let Some(high_water) = checkpoint.high_water
-        && let Some(mark) = high_water
-            .min(checkpoint.request.captured_at)
-            .checked_sub_signed(chrono::Duration::seconds(1))
-    {
-        credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
-    }
+    super::advance_watermarks(
+        &mut tx,
+        org_id,
+        &checkpoint.report,
+        (checkpoint.high_water, checkpoint.missing_timestamp),
+        &checkpoint.catalog.invoices,
+        checkpoint.request.captured_at,
+    )
+    .await?;
     lease
         .archive_report(&mut tx, &mut checkpoint.report)
         .await?;

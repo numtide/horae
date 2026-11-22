@@ -35,6 +35,7 @@ fn fixture_page(url: &openidconnect::url::Url, first: FirstEntry) -> Response {
             json!([{"id":3,"name":"Task","default_hourly_rate":serde_json::from_str::<serde_json::Value>("1.004999999999999999").unwrap()}])
         }
         "users" => json!([{"id":4,"email":"known@example.com"}]),
+        "invoices" => json!([]),
         "time_entries" => json!([{
             "id":if second {11} else {10}, "spent_date":"2026-01-01", "hours":1,
             "project":{"id":2}, "task":{"id":3},
@@ -660,9 +661,10 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool, mode: ImportMode) {
         }
         fixture_page(url, FirstEntry::Valid)
     });
-    // Five downloaded catalog pages, one parent batch, then the first entry page.
+    // Six downloaded catalog pages (the last is the invoices), one parent
+    // batch, then the first entry page.
     let committed = Committed {
-        remaining: Arc::new(AtomicUsize::new(7)),
+        remaining: Arc::new(AtomicUsize::new(8)),
         ready: Arc::new(tokio::sync::Notify::new()),
     };
     let subscriber = tracing_subscriber::registry().with(committed.clone());

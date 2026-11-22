@@ -118,7 +118,7 @@ impl ApiHttp {
         ensure!(
             matches!(
                 collection,
-                "clients" | "projects" | "tasks" | "users" | "time_entries"
+                "clients" | "projects" | "tasks" | "users" | "invoices" | "time_entries"
             ),
             "unsupported Harvest collection"
         );

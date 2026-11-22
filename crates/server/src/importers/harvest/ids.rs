@@ -15,14 +15,16 @@ pub enum Kind {
     User,
 }
 
-impl From<EntityType> for Kind {
-    fn from(entity: EntityType) -> Self {
+impl Kind {
+    /// The numbered table of an imported entity; invoices have no API number.
+    pub fn of(entity: EntityType) -> Option<Self> {
         match entity {
-            EntityType::Client => Self::Client,
-            EntityType::Project => Self::Project,
-            EntityType::Task => Self::Task,
-            EntityType::TimeEntry => Self::TimeEntry,
-            EntityType::Person => Self::User,
+            EntityType::Client => Some(Self::Client),
+            EntityType::Project => Some(Self::Project),
+            EntityType::Task => Some(Self::Task),
+            EntityType::TimeEntry => Some(Self::TimeEntry),
+            EntityType::Person => Some(Self::User),
+            EntityType::Invoice => None,
         }
     }
 }

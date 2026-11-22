@@ -27,6 +27,7 @@ fn data_with_ids() -> HarvestData {
              "task":{"id":70003},"user":{"id":70005},"updated_at":day(3)}
         ]))
         .unwrap(),
+        ..HarvestData::default()
     }
 }
 
@@ -48,7 +49,7 @@ async fn api_id(
     let horae_id = provenance::lookup(pool, org, entity, harvest_import_id)
         .await
         .unwrap()?;
-    Some(crate::importers::harvest::ids::number(pool, entity.into(), horae_id).await)
+    Some(crate::importers::harvest::ids::number(pool, crate::importers::harvest::ids::Kind::of(entity)?, horae_id).await)
 }
 
 /// Native records that already have each of the import's Harvest ids.
@@ -279,6 +280,7 @@ async fn a_deleted_native_records_number_is_not_given_to_an_import(pool: PgPool)
         tasks: Vec::new(),
         users: Vec::new(),
         time_entries: Vec::new(),
+        ..HarvestData::default()
     };
 
     let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &data, day(4))

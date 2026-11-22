@@ -46,6 +46,7 @@ async fn sync_pages(
             "projects" => json!([{"id":2,"name":"Project","client":{"id":1}}]),
             "tasks" => json!([{"id":3,"name":"Task"}]),
             "users" => json!([{"id":4,"email":"known@example.com"}]),
+            "invoices" => json!([]),
             "time_entries" => {
                 let page: usize = url
                     .query_pairs()

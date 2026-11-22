@@ -233,6 +233,8 @@ mod tests {
             UNION ALL SELECT jsonb_build_array('audit_log', to_jsonb(t)) FROM audit_log t
             UNION ALL SELECT jsonb_build_array('invoices', to_jsonb(t)) FROM invoices t
             UNION ALL SELECT jsonb_build_array('invoice_line_items', to_jsonb(t)) FROM invoice_line_items t
+            UNION ALL SELECT jsonb_build_array('harvest_invoices', to_jsonb(t)) FROM harvest_invoices t
+            UNION ALL SELECT jsonb_build_array('harvest_invoice_lines', to_jsonb(t)) FROM harvest_invoice_lines t
         ) records"#).fetch_one(pool).await.unwrap()
     }
 
@@ -701,5 +703,15 @@ mod tests {
         assert_eq!(current.account_id.as_deref(), Some("A"));
         assert_eq!(current.account_generation, 0);
         assert!(current.has_provenance);
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn imported_invoices_alone_block_an_account_change(pool: sqlx::PgPool) {
+        let org = organization(&pool).await;
+        super::super::provenance::upsert(&pool, org, EntityType::Invoice, 7, Uuid::now_v7(), None)
+            .await
+            .unwrap();
+        assert!(change(&pool, org, "A", 0, 0).await.is_err());
+        assert!(status(&pool, org, true).await.unwrap().has_provenance);
     }
 }

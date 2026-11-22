@@ -50,8 +50,9 @@ async fn http_pages_preview_commit_and_reimport(pool: PgPool) {
         assert!(report.reconciles());
         assert_eq!(report.summary.time_entries.processed(), 205);
         assert_eq!(report.summary.time_entries.errored, 1);
-        assert_eq!(server.count.load(Ordering::Acquire) - before, 7);
-        if before < 14 {
+        // Five catalog pages with the invoices, then three entry pages.
+        assert_eq!(server.count.load(Ordering::Acquire) - before, 8);
+        if before < 16 {
             assert_eq!(report.summary.time_entries.created, 204);
         } else {
             assert_eq!(report.summary.time_entries.skipped, 204);
@@ -94,6 +95,7 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
             "tasks" => json!([{"id":3,"name":"Task"}]),
             // Person 5 is not listed, so each of their entries is an error.
             "users" => json!([{"id":4,"email":"known@example.com"}]),
+            "invoices" => json!([]),
             "time_entries" => json!(
                 (offset..(offset + 100).min(records))
                     .map(|n| {

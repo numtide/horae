@@ -7,15 +7,18 @@
 //! so the run continues (FR-018). Only on a clean commit are the row's newly
 //! resolved parents, users and project-task links promoted into the run cache.
 
+use horae_core::importers::harvest::link::{self, Billing, Current, LinkAction};
 use horae_core::importers::harvest::types::{
-    EntityType, EntryErrorKind, IdNotice, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome,
-    SourceKind, SourceRow,
+    EntityType, EntryErrorKind, IdNotice, ImportMode, LinkConflict, PersonErrorKind,
+    PersonOutcome, ReportPerson, RowOutcome, SourceKind, SourceRow,
 };
 use horae_core::importers::harvest::{convert, keys};
+use horae_core::types::EntryState;
 use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::resolve::{self, OrgDefaults, PendingCache, RowFailure, RunCache};
+use super::report::ImportReport;
+use super::resolve::{self, InvoiceSlot, OrgDefaults, PendingCache, RowFailure, RunCache};
 
 /// The per-entity outcomes of applying one row, ready to fold into the summary.
 pub struct RowResult {
@@ -24,6 +27,36 @@ pub struct RowResult {
     pub person: Option<ReportPerson>,
     /// Records the committed row created without their Harvest id as API id.
     pub notices: Vec<IdNotice>,
+    /// What the row did to its entry's billing (spec 025).
+    pub link: Option<LinkNote>,
+}
+
+impl RowResult {
+    pub fn record_into(self, report: &mut ImportReport) {
+        for (entity, outcome) in &self.outcomes {
+            report.record(*entity, outcome);
+        }
+        report.people.extend(self.person);
+        for notice in self.notices {
+            report.note_id(notice);
+        }
+        let links = &mut report.summary.links;
+        match self.link {
+            None => {}
+            Some(LinkNote::Linked) => links.linked += 1,
+            Some(LinkNote::Unlinked) => links.unlinked += 1,
+            Some(LinkNote::BilledWithoutInvoice) => links.billed_without_invoice += 1,
+            Some(LinkNote::Conflict(conflict)) => report.note_conflict(conflict),
+        }
+    }
+}
+
+/// A change to an entry's billing that the report counts.
+pub enum LinkNote {
+    Linked,
+    Unlinked,
+    BilledWithoutInvoice,
+    Conflict(LinkConflict),
 }
 
 /// Apply one source row within its own savepoint. On success returns the entity
@@ -35,6 +68,7 @@ pub async fn apply_row(
     org: OrgDefaults<'_>,
     row: &SourceRow,
     source: SourceKind,
+    mode: ImportMode,
 ) -> RowResult {
     // No provenance is written, so the next sync picks the entry up again.
     if row.running {
@@ -89,8 +123,8 @@ pub async fn apply_row(
         }
     };
 
-    match apply_within(&mut sp, cache, org, row, source).await {
-        Ok((outcomes, mut pending, person)) => match sp.commit().await {
+    match apply_within(&mut sp, cache, org, row, source, mode).await {
+        Ok((outcomes, mut pending, person, link)) => match sp.commit().await {
             Ok(()) => {
                 let notices = std::mem::take(&mut pending.notices);
                 cache.merge(pending);
@@ -98,6 +132,7 @@ pub async fn apply_row(
                     outcomes,
                     person,
                     notices,
+                    link,
                 }
             }
             Err(e) => errored(
@@ -117,6 +152,7 @@ type Applied = (
     Vec<(EntityType, RowOutcome)>,
     PendingCache,
     Option<ReportPerson>,
+    Option<LinkNote>,
 );
 
 /// The resolve → create/skip pipeline for one row inside its savepoint. Returns
@@ -127,6 +163,7 @@ async fn apply_within(
     org: OrgDefaults<'_>,
     row: &SourceRow,
     source: SourceKind,
+    mode: ImportMode,
 ) -> Result<Applied, (EntityType, RowFailure)> {
     let mut outcomes = Vec::new();
     let mut pending = PendingCache::default();
@@ -192,7 +229,7 @@ async fn apply_within(
     });
 
     // Time entry — the record proper.
-    let (te_outcome, entry_slot) = apply_time_entry(
+    let entry = apply_time_entry(
         sp,
         cache,
         org,
@@ -202,10 +239,166 @@ async fn apply_within(
     )
     .await
     .map_err(|e| (EntityType::TimeEntry, e))?;
-    outcomes.push((EntityType::TimeEntry, te_outcome));
-    pending.entry_slot = entry_slot;
+    outcomes.push((EntityType::TimeEntry, entry.outcome));
+    pending.entry_slot = entry.slot;
 
-    Ok((outcomes, pending, person))
+    let mut link = match entry.id {
+        Some(id) => link_entry(sp, cache, org.org_id, row, id, mode)
+            .await
+            .map_err(|e| (EntityType::TimeEntry, e))?,
+        None => None,
+    };
+    if entry.reopened {
+        link = Some(LinkNote::Unlinked);
+    }
+    Ok((outcomes, pending, person, link))
+}
+
+/// What applying a row did to its time entry.
+struct EntryApplied {
+    outcome: RowOutcome,
+    /// The natural-key slot an id-less row consumed.
+    slot: Option<String>,
+    /// The Horae entry, unless it was deleted in Horae.
+    id: Option<Uuid>,
+    /// Reopened from an import's billing so Harvest's edit could apply.
+    reopened: bool,
+}
+
+impl EntryApplied {
+    fn new(outcome: RowOutcome, slot: Option<String>, id: Option<Uuid>) -> Self {
+        Self {
+            outcome,
+            slot,
+            id,
+            reopened: false,
+        }
+    }
+}
+
+/// Set, keep or clear the entry's link to an imported invoice (spec 025,
+/// research R-6). A preview decides and counts but writes nothing: the
+/// invoice it would link to may exist only in a rolled-back page.
+async fn link_entry(
+    sp: &mut Transaction<'_, Postgres>,
+    cache: &RunCache,
+    org_id: Uuid,
+    row: &SourceRow,
+    entry_id: Uuid,
+    mode: ImportMode,
+) -> Result<Option<LinkNote>, RowFailure> {
+    let now = sqlx::query!(
+        r#"SELECT te.state AS "state: EntryState", te.invoice_id,
+                  i.source = 'harvest' AS "imported?", i.number AS "number?"
+           FROM time_entries te LEFT JOIN invoices i ON i.id = te.invoice_id
+           WHERE te.id = $1"#,
+        entry_id,
+    )
+    .fetch_one(&mut **sp)
+    .await?;
+    let current = match (now.invoice_id, now.state) {
+        (Some(invoice), _) if now.imported == Some(true) => Current::OnImported(invoice),
+        (Some(_), _) => Current::OnHorae,
+        (None, EntryState::Invoiced) => Current::BilledWithoutInvoice,
+        (None, EntryState::Submitted) => Current::Submitted,
+        (None, EntryState::Open | EntryState::Approved) => Current::Unbilled,
+    };
+    let action = match row.harvest_time_entry_id {
+        // A CSV knows only "Invoiced?" (Q5): it marks billed and never
+        // unlinks, or moves an entry off an imported invoice.
+        None if !row.invoiced => LinkAction::Keep,
+        None => match link::decide(Billing::Missing, current) {
+            LinkAction::MarkBilled if current != Current::Unbilled => LinkAction::Keep,
+            action => action,
+        },
+        Some(_) => link::decide(billing(cache, row), current),
+    };
+    let target = match action {
+        LinkAction::Keep => return Ok(None),
+        LinkAction::Conflict(kind) => {
+            return Ok(Some(LinkNote::Conflict(LinkConflict {
+                source_location: row.source_location.clone(),
+                harvest_time_entry_id: row.harvest_time_entry_id,
+                harvest_invoice_id: row.harvest_invoice_id,
+                kind,
+                horae_invoice_number: now.number,
+            })));
+        }
+        LinkAction::Link(invoice) => Some(invoice),
+        LinkAction::MarkBilled | LinkAction::Unlink => None,
+    };
+    if mode == ImportMode::Commit {
+        if action == LinkAction::Unlink {
+            reopen(sp, entry_id).await?;
+        } else {
+            // Rounding freezes as generation freezes it.
+            sqlx::query!(
+                "UPDATE time_entries AS te
+                    SET invoice_id = $2, state = 'invoiced',
+                        rounded_minutes = effective_minutes(te.minutes, te.rounded_minutes,
+                                                            o.round_minutes, o.round_dir)
+                   FROM organizations AS o
+                  WHERE te.id = $1 AND o.id = te.org_id",
+                entry_id,
+                target,
+            )
+            .execute(&mut **sp)
+            .await?;
+        }
+        remember_version(sp, org_id, entry_id).await?;
+    }
+    Ok(Some(match action {
+        LinkAction::Link(_) => LinkNote::Linked,
+        LinkAction::Unlink => LinkNote::Unlinked,
+        _ => LinkNote::BilledWithoutInvoice,
+    }))
+}
+
+/// What Harvest says about the row's billing, given the run's invoices.
+fn billing(cache: &RunCache, row: &SourceRow) -> Billing {
+    if !row.invoiced {
+        return Billing::NotBilled;
+    }
+    match row.harvest_invoice_id.and_then(|id| cache.invoice(id)) {
+        Some(InvoiceSlot::Imported { id, voided }) => Billing::Imported {
+            invoice: id,
+            voided_in_horae: voided,
+        },
+        Some(InvoiceSlot::Draft) => Billing::Draft,
+        Some(InvoiceSlot::Failed) | None => Billing::Missing,
+    }
+}
+
+/// Back to open, with no invoice and no frozen rounding, as a void reopens.
+async fn reopen(sp: &mut Transaction<'_, Postgres>, entry_id: Uuid) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE time_entries SET invoice_id = NULL, state = 'open', rounded_minutes = NULL
+         WHERE id = $1",
+        entry_id,
+    )
+    .execute(&mut **sp)
+    .await?;
+    Ok(())
+}
+
+/// The import's own billing write is not an edit made in Horae: remember the
+/// entry's new version so a later Harvest change can still update it.
+async fn remember_version(
+    sp: &mut Transaction<'_, Postgres>,
+    org_id: Uuid,
+    entry_id: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE harvest_import_map AS m SET horae_updated_at = te.updated_at
+           FROM time_entries AS te
+          WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+            AND m.horae_id = $2 AND te.id = $2",
+        org_id,
+        entry_id,
+    )
+    .execute(&mut **sp)
+    .await?;
+    Ok(())
 }
 
 /// Insert, update or skip the time entry for a row.
@@ -241,7 +434,7 @@ async fn apply_time_entry(
     (project_id, task_id, user_id): (Uuid, Uuid, Uuid),
     row: &SourceRow,
     notices: &mut Vec<IdNotice>,
-) -> Result<(RowOutcome, Option<String>), RowFailure> {
+) -> Result<EntryApplied, RowFailure> {
     let minutes_i64 = convert::hours_to_minutes(&row.hours).map_err(|error| match error {
         convert::ConvertError::Negative(hours) => RowFailure::entry(
             EntryErrorKind::NegativeHours,
@@ -269,7 +462,10 @@ async fn apply_time_entry(
                       te.id AS "entry_id?",
                       te.state = 'open' AS "open?",
                       te.updated_at IS DISTINCT FROM COALESCE(m.horae_updated_at, te.created_at)
-                        AS "edited?"
+                        AS "edited?",
+                      te.state = 'invoiced' AND (te.invoice_id IS NULL OR EXISTS (
+                        SELECT 1 FROM invoices AS i
+                        WHERE i.id = te.invoice_id AND i.source = 'harvest')) AS "import_billed?"
                FROM harvest_import_map AS m
                LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id
                WHERE m.org_id = $1
@@ -309,15 +505,42 @@ async fn apply_time_entry(
             } else {
                 RowOutcome::Skipped
             };
-            return Ok((outcome, None));
+            return Ok(EntryApplied::new(outcome, None, mapped.entry_id));
         }
-        if mapped.open != Some(true) {
+        // Billing moves an entry's version in Harvest. An entry Harvest bills
+        // that is no longer open here, or was edited here, keeps its fields;
+        // the link step bills it or reports the conflict (FR-010). Time the
+        // import billed that Harvest no longer bills reopens first, then takes
+        // Harvest's edit.
+        if row.invoiced && (mapped.open != Some(true) || mapped.edited != Some(false)) {
+            super::provenance::upsert(
+                &mut **sp,
+                org.org_id,
+                EntityType::TimeEntry,
+                hid,
+                mapped.horae_id,
+                row.harvest_updated_at,
+            )
+            .await?;
+            return Ok(EntryApplied::new(
+                RowOutcome::Skipped,
+                None,
+                Some(mapped.horae_id),
+            ));
+        }
+        let mut reopened = false;
+        if mapped.import_billed == Some(true) {
+            reopen(sp, mapped.horae_id).await?;
+            remember_version(sp, org.org_id, mapped.horae_id).await?;
+            reopened = true;
+        }
+        if mapped.open != Some(true) && !reopened {
             return Err(RowFailure::entry(
                 EntryErrorKind::ChangedInHorae,
                 "entry is no longer open in Horae; not updated from Harvest",
             ));
         }
-        if mapped.edited != Some(false) {
+        if mapped.edited != Some(false) && !reopened {
             return Err(RowFailure::entry(
                 EntryErrorKind::ChangedInHorae,
                 "entry was changed in Horae (edited, reopened or voided) after import; not updated from Harvest",
@@ -333,7 +556,10 @@ async fn apply_time_entry(
         )
         .await?;
         record_entry(sp, org.org_id, hid, mapped.horae_id, row.harvest_updated_at).await?;
-        return Ok((RowOutcome::Updated, None));
+        return Ok(EntryApplied {
+            reopened,
+            ..EntryApplied::new(RowOutcome::Updated, None, Some(mapped.horae_id))
+        });
     }
 
     // Natural key: (user, project, task, spent_date, minutes, notes).
@@ -393,10 +619,10 @@ async fn apply_time_entry(
         if let Some(hid) = row.harvest_time_entry_id {
             record_entry(sp, org.org_id, hid, id, row.harvest_updated_at).await?;
         }
-        return Ok((RowOutcome::Skipped, entry_slot));
+        return Ok(EntryApplied::new(RowOutcome::Skipped, entry_slot, Some(id)));
     }
 
-    // Create. State defaults to `open`; never `invoiced` from Harvest (FR-016).
+    // Create. State starts `open`; the link step bills it as Harvest did.
     // A row past the day's limit on its own fails here, not on the trigger.
     horae_core::duration::check_daily_total(minutes.into())
         .map_err(|limit| RowFailure::new(limit.to_string()))?;
@@ -459,7 +685,7 @@ async fn apply_time_entry(
     if let Some(hid) = row.harvest_time_entry_id {
         record_entry(sp, org.org_id, hid, id, row.harvest_updated_at).await?;
     }
-    Ok((RowOutcome::Created, entry_slot))
+    Ok(EntryApplied::new(RowOutcome::Created, entry_slot, Some(id)))
 }
 
 /// Rewrite an open entry with Harvest's newer version, under the same daily
@@ -627,5 +853,6 @@ fn errored(entity: EntityType, row: &SourceRow, failure: RowFailure) -> RowResul
         )],
         person: None,
         notices: Vec::new(),
+        link: None,
     }
 }

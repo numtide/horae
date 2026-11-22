@@ -15,6 +15,7 @@ pub mod client_settings;
 pub mod credentials;
 pub mod csv_source;
 pub mod ids;
+mod invoices;
 pub mod oauth;
 mod parents;
 pub mod provenance;
@@ -136,14 +137,9 @@ async fn apply_rows<S: RowSource>(
     mut src: S,
 ) -> anyhow::Result<()> {
     while let Some(row) = src.next_row().await? {
-        let result = apply::apply_row(tx, cache, org, &row, report.source).await;
-        for (entity, outcome) in &result.outcomes {
-            report.record(*entity, outcome);
-        }
-        report.people.extend(result.person);
-        for notice in result.notices {
-            report.note_id(notice);
-        }
+        apply::apply_row(tx, cache, org, &row, report.source, report.mode)
+            .await
+            .record_into(report);
     }
 
     debug_assert!(report.reconciles());
@@ -319,6 +315,7 @@ pub async fn complete_cli_api_fixture(
             "projects" => json!([{"id":102,"name":"CLI API Project","client":{"id":101}}]),
             "tasks" => json!([{"id":103,"name":"CLI API Task"}]),
             "users" => json!([{"id":104,"email":email}]),
+            "invoices" => json!([]),
             "time_entries" => json!([{
                 "id":105,"spent_date":"2026-09-14","hours":1,
                 "notes":"cli-api-acceptance","project":{"id":102},
@@ -479,6 +476,7 @@ async fn run_api_import_with_http(
         SyncScope::Full => None,
         SyncScope::Incremental => conn.watermark_for(EntityType::TimeEntry),
     };
+    let invoice_mark = conn.watermark_for(EntityType::Invoice);
 
     // A bounded queue joins blocking HTTP pages to the async row pipeline.
     let capture_started_at = Utc::now();
@@ -491,6 +489,7 @@ async fn run_api_import_with_http(
                 currency: default_currency.to_owned(),
                 sync,
                 since,
+                invoice_mark,
                 captured_at: capture_started_at,
             },
             mode,
@@ -507,7 +506,15 @@ async fn run_api_import_with_http(
         default_currency,
         mode,
         capture_started_at,
-        move |pages| streaming::fetch(http, &conn.access_token, &conn.account_id, since, pages),
+        move |pages| {
+            streaming::fetch(
+                http,
+                &conn.access_token,
+                &conn.account_id,
+                (since, invoice_mark),
+                pages,
+            )
+        },
         lease,
     )
     .await

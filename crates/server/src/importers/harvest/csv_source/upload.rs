@@ -200,21 +200,16 @@ pub async fn import_body_with_lease(
         while let Record::Row(record, position) = next {
             match *record {
                 Ok(row) => {
-                    let result = apply::apply_row(
+                    apply::apply_row(
                         &mut tx,
                         &mut checkpoint.cache,
                         org,
                         &row,
                         SourceKind::Csv,
+                        mode,
                     )
-                    .await;
-                    for (entity, outcome) in &result.outcomes {
-                        checkpoint.report.record(*entity, outcome);
-                    }
-                    checkpoint.report.people.extend(result.person);
-                    for notice in result.notices {
-                        checkpoint.report.note_id(notice);
-                    }
+                    .await
+                    .record_into(&mut checkpoint.report);
                 }
                 Err(error) => checkpoint.report.record(
                     EntityType::TimeEntry,
