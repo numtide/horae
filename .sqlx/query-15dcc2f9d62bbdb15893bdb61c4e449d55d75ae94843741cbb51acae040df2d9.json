@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (now() AT TIME ZONE $1)::date AS \"today!: chrono::NaiveDate\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "today!: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "15dcc2f9d62bbdb15893bdb61c4e449d55d75ae94843741cbb51acae040df2d9"
+}

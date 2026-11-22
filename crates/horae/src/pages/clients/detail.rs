@@ -299,7 +299,6 @@ fn ClientInvoices(client_id: Uuid) -> Element {
     let retry = use_callback(move |_| invoices.restart());
     let ready = invoices.state()() == UseResourceState::Ready;
     let data = invoices.read();
-    let tr = crate::i18n::use_tr();
     rsx! {
         section { class: "border rounded-xl bg-secondary p-5 min-w-0", aria_labelledby: "client-invoices-title",
             h2 { id: "client-invoices-title", tabindex: "-1", class: "text-lg font-semibold m-0 mb-3", "Invoices" }
@@ -316,9 +315,7 @@ fn ClientInvoices(client_id: Uuid) -> Element {
                             li { key: "{invoice.id}", class: "flex flex-wrap items-center justify-between gap-2 text-sm",
                                 Link { to: Route::InvoiceDetail { id: invoice.id }, class: "font-semibold wrap-anywhere", "{invoice.number}" }
                                 span { class: "font-mono text-secondary wrap-anywhere", "{format_cents(invoice.total_cents, invoice.currency.trim())}" }
-                                span { class: super::super::invoices::invoice_badge_class(invoice.status),
-                                    {super::super::invoices::invoice_status_label(tr, invoice.status)}
-                                }
+                                super::super::invoices::StatusBadge { shown: super::super::invoices::Shown::Status(invoice.status) }
                             }
                         }
                     }

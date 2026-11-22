@@ -53,6 +53,7 @@ fn build_inputs(
         i64::from(invoice.terms_days).into_value(),
     );
     dict.insert("po_number".into(), invoice.po_number.clone().into_value());
+    dict.insert("subject".into(), invoice.subject.clone().into_value());
     let breakdown: Vec<Value> = invoice
         .breakdown()
         .into_iter()
