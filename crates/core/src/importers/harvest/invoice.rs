@@ -63,7 +63,9 @@ pub fn check_amounts(lines: &[i64], amounts: Amounts) -> Result<(), AmountsError
     }
     let subtotal: i128 = lines.iter().map(|&amount| i128::from(amount)).sum();
     if subtotal < 0 {
-        return Err(AmountsError::OutOfRange("the lines add up to less than zero"));
+        return Err(AmountsError::OutOfRange(
+            "the lines add up to less than zero",
+        ));
     }
     if amounts.discount < 0 || amounts.tax1 < 0 || amounts.tax2 < 0 {
         return Err(AmountsError::OutOfRange("a discount or tax is negative"));

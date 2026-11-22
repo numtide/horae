@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harvest_import_map AS m SET horae_updated_at = te.updated_at\n           FROM time_entries AS te\n          WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n            AND m.horae_id = $2 AND te.id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb3d55b4c35ef76ebe9f5b8f6146efad42cfe21d99a559c5e1a5d5d202210174"
+}

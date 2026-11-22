@@ -9,7 +9,14 @@ fn num(text: &str) -> serde_json::Value {
     serde_json::Value::Number(text.parse().unwrap())
 }
 
-fn invoice(id: i64, number: &str, state: &str, lines: &[&str], total: &str, due: &str) -> serde_json::Value {
+fn invoice(
+    id: i64,
+    number: &str,
+    state: &str,
+    lines: &[&str],
+    total: &str,
+    due: &str,
+) -> serde_json::Value {
     let line_items: Vec<_> = lines
         .iter()
         .enumerate()
@@ -41,7 +48,14 @@ fn entry(id: i64, date: u32, billed_on: Option<i64>) -> serde_json::Value {
 /// an invoice the list does not return, and one not billed.
 fn fixture() -> HarvestData {
     let mut data = valid_data();
-    let mut partly_paid = invoice(100, "1001", "open", &["1000.00", "200.00", "-100.00"], "1050.00", "450.00");
+    let mut partly_paid = invoice(
+        100,
+        "1001",
+        "open",
+        &["1000.00", "200.00", "-100.00"],
+        "1050.00",
+        "450.00",
+    );
     partly_paid["discount"] = json!(10);
     partly_paid["discount_amount"] = num("110.00");
     partly_paid["tax"] = num("8.875");
@@ -117,7 +131,14 @@ async fn billing(pool: &PgPool, org: Uuid) -> Vec<(i64, EntryState, Option<Strin
     .await
     .unwrap()
     .into_iter()
-    .map(|row| (row.harvest_import_id, row.state, row.number, row.rounded_minutes))
+    .map(|row| {
+        (
+            row.harvest_import_id,
+            row.state,
+            row.number,
+            row.rounded_minutes,
+        )
+    })
     .collect()
 }
 
@@ -155,7 +176,11 @@ async fn horae_invoices_keep_their_checks(pool: PgPool) {
     .unwrap();
     // A total of 1000 with `adjust` as both discount and tax: with no rates,
     // only an adjustment of 0 adds up under Horae's rounding.
-    let insert = |number: &'static str, source: &'static str, status: &'static str, discount_bps: i16, adjust: i64| {
+    let insert = |number: &'static str,
+                  source: &'static str,
+                  status: &'static str,
+                  discount_bps: i16,
+                  adjust: i64| {
         let pool = pool.clone();
         async move {
             sqlx::query!(
@@ -175,14 +200,27 @@ async fn horae_invoices_keep_their_checks(pool: PgPool) {
             )
             .execute(&pool)
             .await
-            .map_err(|error| error.as_database_error().unwrap().constraint().unwrap().to_owned())
+            .map_err(|error| {
+                error
+                    .as_database_error()
+                    .unwrap()
+                    .constraint()
+                    .unwrap()
+                    .to_owned()
+            })
         }
     };
     insert("0", "horae", "sent", 0, 0).await.unwrap();
     // Constraints are checked by name, so the first is the one reported.
-    assert_eq!(insert("1", "horae", "sent", 0, 100).await.unwrap_err(), "invoice_discount_exact");
+    assert_eq!(
+        insert("1", "horae", "sent", 0, 100).await.unwrap_err(),
+        "invoice_discount_exact"
+    );
     insert("2", "harvest", "sent", 0, 100).await.unwrap();
-    assert_eq!(insert("3", "horae", "closed", 0, 0).await.unwrap_err(), "invoices_closed_imported");
+    assert_eq!(
+        insert("3", "horae", "closed", 0, 0).await.unwrap_err(),
+        "invoices_closed_imported"
+    );
     insert("4", "harvest", "closed", 0, 100).await.unwrap();
     assert_eq!(
         insert("5", "harvest", "sent", 1000, 100).await.unwrap_err(),
@@ -200,14 +238,21 @@ async fn a_commit_imports_invoices_and_links_the_time_they_billed(pool: PgPool) 
     let preview = apply_api_data(&pool, org, "USD", ImportMode::DryRun, &source, day(4))
         .await
         .unwrap();
-    assert_eq!(snapshot(&pool, org).await, before, "a preview writes nothing");
+    assert_eq!(
+        snapshot(&pool, org).await,
+        before,
+        "a preview writes nothing"
+    );
     let commit = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
         .await
         .unwrap();
 
     for report in [&preview, &commit] {
         assert_eq!(
-            (report.summary.invoices.created, report.summary.invoices.errored),
+            (
+                report.summary.invoices.created,
+                report.summary.invoices.errored
+            ),
             (3, 2)
         );
         assert_eq!(report.invoices_skipped_drafts, 1);
@@ -229,12 +274,19 @@ async fn a_commit_imports_invoices_and_links_the_time_they_billed(pool: PgPool) 
             kinds,
             [
                 ("invoice 104 (HORAE-1)", Some(InvoiceErrorKind::NumberTaken)),
-                ("invoice 105 (1006)", Some(InvoiceErrorKind::AmountsMismatch)),
+                (
+                    "invoice 105 (1006)",
+                    Some(InvoiceErrorKind::AmountsMismatch)
+                ),
             ]
         );
         assert!(report.reconciles());
     }
-    assert!(commit.row_errors[1].reason.contains("difference of -100"), "{:?}", commit.row_errors);
+    assert!(
+        commit.row_errors[1].reason.contains("difference of -100"),
+        "{:?}",
+        commit.row_errors
+    );
 
     let billed = |number: &str| (EntryState::Invoiced, Some(number.to_owned()), Some(75));
     let without = (EntryState::Invoiced, None, Some(75));
@@ -291,7 +343,11 @@ async fn a_commit_imports_invoices_and_links_the_time_they_billed(pool: PgPool) 
         (Some("10"), Some("8.875"), Some("2"))
     );
     assert_eq!(
-        (invoice.po_number.as_str(), invoice.subject.as_str(), invoice.notes.as_deref()),
+        (
+            invoice.po_number.as_str(),
+            invoice.subject.as_str(),
+            invoice.notes.as_deref()
+        ),
         ("PO-7", "Work", Some("Thanks"))
     );
     let lines = sqlx::query!(
@@ -356,7 +412,10 @@ async fn an_unchanged_rerun_skips_every_invoice_and_writes_nothing(pool: PgPool)
         .await
         .unwrap();
     assert_eq!(
-        (again.summary.invoices.created, again.summary.invoices.updated),
+        (
+            again.summary.invoices.created,
+            again.summary.invoices.updated
+        ),
         (0, 0)
     );
     assert_eq!(again.summary.invoices.skipped, 3);
@@ -410,11 +469,20 @@ async fn entries_imported_before_invoices_are_linked_by_a_full_scan(pool: PgPool
     let connection = credentials::load(&pool, org, KEY).await.unwrap().unwrap();
     let since = connection.watermark_for(EntityType::TimeEntry);
     let mark = connection.watermark_for(EntityType::Invoice);
-    assert!(mark.is_none(), "an invoice error keeps the next run in full");
-    assert_eq!(api_source::entry_scan(since, Some(day(3)), &invoices).0, EntryScan::Incremental);
+    assert!(
+        mark.is_none(),
+        "an invoice error keeps the next run in full"
+    );
+    assert_eq!(
+        api_source::entry_scan(since, Some(day(3)), &invoices).0,
+        EntryScan::Incremental
+    );
     let mut changed = invoices.clone();
     changed[0].updated_at = day(6);
-    assert_eq!(api_source::entry_scan(since, Some(day(3)), &changed).0, EntryScan::Full);
+    assert_eq!(
+        api_source::entry_scan(since, Some(day(3)), &changed).0,
+        EntryScan::Full
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -422,7 +490,9 @@ async fn reimports_follow_harvest_and_keep_what_horae_billed(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = fixture();
     source.invoices.retain(|invoice| invoice.id < 104);
-    source.time_entries.retain(|entry| entry.id <= 13 || entry.id == 17);
+    source
+        .time_entries
+        .retain(|entry| entry.id <= 13 || entry.id == 17);
     apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
         .await
         .unwrap();
@@ -435,8 +505,9 @@ async fn reimports_follow_harvest_and_keep_what_horae_billed(pool: PgPool) {
     next.invoices[0].due_amount = "0".parse().unwrap();
     next.invoices[0].updated_at = day(5);
     next.invoices.retain(|invoice| invoice.id != 102);
-    next.invoices
-        .push(serde_json::from_value(invoice(106, "1007", "open", &["20.00"], "20.00", "20.00")).unwrap());
+    next.invoices.push(
+        serde_json::from_value(invoice(106, "1007", "open", &["20.00"], "20.00", "20.00")).unwrap(),
+    );
     for entry in &mut next.time_entries {
         match entry.id {
             12 => {
@@ -457,17 +528,17 @@ async fn reimports_follow_harvest_and_keep_what_horae_billed(pool: PgPool) {
             _ => {}
         }
     }
-    let voided = sqlx::query_scalar!("SELECT id FROM invoices WHERE org_id = $1 AND number = '1002'", org)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    sqlx::query!(
-        "UPDATE invoices SET status = 'void' WHERE id = $1",
-        voided
+    let voided = sqlx::query_scalar!(
+        "SELECT id FROM invoices WHERE org_id = $1 AND number = '1002'",
+        org
     )
-    .execute(&pool)
+    .fetch_one(&pool)
     .await
     .unwrap();
+    sqlx::query!("UPDATE invoices SET status = 'void' WHERE id = $1", voided)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query!("UPDATE time_entries SET invoice_id = NULL, state = 'open', rounded_minutes = NULL WHERE invoice_id = $1", voided)
         .execute(&pool)
         .await
@@ -507,7 +578,10 @@ async fn reimports_follow_harvest_and_keep_what_horae_billed(pool: PgPool) {
     );
     assert_eq!(report.link_conflicts.len(), 1);
     assert_eq!(report.link_conflicts[0].harvest_time_entry_id, Some(13));
-    assert_eq!(report.link_conflicts[0].horae_invoice_number.as_deref(), Some("HORAE-9"));
+    assert_eq!(
+        report.link_conflicts[0].horae_invoice_number.as_deref(),
+        Some("HORAE-9")
+    );
 
     let states: Vec<_> = billing(&pool, org)
         .await
@@ -567,7 +641,8 @@ async fn invoice_errors_name_the_reason_and_leave_their_time_billed(pool: PgPool
     ]))
     .unwrap();
     source.time_entries =
-        serde_json::from_value(json!([entry(10, 10, Some(201)), entry(11, 11, Some(204))])).unwrap();
+        serde_json::from_value(json!([entry(10, 10, Some(201)), entry(11, 11, Some(204))]))
+            .unwrap();
     let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
         .await
         .unwrap();

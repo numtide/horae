@@ -17,7 +17,10 @@ pub enum Billing {
     Draft,
     /// Billed on a Harvest invoice imported as `invoice`. `voided_in_horae`
     /// is true while someone's void in Horae stands (FR-016).
-    Imported { invoice: Uuid, voided_in_horae: bool },
+    Imported {
+        invoice: Uuid,
+        voided_in_horae: bool,
+    },
     /// Billed on an invoice Horae could not import or Harvest no longer lists.
     Missing,
 }
@@ -34,7 +37,6 @@ pub enum Current {
     /// On an invoice made in Horae.
     OnHorae,
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkAction {
@@ -116,7 +118,11 @@ mod tests {
             (voided(I), OnImported(I), Keep),
             (voided(I), OnImported(J), Unlink),
             (on(I), OnHorae, Conflict(LinkConflictKind::BilledInHorae)),
-            (Billing::Missing, OnHorae, Conflict(LinkConflictKind::BilledInHorae)),
+            (
+                Billing::Missing,
+                OnHorae,
+                Conflict(LinkConflictKind::BilledInHorae),
+            ),
             (Billing::Draft, OnHorae, Keep),
             (Billing::NotBilled, OnHorae, Keep),
             (Billing::Draft, Unbilled, Keep),
@@ -128,7 +134,11 @@ mod tests {
             (Billing::NotBilled, OnImported(I), Unlink),
             (Billing::NotBilled, BilledWithoutInvoice, Unlink),
             (Billing::NotBilled, Unbilled, Keep),
-            (on(I), Submitted, Conflict(LinkConflictKind::SubmittedInHorae)),
+            (
+                on(I),
+                Submitted,
+                Conflict(LinkConflictKind::SubmittedInHorae),
+            ),
             (
                 Billing::Missing,
                 Submitted,

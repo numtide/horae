@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT invoice_id, due_cents, paid_on AS \"paid_on: chrono::NaiveDate\",\n                  discount_rate::text AS \"discount_rate?\",\n                  tax1_rate::text AS \"tax1_rate?\", tax2_rate::text AS \"tax2_rate?\",\n                  period_start AS \"period_start: chrono::NaiveDate\",\n                  period_end AS \"period_end: chrono::NaiveDate\"\n           FROM harvest_invoices WHERE org_id = $1 AND invoice_id = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "due_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "paid_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "discount_rate?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "tax1_rate?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "tax2_rate?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "period_start: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "period_end: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      null,
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "1c9dd0567268fd155ec755c8edfe60a159f0559da7c60ead134831395267b3f6"
+}

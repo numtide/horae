@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET invoice_id = NULL, state = 'open', rounded_minutes = NULL WHERE invoice_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "46f8057db70d56d1511ebd8ea00af1867963994392b2299d1325cc5052e5911f"
+}

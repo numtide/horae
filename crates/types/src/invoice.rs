@@ -576,7 +576,10 @@ mod tests {
         );
         let json = serde_json::to_value(&item).unwrap();
         assert_eq!(json["imported"]["tax1_rate"], "8.875");
-        assert_eq!(serde_json::from_value::<InvoiceListItem>(json).unwrap(), item);
+        assert_eq!(
+            serde_json::from_value::<InvoiceListItem>(json).unwrap(),
+            item
+        );
         item.imported = None;
         assert_eq!(item.due_cents(), 100_000);
     }

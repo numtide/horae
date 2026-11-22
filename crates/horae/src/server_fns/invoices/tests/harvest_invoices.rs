@@ -99,21 +99,34 @@ async fn imported_invoices_are_read_only_apart_from_their_status(pool: PgPool) {
     let reopened = billed_entry(&pool, &ids, "2026-09-10", Some(voided)).await;
 
     let refused = editing::load(&pool, org, actor, closed).await.unwrap_err();
-    assert!(refused.to_string().contains("imported from Harvest"), "{refused}");
+    assert!(
+        refused.to_string().contains("imported from Harvest"),
+        "{refused}"
+    );
     let mut read = begin_read(&pool, org, actor).await.unwrap();
     let refused = crate::ops::invoices::duplicate(&mut read.tx, &read.actor, closed)
         .await
         .unwrap_err();
-    assert!(refused.to_string().contains("imported from Harvest"), "{refused}");
+    assert!(
+        refused.to_string().contains("imported from Harvest"),
+        "{refused}"
+    );
     drop(read);
     for target in [InvoiceStatus::Draft, InvoiceStatus::Sent] {
-        assert!(transition_invoice(&pool, org, closed, target, actor).await.is_err());
+        assert!(
+            transition_invoice(&pool, org, closed, target, actor)
+                .await
+                .is_err()
+        );
     }
 
     transition_invoice(&pool, org, closed, InvoiceStatus::Closed, actor)
         .await
         .unwrap();
-    assert_eq!(status(&pool, closed).await, (InvoiceStatus::Closed, 4000, None));
+    assert_eq!(
+        status(&pool, closed).await,
+        (InvoiceStatus::Closed, 4000, None)
+    );
     assert!(
         transition_invoice(&pool, org, closed, InvoiceStatus::Paid, actor)
             .await
@@ -174,10 +187,11 @@ async fn time_harvest_billed_is_never_offered_again(pool: PgPool) {
     let clients = crate::ops::invoices::uninvoiced::list(&mut read.tx, &read.actor)
         .await
         .unwrap();
-    let last = crate::ops::invoices::uninvoiced::last_invoice(&mut read.tx, &read.actor, ids.client_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let last =
+        crate::ops::invoices::uninvoiced::last_invoice(&mut read.tx, &read.actor, ids.client_id)
+            .await
+            .unwrap()
+            .unwrap();
     drop(read);
     assert_eq!(clients.len(), 1);
     assert_eq!(clients[0].unbilled_minutes, 60);
@@ -195,7 +209,11 @@ async fn time_harvest_billed_is_never_offered_again(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(
-        generated.lines.iter().map(|line| line.time_entry_id).collect::<Vec<_>>(),
+        generated
+            .lines
+            .iter()
+            .map(|line| line.time_entry_id)
+            .collect::<Vec<_>>(),
         [Some(open)]
     );
 }
@@ -219,10 +237,15 @@ async fn new_numbers_skip_one_an_import_took(pool: PgPool) {
 async fn imported_invoices_read_with_their_lines_and_need_invoice_grants(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let id = imported_invoice(&pool, &ids, "H-1").await;
-    let detail = fetch_detail(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+    let detail = fetch_detail(&pool, ids.org_id, ids.user_id, id)
+        .await
+        .unwrap();
     assert!(detail.lines.is_empty());
     let imported = detail.imported.unwrap();
-    assert_eq!((imported.due_cents, imported.tax1_rate.as_deref()), (4000, Some("8.875")));
+    assert_eq!(
+        (imported.due_cents, imported.tax1_rate.as_deref()),
+        (4000, Some("8.875"))
+    );
     assert_eq!(detail.imported_lines.len(), 1);
     assert_eq!(
         (
@@ -231,7 +254,9 @@ async fn imported_invoices_read_with_their_lines_and_need_invoice_grants(pool: P
         ),
         ("2.5", 10000)
     );
-    let list = fetch_list(&pool, ids.org_id, ids.user_id, None).await.unwrap();
+    let list = fetch_list(&pool, ids.org_id, ids.user_id, None)
+        .await
+        .unwrap();
     assert_eq!(list[0].due_cents(), 4000);
 
     let member = crate::testing::add_person(&pool, &ids, BuiltInProfile::Member)

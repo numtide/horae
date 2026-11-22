@@ -725,7 +725,7 @@ mod tests {
                 crate::render::render_invoice_pdf(
                     &document.invoice,
                     &document.lines,
-                document.imported(),
+                    document.imported(),
                     &document.client_name,
                     document.client_address.as_deref(),
                     document.client_tax_id.as_deref(),
@@ -779,7 +779,7 @@ mod tests {
                 crate::render::render_invoice_pdf(
                     &document.invoice,
                     &document.lines,
-                document.imported(),
+                    document.imported(),
                     &document.client_name,
                     document.client_address.as_deref(),
                     document.client_tax_id.as_deref(),

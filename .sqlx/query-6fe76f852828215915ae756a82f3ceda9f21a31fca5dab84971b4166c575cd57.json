@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.kind, l.amount_cents, l.taxed, l.project_id IS NOT NULL AS \"project!\"\n           FROM harvest_invoice_lines l JOIN invoices i ON i.id = l.invoice_id\n           WHERE i.org_id = $1 AND i.number = '1001' ORDER BY l.position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "taxed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "project!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "6fe76f852828215915ae756a82f3ceda9f21a31fca5dab84971b4166c575cd57"
+}

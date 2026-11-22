@@ -127,7 +127,11 @@ type Existing = Option<(Uuid, InvoiceStatus, DateTime<Utc>)>;
 
 /// The invoice an earlier run imported for this Harvest id, its status in
 /// Horae and the Harvest version it was written from.
-async fn existing(conn: &mut PgConnection, org_id: Uuid, harvest_id: i64) -> sqlx::Result<Existing> {
+async fn existing(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+    harvest_id: i64,
+) -> sqlx::Result<Existing> {
     let row = sqlx::query!(
         r#"SELECT i.id, i.status AS "status: InvoiceStatus",
                   h.harvest_updated_at AS "harvest_updated_at: DateTime<Utc>"
@@ -191,12 +195,14 @@ async fn apply_one(
             },
         ));
     }
-    let client_id = cache.client_by_harvest_id(source.client.id).ok_or_else(|| {
-        Failure::new(
-            InvoiceErrorKind::ClientMissing,
-            format!("client {} was not imported", source.client.id),
-        )
-    })?;
+    let client_id = cache
+        .client_by_harvest_id(source.client.id)
+        .ok_or_else(|| {
+            Failure::new(
+                InvoiceErrorKind::ClientMissing,
+                format!("client {} was not imported", source.client.id),
+            )
+        })?;
     let currency = source.currency.trim();
     let money = |amount: Option<&serde_json::Number>| -> Result<i64, Failure> {
         amount.map_or(Ok(0), |amount| {
@@ -214,9 +220,8 @@ async fn apply_one(
     for (position, line) in source.line_items.iter().enumerate() {
         let kind = line.kind.trim();
         lines.push(Line {
-            position: i32::try_from(position).map_err(|_| {
-                Failure::new(InvoiceErrorKind::AmountsMismatch, "too many lines")
-            })?,
+            position: i32::try_from(position)
+                .map_err(|_| Failure::new(InvoiceErrorKind::AmountsMismatch, "too many lines"))?,
             harvest_id: line.id,
             kind: if kind.is_empty() { "-" } else { kind }
                 .chars()
@@ -256,7 +261,10 @@ async fn apply_one(
     let due_on = source.due_date.unwrap_or(source.issue_date);
     let po_number = source.purchase_order.clone().unwrap_or_default();
     let subject = source.subject.clone().unwrap_or_default();
-    let notes = source.notes.clone().filter(|notes| !notes.trim().is_empty());
+    let notes = source
+        .notes
+        .clone()
+        .filter(|notes| !notes.trim().is_empty());
     let rate = |rate: &Option<serde_json::Number>| rate.as_ref().map(decimal);
     if existing.is_some() {
         sqlx::query!(

@@ -211,7 +211,10 @@ pub async fn fetch_imported(
     else {
         return Ok(None);
     };
-    Ok(Some((invoice, imported_lines(connection, invoice_id).await?)))
+    Ok(Some((
+        invoice,
+        imported_lines(connection, invoice_id).await?,
+    )))
 }
 
 /// An imported invoice's lines, in Harvest's order.

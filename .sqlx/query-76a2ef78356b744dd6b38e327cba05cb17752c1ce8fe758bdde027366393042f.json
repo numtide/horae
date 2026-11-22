@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.number, i.status AS \"status: InvoiceStatus\", h.due_cents\n           FROM invoices i JOIN harvest_invoices h ON h.invoice_id = i.id\n           WHERE i.org_id = $1 ORDER BY i.number",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void",
+                "closed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "due_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "76a2ef78356b744dd6b38e327cba05cb17752c1ce8fe758bdde027366393042f"
+}

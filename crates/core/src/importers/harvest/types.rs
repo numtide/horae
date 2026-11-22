@@ -835,7 +835,10 @@ mod tests {
         }
         assert_eq!(report.link_conflicts.len(), LINK_CONFLICTS_KEPT);
         assert_eq!(report.omitted_link_conflicts, 3);
-        assert_eq!(report.summary.links.conflicts, LINK_CONFLICTS_KEPT as u64 + 3);
+        assert_eq!(
+            report.summary.links.conflicts,
+            LINK_CONFLICTS_KEPT as u64 + 3
+        );
         let json = serde_json::to_value(&report).unwrap();
         assert_eq!(json["row_errors"][0]["invoice_kind"], "number_taken");
         assert_eq!(json["link_conflicts"][0]["kind"], "billed_in_horae");

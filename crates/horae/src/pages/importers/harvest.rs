@@ -6,6 +6,8 @@ use horae_core::importers::harvest::types::{ConnectionStatus, EntityType};
 
 use crate::server_fns;
 
+#[path = "harvest/billing.rs"]
+mod billing;
 #[path = "harvest/change_account.rs"]
 mod change_account;
 #[path = "harvest/client_settings.rs"]
@@ -18,8 +20,6 @@ mod connect_outcome;
 mod connection_card;
 #[path = "harvest/credentials_hint.rs"]
 mod credentials_hint;
-#[path = "harvest/billing.rs"]
-mod billing;
 #[path = "harvest/csv.rs"]
 mod csv;
 #[path = "harvest/entity_table.rs"]

@@ -1395,10 +1395,13 @@ mod tests {
         let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
         assert!(!entry.is_billed);
         // An import marks time Harvest billed on an invoice it lacks this way.
-        sqlx::query!("UPDATE time_entries SET state = 'invoiced' WHERE id = $1", id)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query!(
+            "UPDATE time_entries SET state = 'invoiced' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
         let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
             .await

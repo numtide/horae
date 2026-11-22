@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_invoices\n           (invoice_id, org_id, harvest_invoice_id, due_cents, paid_on, discount_rate,\n            tax1_rate, tax2_rate, period_start, period_end, harvest_updated_at)\n         VALUES ($1, $2, $3, $4, $5, $6::text::numeric, $7::text::numeric, $8::text::numeric,\n                 $9, $10, $11)\n         ON CONFLICT (invoice_id) DO UPDATE SET\n           due_cents = EXCLUDED.due_cents, paid_on = EXCLUDED.paid_on,\n           discount_rate = EXCLUDED.discount_rate, tax1_rate = EXCLUDED.tax1_rate,\n           tax2_rate = EXCLUDED.tax2_rate, period_start = EXCLUDED.period_start,\n           period_end = EXCLUDED.period_end, harvest_updated_at = EXCLUDED.harvest_updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Date",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d7030a9e8a49f892fc90a259d6cc9c1f8adf8e768877fadf83964be39a795929"
+}

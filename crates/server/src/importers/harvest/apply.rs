@@ -9,8 +9,8 @@
 
 use horae_core::importers::harvest::link::{self, Billing, Current, LinkAction};
 use horae_core::importers::harvest::types::{
-    EntityType, EntryErrorKind, IdNotice, ImportMode, LinkConflict, PersonErrorKind,
-    PersonOutcome, ReportPerson, RowOutcome, SourceKind, SourceRow,
+    EntityType, EntryErrorKind, IdNotice, ImportMode, LinkConflict, PersonErrorKind, PersonOutcome,
+    ReportPerson, RowOutcome, SourceKind, SourceRow,
 };
 use horae_core::importers::harvest::{convert, keys};
 use horae_core::types::EntryState;

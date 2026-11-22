@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object(\n             'invoices', (SELECT jsonb_agg(to_jsonb(i) ORDER BY i.id) FROM invoices i WHERE i.org_id = $1),\n             'harvest', (SELECT jsonb_agg(to_jsonb(h) ORDER BY h.invoice_id) FROM harvest_invoices h WHERE h.org_id = $1),\n             'lines', (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.invoice_id, l.position) FROM harvest_invoice_lines l WHERE l.org_id = $1),\n             'entries', (SELECT jsonb_agg(jsonb_build_array(te.id, te.state, te.invoice_id, te.rounded_minutes, te.updated_at) ORDER BY te.id)\n                         FROM time_entries te WHERE te.org_id = $1)\n           ) AS \"snapshot!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6e449f3e094ee39e38193fa07afa57d988daaa99f16576d17af630f735dc35df"
+}
