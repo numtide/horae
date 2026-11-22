@@ -149,7 +149,7 @@ function assignPerson() {
     }
     console.log('PASS: changing person and browser history reload the correct sheet, including an empty teammate');
 
-    await row.getByRole('button', { name: 'Edit', exact: true }).click();
+    await row.getByRole('button', { name: /^Edit / }).click();
     await dialog.getByRole('textbox', { name: 'Duration', exact: true }).fill('1:30');
     await mutation('update', () => dialog.getByRole('button', { name: 'Save entry', exact: true }).click());
     assert.equal(fixtureMinutes(), 90);
@@ -261,7 +261,7 @@ function assignPerson() {
     console.log('PASS: delegated untimed moves and order inversions persist the complete ordered entry set');
 
     await visit('day', person, nextDay);
-    await page.locator('.ts-day-entry').filter({ hasText: 'Delegated timed' }).getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.locator('.ts-day-entry').filter({ hasText: 'Delegated timed' }).getByRole('button', { name: /^Edit / }).click();
     await dialog.getByRole('button', { name: 'Delete…', exact: true }).click();
     await mutation('delete', () => page.getByRole('dialog', { name: 'Delete this time entry?', exact: true })
       .getByRole('button', { name: 'Delete entry', exact: true }).click());
@@ -284,7 +284,7 @@ function assignPerson() {
     console.log('PASS: delegated modal and Week row deletion preserve unrelated hours and requester timer');
 
     await visit('day');
-    await row.getByRole('button', { name: 'Edit', exact: true }).click();
+    await row.getByRole('button', { name: /^Edit / }).click();
     await dialog.getByRole('textbox', { name: 'Duration', exact: true }).fill('3:00');
     let release, intercepted = false;
     const gate = new Promise(resolve => { release = resolve; });
@@ -303,7 +303,7 @@ function assignPerson() {
     } finally { release(); await page.unroute(pattern); }
     await page.keyboard.press('Escape');
     await visit('day');
-    await expect(row.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+    await expect(row.getByRole('button', { name: /^Edit / })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Add entry', exact: true })).toBeDisabled();
     setWrite(true);
     await visit('day');
@@ -360,7 +360,7 @@ function assignPerson() {
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${id(17)}'`);
     await owner.goto(`${base}/timesheet/day/${timerDay}?span=week`);
     const ownRow = owner.locator('.ts-day-entry').filter({ has: owner.getByRole('button', { name: 'Stop', exact: true }) });
-    await expect(ownRow.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+    await expect(ownRow.getByRole('button', { name: /^Edit / })).toBeDisabled();
     const stopped = owner.waitForResponse(r => r.url().includes('/api/apply_timesheet_command'));
     await ownRow.getByRole('button', { name: 'Stop', exact: true }).click();
     const stoppedResponse = await stopped;

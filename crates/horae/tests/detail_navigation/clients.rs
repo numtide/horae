@@ -88,6 +88,37 @@ async fn manager_list_keeps_rows_and_management_actions() {
 }
 
 #[tokio::test]
+async fn a_managed_row_offers_edit_then_archive_in_one_actions_menu() {
+    let dom = mount(&list(Probe::default()));
+    let html = dioxus::ssr::render(&dom);
+    let id = Uuid::from_u128(1);
+    let trigger = format!("id=\"client-actions-{id}-trigger\"");
+    assert_eq!(html.matches(&trigger).count(), 1, "{html}");
+    assert!(
+        html.contains("aria-label=\"Actions for Client-1\""),
+        "{html}"
+    );
+    let edit = html.find(&format!("id=\"client-edit-{id}\"")).unwrap();
+    let archive = html.find(&format!("id=\"client-activity-{id}\"")).unwrap();
+    assert!(
+        html.find(&trigger).unwrap() < edit && edit < archive,
+        "{html}"
+    );
+    for item in [&html[edit..], &html[archive..]] {
+        let tag = item.split('>').next().unwrap();
+        assert!(tag.contains("role=\"menuitem\""), "{tag}");
+    }
+    assert!(
+        html[archive..]
+            .split("</button>")
+            .next()
+            .unwrap()
+            .ends_with("Archive"),
+        "{html}"
+    );
+}
+
+#[tokio::test]
 async fn members_and_readers_get_rows_without_writes() {
     for probe in [
         Probe {

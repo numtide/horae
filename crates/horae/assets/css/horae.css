@@ -182,7 +182,6 @@
   --glow-primary: 0 6px 18px -8px rgba(79, 183, 154, 0.65);
   --glow-accent: 0 6px 18px -8px rgba(217, 154, 60, 0.6);
   --glow-danger: 0 6px 18px -8px rgba(224, 102, 97, 0.6);
-  --glow-pine: 0 6px 18px -8px rgba(31, 92, 77, 0.7);
 
   /* Layout — some values are overridden per breakpoint below */
   --sidebar-width: 264px;
@@ -287,7 +286,6 @@
   --glow-primary: 0 6px 18px -8px rgba(31, 92, 77, 0.5);
   --glow-accent: 0 6px 18px -8px rgba(198, 128, 42, 0.5);
   --glow-danger: 0 6px 18px -8px rgba(178, 58, 53, 0.5);
-  --glow-pine: 0 6px 18px -8px rgba(31, 92, 77, 0.5);
 
   /* Horae mark stays on the same deep-pine tile as dark mode */
 }
@@ -345,8 +343,6 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
    can crop it. */
 .menu-item:focus-visible,
 .ts-pager-btn:focus-visible,
-.ts-submit-main:focus-visible,
-.ts-submit-caret:focus-visible,
 .collapse-head:focus-visible {
   outline: none;
   box-shadow: var(--ring-inset);
@@ -854,9 +850,6 @@ h1, h2, h3, h4, h5, h6 {
 .btn-ghost:hover { background: var(--color-primary-bg); color: var(--color-primary-light); text-decoration: none; }
 .btn-accent { background: var(--color-accent); color: var(--color-on-accent); border-color: transparent; font-weight: 700; }
 .btn-accent:hover { background: var(--color-accent-hover); color: var(--color-on-accent); box-shadow: var(--glow-accent); text-decoration: none; }
-/* Solid — deep pine fill, for form submits (distinct from the luminous primary) */
-.btn-solid { background: var(--color-pine); color: var(--color-on-pine); border-color: transparent; }
-.btn-solid:hover { background: var(--color-pine-hover); color: var(--color-on-pine); box-shadow: var(--glow-pine); text-decoration: none; }
 .btn-sm { padding: var(--space-2) var(--space-3); font-size: var(--font-size-xs); }
 
 /* Forms */
@@ -1058,6 +1051,9 @@ tbody td, tbody th {
 }
 tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
 tbody tr:hover { background: var(--color-row-hover); }
+/* A row that opens a record: its first link stretches over the whole row. */
+tr.row-link { position: relative; }
+tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 
 /* Badges */
 .badge {
@@ -1627,15 +1623,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 .access-change { display: inline-block; padding: var(--space-1) var(--space-2); border-radius: var(--radius); font-size: var(--font-size-xs); font-weight: 500; }
 .access-change-up { color: var(--color-success-fg); background: var(--color-success-bg); }
 .access-change-down { color: var(--color-danger-fg); background: var(--color-danger-bg); }
-.ts-add {
-  width: 46px; height: 46px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--color-primary); color: var(--color-on-primary);
-  border: none; border-radius: var(--radius-lg);
-  font-size: var(--font-size-2xl); font-weight: 600; line-height: 0; cursor: pointer;
-}
-.ts-add:hover:not(:disabled) { background: var(--color-primary-hover); }
-.ts-add:disabled { opacity: 0.5; }
 .ts-pager {
   display: flex; align-items: center; overflow: hidden;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
@@ -1674,15 +1661,16 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* Where title, total and tabs cannot share a row, give the tabs one of their
    own; plain wrapping would let them climb beside the title whenever the
    total is absent. The header's width, not the viewport's, decides, because
-   the rail beside it is resizable. One row needs about 560px in the brand
-   fonts and noticeably more in fallback fonts, hence the margin. The wrapper
+   the rail beside it is resizable. With "Submit week", one row needs about
+   700px in the brand fonts and noticeably more in fallback fonts, hence the
+   margin. The wrapper
    around the shared header is the container (it holds nothing fixed-position,
    which a container would trap). Below it the title's wrappers dissolve (see
    page_header.rs) so the title, the tabs and the total share the header's own
    rows: the title takes the first row whole, so it never breaks to make room,
    and the total follows the tabs, so its absence moves nothing before it. */
 .ts-header { container: ts-header / inline-size; }
-@container ts-header (max-width: 680px) {
+@container ts-header (max-width: 860px) {
   .ts-header .page-heading,
   .ts-header .page-heading > div,
   .ts-header .page-title-row { display: contents; }
@@ -1747,14 +1735,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-day-entry-notes { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-2); white-space: pre-line; }
 .ts-day-entry-side { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); max-width: 100%; }
 .ts-day-entry-dur { font-size: var(--font-size-sm); color: var(--color-text); min-width: 52px; text-align: right; }
-.ts-day-action {
-  padding: var(--space-1) var(--space-3);
-  background: none; border: 1px solid var(--color-border-input); border-radius: var(--radius-btn);
-  color: var(--color-text-secondary); font: inherit; font-size: var(--font-size-sm); cursor: pointer;
-}
-.ts-day-action:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
-.ts-day-action.primary { border-color: var(--color-primary-border); color: var(--color-primary-light); }
-.ts-day-action.primary:hover { background: var(--color-primary-bg); }
 
 .ts-project { display: flex; align-items: flex-start; gap: var(--space-4); padding-right: var(--space-4); }
 .ts-project-icon {
@@ -1805,17 +1785,6 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-coltotal.empty { color: var(--color-text-muted); }
 .ts-grandtotal { text-align: right; font-family: var(--font-family-mono); font-size: var(--font-size-base); font-weight: 600; color: var(--color-accent); }
 
-.ts-submit-bar { display: flex; justify-content: flex-end; margin-top: var(--space-5); }
-.ts-submit {
-  display: inline-flex; align-items: stretch; border-radius: var(--radius-lg); overflow: hidden;
-  box-shadow: 0 8px 24px -10px rgba(31, 92, 77, 0.6);
-}
-.ts-submit-main {
-  padding: 13px var(--space-6); background: var(--color-pine); color: var(--color-on-pine);
-  border: none; font: inherit; font-size: var(--font-size-sm); font-weight: 600; cursor: pointer;
-}
-.ts-submit-main:disabled { opacity: 0.5; cursor: not-allowed; }
-.ts-submit-caret { padding: 0 var(--space-4); background: #164034; color: var(--color-pine-fg); border: none; border-left: 1px solid #0f3d33; cursor: pointer; font-size: 12px; }
 
 /* Calendar (duration mode): an hour rail + 7 day columns + a week-total column.
    Each entry is a block whose height is proportional to its duration, stacked

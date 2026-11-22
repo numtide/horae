@@ -51,6 +51,8 @@ pub mod menu {
     }
 }
 #[allow(dead_code)]
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[path = "../src/components/button.rs"]
 pub mod button;
 #[path = "../src/components/confirm_dialog.rs"]
@@ -74,8 +76,8 @@ pub mod select_field;
 pub mod today;
 mod components {
     pub use super::{
-        button, confirm_dialog, controls, icons, menu, modal, no_tracking, page_header, period_nav,
-        screen_state, select_field, today,
+        badge, button, confirm_dialog, controls, icons, menu, modal, no_tracking, page_header,
+        period_nav, screen_state, select_field, today,
     };
 
     /// The shell's week start and a viewer who cannot manage projects, without
@@ -961,7 +963,7 @@ async fn the_toolbar_keeps_the_last_choices_while_the_sheet_reloads() {
     // The add button's attribute names, so `disabled` and `aria-disabled`
     // can be told apart.
     let add_button = |html: &str| -> Vec<String> {
-        let start = html.find("class=\"ts-add\"").expect("the add button");
+        let start = html.find("id=\"ts-add\"").expect("the add button");
         let tag = html[start..].split('>').next().unwrap_or_default();
         tag.split_whitespace()
             .map(|attribute| attribute.split('=').next().unwrap_or_default().to_string())

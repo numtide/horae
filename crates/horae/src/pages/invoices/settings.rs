@@ -282,7 +282,7 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
                 }
             }
             div { class: "flex flex-wrap items-center gap-3",
-                button { r#type: "submit", class: "btn btn-solid", disabled: busy(),
+                button { r#type: "submit", class: "btn btn-primary", disabled: busy(),
                     if busy() { "Saving…" } else { "Save {card.title().to_lowercase()}" }
                 }
                 p { class: "text-sm text-secondary m-0", role: "status",

@@ -92,7 +92,8 @@ const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${
         ('${id(409)}', '${actor.org_id}', '${client}', 'ACCESS-OWN', CURRENT_DATE, CURRENT_DATE, 'EUR'),
         ('${id(410)}', '${foreignOrg}', '${foreignClient}', 'ACCESS-FOREIGN', CURRENT_DATE, CURRENT_DATE, 'GBP')`);
     await visit(`/clients/${client}`);
-    await page.getByRole('button', { name: 'Edit client', exact: true }).click();
+    await page.locator('#client-actions-trigger').click();
+    await page.getByRole('menuitem', { name: 'Edit client', exact: true }).click();
     await expect(dialog.getByLabel('Default rate', { exact: true })).toHaveValue('123.45');
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -129,7 +130,7 @@ const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${
       await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Access visible project', exact: true })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Access hidden project', exact: true })).toHaveCount(scenario.count === 2 ? 1 : 0);
-      await expect(page.getByRole('button', { name: 'Edit client', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
+      await expect(page.locator('#client-actions-trigger')).toHaveCount(scenario.billing ? 1 : 0);
       await expect(page.getByRole('link', { name: 'New invoice', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       const view = await json('client_detail_view', null);
       assert.deepEqual([view.can_manage, view.details.client.id], [scenario.billing, client]);

@@ -306,7 +306,11 @@ const sql = query => require('node:child_process').execFileSync('psql',
     const clientEditor = await context.newPage();
     await clientEditor.goto(`${base}/clients`);
     const clientRow = clientEditor.getByRole('row').filter({ hasText: 'New project browser client' });
-    await clientRow.getByRole('button', { name: 'Edit', exact: true }).click();
+    const editClient = async () => {
+      await clientRow.getByRole('button', { name: 'Actions for New project browser client', exact: true }).click();
+      await clientRow.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    };
+    await editClient();
     await clientEditor.getByLabel('Client name', { exact: true }).fill('Rejected currency rename');
     await clientEditor.getByLabel('Currency', { exact: true }).selectOption('USD');
     await clientEditor.getByLabel('Billing address', { exact: true }).fill('Retained address');
@@ -324,7 +328,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(clientEditor.getByRole('dialog')).toBeHidden();
     await clientEditor.reload();
     await expect(clientRow).toContainText('EUR');
-    await clientRow.getByRole('button', { name: 'Edit', exact: true }).click();
+    await editClient();
     await expect(clientEditor.getByLabel('Billing address', { exact: true })).toHaveValue('Retained address');
     await expect(clientEditor.getByLabel('Default rate', { exact: true })).toHaveValue('0.00');
     await clientEditor.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -500,6 +504,9 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await teamSection.getByLabel('Billable rate for Admin User (EUR/h)', { exact: true }).fill('0');
     await teamSection.getByLabel('Budget hours for Admin User', { exact: true }).fill('12:30');
     await costInput.fill('0');
+    // Settle the autosave first: otherwise its write can land inside the loop
+    // and readsFinished waits on it instead of on the teammate search.
+    await saved();
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await addPerson.click();
@@ -1323,7 +1330,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await readsFinished(page);
     console.log('PASS: a new tagged project reaches reports and both exports; pending/error filters never show stale rows');
     await page.goto(`${base}/invoices`);
-    await page.getByRole('button', { name: 'New Invoice', exact: true }).click();
+    await page.getByRole('link', { name: 'New invoice', exact: true }).click();
     await page.getByLabel('Client', { exact: true }).selectOption({ label: 'New project browser client' });
     await page.getByLabel('Period from', { exact: true }).fill(entryDate);
     await page.getByLabel('Period to', { exact: true }).fill(entryDate);
@@ -1363,7 +1370,6 @@ const sql = query => require('node:child_process').execFileSync('psql',
       await generate.click();
       await expect.poll(() => !!releaseInvoice).toBe(true);
       await expect(generate).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
       await expect(page.getByLabel('PO number', { exact: true })).toBeDisabled();
     } finally {
       releaseInvoice?.();
@@ -1375,7 +1381,8 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(page.getByRole('heading', { name: `Invoice ${draft.number}`, exact: true })).toBeVisible();
     await readsFinished(page);
     await page.unroute('**/api/generate_invoice*');
-    await page.getByRole('button', { name: 'Edit invoice values', exact: true }).click();
+    await page.locator('#invoice-actions-trigger').click();
+    await page.getByRole('menuitem', { name: 'Edit invoice values', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Mark Sent', exact: true })).toBeDisabled();
     await page.getByLabel('Payment terms', { exact: true }).selectOption('45');
     await page.getByLabel('Discount (%)', { exact: true }).fill('12.50');
@@ -1409,7 +1416,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(page.locator('tfoot tr').last()).toHaveText(/TotalEUR 80.66/);
     await page.getByRole('button', { name: 'Mark Sent', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Mark Paid', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit invoice values', exact: true })).toHaveCount(0);
+    await expect(page.locator('#invoice-edit-values')).toHaveCount(0);
     await readsFinished(page);
     console.log('PASS: project invoice defaults prefill real estimates, stale reviews cannot generate, and editable draft values persist independently');
     await page.goto(`${base}/projects/new`);

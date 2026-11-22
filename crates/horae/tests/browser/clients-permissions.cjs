@@ -51,8 +51,10 @@ let actor, org, owned = false, restoreSeededStates;
     await page.goto(`${base}/clients/${client}`);
     return response;
   };
-  const editTaxId = async (opener, value) => {
-    await opener.click();
+  // Edit sits in an "Actions" menu: open it, then choose the item.
+  const editTaxId = async ([trigger, item], value) => {
+    await trigger.click();
+    await item.click();
     await expect(dialog.getByLabel('Client name', { exact: true })).toBeFocused();
     await dialog.getByLabel('Tax ID (optional)', { exact: true }).fill(value);
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -83,14 +85,15 @@ let actor, org, owned = false, restoreSeededStates;
     // instead of moving focus later.
     await loadList();
     await page.getByRole('searchbox', { name: 'Search clients by name' }).fill('Permission unset client');
-    const rowEdit = page.locator(`#client-edit-${unset}`);
+    const rowActions = page.locator(`#client-actions-${unset}-trigger`);
+    const rowEdit = [rowActions, page.locator(`#client-edit-${unset}`)];
     await page.route('**/api/client_overview*', route => route.abort('failed'), { times: 1 });
     await editTaxId(rowEdit, 'PERM-1');
     await expect(page.getByRole('alert')).toContainText('Could not load clients');
     await expect(page.locator('#clients-heading')).toBeFocused();
     await page.getByRole('button', { name: 'Try again', exact: true }).click();
-    await expect(rowEdit).toBeVisible();
-    assert.notEqual(await activeId(), `client-edit-${unset}`);
+    await expect(rowActions).toBeVisible();
+    assert.notEqual(await activeId(), `client-actions-${unset}-trigger`);
 
     let refresh;
     await page.route('**/api/client_overview*', async route => {
@@ -104,23 +107,24 @@ let actor, org, owned = false, restoreSeededStates;
     assert.deepEqual(refresh.expected_requester, { org_id: org, user_id: actor.id }, 'the reload asks the server to check the bound account');
     await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Try again', exact: true }).click();
-    await expect(rowEdit).toBeVisible();
-    assert.notEqual(await activeId(), `client-edit-${unset}`);
+    await expect(rowActions).toBeVisible();
+    assert.notEqual(await activeId(), `client-actions-${unset}-trigger`);
     await editTaxId(rowEdit, 'PERM-3');
-    await expect(rowEdit).toBeFocused();
+    await expect(rowActions).toBeFocused();
     console.log('PASS: list refocus is one-shot across failed and rebound reloads; a successful edit returns to its row');
 
     await loadDetail(unset);
-    const edit = page.locator('#client-edit');
+    const headerActions = page.locator('#client-actions-trigger');
+    const edit = [headerActions, page.locator('#client-edit')];
     await page.route('**/api/client_detail_view*', route => route.abort('failed'), { times: 1 });
     await editTaxId(edit, 'PERM-4');
     await expect(page.getByRole('alert')).toContainText('Could not load this client');
-    await expect(edit).toHaveCount(0);
+    await expect(headerActions).toHaveCount(0);
     await page.getByRole('button', { name: 'Try again', exact: true }).click();
-    await expect(edit).toBeVisible();
-    assert.notEqual(await activeId(), 'client-edit');
+    await expect(headerActions).toBeVisible();
+    assert.notEqual(await activeId(), 'client-actions-trigger');
     await editTaxId(edit, 'PERM-5');
-    await expect(edit).toBeFocused();
+    await expect(headerActions).toBeFocused();
     console.log('PASS: detail refocus is one-shot across a failed reload; a successful edit returns to Edit client');
 
     // Catalog reads without management.
@@ -130,9 +134,9 @@ let actor, org, owned = false, restoreSeededStates;
     assert.ok([unset, zero].every(client => overview.clients.some(row => row.client.id === client)));
     await expect(page.getByRole('link', { name: 'Permission zero client', exact: true })).toBeVisible();
     await expect(sidebarClients).toBeVisible();
-    for (const control of ['New client', 'Edit', 'Archive', 'Restore', 'Archive client', 'Restore client']) {
-      await expect(page.getByRole('button', { name: control, exact: true })).toHaveCount(0);
-    }
+    await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(0);
+    // No row menu at all: a reader may take no action on a client.
+    await expect(page.getByRole('button', { name: /^Actions for / })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Import', exact: true })).toHaveCount(0);
     await capture('read-only-list');
     for (const client of [unset, zero]) {
@@ -141,8 +145,9 @@ let actor, org, owned = false, restoreSeededStates;
       await expect(billing).toBeVisible();
       await expect(billing).not.toContainText('Default rate');
     }
-    for (const control of ['Edit client', 'Archive client', 'Restore client', 'New project', 'New invoice']) {
-      await expect(page.getByRole(control.endsWith('client') ? 'button' : 'link', { name: control, exact: true })).toHaveCount(0);
+    await expect(page.locator('#client-actions-trigger')).toHaveCount(0);
+    for (const control of ['New project', 'New invoice']) {
+      await expect(page.getByRole('link', { name: control, exact: true })).toHaveCount(0);
     }
     console.log('PASS: ClientReadAll reads the catalog without client management or default rates');
 
@@ -156,7 +161,7 @@ let actor, org, owned = false, restoreSeededStates;
       const view = await success(await loadDetail(client));
       assert.deepEqual(view.details.billing, { default_rate_cents: rate });
       await expect(billing.locator('dt:text-is("Default rate") + dd')).toHaveText(text);
-      await expect(page.getByRole('button', { name: 'Edit client', exact: true })).toHaveCount(0);
+      await expect(page.locator('#client-actions-trigger')).toHaveCount(0);
     }
     await capture('global-rate-detail');
     console.log('PASS: only global billable-rate read reveals the client default, keeping unset distinct from zero');
@@ -165,6 +170,7 @@ let actor, org, owned = false, restoreSeededStates;
     const writer = await success(await loadDetail(zero));
     assert.deepEqual([writer.can_manage, writer.can_read_invoices, Object.hasOwn(writer.details, 'billing')], [true, false, false]);
     await expect(page.getByRole('region', { name: 'Invoices', exact: true })).toHaveCount(0);
+    await page.locator('#client-actions-trigger').click();
     await page.locator('#client-edit').click();
     await expect(dialog.getByLabel('Client name', { exact: true })).toBeFocused();
     await expect(dialog.getByLabel('Default rate', { exact: true })).toHaveCount(0);

@@ -221,7 +221,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       await headersFit();
       if (process.env.HORAE_TEST_SCREENSHOT_DIR)
         await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/responsive-day.png` });
-      await first.getByRole('button', { name: 'Edit', exact: true }).click();
+      await first.getByRole('button', { name: /^Edit / }).click();
       await expect(page.getByRole('dialog', { name: /Edit time entry/ })).toBeVisible();
       await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.locator('.ts-daystrip').getByRole('button', { name: /^Sun/ }).click();
