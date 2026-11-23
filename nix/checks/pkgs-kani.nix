@@ -1,6 +1,6 @@
-{ pkgs, perSystem, ... }:
-# Replaces blueprint's automatic check of the Kani package, which would build
-# Kani and its nightly toolchain on every CI run. This only evaluates it.
-pkgs.runCommand "pkgs-kani-evaluates" { } ''
-  echo ${builtins.unsafeDiscardStringContext perSystem.self.kani.drvPath} > $out
-''
+{ pkgs, ... }:
+# Replaces blueprint's automatic check of the Kani package. CI must not build
+# Kani and its nightly toolchain, and cannot even evaluate them: the toolchain
+# comes from fenix's manifest, an import from derivation that the CI refuses.
+# Kani is used locally through `nix develop .#kani`.
+pkgs.emptyFile
