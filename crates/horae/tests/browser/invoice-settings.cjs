@@ -33,7 +33,12 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
   const errors = [];
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const main = page.locator('main');
-  const settingsLink = main.getByRole('link', { name: 'Settings', exact: true });
+  // Invoice settings is an item of the list header's "More" menu.
+  const moreMenu = main.locator('#invoices-more-trigger');
+  const settingsLink = { click: async () => {
+    await moreMenu.click();
+    await page.getByRole('menuitem', { name: 'Invoice settings', exact: true }).click();
+  } };
   // The action follows the session's permissions, so wait for them to load.
   const invoices = async () => {
     const permissions = page.waitForResponse(r => r.url().includes('/api/get_my_permissions') && r.status() === 200);
@@ -118,7 +123,7 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     // Reading invoices is not enough: no action, and a direct link shows no values.
     setGrants(reader);
     await invoices();
-    await expect(settingsLink).toHaveCount(0);
+    await expect(moreMenu).toHaveCount(0);
     await page.goto(`${base}/invoices/settings`);
     await expect(main.getByRole('alert')).toContainText('Access unavailable');
     await expect(page.getByLabel('Company name', { exact: true })).toHaveCount(0);

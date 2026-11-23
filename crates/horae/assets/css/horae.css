@@ -1050,6 +1050,10 @@ tbody td, tbody th {
   text-align: left;
 }
 tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
+/* Totals inside a table line up with its rows, set off by one rule. */
+tfoot td, tfoot th { padding: var(--space-2) var(--space-5); color: var(--color-text); }
+tfoot tr:first-child td, tfoot tr:first-child th { padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
+tfoot tr:last-child td, tfoot tr:last-child th { padding-bottom: var(--space-4); }
 tbody tr:hover { background: var(--color-row-hover); }
 /* A row that opens a record: its first link stretches over the whole row. */
 tr.row-link { position: relative; }
@@ -1588,7 +1592,8 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 .ts-content[aria-busy="true"],
 .proj-content[aria-busy="true"],
 .ppl-content[aria-busy="true"],
-.audit-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
+.audit-content[aria-busy="true"],
+.inv-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
 
 /* Audit log: rows grouped by day. A row's line holds time, kind, sentence,
    "+2 −1" and the toggle button that opens what changed below it. */
@@ -2149,6 +2154,15 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
    express lives here. */
 /* Invoice detail: the client/status/dates summary fills as many columns as fit. */
 .inv-meta { grid-template-columns: repeat(auto-fill, minmax(var(--space-50), 1fr)); }
+/* A void invoice's amount stays readable but is struck through. */
+.inv-void-amount { text-decoration: line-through; }
+/* The draft editor: the form beside its totals, which stay in view while the
+   form scrolls; stacked on narrow screens. */
+.inv-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+@media (min-width: 64rem) {
+  .inv-editor { grid-template-columns: minmax(0, 1fr) var(--width-form-select); }
+  .inv-editor-totals { position: sticky; top: var(--space-6); }
+}
 
 /* The Tailwind-style utility layer + responsive variants live in the GENERATED
    horae-utils.css — regenerated automatically by crates/horae/build.rs on build.

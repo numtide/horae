@@ -1,12 +1,13 @@
 use chrono::NaiveDate;
 use dioxus::prelude::*;
 
-use crate::components::date_picker::DatePicker;
-use crate::components::icons::NavIcon;
+use super::date_picker::DatePicker;
+use super::icons::NavIcon;
 
-/// Advisory planning dates keep ISO values in the draft and use the shared calendar.
+/// A date field: a trigger showing the date in the app's format that opens the
+/// shared calendar. Its value is an ISO date, or empty.
 #[component]
-pub(super) fn DateField(
+pub fn DateField(
     id: String,
     label: String,
     placeholder: String,

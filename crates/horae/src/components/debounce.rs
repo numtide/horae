@@ -33,7 +33,8 @@ pub fn use_debounced<T: Clone + PartialEq + 'static>(
     use_hook(|| settled.into())
 }
 
-async fn sleep(delay: Duration) {
+/// Waits `delay` on the server and in the browser alike.
+pub(crate) async fn sleep(delay: Duration) {
     #[cfg(target_arch = "wasm32")]
     gloo_timers::future::TimeoutFuture::new(delay.as_millis() as u32).await;
     #[cfg(not(target_arch = "wasm32"))]

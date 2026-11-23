@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE invoices SET status = $3\n           WHERE id = $1 AND org_id = $2\n           RETURNING id, org_id, client_id, number,\n                     status as \"status: InvoiceStatus\",\n                     issued_on as \"issued_on: chrono::NaiveDate\",\n                     due_on as \"due_on: chrono::NaiveDate\",\n                     currency, total_cents, notes, terms_days, po_number,\n                     discount_bps, tax1_bps, tax2_name, tax2_bps,\n                     subtotal_cents, discount_cents, tax1_cents, tax2_cents,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "SELECT id, org_id, client_id, number,\n                  status as \"status: InvoiceStatus\",\n                  issued_on as \"issued_on: chrono::NaiveDate\",\n                  due_on as \"due_on: chrono::NaiveDate\",\n                  currency, total_cents, notes, terms_days, po_number,\n                  discount_bps, tax1_bps, tax2_name, tax2_bps,\n                  subtotal_cents, discount_cents, tax1_cents, tax2_cents, subject,\n                  created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n           FROM invoices\n           WHERE id = $1 AND org_id = $2",
   "describe": {
     "columns": [
       {
@@ -117,6 +117,11 @@
       },
       {
         "ordinal": 20,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
         "name": "created_at: chrono::DateTime<chrono::Utc>",
         "type_info": "Timestamptz"
       }
@@ -124,20 +129,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        {
-          "Custom": {
-            "name": "invoice_status",
-            "kind": {
-              "Enum": [
-                "draft",
-                "sent",
-                "paid",
-                "void"
-              ]
-            }
-          }
-        }
+        "Uuid"
       ]
     },
     "nullable": [
@@ -161,8 +153,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "9d975c790f296f0fac4aff6f3e5ff95fac89f65eee24db6c32c9660a710952f2"
+  "hash": "f5606989a72569881d9a58cf9ebbeb48e9fbf794aea61705ea5fcd8727cd2992"
 }

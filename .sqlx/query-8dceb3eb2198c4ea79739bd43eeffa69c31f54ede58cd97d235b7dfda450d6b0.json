@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices SET issued_on = $2::date - 30, due_on = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8dceb3eb2198c4ea79739bd43eeffa69c31f54ede58cd97d235b7dfda450d6b0"
+}
