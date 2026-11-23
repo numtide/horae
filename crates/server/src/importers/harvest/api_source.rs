@@ -77,19 +77,17 @@ pub(super) fn decimal(n: &serde_json::Number) -> String {
 }
 
 /// Whether an incremental run may read only the time entries changed since
-/// `since`. Billing an entry in Harvest is assumed, not verified, to move the
-/// entry's `updated_at` (spec 025, T002), so every entry is read again until
-/// invoices were imported once (`invoice_mark`), and whenever an invoice
-/// changed since that run.
+/// `since`. Entries imported before invoices were never linked, so every entry
+/// is read until invoices have imported once without errors (`invoice_mark`).
+/// After that, billing and unbilling an entry move its `updated_at` in
+/// Harvest (checked against the test account, spec 025 T002), so an
+/// incremental read sees them.
 pub(super) fn entry_scan(
     since: Option<DateTime<Utc>>,
     invoice_mark: Option<DateTime<Utc>>,
-    invoices: &[ApiInvoice],
 ) -> (EntryScan, Option<DateTime<Utc>>) {
     match (since, invoice_mark) {
-        (Some(since), Some(mark)) if invoices.iter().all(|i| i.updated_at <= mark) => {
-            (EntryScan::Incremental, Some(since))
-        }
+        (Some(since), Some(_)) => (EntryScan::Incremental, Some(since)),
         _ => (EntryScan::Full, None),
     }
 }

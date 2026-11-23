@@ -106,7 +106,7 @@ pub(super) fn fetch(
             Ok(())
         },
     )?;
-    let (scan, since) = super::api_source::entry_scan(since, invoice_mark, &catalog.invoices);
+    let (scan, since) = super::api_source::entry_scan(since, invoice_mark);
     catalog.entry_scan = Some(scan);
     pages
         .blocking_send(Page::Catalog(catalog))

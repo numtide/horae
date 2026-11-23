@@ -445,12 +445,10 @@ async fn entries_imported_before_invoices_are_linked_by_a_full_scan(pool: PgPool
     .await
     .unwrap();
     let connection = credentials::load(&pool, org, KEY).await.unwrap().unwrap();
-    let invoices = fixture().invoices;
     assert_eq!(
         api_source::entry_scan(
             connection.watermark_for(EntityType::TimeEntry),
             connection.watermark_for(EntityType::Invoice),
-            &invoices,
         ),
         (EntryScan::Full, None),
         "the first run with invoices reads every entry"
@@ -473,15 +471,44 @@ async fn entries_imported_before_invoices_are_linked_by_a_full_scan(pool: PgPool
         mark.is_none(),
         "an invoice error keeps the next run in full"
     );
+    // Once invoices have imported, billing changes reach incremental runs
+    // through each entry's own `updated_at` (T002).
     assert_eq!(
-        api_source::entry_scan(since, Some(day(3)), &invoices).0,
-        EntryScan::Incremental
+        api_source::entry_scan(since, Some(day(3))),
+        (EntryScan::Incremental, since)
     );
-    let mut changed = invoices.clone();
-    changed[0].updated_at = day(6);
+}
+
+/// Harvest bills an hour on a project billed by "none" as a line of quantity
+/// 1.0 at 0.0; such an invoice imports and its time is linked.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn zero_amount_lines_import(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut source = valid_data();
+    let mut zero = invoice(301, "3001", "open", &["0.0"], "0.0", "0.0");
+    zero["line_items"][0]["quantity"] = num("1.0");
+    source.invoices = serde_json::from_value(json!([zero])).unwrap();
+    source.time_entries = serde_json::from_value(json!([entry(10, 10, Some(301))])).unwrap();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    assert_eq!(report.error_count(), 0, "{:?}", report.row_errors);
     assert_eq!(
-        api_source::entry_scan(since, Some(day(3)), &changed).0,
-        EntryScan::Full
+        (report.summary.invoices.created, report.summary.links.linked),
+        (1, 1)
+    );
+    let line = sqlx::query!(
+        r#"SELECT l.quantity::text AS "quantity!", l.amount_cents, i.total_cents
+           FROM harvest_invoice_lines l JOIN invoices i ON i.id = l.invoice_id
+           WHERE i.org_id = $1"#,
+        org,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (line.quantity.as_str(), line.amount_cents, line.total_cents),
+        ("1.0", 0, 0)
     );
 }
 

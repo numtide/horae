@@ -226,34 +226,22 @@ pub(in crate::importers::harvest) async fn run(
     };
     let download = checkpoint.download.clone();
     let account = checkpoint.request.account_id.clone();
-    let entries = EntryWindow {
-        since: checkpoint.request.since,
-        invoice_mark: checkpoint.request.invoice_mark,
-        // Invoice pages saved before a resume are not downloaded again.
-        invoices: checkpoint.catalog.invoices.clone(),
-    };
+    let window = (checkpoint.request.since, checkpoint.request.invoice_mark);
     super::run_inner(
         connection,
         org_id,
         Settings::Durable(Box::new(checkpoint)),
-        move |pages| fetch(http, &access, &account, entries, download, pages),
+        move |pages| fetch(http, &access, &account, window, download, pages),
         Some(lease),
     )
     .await
-}
-
-/// What decides how time entries are read once the invoices are in.
-struct EntryWindow {
-    since: Option<DateTime<Utc>>,
-    invoice_mark: Option<DateTime<Utc>>,
-    invoices: Vec<ApiInvoice>,
 }
 
 fn fetch(
     mut http: ApiHttp,
     access: &str,
     account: &str,
-    mut entries: EntryWindow,
+    (since, invoice_mark): (Option<DateTime<Utc>>, Option<DateTime<Utc>>),
     mut download: Download,
     pages: &mpsc::Sender<Page>,
 ) -> anyhow::Result<()> {
@@ -292,10 +280,7 @@ fn fetch(
                 (access, account),
                 &mut download,
                 pages,
-                |page: Vec<ApiInvoice>| {
-                    entries.invoices.extend(page.iter().cloned());
-                    Rows::Invoices(page)
-                },
+                Rows::Invoices,
             )?,
             Collection::TimeEntries => fetch_pages(
                 &mut http,
@@ -309,11 +294,7 @@ fn fetch(
             return Ok(());
         };
         if collection == Collection::TimeEntries {
-            let (scan, since) = super::super::api_source::entry_scan(
-                entries.since,
-                entries.invoice_mark,
-                &entries.invoices,
-            );
+            let (scan, since) = super::super::api_source::entry_scan(since, invoice_mark);
             download = Download {
                 collection,
                 page: http.cursor(collection.name(), since)?,

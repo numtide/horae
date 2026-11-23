@@ -65,7 +65,7 @@ their requirements. Missing mockups do not exclude approved web workflows.
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
 | Workspace administration | Pending 013; design 09 | People/invitations, preferences, export/backup guarantees, audit and deletion semantics |
-| Import and migration | `004-harvest-importer`, 005–008, 019, 025; design 10 | Preserve delivered job/CLI/account-switch behavior. 025 imports invoices (open, paid, closed; drafts left out) and links billed time; payments wait for Invoices step 3, and that billing an entry moves its `updated_at` is unverified against the test account, so runs read every entry again whenever an invoice changed. People import and the Harvest import section are authorized by D-019; any other new connector or entity import is not authorized by web parity |
+| Import and migration | `004-harvest-importer`, 005–008, 019, 025; design 10 | Preserve delivered job/CLI/account-switch behavior. 025 imports invoices (open, paid, closed; drafts left out) and links billed time; payments wait for Invoices step 3. Billing and unbilling an entry move its `updated_at` (checked 2026-11-23, iteration log), so incremental runs see them. People import and the Harvest import section are authorized by D-019; any other new connector or entity import is not authorized by web parity |
 | Existing integrations and API | 001/002, compatibility API and plugin infrastructure | Regression/authorization coverage; no new connectors. The Harvest-compatible API's write endpoints and fidelity work are approved for 021 (D-020) |
 | Native applications, Forecast and new integrations | Excluded by D-001 | No implementation/specification work for these products in this phase, including new payment gateways, calendar/accounting connectors and third-party extensions |
 | Other plan-dependent web capabilities | Harvest indexes; investigate within confirmed web scope | Classify AI, e-invoicing and commercial account features against the self-hosted architecture and no-new-integration boundary; do not silently invent external services |
@@ -124,6 +124,18 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-11-23 — Billing moves a time entry's version (025 T002)
+
+- With the user's authorization for this check, a disposable invoice and a disposable time entry
+  were created in the test (evidence) account. No production account was used.
+- Reading the entry through the API before and after: its `updated_at` moved when the invoice
+  took it in (`is_billed` true, `invoice` set), and moved again when the invoice was deleted
+  (`is_billed` false, `invoice` null).
+- Both fixtures were deleted afterwards. No ids or account data are recorded here.
+- Consequence for 025: billing and unbilling both reach incremental runs through the entry's own
+  `updated_at` (research R-7), so a run reads entries in full only until invoices have imported
+  once.
 
 ### 2026-11-05 — Reference-account data policy
 
