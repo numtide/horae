@@ -3000,7 +3000,7 @@ async fn line_amount_cents_is_inlined_with_the_arguments_callers_pass(pool: PgPo
                    CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
                  ) END, 0),
                  effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir),
-                 CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END
+                 COALESCE(invoice.currency, CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END)
                ))
            FROM (VALUES (NULL::uuid, NULL::text), ('00000000-0000-7000-8000-000000000001', 'task')) ps(project_id, rate_mode),
                 (VALUES ('time_and_materials'::project_type, 6000::bigint, 'JPY'::bpchar),
@@ -3011,6 +3011,7 @@ async fn line_amount_cents_is_inlined_with_the_arguments_callers_pass(pool: PgPo
                 (VALUES ('JPY'::bpchar, 5000::bigint), ('EUR', NULL)) c(currency, default_rate_cents),
                 (VALUES ('EUR'::bpchar, 15::smallint, 'up'::round_dir), ('JPY', 0::smallint, 'nearest'))
                   o(default_currency, round_minutes, round_dir),
+                (VALUES (NULL::bpchar), ('KWD')) invoice(currency),
                 (VALUES (90, NULL::integer), (30, 30)) te(minutes, rounded_minutes)"#
     )
     .fetch_all(&pool)

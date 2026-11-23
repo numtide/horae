@@ -327,7 +327,7 @@ pub(crate) async fn fetch_progress(
                           CASE WHEN c.currency = o.default_currency THEN u.billable_rate_cents END,
                           CASE WHEN c.currency = cl.currency THEN cl.default_rate_cents END), 0),
                         effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir),
-                        c.currency))
+                        COALESCE(invoice.currency, c.currency)))
                       ELSE 0
                     END AS consumed
              FROM config c JOIN time_entries te ON te.project_id = c.id AND te.org_id = $1

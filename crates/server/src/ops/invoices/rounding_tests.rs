@@ -259,15 +259,16 @@ async fn an_invoice_stored_before_the_change_keeps_its_amounts(pool: PgPool) {
     );
 }
 
+/// An imported JPY invoice on an EUR project: Harvest billed JPY 130 for the
+/// 80.50 × 90 min entry, where Horae's own rule gives JPY 121.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn an_imported_invoice_keeps_the_amounts_harvest_billed(pool: PgPool) {
-    let ids = project_in(&pool, "JPY").await;
+async fn an_imported_invoice_keeps_its_amounts_and_its_time_rounds_in_its_currency(pool: PgPool) {
+    let ids = project_in(&pool, "EUR").await;
     let invoice_id = Uuid::now_v7();
-    // Harvest billed JPY 120.75 for 80.50 × 90 min; Horae's rule would say 121.
     sqlx::query!(
         "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency,
                                total_cents, discount_cents, tax1_cents, tax2_cents, subject, source)
-         VALUES ($1, $2, $3, 'H-1', 'sent', $4, $4, 'JPY', 12075, 0, 0, 0, '', 'harvest')",
+         VALUES ($1, $2, $3, 'H-1', 'sent', $4, $4, 'JPY', 13000, 0, 0, 0, '', 'harvest')",
         invoice_id,
         ids.org_id,
         ids.client_id,
@@ -278,7 +279,7 @@ async fn an_imported_invoice_keeps_the_amounts_harvest_billed(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         "INSERT INTO harvest_invoices (invoice_id, org_id, harvest_invoice_id, due_cents, harvest_updated_at)
-         VALUES ($1, $2, 1, 12075, now())",
+         VALUES ($1, $2, 1, 13000, now())",
         invoice_id,
         ids.org_id,
     )
@@ -288,7 +289,7 @@ async fn an_imported_invoice_keeps_the_amounts_harvest_billed(pool: PgPool) {
     sqlx::query!(
         "INSERT INTO harvest_invoice_lines (id, org_id, invoice_id, position, harvest_line_id, kind,
                                             description, quantity, unit_price, amount_cents, taxed, taxed2)
-         VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 1.5, 80.5, 12075, false, false)",
+         VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 1, 130, 13000, false, false)",
         Uuid::now_v7(),
         ids.org_id,
         invoice_id,
@@ -296,21 +297,69 @@ async fn an_imported_invoice_keeps_the_amounts_harvest_billed(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
+    // The import links the time it billed, without a line per entry.
+    sqlx::query!(
+        "UPDATE time_entries SET invoice_id = $1, state = 'invoiced'
+         WHERE project_id = $2 AND minutes = 90",
+        invoice_id,
+        ids.project_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
-    let mut read = begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
-        .await
-        .unwrap();
+    let caller = Caller::session(ids.org_id, ids.user_id);
+    let mut read = begin_read(&pool, caller).await.unwrap();
     let detail = super::detail(&mut read.tx, &read.actor, invoice_id).await;
     let detail = read.finish(detail).await.unwrap();
-    assert_eq!(detail.invoice.total_cents, 12075);
+    assert_eq!(detail.invoice.total_cents, 13000);
     assert_eq!(
         detail.imported.map(|imported| imported.due_cents),
-        Some(12075)
+        Some(13000)
     );
     let amounts: Vec<i64> = detail
         .imported_lines
         .iter()
         .map(|line| line.amount_cents)
         .collect();
-    assert_eq!(amounts, [12075]);
+    assert_eq!(amounts, [13000]);
+
+    // The linked time has no stored line, so it is priced from its rate and
+    // rounded in the invoice's currency everywhere: JPY 121, not EUR 120.75.
+    let mut read = begin_read(&pool, caller).await.unwrap();
+    let report = crate::ops::reports::time(
+        &mut read.tx,
+        &read.actor,
+        (day(), day()),
+        "project",
+        ReportFilters::default(),
+    )
+    .await;
+    let report: Vec<(String, Option<i64>)> = read
+        .finish(report)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.currency, row.billable_cents))
+        .collect();
+    assert_eq!(
+        report,
+        [
+            ("EUR".to_owned(), Some(250)),
+            ("JPY".to_owned(), Some(12100))
+        ]
+    );
+    let mut read = begin_read(&pool, caller).await.unwrap();
+    let spend = crate::ops::projects::spend(&mut read.tx, &read.actor, None).await;
+    let spend = read.finish(spend).await.unwrap();
+    assert_eq!(spend[0].spent_cents, Some(12350));
+    let budget = crate::notifications::budgets::configured_progress(
+        &mut pool.acquire().await.unwrap(),
+        ids.org_id,
+        ids.project_id,
+        day(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(budget[0].consumed, 12350);
 }
