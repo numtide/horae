@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.user_id, g.revoked_at IS NOT NULL AS \"revoked!\", g.scopes,\n                c.name AS app_name, c.client_id, u.name AS person_name\n         FROM oauth_grants g\n         JOIN oauth_clients c ON c.id = g.client_id\n         JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id\n         WHERE g.id = $1 AND g.org_id = $2\n         FOR UPDATE OF g",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "revoked!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "app_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "client_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "person_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "83f06dc449c3f8f483131765fce52748c74d4c7ccc02f5781ec34f17d2b60aa9"
+}

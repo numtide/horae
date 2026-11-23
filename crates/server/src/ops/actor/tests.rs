@@ -243,3 +243,168 @@ async fn a_token_of_an_inactive_person_has_no_authority(pool: PgPool) {
     assert!(actor.permissions().is_none());
     assert!(!actor.administrator());
 }
+
+// ── OAuth: the person's grants narrowed to the token's scopes ────────────────
+
+use horae_core::permissions::oauth::{Scope, ScopeSet};
+
+async fn load_oauth(pool: &PgPool, org_id: Uuid, user_id: Uuid, scopes: ScopeSet) -> Actor {
+    let mut tx: Tx = pool.begin().await.unwrap();
+    let caller = Caller::oauth(org_id, user_id, Uuid::now_v7(), Uuid::now_v7(), scopes);
+    Actor::load(&mut tx, caller).await.unwrap()
+}
+
+fn scope_sets() -> Vec<ScopeSet> {
+    (0..8u8)
+        .map(|bits| {
+            let scopes: Vec<Scope> = Scope::ALL
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| bits & (1 << index) != 0)
+                .map(|(_, scope)| scope)
+                .collect();
+            ScopeSet::of(&scopes)
+        })
+        .collect()
+}
+
+fn assert_no_authority(actor: &Actor) {
+    assert!(!actor.is_active());
+    assert!(actor.grants().is_none());
+    assert!(actor.permissions().is_none());
+    assert!(!actor.identity().active);
+    assert!(!actor.administrator());
+    assert!(
+        Permission::ALL
+            .iter()
+            .all(|&permission| !actor.has(permission))
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_actor_has_no_authority_until_a_scope_is_unlocked(pool: PgPool) {
+    for profile in [BuiltInProfile::Member, BuiltInProfile::Administrator] {
+        let ids = seed(&pool, profile).await;
+        let session = load(&pool, ids.org_id, ids.user_id).await.unwrap();
+        let stored = session.grants().unwrap().clone();
+        for scopes in scope_sets() {
+            let mut actor = load_oauth(&pool, ids.org_id, ids.user_id, scopes).await;
+            assert_eq!(actor.scopes(), Some(scopes));
+            assert_no_authority(&actor);
+            assert!(actor.require_session().is_err());
+            let Some(scope) = scopes.iter().next() else {
+                for scope in Scope::ALL {
+                    assert!(actor.unlock_scope(scope).is_err());
+                }
+                assert_no_authority(&actor);
+                continue;
+            };
+            actor.unlock_scope(scope).unwrap();
+            assert!(actor.is_active());
+            assert_eq!(
+                actor.grants(),
+                Some(&stored.intersection(&scopes.ceiling())),
+                "{profile:?} {scopes:?}"
+            );
+            assert!(!actor.administrator(), "{profile:?} {scopes:?}");
+            assert!(actor.require_administrator().is_err());
+            assert!(actor.require_session().is_err());
+            assert!(!actor.permissions().unwrap().is_administrator);
+        }
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_scope_the_token_lacks_does_not_unlock_it(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let read = ScopeSet::of(&[Scope::TimeRead]);
+    let mut actor = load_oauth(&pool, ids.org_id, ids.user_id, read).await;
+    for scope in [Scope::TimeWrite, Scope::CatalogRead] {
+        assert!(matches!(
+            actor.unlock_scope(scope),
+            Err(OpError::Forbidden(_))
+        ));
+        assert_no_authority(&actor);
+    }
+    // `time:write` includes `time:read`.
+    let write = ScopeSet::of(&[Scope::TimeWrite]);
+    let mut actor = load_oauth(&pool, ids.org_id, ids.user_id, write).await;
+    actor.unlock_scope(Scope::TimeRead).unwrap();
+    assert!(actor.has(Permission::TimeReadAll));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn unlocking_leaves_other_channels_as_they_are(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let mut session = load(&pool, ids.org_id, ids.user_id).await.unwrap();
+    let before = session.permissions().cloned();
+    session.unlock_scope(Scope::TimeRead).unwrap();
+    assert_eq!(session.permissions().cloned(), before);
+    assert!(session.administrator());
+    assert!(session.require_session().is_ok());
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_administrators_oauth_actor_reaches_only_what_the_scopes_cover(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let mut read = load_oauth(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        ScopeSet::of(&[Scope::TimeRead]),
+    )
+    .await;
+    read.unlock_scope(Scope::TimeRead).unwrap();
+    assert!(read.has(Permission::TimeReadAll));
+    assert!(!read.has(Permission::TimeWriteOwn));
+    assert!(!read.has(Permission::ProjectReadAll));
+
+    let all = ScopeSet::of(&Scope::ALL);
+    let mut write = load_oauth(&pool, ids.org_id, ids.user_id, all).await;
+    write.unlock_scope(Scope::TimeWrite).unwrap();
+    assert!(write.has(Permission::TimeWriteAll));
+    assert!(write.has(Permission::ProjectReadAll));
+    for outside in [
+        Permission::TimeApproveAll,
+        Permission::ProjectWriteAll,
+        Permission::PeopleWriteAll,
+        Permission::InvoiceReadAll,
+        Permission::BillableRateReadAll,
+        Permission::CompanyWrite,
+    ] {
+        assert!(!write.has(outside), "{outside:?}");
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_actor_of_an_inactive_person_has_no_authority(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut actor = load_oauth(&pool, ids.org_id, ids.user_id, ScopeSet::of(&Scope::ALL)).await;
+    actor.unlock_scope(Scope::TimeRead).unwrap();
+    assert_no_authority(&actor);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_actor_of_a_missing_organization_has_no_authority(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let mut actor = load_oauth(
+        &pool,
+        Uuid::now_v7(),
+        ids.user_id,
+        ScopeSet::of(&Scope::ALL),
+    )
+    .await;
+    actor.unlock_scope(Scope::TimeRead).unwrap();
+    assert_no_authority(&actor);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn only_oauth_actors_have_scopes(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let session = load(&pool, ids.org_id, ids.user_id).await.unwrap();
+    assert_eq!(session.scopes(), None);
+}

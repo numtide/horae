@@ -3421,12 +3421,16 @@ dependencies = [
 name = "horae-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "proptest",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
+ "subtle",
  "thiserror 2.0.18",
+ "url",
  "uuid",
 ]
 
@@ -3522,6 +3526,7 @@ dependencies = [
  "typst-layout",
  "typst-pdf",
  "ureq 2.12.1",
+ "url",
  "uuid",
  "wasmtime",
 ]
