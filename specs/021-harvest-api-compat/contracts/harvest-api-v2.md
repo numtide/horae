@@ -208,10 +208,9 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 - Filters: `client_id`, `project_id` (invoices with a line for that project), `state` (one
   value, `draft`, `open`, `paid` or `closed`, as Harvest's filter takes one; checked
   2026-11-22), `from` and `to` (on `issue_date`), `updated_since`.
-- Order: newest `issue_date` first, keyed by `(issue_date, id)` as time entries are keyed by
-  `(spent_date, id)`. Keying by id alone would put every invoice of an import at the top, since
-  spec 025 creates them at import time. Harvest's own order is still to be confirmed against
-  the public reference (T062).
+- Order: newest `issue_date` first, as on Harvest (checked 2026-11-23). The reference states no
+  tie-break; invoices with the same issue date run by id, newest first, which is Horae's choice.
+  The list is keyed by `(issue_date, id)` as time entries are keyed by `(spent_date, id)`.
 - `updated_at` moves when the invoice row or any of its lines changes.
 - `GET /invoices/{id}/payments` is an empty list with the full envelope; Horae has no payment
   records yet. An unknown or void invoice is 404.
@@ -236,10 +235,11 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   `client_id` and `client_name`), `total_hours` (rounded minutes), `billable_hours`,
   `currency`, `billable_amount` (`null` when the caller may not read a rate in the group, the
   report's own rule). Team rows add `is_contractor` false, `weekly_capacity` and `avatar_url`
-  `null`. `include_fixed_fee` is accepted and, until its meaning on the time reports is checked
-  against the public reference (T062), changes nothing: Horae prices no time on fixed-fee
-  projects. If the reference says `false` leaves fixed-fee projects out, those rows are dropped
-  instead. Who reads them: the report's grants (`TimeReadAll` or `TimeReadManaged`).
+  `null`. `include_fixed_fee` is an optional string: on Harvest, `true` makes the report
+  calculate and include billable amounts for fixed-fee projects (checked 2026-11-23). The
+  reference states no default for the time reports, so Horae treats an absent value as `false`
+  unless a later check shows otherwise. Horae prices no time on fixed-fee projects, so it has no
+  such amount to add and the rows are the same either way. Who reads them: the report's grants (`TimeReadAll` or `TimeReadManaged`).
 - `/reports/uninvoiced`: one row per project with billable, uninvoiced time in the range, using
   the eligibility of the Uninvoiced view (PR #453: billable, stopped, not invoiced, open or
   approved). Fields: `client_id`, `client_name`, `project_id`, `project_name`, `currency`,
