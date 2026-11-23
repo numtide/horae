@@ -4,7 +4,7 @@ Read at start-up in `crates/server/src/config.rs`, like the other `HORAE_*` sett
 
 | Setting | Variable | NixOS option | Default |
 | --- | --- | --- | --- |
-| Public base URL, the issuer | `HORAE_PUBLIC_URL` (absolute `https` URL without a trailing slash; `http` allowed only for a loopback host) | `services.horae.publicUrl` | unset: the authorization server is off, `/oauth/*` and the metadata answer 404, and the admin apps page says so |
+| Public base URL, the issuer | `HORAE_PUBLIC_URL` (absolute `https` URL without a trailing slash, written in canonical form: lowercase scheme and host, no default port, no spaces; the error names that form; `http` allowed only for a loopback host) | `services.horae.publicUrl` | unset: the authorization server is off, `/oauth/*` and the metadata answer 404, and the admin apps page says so |
 | Access token lifetime | `HORAE_OAUTH_ACCESS_TTL` (seconds) | `services.horae.oauth.accessTokenTtl` | `3600` |
 | Refresh token idle expiry | `HORAE_OAUTH_REFRESH_IDLE` (seconds) | `services.horae.oauth.refreshIdle` | `2592000` (30 days, D-2) |
 | Refresh absolute limit | `HORAE_OAUTH_REFRESH_MAX` (seconds) | `services.horae.oauth.refreshMax` | `31536000` (1 year, D-2) |

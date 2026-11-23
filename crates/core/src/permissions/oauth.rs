@@ -193,6 +193,8 @@ pub enum RedirectUriError {
     Wildcard,
     #[error("Use 127.0.0.1 or [::1] instead of localhost")]
     Localhost,
+    #[error("Port 0 cannot receive a redirect")]
+    PortZero,
     #[error("http is allowed only to 127.0.0.1 or [::1]")]
     HttpNotLoopback,
     #[error("Use https, a loopback http URI, or an app scheme such as com.example.app:/callback")]
@@ -232,11 +234,15 @@ impl RedirectUri {
         if !url.username().is_empty() || url.password().is_some() {
             return Err(RedirectUriError::UserInfo);
         }
-        if url
-            .host_str()
-            .is_some_and(|host| host.trim_end_matches('.').eq_ignore_ascii_case("localhost"))
-        {
+        // Browsers send every `*.localhost` name to loopback (RFC 6761 §6.3).
+        if url.host_str().is_some_and(|host| {
+            let host = host.trim_end_matches('.').to_ascii_lowercase();
+            host == "localhost" || host.ends_with(".localhost")
+        }) {
             return Err(RedirectUriError::Localhost);
+        }
+        if url.port() == Some(0) {
+            return Err(RedirectUriError::PortZero);
         }
         // `https:/host`, `https:host`, `HTTPS://Host`, `127.1` and the like
         // parse, but to another string.

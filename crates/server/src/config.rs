@@ -175,8 +175,14 @@ pub struct PublicUrl(String);
 
 impl PublicUrl {
     /// An absolute `https` URL, or `http` to a loopback host, with no trailing
-    /// slash, query, fragment or user information.
+    /// slash, query, fragment or user information, written in its canonical
+    /// form: it is the issuer, which clients compare exactly (RFC 8414 §3.3).
     pub fn parse(value: &str) -> anyhow::Result<Self> {
+        // The URL parser drops tabs and newlines and trims spaces.
+        anyhow::ensure!(
+            !value.chars().any(|c| c.is_whitespace() || c.is_control()),
+            "spaces and control characters are not allowed"
+        );
         let url = url::Url::parse(value).context("not an absolute URL")?;
         let host = url.host_str().context("no host")?;
         match url.scheme() {
@@ -193,6 +199,12 @@ impl PublicUrl {
             url.query().is_none() && url.fragment().is_none(),
             "a query or fragment is not allowed"
         );
+        // The parser always gives a bare host the path `/`, which the issuer omits.
+        let canonical = match url.path() {
+            "/" => url.as_str().trim_end_matches('/'),
+            _ => url.as_str(),
+        };
+        anyhow::ensure!(value == canonical, "write it as {canonical}");
         anyhow::ensure!(!value.ends_with('/'), "remove the trailing slash");
         Ok(Self(value.to_owned()))
     }
@@ -681,6 +693,39 @@ mod tests {
     use super::check_dev_login_bind;
 
     mod environment;
+
+    #[test]
+    fn the_public_url_is_kept_only_in_its_canonical_form() {
+        use super::PublicUrl;
+        for value in [
+            "https://horae.example.test",
+            "https://horae.example.test:8443/horae",
+            "http://127.0.0.1:8080",
+            "http://[::1]:8080",
+        ] {
+            assert_eq!(PublicUrl::parse(value).unwrap().as_str(), value);
+        }
+        for (value, canonical) in [
+            ("HTTPS://Horae.Example.test", "https://horae.example.test"),
+            (
+                "https://horae.example.test:443",
+                "https://horae.example.test",
+            ),
+            (
+                "https://horae.example.test/a/../b",
+                "https://horae.example.test/b",
+            ),
+        ] {
+            let error = PublicUrl::parse(value).unwrap_err().to_string();
+            assert_eq!(error, format!("write it as {canonical}"), "{value}");
+        }
+        for value in [
+            "https://horae.exam\tple.test",
+            " https://horae.example.test",
+        ] {
+            assert!(PublicUrl::parse(value).is_err(), "{value:?}");
+        }
+    }
 
     #[test]
     fn harvest_secrets_stay_out_of_debug_and_serialized_configuration() {
