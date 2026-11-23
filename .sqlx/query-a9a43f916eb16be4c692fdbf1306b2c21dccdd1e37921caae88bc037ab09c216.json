@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT h.harvest_invoice_id,\n                  h.harvest_updated_at AS \"harvest_updated_at: DateTime<Utc>\"\n           FROM harvest_invoices h JOIN invoices i ON i.id = h.invoice_id AND i.org_id = h.org_id\n           WHERE h.org_id = $1 AND i.status = 'void'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_invoice_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "harvest_updated_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a9a43f916eb16be4c692fdbf1306b2c21dccdd1e37921caae88bc037ab09c216"
+}

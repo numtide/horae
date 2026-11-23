@@ -249,6 +249,7 @@ mod tests {
             reason: reason.into(),
             person: None,
             entry_kind: None,
+            invoice_kind: None,
         }
     }
 

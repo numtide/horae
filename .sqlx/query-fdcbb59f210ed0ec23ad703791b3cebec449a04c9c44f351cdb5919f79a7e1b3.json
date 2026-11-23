@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT te.state::text AS \"state!\", te.notes, te.invoice_id IS NOT NULL AS \"linked!\",\n                      m.harvest_updated_at AS \"version: DateTime<Utc>\"\n               FROM time_entries te JOIN harvest_import_map m ON m.horae_id = te.id\n               WHERE te.org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "linked!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "version: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      null,
+      true
+    ]
+  },
+  "hash": "fdcbb59f210ed0ec23ad703791b3cebec449a04c9c44f351cdb5919f79a7e1b3"
+}

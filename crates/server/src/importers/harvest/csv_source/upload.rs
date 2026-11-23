@@ -197,23 +197,26 @@ pub async fn import_body_with_lease(
             default_currency: &checkpoint.default_currency,
         };
         let mut next = first;
+        // Billing is written per batch of rows, before the batch commits.
+        let mut writes = Vec::new();
         while let Record::Row(record, position) = next {
             match *record {
                 Ok(row) => {
-                    let result = apply::apply_row(
-                        &mut tx,
-                        &mut checkpoint.cache,
-                        org,
-                        &row,
-                        SourceKind::Csv,
-                    )
-                    .await;
-                    for (entity, outcome) in &result.outcomes {
-                        checkpoint.report.record(*entity, outcome);
-                    }
-                    checkpoint.report.people.extend(result.person);
-                    for notice in result.notices {
-                        checkpoint.report.note_id(notice);
+                    writes.extend(
+                        apply::apply_row(
+                            &mut tx,
+                            &mut checkpoint.cache,
+                            org,
+                            &row,
+                            SourceKind::Csv,
+                            mode,
+                        )
+                        .await
+                        .record_into(&mut checkpoint.report),
+                    );
+                    if writes.len() as u64 >= BATCH_ROWS {
+                        apply::write_links(&mut tx, org_id, &mut writes, &mut checkpoint.report)
+                            .await?;
                     }
                 }
                 Err(error) => checkpoint.report.record(
@@ -230,6 +233,7 @@ pub async fn import_body_with_lease(
             if let Some(lease) = lease
                 && position.record.is_multiple_of(BATCH_ROWS)
             {
+                apply::write_links(&mut tx, org_id, &mut writes, &mut checkpoint.report).await?;
                 if mode == ImportMode::DryRun {
                     checkpoint.preview =
                         Some(ParentSnapshot::capture(&mut tx, org_id, &checkpoint.cache).await?);
@@ -268,6 +272,7 @@ pub async fn import_body_with_lease(
             };
         }
         anyhow::ensure!(matches!(next, Record::Complete), "unexpected CSV headers");
+        apply::write_links(&mut tx, org_id, &mut writes, &mut checkpoint.report).await?;
         debug_assert!(checkpoint.report.reconciles());
         finish_import(tx, &mut checkpoint.report, lease).await?;
         if mode == ImportMode::DryRun

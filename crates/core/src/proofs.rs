@@ -119,8 +119,8 @@ fn invoice_amounts_add_up_for_every_subtotal() {
 /// stored non-negative inputs it is rate × minutes / 60 rounded half up to the
 /// currency's step: a hundredth for EUR, a whole unit (100) for JPY.
 #[kani::proof]
-// One more than the 16 codes `currency_decimals` searches.
-#[kani::unwind(17)]
+// One more than the 18 codes `currency_decimals` searches.
+#[kani::unwind(19)]
 fn line_amount_is_half_up_for_every_input() {
     let (rate, minutes): (i64, i32) = (kani::any(), kani::any());
     let (currency, step) = if kani::any() {

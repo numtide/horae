@@ -31,9 +31,82 @@ pub fn money_to_cents(amount: &str) -> Result<i64, ConvertError> {
     scale_decimal(amount, 100)
 }
 
+/// Why an invoice amount could not be converted exactly.
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MoneyError {
+    #[error("unknown currency {0:?}")]
+    UnknownCurrency(String),
+    #[error("{amount} has more decimals than {currency} allows")]
+    Precision { amount: String, currency: String },
+    #[error(transparent)]
+    Invalid(#[from] ConvertError),
+}
+
+/// Convert a signed decimal amount of `currency` to the hundredths Horae
+/// stores, exactly: `-25.00` → -2500. Never rounds. A digit beyond the
+/// currency's own decimals, or beyond hundredths (which is all Horae stores
+/// for a three-decimal currency), is an error unless it is zero. A currency is
+/// known when it is an ISO 4217 code.
+pub fn money_exact(amount: &str, currency: &str) -> Result<i64, MoneyError> {
+    if !crate::money::is_iso_currency(currency) {
+        return Err(MoneyError::UnknownCurrency(currency.to_owned()));
+    }
+    let text = amount.trim();
+    let (negative, body) = match text.strip_prefix('-') {
+        Some(body) if !body.starts_with('+') => (true, body),
+        Some(_) => return Err(ConvertError::NotANumber(amount.to_owned()).into()),
+        None => (false, text.strip_prefix('+').unwrap_or(text)),
+    };
+    // Validates the number; it rounds, so only a check below makes it exact.
+    let cents = scale_decimal(body, 100)?;
+    let (_, fraction) = body.split_once('.').unwrap_or((body, ""));
+    let allowed = usize::from(crate::money::currency_decimals(currency).min(2));
+    if fraction.bytes().skip(allowed).any(|digit| digit != b'0') {
+        return Err(MoneyError::Precision {
+            amount: amount.to_owned(),
+            currency: currency.to_owned(),
+        });
+    }
+    Ok(if negative { -cents } else { cents })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_money_keeps_sign_and_refuses_rounding() {
+        assert_eq!(money_exact("10.5", "EUR"), Ok(1050));
+        assert_eq!(money_exact("-25.00", "EUR"), Ok(-2500));
+        assert_eq!(money_exact("1000", "JPY"), Ok(100_000));
+        assert_eq!(money_exact("10.000", "BHD"), Ok(1000));
+        assert_eq!(money_exact("0.10", "USD"), Ok(10));
+        for (amount, currency) in [("10.005", "EUR"), ("10.5", "JPY"), ("10.001", "BHD")] {
+            assert!(
+                matches!(
+                    money_exact(amount, currency),
+                    Err(MoneyError::Precision { .. })
+                ),
+                "{amount} {currency}"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_money_refuses_unknown_currencies_and_bad_numbers() {
+        for currency in ["", "eur", "EURO", "E1R", "XYZ"] {
+            assert_eq!(
+                money_exact("1", currency),
+                Err(MoneyError::UnknownCurrency(currency.into()))
+            );
+        }
+        for amount in ["", "-", "1.2.3", "--1", "-+1", "abc"] {
+            assert!(
+                matches!(money_exact(amount, "EUR"), Err(MoneyError::Invalid(_))),
+                "{amount:?}"
+            );
+        }
+    }
 
     #[test]
     fn conversion_handles_high_precision_without_intermediate_overflow() {

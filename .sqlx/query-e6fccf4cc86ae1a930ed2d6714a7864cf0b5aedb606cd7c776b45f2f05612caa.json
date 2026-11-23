@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status AS \"status: InvoiceStatus\" FROM invoices\n           WHERE org_id = $1 AND number = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void",
+                "closed"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e6fccf4cc86ae1a930ed2d6714a7864cf0b5aedb606cd7c776b45f2f05612caa"
+}

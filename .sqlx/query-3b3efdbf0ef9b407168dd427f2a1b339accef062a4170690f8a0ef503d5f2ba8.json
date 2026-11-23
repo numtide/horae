@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET project_type = 'fixed_fee', currency = 'EUR', starts_on = '2026-09-01' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3b3efdbf0ef9b407168dd427f2a1b339accef062a4170690f8a0ef503d5f2ba8"
+}

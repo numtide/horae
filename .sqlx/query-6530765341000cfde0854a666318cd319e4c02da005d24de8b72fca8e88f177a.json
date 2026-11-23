@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT LEAST(statement_timestamp(),\n             (SELECT min(xact_start) FROM pg_stat_activity\n              WHERE datname = current_database() AND backend_xid IS NOT NULL\n                AND pid <> pg_backend_pid())) AS \"horizon!: DateTime<Utc>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "horizon!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6530765341000cfde0854a666318cd319e4c02da005d24de8b72fca8e88f177a"
+}

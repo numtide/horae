@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.kind, l.description, l.quantity::text AS \"quantity!\",\n                  l.unit_price::text AS \"unit_price!\", l.amount_cents, l.taxed, l.taxed2,\n                  l.project_id, i.currency\n           FROM harvest_invoice_lines AS l JOIN invoices AS i ON i.id = l.invoice_id\n           WHERE l.invoice_id = $1 ORDER BY l.position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "quantity!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "unit_price!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "taxed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "taxed2",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "currency",
+        "type_info": "Bpchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "b358ff28aca4e87fc6668530f8cab2267add12912aeaa5e5072e87770f083ae6"
+}

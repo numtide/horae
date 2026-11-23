@@ -3,8 +3,10 @@ use crate::testing::{seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
+mod additions;
 mod authority;
 mod financial_fields;
+mod harvest_invoices;
 mod imported_rates;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -359,18 +361,19 @@ async fn invoice_preview_matches_generation_without_claiming_time(pool: PgPool) 
         preview.lines[0].amount_cents,
         generated.lines[0].amount_cents
     );
-    assert!(
-        preview::prepare(
-            &pool,
-            (ids.org_id, ids.user_id),
-            ids.client_id,
-            (day, day),
-            None,
-            None
-        )
-        .await
-        .is_err()
-    );
+    // The generated draft claimed the time, so the same period now previews
+    // empty rather than failing.
+    let after = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        (day, day),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(after.lines.is_empty());
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

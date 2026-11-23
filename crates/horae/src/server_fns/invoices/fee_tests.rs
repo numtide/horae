@@ -383,6 +383,7 @@ async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: P
         request_id: Uuid::now_v7(),
         confirmed_excess: review.excess.clone(),
         review,
+        duplicate_of: None,
     };
     generate_invoice_with_request(
         &pool,
@@ -456,6 +457,7 @@ async fn reviewed_generation_bills_partial_fees_and_rejects_stale_balances(pool:
         request_id: Uuid::now_v7(),
         review,
         confirmed_excess: vec![],
+        duplicate_of: None,
     };
     let (invoice, created) = generate_invoice_with_request(
         &pool,
@@ -565,6 +567,7 @@ async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: P
         request_id: Uuid::now_v7(),
         review,
         confirmed_excess: vec![],
+        duplicate_of: None,
     };
     let error = generate_invoice_with_request(
         &pool,
@@ -687,6 +690,7 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
         request_id: Uuid::now_v7(),
         review,
         confirmed_excess: vec![],
+        duplicate_of: None,
     };
     let (invoice, _) = generate_invoice_with_request(
         &pool,
@@ -757,6 +761,7 @@ async fn reviewed_generation_rejects_changed_time_before_claiming_it(pool: PgPoo
         request_id: Uuid::now_v7(),
         review,
         confirmed_excess: vec![],
+        duplicate_of: None,
     };
     let error = generate_invoice_with_request(
         &pool,
@@ -857,6 +862,7 @@ async fn prepared_fee_selection_rejects_invalid_values_and_empty_generation(pool
         request_id: Uuid::now_v7(),
         review,
         confirmed_excess: vec![],
+        duplicate_of: None,
     };
     assert!(
         generate_invoice_with_request(
@@ -1509,6 +1515,7 @@ async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) 
         request_id: Uuid::now_v7(),
         review,
         confirmed_excess: Vec::new(),
+        duplicate_of: None,
     };
     let request = Some((&mutation, ids.user_id));
     let (a, b) = tokio::join!(

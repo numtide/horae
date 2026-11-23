@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM oauth_refresh_tokens\n         WHERE used_at IS NULL AND idle_expires_at < now() - interval '1 day'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f15ae2a358f1e21d38725e7e8bc0dabf8a92b977049f362e094ecf40bbd0f150"
+}

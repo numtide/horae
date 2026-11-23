@@ -14,6 +14,7 @@ async fn snapshot(
     org_id: Uuid,
     id: Uuid,
 ) -> Result<(Invoice, i64, Vec<balances::BalanceLine>), OpError> {
+    super::refuse_imported(tx, org_id, id).await?;
     let invoice = super::fetch_invoice_metadata(&mut **tx, id, org_id)
         .await?
         .ok_or_else(|| OpError::not_found("Invoice not found"))?;
@@ -64,6 +65,7 @@ pub async fn load(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<InvoiceEditor,
                 amount_cents: row.amount_cents,
             })
             .collect(),
+        subject: invoice.subject,
     };
     let (review, _) = evaluate(&mut rows, &edit)?;
     Ok(InvoiceEditor {
@@ -95,6 +97,11 @@ fn evaluate(
     rows: &mut [balances::BalanceLine],
     edit: &InvoiceDraftEdit,
 ) -> Result<(InvoiceEditReview, Vec<i64>), OpError> {
+    if edit.subject.chars().count() > 200 || edit.subject.contains('\0') {
+        return Err(OpError::bad_input(
+            "The subject must contain at most 200 characters",
+        ));
+    }
     let edits: std::collections::BTreeMap<_, _> =
         edit.fees.iter().map(|fee| (fee.line_id, fee)).collect();
     if edits.len() != edit.fees.len()
@@ -244,9 +251,10 @@ pub async fn save(
         let due_on = horae_core::project::payment_due_date(invoice.issued_on, values.terms_days as u16).map_err(OpError::bad_input)?;
         let amounts = review.amounts;
         sqlx::query!("UPDATE invoices SET due_on=$3,po_number=$4,discount_bps=$5,tax1_bps=$6,
-            tax2_name=$7,tax2_bps=$8,discount_cents=$9,tax1_cents=$10,tax2_cents=$11,total_cents=$12
+            tax2_name=$7,tax2_bps=$8,discount_cents=$9,tax1_cents=$10,tax2_cents=$11,total_cents=$12,subject=$13
             WHERE org_id=$1 AND id=$2", org_id,id,due_on as chrono::NaiveDate,values.po_number,values.discount_bps,
-            values.tax1_bps,values.tax2_name,values.tax2_bps,amounts.discount_cents,amounts.tax1_cents,amounts.tax2_cents,amounts.total_cents)
+            values.tax1_bps,values.tax2_name,values.tax2_bps,amounts.discount_cents,amounts.tax1_cents,amounts.tax2_cents,amounts.total_cents,
+            request.edit.subject.trim())
             .execute(&mut **tx).await?;
         sqlx::query!("INSERT INTO invoice_edit_requests (id,org_id,actor_id,invoice_id,completed_revision,payload)
             SELECT $1,$2,$3,id,edit_revision,$5 FROM invoices WHERE id=$4 AND org_id=$2",

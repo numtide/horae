@@ -1219,21 +1219,25 @@ async fn editor_recovers_each_budget_scope_without_turning_absence_into_zero(poo
 
 /// A task linked without an explicit rate inherits its catalog default only
 /// when that default is in the project currency; otherwise nothing is linked.
+/// A task without a default (an imported Harvest 0) links with no rate, so
+/// task billing falls back to the client's default rate.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool: PgPool) {
-    for (currency, rate, expected) in [
-        (None, "", None),
-        (Some("USD"), "", None),
-        (Some("EUR"), "", Some(8000)),
-        (Some("USD"), "12.34", Some(1234)),
+    for (default, currency, rate, expected) in [
+        (Some(8000), None, "", None),
+        (Some(8000), Some("USD"), "", None),
+        (Some(8000), Some("EUR"), "", Some(Some(8000))),
+        (Some(8000), Some("USD"), "12.34", Some(Some(1234))),
+        (None, None, "", Some(None)),
     ] {
         let (owner, original) = configured_fixture(&pool).await;
         let task_id = Uuid::now_v7();
         sqlx::query!(
             "INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
-             VALUES ($1,$2,'Catalog default',true,8000,$3)",
+             VALUES ($1,$2,'Catalog default',true,$3,$4)",
             task_id,
             owner.org_id,
+            default,
             currency,
         )
         .execute(&pool)
@@ -1260,7 +1264,7 @@ async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool
         .unwrap();
         if let Some(expected) = expected {
             result.unwrap();
-            assert_eq!(stored, Some(Some(expected)), "{currency:?} {rate:?}");
+            assert_eq!(stored, Some(expected), "{default:?} {currency:?} {rate:?}");
         } else {
             assert!(
                 matches!(

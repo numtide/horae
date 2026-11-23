@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM harvest_import_map\n          WHERE org_id = $1 AND harvest_entity_type = 'invoice'::harvest_entity_type\n            AND horae_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e389da5810647591ada2e442895cc229a818d49fa869492105d8c9ec79eddbb"
+}

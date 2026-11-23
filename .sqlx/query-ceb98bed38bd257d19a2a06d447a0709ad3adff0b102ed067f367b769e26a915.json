@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oauth_codes (id, org_id, grant_id, code_sha256, redirect_uri, code_challenge,\n                                  expires_at)\n         VALUES ($1, $2, $3, $4, 'com.example.app:/callback', $5, now() + interval '1 minute')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ceb98bed38bd257d19a2a06d447a0709ad3adff0b102ed067f367b769e26a915"
+}

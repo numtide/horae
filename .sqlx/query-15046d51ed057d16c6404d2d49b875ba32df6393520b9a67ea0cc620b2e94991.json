@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_invoice_lines (id, org_id, invoice_id, position, harvest_line_id, kind,\n                                                description, quantity, unit_price, amount_cents, taxed, taxed2)\n             VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 1.05, 95.2381, 10000, true, false)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "15046d51ed057d16c6404d2d49b875ba32df6393520b9a67ea0cc620b2e94991"
+}

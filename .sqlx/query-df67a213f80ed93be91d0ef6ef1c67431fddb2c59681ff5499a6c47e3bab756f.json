@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_grants SET revoked_at = now() - $2::text::interval,\n                                     revoke_reason = 'person'\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "df67a213f80ed93be91d0ef6ef1c67431fddb2c59681ff5499a6c47e3bab756f"
+}

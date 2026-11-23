@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harvest_invoices SET harvest_updated_at = $3\n          WHERE invoice_id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a75a48918e0d296704a09474a2a3b6f18f07a1c3e7a252e85741f3d64da2a6da"
+}

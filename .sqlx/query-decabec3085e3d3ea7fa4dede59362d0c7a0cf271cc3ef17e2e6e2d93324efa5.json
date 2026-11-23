@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries te SET notes = 'edited in Horae'\n         FROM harvest_import_map m\n         WHERE m.horae_id = te.id AND m.harvest_import_id = 17 AND m.org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "decabec3085e3d3ea7fa4dede59362d0c7a0cf271cc3ef17e2e6e2d93324efa5"
+}

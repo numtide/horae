@@ -1,6 +1,7 @@
 # Constitution amendment for 026 Task rate templates
 
-**Status**: Approved by the maintainer on 2026-11-23. Not applied yet. The templates PR (delivery 2
+**Status**: Approved by the maintainer on 2026-11-23, with the last three sentences of the
+Principle I paragraph added the same day (review finding H3). Not applied yet. The templates PR (delivery 2
 in plan.md) applies the text below verbatim to `.specify/memory/constitution.md` as its first
 change, with a Sync Impact Report. The rounding PR (delivery 1) does not need it: it only rounds
 money.
@@ -27,7 +28,12 @@ The note says what a template is and where its use stops.
 > that currency. A template MUST NOT be summed, reported, invoiced, compared with money or given a
 > currency by any other route, and a currency MUST NOT be guessed for it. Amounts computed from an
 > applied rate are money and follow the rules above, rounded once, half up, to the currency's
-> precision.
+> precision. A rate, whether applied from a template or typed, keeps two decimals in every currency,
+> even where the currency has fewer (JPY 80.50 per hour); only amounts computed from a rate round to
+> the currency's precision. A currency's precision is one whole unit for a currency with no decimals
+> and one hundredth for every other currency, the finest unit Horae stores. An interface that writes
+> such a rate as a decimal, such as the Harvest-compatible API, writes its two decimals; this does not
+> breach the decimal wire formats rule above.
 
 ### Rationale: add one sentence at the end
 

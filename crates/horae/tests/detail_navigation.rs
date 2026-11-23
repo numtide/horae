@@ -21,12 +21,23 @@ pub mod back_link;
 pub mod badge;
 #[path = "../src/components/button.rs"]
 pub mod button;
+#[path = "../src/components/card.rs"]
+pub mod card;
 #[path = "../src/components/combobox.rs"]
 pub mod combobox;
 #[path = "../src/components/confirm_dialog.rs"]
 pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/date_field.rs"]
+pub mod date_field;
+#[path = "../src/components/date_picker.rs"]
+pub mod date_picker;
+#[allow(dead_code)]
+#[path = "../src/components/debounce.rs"]
+pub mod debounce;
+#[path = "../src/components/filter_bar.rs"]
+pub mod filter_bar;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[allow(dead_code)]
@@ -43,16 +54,22 @@ pub mod page_header;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
+#[path = "../src/components/select_field.rs"]
+pub mod select_field;
 #[path = "../src/components/session.rs"]
 pub mod session;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/toast.rs"]
 pub mod toast;
+#[allow(dead_code)]
+#[path = "../src/components/today.rs"]
+pub mod today;
 mod components {
     pub use super::{
-        back_link, badge, combobox, confirm_dialog, controls, form, icons, menu, modal,
-        page_header, screen_state, session, table, toast,
+        back_link, badge, button, card, combobox, confirm_dialog, controls, date_field, debounce,
+        filter_bar, form, icons, menu, modal, page_header, screen_state, select_field, session,
+        table, toast, today,
     };
 }
 #[path = "../src/pages/clients.rs"]
@@ -163,9 +180,13 @@ fn app(probe: Probe) -> Element {
 
 mod route {
     pub use super::edit_return::EditReturn;
+    pub use super::invoices::InvoiceFilter;
     use super::*;
     use clients::{ClientDetail, ClientList};
-    use invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoice, NewInvoiceForClient};
+    use invoices::{
+        DuplicateInvoice, EditInvoice, InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoice,
+        NewInvoiceForClient,
+    };
     use projects::{ProjectDetail, ProjectList, ProjectsForClient};
 
     #[derive(Clone, PartialEq, Routable)]
@@ -175,14 +196,18 @@ mod route {
         ClientList {},
         #[route("/clients/:id")]
         ClientDetail { id: Uuid },
-        #[route("/invoices")]
-        InvoiceList {},
+        #[route("/invoices?:..filter")]
+        InvoiceList { filter: InvoiceFilter },
         #[route("/invoices/new")]
         NewInvoice {},
         #[route("/invoices/new/client/:client")]
         NewInvoiceForClient { client: String },
+        #[route("/invoices/new/client/:client/from/:source")]
+        DuplicateInvoice { client: String, source: Uuid },
         #[route("/invoices/settings")]
         InvoiceSettings {},
+        #[route("/invoices/:id/edit")]
+        EditInvoice { id: Uuid },
         #[route("/invoices/:id")]
         InvoiceDetail { id: Uuid },
         #[route("/projects")]
@@ -199,6 +224,13 @@ mod route {
         ProjectDetail { id: Uuid },
         #[route("/admin/importers")]
         ImporterIndex {},
+        #[route("/approvals?:week")]
+        Approvals { week: String },
+    }
+
+    #[component]
+    fn Approvals(week: String) -> Element {
+        rsx! { h1 { "Approvals {week}" } }
     }
 
     #[component]
@@ -645,7 +677,7 @@ async fn new_invoice_visited_without_prepare_rights_shows_no_access() {
         html.contains("New invoice") && html.contains("Access unavailable"),
         "{html}"
     );
-    for hidden in ["Generate draft", "Review invoice", "inv-client"] {
+    for hidden in ["Create draft", "Continue", "inv-client"] {
         assert!(!html.contains(hidden), "shown {hidden}: {html}");
     }
 }
@@ -662,7 +694,7 @@ async fn new_invoice_with_a_failed_permissions_read_offers_a_retry_not_no_access
     );
     assert!(html.contains(">Try again<"), "{html}");
     assert!(
-        !html.contains("Access unavailable") && !html.contains("Generate draft"),
+        !html.contains("Access unavailable") && !html.contains("Continue"),
         "{html}"
     );
 }
@@ -679,10 +711,10 @@ async fn navigating_between_invoice_ids_loads_the_current_invoice() {
     assert!(dioxus::ssr::render(&dom).contains("Invoice INV-1"));
     let html = dioxus::ssr::render(&dom);
     assert!(
-        !html.contains("Mark Sent"),
+        !html.contains("Mark as sent"),
         "SSR must wait for browser recovery before exposing mutations"
     );
-    assert!(!html.contains("Edit invoice values"));
+    assert!(!html.contains("Edit draft"));
 
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
@@ -900,8 +932,6 @@ async fn pending_or_failed_project_assignments_never_show_previous_assignments()
 fn is_administrator(own: &Result<own_permissions::OwnPermissions, ServerFnError>) -> bool {
     matches!(own, Ok(own) if own.is_administrator)
 }
-
-use screen_state::{Failure, loaded};
 
 // Mirrors the production helper only for tests that opt into client or project activity.
 fn run_action<O: 'static, T: 'static>(
@@ -1367,10 +1397,14 @@ mod server_fns {
                 tax1_cents: 0,
                 tax2_cents: 0,
                 notes: None,
+                subject: String::new(),
                 created_at: chrono::DateTime::UNIX_EPOCH,
             },
             lines: Vec::new(),
             client_name: "Historical client".into(),
+            overdue: false,
+            imported: None,
+            imported_lines: Vec::new(),
         })
     }
 
@@ -1383,6 +1417,23 @@ mod server_fns {
         _status: Option<String>,
     ) -> Result<Vec<InvoiceListItem>, ServerFnError> {
         Ok(Vec::new())
+    }
+
+    pub async fn list_uninvoiced_clients()
+    -> Result<Vec<crate::invoice::UninvoicedClient>, ServerFnError> {
+        Ok(Vec::new())
+    }
+
+    pub async fn get_last_client_invoice(
+        _client: String,
+    ) -> Result<Option<crate::invoice::LastInvoice>, ServerFnError> {
+        Ok(None)
+    }
+
+    pub async fn get_invoice_duplicate(
+        _id: String,
+    ) -> Result<crate::invoice::InvoiceDuplicate, ServerFnError> {
+        panic!("navigation must not duplicate invoices");
     }
 
     pub async fn generate_invoice(

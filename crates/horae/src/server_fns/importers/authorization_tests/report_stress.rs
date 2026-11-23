@@ -94,6 +94,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         reason: String::new(),
         person: None,
         entry_kind: None,
+        invoice_kind: None,
     };
     error.reason = "x".repeat(CHUNK - 1 - serde_json::to_vec(&error).unwrap().len());
     let mut expected_line = serde_json::to_vec(&error).unwrap();

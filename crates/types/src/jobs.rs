@@ -78,6 +78,8 @@ pub enum JobErrorKind {
     ReconnectRequired,
     /// The connected Harvest user lacks permissions (HTTP 403).
     Forbidden,
+    /// The connected Harvest user cannot read invoices (HTTP 403 on them).
+    InvoicesForbidden,
     /// Harvest did not answer or answered with a server error.
     Unavailable,
 }

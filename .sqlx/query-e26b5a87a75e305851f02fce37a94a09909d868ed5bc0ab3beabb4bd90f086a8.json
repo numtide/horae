@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT project_id <> $2 OR task_id <> $3 OR user_id <> $4 OR spent_date <> $5\n                          OR minutes <> $6 OR COALESCE(notes, '') <> COALESCE($7, '') AS \"differs!\"\n                   FROM time_entries WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "differs!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e26b5a87a75e305851f02fce37a94a09909d868ed5bc0ab3beabb4bd90f086a8"
+}

@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, i.status AS \"status: InvoiceStatus\",\n                  h.harvest_updated_at AS \"harvest_updated_at: DateTime<Utc>\"\n           FROM harvest_invoices h JOIN invoices i ON i.id = h.invoice_id AND i.org_id = h.org_id\n           WHERE h.org_id = $1 AND h.harvest_invoice_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void",
+                "closed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "harvest_updated_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d81f841798b6343814950034e5bce74f9a7a434fc089e517e939a4c5532e0497"
+}

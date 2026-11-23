@@ -140,6 +140,17 @@ pub fn resolve_rate(
         .or(user_rate_cents)
 }
 
+/// Whether an invoice is overdue on `today`: sent, still unpaid, and past its
+/// due date. Overdue is computed, never stored as a status.
+#[must_use]
+pub fn is_overdue(
+    status: crate::types::InvoiceStatus,
+    due_on: chrono::NaiveDate,
+    today: chrono::NaiveDate,
+) -> bool {
+    status == crate::types::InvoiceStatus::Sent && due_on < today
+}
+
 /// Compute a line amount in hundredths, rounded to the currency's precision.
 ///
 /// `rate_cents` is an hourly rate in hundredths; `minutes` is the duration.
@@ -169,6 +180,18 @@ pub fn line_amount_cents(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_sent_invoice_past_its_due_date_is_overdue() {
+        use crate::types::InvoiceStatus::{Draft, Paid, Sent, Void};
+        let due = chrono::NaiveDate::from_ymd_opt(2026, 11, 20).unwrap();
+        let after = due.succ_opt().unwrap();
+        assert!(is_overdue(Sent, due, after));
+        assert!(!is_overdue(Sent, due, due), "due today is not overdue yet");
+        for status in [Draft, Paid, Void] {
+            assert!(!is_overdue(status, due, after), "{status:?}");
+        }
+    }
 
     #[test]
     fn discounted_fee_contribution_leaves_discount_available() {

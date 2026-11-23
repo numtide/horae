@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.horae_id,\n                      m.harvest_updated_at AS \"harvest_updated_at: chrono::DateTime<chrono::Utc>\",\n                      te.id AS \"entry_id?\",\n                      te.state = 'open' AS \"open?\",\n                      te.updated_at IS DISTINCT FROM COALESCE(m.horae_updated_at, te.created_at)\n                        AS \"edited?\",\n                      te.state AS \"state?: EntryState\",\n                      te.invoice_id,\n                      (SELECT i.source = 'harvest' FROM invoices AS i WHERE i.id = te.invoice_id)\n                        AS \"invoice_imported?\"\n               FROM harvest_import_map AS m\n               -- LATERAL starts from the provenance row: without statistics\n               -- inside an import, a plain join can start from the entries.\n               LEFT JOIN LATERAL (\n                 SELECT e.id, e.state, e.updated_at, e.created_at, e.invoice_id\n                 FROM time_entries AS e WHERE e.id = m.horae_id AND e.org_id = m.org_id\n               ) AS te ON true\n               WHERE m.org_id = $1\n                 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n                 AND m.harvest_import_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "horae_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "harvest_updated_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "entry_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "open?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "edited?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "state?: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "invoice_imported?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      null,
+      null,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "3dfd4f3eb29ce3b2299f71d261d5c9eb5b1031b0ac6ab6fa44326cd6b300a488"
+}

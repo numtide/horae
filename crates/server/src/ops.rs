@@ -36,6 +36,7 @@ pub mod clients;
 mod error;
 pub mod importers;
 pub mod invoices;
+pub mod oauth;
 pub mod organization;
 pub mod people;
 pub mod permissions;
@@ -151,6 +152,25 @@ impl Caller {
             org_id,
             user_id,
             channel: Channel::Token { token_id },
+        }
+    }
+
+    /// A person through an app's OAuth access token, narrowed to its scopes.
+    pub fn oauth(
+        org_id: Uuid,
+        user_id: Uuid,
+        grant_id: Uuid,
+        token_id: Uuid,
+        scopes: horae_core::permissions::oauth::ScopeSet,
+    ) -> Self {
+        Self {
+            org_id,
+            user_id,
+            channel: Channel::OAuth {
+                grant_id,
+                token_id,
+                scopes,
+            },
         }
     }
 

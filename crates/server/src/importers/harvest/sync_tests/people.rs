@@ -294,6 +294,7 @@ fn paged_people(url: &openidconnect::url::Url) -> Response {
         "users" => {
             json!([{"id":5,"email":"new@example.com","first_name":"New","last_name":"Person"}])
         }
+        "invoices" => json!([]),
         "time_entries" => json!([{
             "id":if second {11} else {10}, "spent_date":"2026-01-01", "hours":1,
             "project":{"id":2}, "task":{"id":3}, "user":{"id":5}, "updated_at":day(3)

@@ -80,6 +80,13 @@
   ],
 )
 
+#if inputs.subject != "" [
+  #v(12pt)
+  #text(size: 9pt, weight: "semibold", fill: luma(100), "SUBJECT") \
+  #v(4pt)
+  #text(inputs.subject)
+]
+
 #v(24pt)
 
 // ── Line items ───────────────────────────────────────────────────────────────
@@ -95,20 +102,30 @@
   table.hline(stroke: 0.8pt + luma(180)),
   table.header(
     text(size: 9pt, weight: "semibold", "Description"),
-    text(size: 9pt, weight: "semibold", "Hours"),
-    text(size: 9pt, weight: "semibold", "Rate"),
+    text(size: 9pt, weight: "semibold", if inputs.at("imported", default: false) { "Quantity" } else { "Hours" }),
+    text(size: 9pt, weight: "semibold", if inputs.at("imported", default: false) { "Unit price" } else { "Rate" }),
     align(right, text(size: 9pt, weight: "semibold", "Amount")),
   ),
   table.hline(stroke: 0.5pt + luma(210)),
 
-  // Rows
+  // Rows: Horae's lines, or the lines of an invoice imported from Harvest.
   ..for line in inputs.lines {
-    (
-      text(size: 9pt, line.description),
-      text(size: 9pt, if line.minutes == none { "—" } else { fmt-hours(line.minutes) }),
-      text(size: 9pt, if line.rate_cents == none { "—" } else { fmt-money(line.rate_cents, currency) + "/hr" }),
-      align(right, text(size: 9pt, fmt-money(line.amount_cents, currency))),
-    )
+    if "quantity" in line {
+      (
+        text(size: 9pt, line.description),
+        text(size: 9pt, line.quantity),
+        // Harvest's price as written, which may have more decimals than the currency.
+        text(size: 9pt, currency + " " + line.unit_price),
+        align(right, text(size: 9pt, fmt-money(line.amount_cents, currency))),
+      )
+    } else {
+      (
+        text(size: 9pt, line.description),
+        text(size: 9pt, if line.minutes == none { "—" } else { fmt-hours(line.minutes) }),
+        text(size: 9pt, if line.rate_cents == none { "—" } else { fmt-money(line.rate_cents, currency) + "/hr" }),
+        align(right, text(size: 9pt, fmt-money(line.amount_cents, currency))),
+      )
+    }
   },
 
   // Stored invoice components

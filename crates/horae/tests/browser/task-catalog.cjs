@@ -52,7 +52,7 @@ let restoreSeededStates = () => {};
     };
     await expect(row).toContainText('USD 80.00');
     await expect(row.locator('.badge')).toHaveText('Active');
-    await expect(row.getByRole('cell', { name: 'USD 80.00', exact: true })).toHaveCSS('white-space', 'nowrap');
+    await expect(row.getByRole('cell', { name: 'USD 80.00 / h', exact: true })).toHaveCSS('white-space', 'nowrap');
     await expect(page.locator('.adm-nav')).toHaveCount(0);
     // Task reads without people or client reads: Organize offers Projects and Tasks only.
     const organize = page.locator('.app-sidebar .sidebar-section').filter({ hasText: 'Organize' }).locator('+ .sidebar-group .nav-item-label');

@@ -236,6 +236,37 @@ async fn starting_and_stopping_announce_the_entry_after_commit(pool: PgPool) {
     );
 }
 
+/// Stopping needs only an active person, so an OAuth token unlocked for a
+/// read scope must not reach it; `time:write` does.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_token_stops_a_timer_only_with_time_write(pool: PgPool) {
+    use horae_core::permissions::oauth::ScopeSet;
+    let ids = trackable(&pool, BuiltInProfile::Member).await;
+    let running = start(&pool, &ids, &Recorder::default())
+        .await
+        .unwrap()
+        .entry;
+    let stop_with = async |scopes: &[Scope]| {
+        let scopes = ScopeSet::of(scopes);
+        let caller = Caller::oauth(
+            ids.org_id,
+            ids.user_id,
+            Uuid::now_v7(),
+            Uuid::now_v7(),
+            scopes,
+        );
+        let mut write = ops::begin(&pool, caller).await.unwrap();
+        write.actor.unlock_scope(Scope::TimeRead).unwrap();
+        let result = stop_timer(&mut write.tx, &write.actor, running.id).await;
+        write.commit(result, &Recorder::default()).await
+    };
+
+    let refused = stop_with(&[Scope::TimeRead, Scope::CatalogRead]).await;
+    assert!(matches!(refused, Err(OpError::Forbidden(_))), "{refused:?}");
+    let (stopped, _) = stop_with(&[Scope::TimeWrite]).await.unwrap();
+    assert!(!stopped.is_running);
+}
+
 /// A start while a timer runs stops it first, as its stop would (021 D-6),
 /// and announces the stop before the new timer.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

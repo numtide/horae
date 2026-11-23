@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM harvest_invoice_lines WHERE invoice_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b43b5e06b8a89681ab47412eb6ca0ab781d75c31a707d283bc64fa04ef2249b"
+}

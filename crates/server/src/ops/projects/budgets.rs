@@ -344,7 +344,7 @@ pub(crate) async fn fetch_progress(
                       AND te.spent_date < (date_trunc('month', $3::date) + interval '1 month')::date))
                AND (te.invoice_id IS NULL OR invoice.id IS NOT NULL)
                AND (c.include_nonbillable OR c.project_type = 'non_billable'
-                    OR (te.billable AND (te.invoice_id IS NOT NULL OR COALESCE(pt.billable, t.billable_default))))
+                    OR (te.billable AND (te.state = 'invoiced' OR COALESCE(pt.billable, t.billable_default))))
            )
            SELECT c.id AS "project_id!", s.task_id AS "task_id?", s.user_id AS "user_id?",
                   s.label AS "label?", c.budget_scope AS "scope!", c.currency AS "currency!",

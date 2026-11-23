@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices SET subject = 'Retainer', notes = 'Thanks' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6bb20a0f1433b93955e9926eae8e3d6cb352139b9d8dbdeae6b41d1642748a49"
+}

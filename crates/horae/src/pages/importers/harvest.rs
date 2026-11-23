@@ -6,6 +6,8 @@ use horae_core::importers::harvest::types::{ConnectionStatus, EntityType};
 
 use crate::server_fns;
 
+#[path = "harvest/billing.rs"]
+mod billing;
 #[path = "harvest/change_account.rs"]
 mod change_account;
 #[path = "harvest/client_settings.rs"]
@@ -121,6 +123,7 @@ fn entity_label(e: EntityType) -> &'static str {
         EntityType::Project => "Projects",
         EntityType::Task => "Tasks",
         EntityType::Person => "People",
+        EntityType::Invoice => "Invoices",
         EntityType::TimeEntry => "Time entries",
     }
 }

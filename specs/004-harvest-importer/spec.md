@@ -154,7 +154,8 @@ An administrator who cannot or prefers not to connect the API — an offline mig
 
 **Behavior on conflicts & existing data**
 
-- **FR-016**: The system MUST import time entries into Horae's neutral/open state and MUST NOT mark them as invoiced within Horae's own invoicing lifecycle solely because Harvest recorded them as billed or invoiced; the Harvest billed/invoiced fact MAY be preserved as informational data but MUST NOT couple an imported entry to a Horae invoice.
+- **FR-016** (amended by [025](../025-harvest-invoice-import/spec.md), which imports Harvest's
+  invoices and links the time they billed, for the API and the CSV source alike): The system MUST import time entries into Horae's neutral/open state and MUST NOT mark them as invoiced within Horae's own invoicing lifecycle solely because Harvest recorded them as billed or invoiced; the Harvest billed/invoiced fact MAY be preserved as informational data but MUST NOT couple an imported entry to a Horae invoice.
 - **FR-017**: For a record that already exists (matched by provenance or natural key), the system MUST either leave it unchanged or update a defined set of safe attributes in place, and MUST count it as skipped or updated accordingly — never as a new creation.
 
 **Errors, partial success & reporting**

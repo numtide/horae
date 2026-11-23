@@ -45,7 +45,7 @@ ______________________________________________________________________
 
 **Independent test**: quickstart.md "Rounding".
 
-- [x] T010 [P] [US3] Tests first: a JPY invoice preview and invoice with lines 12100 and 300 and subtotal 12400 in `crates/server/src/ops/invoices/` tests; for JPY, EUR and KWD invoices, the preview's and the generated invoice's `subtotal_cents` equal the sum of `line.amount_cents` (SC-003); the PDF from `render_invoice_pdf` in `crates/server/src/render.rs` shows "121.00", "3.00" and "124.00" with JPY, since the display keeps two decimals (SC-004); the time report (`ops::reports::time`, `billable_cents`) and its CSV export, the project figures and the amount budget for the same entries give 12100 and 300; an invoice stored before the change keeps its amounts. Done in `crates/server/src/ops/invoices/rounding_tests.rs`; the PDF check reads the text of the same Typst document (`render::invoice_text`), and the CSV export has no amount to check, since it writes hours only
+- [x] T010 [P] [US3] Tests first: a JPY invoice preview and invoice with lines 12100 and 300 and subtotal 12400 in `crates/server/src/ops/invoices/` tests; for JPY, EUR and KWD invoices, the preview's and the generated invoice's `subtotal_cents` equal the sum of `line.amount_cents` (SC-003); the PDF from `render_invoice_pdf` in `crates/server/src/render.rs` shows "121.00", "3.00" and "124.00" with JPY, since the display keeps two decimals (SC-004); the time report (`ops::reports::time`, `billable_cents`) and its CSV export, the project figures and the amount budget for the same entries give 12100 and 300; an invoice stored before the change keeps its amounts
 - [x] T011 [US3] Pass the invoice currency to `line_amount_cents` in `crates/server/src/ops/invoices/entries.rs` (`EntryWithRates::amount`)
 - [x] T012 [P] [US3] Use the three-argument SQL function with the row's currency in `crates/server/src/ops/reports.rs` (billable with the report currency; cost with the cost currency)
 - [x] T013 [P] [US3] Same in `crates/server/src/ops/projects/reads.rs`
@@ -66,7 +66,7 @@ Starts after Delivery 1 and the OAuth amendment (7.1.0) have merged.
 
 ## Phase 5: Setup
 
-- [ ] T019 Apply the approved text (with any wording the maintainer approves for review finding H3; see HANDOFF.md) of `specs/026-task-rate-templates/constitution-amendment.md` to `.specify/memory/constitution.md` verbatim, as MINOR 7.1.0 → 7.2.0, with a Sync Impact Report; if 7.1.0 has not landed, stop and ask
+- [ ] T019 Apply the approved text of `specs/026-task-rate-templates/constitution-amendment.md` to `.specify/memory/constitution.md` verbatim, as MINOR 7.1.0 → 7.2.0, with a Sync Impact Report; if 7.1.0 has not landed, stop and ask
 - [ ] T020 Check the next free migration number on master (one after Delivery 1's) and use it for `crates/server/migrations/NNNN_task_rate_templates.sql` in every later task
 
 ## Phase 6: Foundational (blocks every Delivery 2 story)

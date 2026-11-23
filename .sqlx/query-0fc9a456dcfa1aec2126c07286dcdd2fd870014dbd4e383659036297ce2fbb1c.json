@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state AS \"state: EntryState\", invoice_id, rounded_minutes\n           FROM time_entries WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "rounded_minutes",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "0fc9a456dcfa1aec2126c07286dcdd2fd870014dbd4e383659036297ce2fbb1c"
+}

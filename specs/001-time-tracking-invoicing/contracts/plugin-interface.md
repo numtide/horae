@@ -288,9 +288,8 @@ private configuration is not included.
 Executable SECURITY DEFINER functions are rejected. Outside PostgreSQL's system
 schemas, only Horae's `harvest_norm(text)`, `currency_amount_step(text)`,
 `line_amount_cents(bigint,integer,text)`, `effective_minutes(integer,integer,smallint,round_dir)`
-and `set_updated_at()` functions are accepted. `line_amount_cents(bigint,integer)` is also
-accepted while it exists; a later migration removes it, so plugins should call the
-three-argument form (spec 026). Additional functions/extensions may
+and `set_updated_at()` functions are accepted. Spec 026 replaced
+`line_amount_cents(bigint,integer)` with the three-argument form. Additional functions/extensions may
 require revoking their default PUBLIC execution grants and restoring grants for
 their intended application roles. Likewise, older databases granting PUBLIC
 creation on the public schema need those grants reviewed. These are shared

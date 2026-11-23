@@ -173,6 +173,17 @@ async fn every_consumer_rounds_lines_to_the_currency_and_sums_them(pool: PgPool)
             "{currency} report, project figures and budget"
         );
 
+        let mut read = begin_read(&pool, caller).await.unwrap();
+        let uninvoiced = super::uninvoiced::list(&mut read.tx, &read.actor).await;
+        let uninvoiced = read.finish(uninvoiced).await.unwrap();
+        let time: Vec<(&str, i64)> = uninvoiced
+            .iter()
+            .filter(|client| client.client_id == ids.client_id)
+            .flat_map(|client| &client.time)
+            .map(|amount| (amount.currency.as_str(), amount.cents))
+            .collect();
+        assert_eq!(time, [(currency, total)], "{currency} work to invoice");
+
         let mut write = begin_gated(
             &pool,
             caller,
@@ -201,7 +212,8 @@ async fn every_consumer_rounds_lines_to_the_currency_and_sums_them(pool: PgPool)
 
         if currency == "JPY" {
             // The display keeps two decimals for every currency (spec 026 Q3).
-            let text = crate::render::invoice_text(&invoice.invoice, &invoice.lines, &branding());
+            let text =
+                crate::render::invoice_text(&invoice.invoice, &invoice.lines, None, &branding());
             for amount in ["121.00", "3.00", "124.00"] {
                 assert!(text.contains(amount), "missing {amount}: {text}");
             }
@@ -245,4 +257,60 @@ async fn an_invoice_stored_before_the_change_keeps_its_amounts(pool: PgPool) {
         figures(&pool, &ids).await,
         (Some(12375), Some(12375), 12375)
     );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_imported_invoice_keeps_the_amounts_harvest_billed(pool: PgPool) {
+    let ids = project_in(&pool, "JPY").await;
+    let invoice_id = Uuid::now_v7();
+    // Harvest billed JPY 120.75 for 80.50 × 90 min; Horae's rule would say 121.
+    sqlx::query!(
+        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency,
+                               total_cents, discount_cents, tax1_cents, tax2_cents, subject, source)
+         VALUES ($1, $2, $3, 'H-1', 'sent', $4, $4, 'JPY', 12075, 0, 0, 0, '', 'harvest')",
+        invoice_id,
+        ids.org_id,
+        ids.client_id,
+        day() as NaiveDate,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO harvest_invoices (invoice_id, org_id, harvest_invoice_id, due_cents, harvest_updated_at)
+         VALUES ($1, $2, 1, 12075, now())",
+        invoice_id,
+        ids.org_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO harvest_invoice_lines (id, org_id, invoice_id, position, harvest_line_id, kind,
+                                            description, quantity, unit_price, amount_cents, taxed, taxed2)
+         VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 1.5, 80.5, 12075, false, false)",
+        Uuid::now_v7(),
+        ids.org_id,
+        invoice_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut read = begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+        .await
+        .unwrap();
+    let detail = super::detail(&mut read.tx, &read.actor, invoice_id).await;
+    let detail = read.finish(detail).await.unwrap();
+    assert_eq!(detail.invoice.total_cents, 12075);
+    assert_eq!(
+        detail.imported.map(|imported| imported.due_cents),
+        Some(12075)
+    );
+    let amounts: Vec<i64> = detail
+        .imported_lines
+        .iter()
+        .map(|line| line.amount_cents)
+        .collect();
+    assert_eq!(amounts, [12075]);
 }

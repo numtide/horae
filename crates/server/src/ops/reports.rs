@@ -110,7 +110,7 @@ pub async fn time(
                -- invoiced; cost is what the worked time costs, so it stays on
                -- the actual ones.
                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) AS rounded_minutes,
-               (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) AS billable,
+               (te.billable AND (te.state = 'invoiced' OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) AS billable,
                ($13 OR ($14 AND EXISTS (SELECT 1 FROM project_management_assignments m
                  WHERE m.org_id = te.org_id AND m.manager_id = $6 AND m.project_id = te.project_id)))
                  AS rate_visible,
@@ -217,7 +217,7 @@ pub async fn fetch_entries<'e>(
                 p.name AS project_name, t.name AS task_name,
                 u.name AS user_name, te.minutes,
                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "rounded_minutes?",
-                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.notes
+                (te.billable AND (te.state = 'invoiced' OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.notes
          FROM time_entries te
          JOIN projects p ON te.project_id = p.id
          JOIN tasks t ON te.task_id = t.id

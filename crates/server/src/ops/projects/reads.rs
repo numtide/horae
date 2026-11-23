@@ -356,7 +356,7 @@ pub(super) async fn spend_rows(
            ), spent AS MATERIALIZED (
              SELECT p.id AS project_id, SUM(te.minutes) AS minutes,
                SUM(CASE WHEN p.can_view_money AND te.billable
-                 AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'
+                 AND (te.state = 'invoiced' OR (p.project_type <> 'non_billable'
                    AND COALESCE(pt.billable, t.billable_default)))
                THEN COALESCE(line.amount_cents, line_amount_cents(
                  COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'

@@ -42,7 +42,7 @@ invoice, a `reason` in plain words, and a new optional `invoice_kind`:
 
 ```json
 {"source_location": "invoice 998877 (1042)", "entity": "invoice",
- "reason": "A Horae invoice already uses number 1042", "invoice_kind": "number_taken"}
+ "reason": "An invoice made in Horae already uses number 1042", "invoice_kind": "number_taken"}
 ```
 
 `invoice_kind` is one of `number_taken`, `amounts_mismatch`, `amount_precision`, `unknown_currency`,

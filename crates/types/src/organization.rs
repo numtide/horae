@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Branding-only DTO for invoice rendering and settings UI.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct OrgBranding {
     pub provider_name: Option<String>,
     pub provider_address: Option<String>,

@@ -147,6 +147,12 @@ pub(super) async fn apply_batch(
             }
         }
     }
+    // Invoices follow the catalog records they name, in the same positions.
+    let catalog = data.clients.len() + data.projects.len() + data.tasks.len() + data.users.len();
+    if range.end >= catalog {
+        let invoices = range.start.saturating_sub(catalog)..range.end - catalog;
+        super::invoices::apply_batch(tx, cache, org.org_id, data, report, invoices).await?;
+    }
     Ok(())
 }
 

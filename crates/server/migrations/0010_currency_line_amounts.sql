@@ -20,8 +20,8 @@ CREATE FUNCTION public.currency_amount_step(currency text) RETURNS integer
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
     SELECT CASE WHEN btrim(currency) IN (
-        'BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'VND', 'VUV',
-        'XAF', 'XOF', 'XPF'
+        'BIF', 'BYR', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'UYI',
+        'VND', 'VUV', 'XAF', 'XOF', 'XPF'
     ) THEN 100 ELSE 1 END
   $$;
 
@@ -40,6 +40,4 @@ CREATE FUNCTION public.line_amount_cents(rate_cents bigint, minutes integer, cur
                  CASE public.currency_amount_step(currency) WHEN 100 THEN -2 ELSE 0 END)::bigint
   $$;
 
--- `line_amount_cents(bigint, integer)` stays until a later migration: during a
--- rolling update the previous release keeps serving reports, project figures
--- and budget checks with it after this migration has run.
+DROP FUNCTION public.line_amount_cents(bigint, integer);

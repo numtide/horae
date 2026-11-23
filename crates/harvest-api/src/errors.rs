@@ -51,6 +51,10 @@ impl ApiError {
         Self::new(StatusCode::NOT_FOUND, "Not found")
     }
 
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, message)
+    }
+
     pub fn unprocessable(message: impl Into<String>) -> Self {
         Self::new(StatusCode::UNPROCESSABLE_ENTITY, message)
     }

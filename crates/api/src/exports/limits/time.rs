@@ -93,7 +93,7 @@ async fn read_entries(
              SELECT e.id, e.user_id, e.project_id, e.spent_date, p.name project_name,
                     t.name task_name, u.name user_name, e.minutes,
                     effective_minutes(e.minutes,e.rounded_minutes,o.round_minutes,o.round_dir) rounded_minutes,
-                    (e.billable AND (e.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'
+                    (e.billable AND (e.state = 'invoiced' OR (p.project_type <> 'non_billable'
                       AND COALESCE(pt.billable,t.billable_default)))) billable, e.notes
              FROM time_entries e JOIN organizations o ON o.id=e.org_id
              JOIN users u ON u.id=e.user_id AND u.org_id=e.org_id
@@ -109,7 +109,7 @@ async fn read_entries(
                    WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.project_id=e.project_id))))
                AND e.spent_date BETWEEN $6 AND $7
                AND (NOT $16::bool OR p.active)
-               AND ($17::bool IS NULL OR $17 = (e.billable AND (e.invoice_id IS NOT NULL
+               AND ($17::bool IS NULL OR $17 = (e.billable AND (e.state = 'invoiced'
                  OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)))))
                AND (cardinality($8::uuid[])=0 OR p.client_id=ANY($8))
                AND (cardinality($9::uuid[])=0 OR e.project_id=ANY($9))

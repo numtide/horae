@@ -35,7 +35,7 @@ copied onto the token.
 per `(org_id, harvest_id)`: **the id in the Harvest-compatible API; Horae's identity is `id`
 (UUID v7).** It is the `id` a client of `/harvest/v2` sees for every record, native or
 imported, and the number it sends back in paths and filters. Later steps add the column to the
-kinds they expose (assignments, invoices, invoice lines, tags).
+kinds they expose (assignments, invoices, invoice lines).
 
 - **Native records**: the column has no default. A `BEFORE INSERT` trigger
   (`harvest_id_assign`) fills it when the insert gives none, from one global sequence per kind
@@ -91,7 +91,73 @@ most 0.56 s.
 | `harvest_import_map` | `harvest_id` renamed to `harvest_import_id`; read by the backfill and the trigger | 1 |
 | `clients`, `projects`, `tasks`, `time_entries`, `users` | `harvest_id bigint NOT NULL`, unique per organization (above) | 1 |
 
-The migration snapshot tests compare whole rows; the new columns are excluded there.
+Step 1's whole-row migration snapshot tests went away with the squash into `0001_baseline.sql`.
+
+## Step 5: numbers for assignments and invoices
+
+Step 5 exposes four more kinds (tags are left out: the public API reference has no tags
+resource), and FR-015 needs each record to have its own number. It reuses
+step 1's design: a `harvest_id bigint` column, a global sequence per kind, the
+`harvest_id_assign` trigger in the creating transaction, and unique `(org_id, harvest_id)`.
+
+| Table | API kind | `harvest_entity_type` | Missing today |
+| --- | --- | --- | --- |
+| `assignments` | user assignment | `user_assignment` | `org_id`, `harvest_id`, `updated_at` |
+| `project_tasks` | task assignment | `task_assignment` | `id`, `org_id`, `harvest_id`, `created_at`, `updated_at` (its key is `(project_id, task_id)`) |
+| `invoices` | invoice | `invoice` (spec 025 adds it) | `harvest_id`, `updated_at` |
+| `invoice_line_items` | invoice line item | `invoice_line` | `org_id`, `harvest_id` |
+| `harvest_invoice_lines` (spec 025) | invoice line item | `invoice_line` | `harvest_id` |
+
+- **Enum values** go in their own migration before the rest: PostgreSQL refuses to use an enum
+  value in the transaction that adds it.
+- **`org_id`** is added where missing, backfilled from the parent (project or invoice), `NOT NULL`
+  with a foreign key to `organizations`. A `BEFORE INSERT` trigger fills it from the parent when
+  the insert leaves it out, so the existing inserts (operations, importer, seed and many tests)
+  need no change. The `harvest_id` trigger reads `NEW.org_id`, so it must run second.
+  PostgreSQL fires triggers on the same event in name order, and step 1's is
+  `<table>_harvest_id`; the fill trigger is named `<table>_fill`, which sorts first. A migration
+  test inserts with neither column set and checks the number skips one that is held.
+- **`project_tasks.id`**: a `uuid` v7, unique, backfilled in `(project_id, task_id)` order and
+  filled by the same `<table>_fill` trigger when the insert leaves it out (about 60 inserts name
+  no id). PostgreSQL has no v7 generator before 18, so the migration adds a small SQL function
+  building one from `clock_timestamp()` and random bytes. With it, task assignments fit
+  `ids::Kind::record`, the UUID path form and `pagination::Key` like every other kind, with no
+  change to the cursor format. The composite key stays.
+- **Invoice lines** are one kind in two tables. Both use one sequence, and their trigger checks
+  both tables and `harvest_import_map` before taking a number, so a native and an imported line
+  never share one. Spec 025 maps only invoices, so the import also records each line in
+  `harvest_import_map` (kind `invoice_line`) and points the entry at the new row when a
+  re-import replaces the lines; the Harvest line id then stays reserved after its row is
+  deleted, as step 1 reserves other kinds. Line items have no timestamps on Harvest, so neither
+  table gains any.
+- **Imported records** follow step 1's rule. The invoice import (spec 025) passes the Harvest
+  invoice id and each line's Harvest id as `harvest_id` when no record of the kind in the
+  organization has it and it is more than 10,000 above the sequence; otherwise the trigger
+  numbers the record and the report gets an `IdNotice`. The Harvest API import also brings
+  Harvest's user assignments as `assignments` rows (T080), passing each one's Harvest id under
+  the same rule and recording it in `harvest_import_map` (kind `user_assignment`). Project tasks
+  are still created from time entries without Harvest's task assignment ids, so task
+  assignments are always numbered by the trigger. The CSV import creates no assignments.
+- **Update times** use `set_updated_at`, stamped at write time (step 4's
+  `0006_updated_at_at_write.sql`). An invoice's `updated_at` also moves when one of its lines is
+  inserted, changed or deleted, because the lines are part of the invoice object. As in step 4,
+  a name shown from another record (a project's name on an assignment) does not move the time.
+  Backfilled `created_at` and `updated_at` take the migration's time where the table has no
+  earlier one (`project_tasks`) and `created_at` elsewhere.
+- **Backfill** numbers rows in creation order (`id`, UUID v7; `project_tasks` by
+  `(project_id, task_id)`, having no creation time), imported invoices first with their Harvest
+  ids from `harvest_import_map`, and imported lines with `harvest_line_id`. The unique indexes
+  are built after the backfill, for the reason step 1 found (an `UPDATE` of a column in a unique
+  index waits for the foreign-key locks of concurrent inserts). These tables are small next to
+  `time_entries` except `invoice_line_items`, which has one row per invoiced entry; time the
+  migration on a copy with 1,000,000 invoiced entries and record it here. If the line backfill
+  holds writes for more than about a second, batch it as step 1's backfill did.
+- **Keys for cursors.** `assignments` and `project_tasks` are keyed by their UUID like step 4's
+  lists. Invoices are keyed by `(issue_date, id)`, newest first, as time entries are by
+  `(spent_date, id)` (contracts *Step 5 › Invoices*).
+- **Update times of nested objects.** A project assignment's `updated_at` is its user
+  assignment's; task assignment changes move only the `project_tasks` row's time. Invoices are
+  different because Harvest serves lines without times of their own.
 
 ## Domain changes (no schema)
 

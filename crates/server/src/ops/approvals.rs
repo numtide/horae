@@ -52,6 +52,8 @@ pub async fn submit_week(
     if !actor.is_active() {
         return Err(OpError::forbidden(ACTIVE_REQUIRED));
     }
+    // `time:write` covers TimeWriteOwn, but submitting is an approval step.
+    actor.refuse_oauth()?;
     if !actor.has(Permission::TimeWriteOwn) {
         return Err(OpError::forbidden("You cannot submit your own time"));
     }

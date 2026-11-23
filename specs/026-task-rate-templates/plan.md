@@ -57,7 +57,7 @@ in `horae-server`, `horae-harvest-api` and `horae`, the browser scripts under
 
 | Principle | Check | Result |
 | --- | --- | --- |
-| I. Exactness | Templates and amounts are integers; one half-up rounding from the exact value; totals are sums of stored lines. A currency-free integer needs the approved amendment (7.2.0) in `constitution-amendment.md`; the rounding PR only rounds money and does not | Pass: the templates PR applies the amendment as its first task (T019). Open: review finding H3 proposes two added clauses for the maintainer (HANDOFF.md) |
+| I. Exactness | Templates and amounts are integers; one half-up rounding from the exact value; totals are sums of stored lines. A currency-free integer needs the approved amendment (7.2.0) in `constitution-amendment.md`; the rounding PR only rounds money and does not | Pass: the templates PR applies the amendment as its first task (T019). The amendment includes the wording approved for review finding H3 |
 | II. Domain purity | `RateTemplate`, `currency_decimals` and the line amount live in `horae-core`, with unit, property and Kani tests; the SQL twin is tested against them | Pass |
 | III. Single datastore | PostgreSQL migration; no new tables | Pass |
 | IV. Shared operations | Rate writes stay in `ops/projects/task_writes.rs`; applications in the creation and editor operations; importers keep their paths | Pass |

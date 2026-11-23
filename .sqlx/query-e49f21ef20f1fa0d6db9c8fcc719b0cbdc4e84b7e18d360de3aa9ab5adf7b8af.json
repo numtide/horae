@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_date AS \"today!: chrono::NaiveDate\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "today!: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e49f21ef20f1fa0d6db9c8fcc719b0cbdc4e84b7e18d360de3aa9ab5adf7b8af"
+}

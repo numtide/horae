@@ -58,6 +58,17 @@ currency.
   PATCH later, outside this spec (see Follow-up).
 - Q: One PR, or the rounding change first? → A: two deliveries. The rounding change (User Story 3)
   ships first as its own smaller PR, and the templates follow (plan.md, Delivery).
+- Q: The amendment does not cover a rate applied to a zero-decimal currency (JPY 80.50) and does not
+  define "the currency's precision". Add wording? → A: yes. Three sentences join the Principle I
+  paragraph: a rate keeps two decimals in every currency; only amounts computed from it round to the
+  currency's precision, one whole unit for a currency with no decimals and one hundredth for every
+  other; the Harvest-compatible API writes the rate's two decimals. The version stays 7.2.0
+  (`constitution-amendment.md`).
+- Q: Should invoice discounts, taxes, fixed fees and typed line amounts also round in zero-decimal
+  currencies? → A: deferred, to revisit with the invoice editor. Meanwhile this spec keeps today's
+  behaviour: they keep hundredths (FR-011; see Follow-up).
+- Q: Should zero-decimal amounts be shown without decimals? → A: deferred, to revisit with i18n number
+  formatting. Meanwhile the display keeps two decimals ("JPY 121.00"; see Follow-up).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -359,3 +370,9 @@ ______________________________________________________________________
 - Principle I says money is "integer minor units (cents)", but Horae stores hundredths of the major
   unit for every currency, which are not ISO minor units for JPY or KWD. A separate PATCH of the
   constitution fixes that wording later; this spec and its amendment leave it as it is.
+- Open, to revisit with the invoice editor: whether invoice discounts, taxes, fixed fees and typed
+  line amounts round to the currency's precision in zero-decimal currencies. Until then this spec
+  keeps today's behaviour, and they keep hundredths (FR-011).
+- Open, to revisit with i18n number formatting: whether screens and the PDF show zero-decimal amounts
+  without decimals. Until then this spec keeps today's behaviour, two decimals for every currency
+  ("JPY 121.00").

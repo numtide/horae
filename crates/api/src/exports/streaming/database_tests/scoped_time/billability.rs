@@ -70,7 +70,9 @@ async fn fixture(pool: &PgPool) -> SeedIds {
             EntryState::Open,
         )
         .await;
-        sqlx::query!("UPDATE time_entries SET minutes=17,billable=$2,invoice_id=$3,rounded_minutes=$4 WHERE id=$1",
+        // An invoiced entry, as generation leaves it: billed is its state.
+        sqlx::query!("UPDATE time_entries SET minutes=17,billable=$2,invoice_id=$3,rounded_minutes=$4,
+            state=CASE WHEN $3::uuid IS NULL THEN 'open'::entry_state ELSE 'invoiced'::entry_state END WHERE id=$1",
             entry, index != 1, (index == 6).then_some(invoice), (index == 6).then_some(0_i32))
             .execute(pool).await.unwrap();
     }

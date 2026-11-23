@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_invoices (invoice_id, org_id, harvest_invoice_id, due_cents, harvest_updated_at)\n         VALUES ($1, $2, 1, 12075, now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3b34dc3543a22e7fc173bc5aa8384909b90f7fe47f5a970f3f0f60c7ed6e9ea9"
+}

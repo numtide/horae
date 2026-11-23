@@ -9,6 +9,7 @@ use crate::components::back_link::BackLink;
 use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{LoadError, Loading};
+use crate::i18n::{Tr, use_tr};
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::{OrgBranding, branding_value_error};
 use crate::route::Route;
@@ -29,9 +30,22 @@ fn message_of(error: ServerFnError) -> String {
     }
 }
 
+/// Why a value cannot be saved, in the catalog's words. The rule itself is
+/// `branding_value_error`, which the server applies too.
+fn value_error(tr: Tr, value: &str) -> Option<String> {
+    branding_value_error(value)?;
+    Some(
+        if value.len() > crate::models::organization::MAX_BRANDING_VALUE_BYTES {
+            tr.invoices_settings_too_long()
+        } else {
+            tr.invoices_settings_nul()
+        },
+    )
+}
+
 struct Field {
     id: &'static str,
-    label: &'static str,
+    label: fn(Tr) -> String,
     kind: &'static str,
     multiline: bool,
     value: fn(&mut OrgBranding) -> &mut Option<String>,
@@ -39,7 +53,7 @@ struct Field {
 
 const fn field(
     id: &'static str,
-    label: &'static str,
+    label: fn(Tr) -> String,
     kind: &'static str,
     value: fn(&mut OrgBranding) -> &mut Option<String>,
 ) -> Field {
@@ -54,7 +68,7 @@ const fn field(
 
 const fn multiline(
     id: &'static str,
-    label: &'static str,
+    label: fn(Tr) -> String,
     value: fn(&mut OrgBranding) -> &mut Option<String>,
 ) -> Field {
     Field {
@@ -74,68 +88,106 @@ enum Card {
 impl Card {
     const ALL: [Card; 3] = [Card::Company, Card::Payment, Card::Defaults];
 
-    fn title(self) -> &'static str {
+    fn title(self, tr: Tr) -> String {
         match self {
-            Card::Company => "Company information",
-            Card::Payment => "Payment details",
-            Card::Defaults => "Default values",
+            Card::Company => tr.invoices_settings_company(),
+            Card::Payment => tr.invoices_settings_payment(),
+            Card::Defaults => tr.invoices_settings_defaults(),
         }
     }
 
-    fn description(self) -> &'static str {
+    fn save_label(self, tr: Tr) -> String {
         match self {
-            Card::Company => {
-                "Your details as the issuer. Every invoice PDF shows the current values, including invoices already sent."
-            }
-            Card::Payment => {
-                "How clients pay you. Every invoice PDF shows the current values, including invoices already sent."
-            }
-            Card::Defaults => {
-                "Terms print on every invoice PDF. Notes are copied into each new invoice; existing invoices keep theirs."
-            }
+            Card::Company => tr.invoices_settings_save_company(),
+            Card::Payment => tr.invoices_settings_save_payment(),
+            Card::Defaults => tr.invoices_settings_save_defaults(),
+        }
+    }
+
+    fn description(self, tr: Tr) -> String {
+        match self {
+            Card::Company => tr.invoices_settings_company_hint(),
+            Card::Payment => tr.invoices_settings_payment_hint(),
+            Card::Defaults => tr.invoices_settings_defaults_hint(),
         }
     }
 
     fn fields(self) -> &'static [Field] {
         const COMPANY: [Field; 5] = [
-            field("inv-settings-name", "Company name", "text", |b| {
-                &mut b.provider_name
-            }),
-            multiline("inv-settings-address", "Address", |b| {
-                &mut b.provider_address
-            }),
-            field("inv-settings-tax-id", "Tax ID", "text", |b| {
-                &mut b.provider_tax_id
-            }),
-            field("inv-settings-email", "Email", "email", |b| {
-                &mut b.provider_email
-            }),
-            field("inv-settings-phone", "Phone", "tel", |b| {
-                &mut b.provider_phone
-            }),
+            field(
+                "inv-settings-name",
+                |tr| tr.invoices_settings_name(),
+                "text",
+                |b| &mut b.provider_name,
+            ),
+            multiline(
+                "inv-settings-address",
+                |tr| tr.invoices_settings_address(),
+                |b| &mut b.provider_address,
+            ),
+            field(
+                "inv-settings-tax-id",
+                |tr| tr.invoices_settings_tax_id(),
+                "text",
+                |b| &mut b.provider_tax_id,
+            ),
+            field(
+                "inv-settings-email",
+                |tr| tr.invoices_settings_email(),
+                "email",
+                |b| &mut b.provider_email,
+            ),
+            field(
+                "inv-settings-phone",
+                |tr| tr.invoices_settings_phone(),
+                "tel",
+                |b| &mut b.provider_phone,
+            ),
         ];
         const PAYMENT: [Field; 5] = [
-            field("inv-settings-bank", "Bank name", "text", |b| {
-                &mut b.bank_name
-            }),
-            field("inv-settings-iban", "IBAN", "text", |b| &mut b.bank_iban),
-            field("inv-settings-bic", "BIC / SWIFT", "text", |b| {
-                &mut b.bank_bic
-            }),
-            field("inv-settings-routing", "Routing number", "text", |b| {
-                &mut b.bank_routing
-            }),
-            field("inv-settings-account", "Account number", "text", |b| {
-                &mut b.bank_account
-            }),
+            field(
+                "inv-settings-bank",
+                |tr| tr.invoices_settings_bank(),
+                "text",
+                |b| &mut b.bank_name,
+            ),
+            field(
+                "inv-settings-iban",
+                |tr| tr.invoices_settings_iban(),
+                "text",
+                |b| &mut b.bank_iban,
+            ),
+            field(
+                "inv-settings-bic",
+                |tr| tr.invoices_settings_bic(),
+                "text",
+                |b| &mut b.bank_bic,
+            ),
+            field(
+                "inv-settings-routing",
+                |tr| tr.invoices_settings_routing(),
+                "text",
+                |b| &mut b.bank_routing,
+            ),
+            field(
+                "inv-settings-account",
+                |tr| tr.invoices_settings_account(),
+                "text",
+                |b| &mut b.bank_account,
+            ),
         ];
         const DEFAULTS: [Field; 2] = [
-            field("inv-settings-terms", "Payment terms", "text", |b| {
-                &mut b.invoice_payment_terms
-            }),
-            multiline("inv-settings-notes", "Invoice notes", |b| {
-                &mut b.invoice_notes
-            }),
+            field(
+                "inv-settings-terms",
+                |tr| tr.invoices_terms(),
+                "text",
+                |b| &mut b.invoice_payment_terms,
+            ),
+            multiline(
+                "inv-settings-notes",
+                |tr| tr.invoices_settings_notes(),
+                |b| &mut b.invoice_notes,
+            ),
         ];
         match self {
             Card::Company => &COMPANY,
@@ -158,29 +210,30 @@ impl Card {
     }
 
     /// The first field this card cannot save, with the reason.
-    fn first_error(self, draft: &OrgBranding) -> Option<(&'static str, &'static str)> {
+    fn first_error(self, tr: Tr, draft: &OrgBranding) -> Option<(&'static str, String)> {
         let mut draft = draft.clone();
         self.fields().iter().find_map(|field| {
             let value = (field.value)(&mut draft).as_deref()?;
-            branding_value_error(value).map(|message| (field.id, message))
+            value_error(tr, value).map(|message| (field.id, message))
         })
     }
 }
 
 #[component]
 pub fn InvoiceSettings() -> Element {
+    let tr = use_tr();
     let mut branding = use_resource(server_fns::get_org_branding);
     let retry = use_callback(move |_| branding.restart());
     rsx! {
         div {
-            BackLink { to: Route::InvoiceList {}, label: "Back to Invoices" }
-            PageHeader { title: "Invoice settings" }
+            BackLink { to: Route::InvoiceList { filter: Default::default() }, label: tr.invoices_back() }
+            PageHeader { title: tr.invoices_settings() }
             match &*branding.read() {
-                None => rsx! { Loading { label: "Loading invoice settings…" } },
+                None => rsx! { Loading { label: tr.invoices_settings_loading() } },
                 Some(Ok(initial)) => rsx! { SettingsForm { initial: initial.clone() } },
                 // A refusal shows `NoAccess`, as on every screen.
                 Some(Err(error)) => rsx! {
-                    LoadError { error: error.clone(), what: "invoice settings", retry }
+                    LoadError { error: error.clone(), what: tr.invoices_settings_what(), retry }
                 },
             }
         }
@@ -195,7 +248,7 @@ fn SettingsForm(initial: OrgBranding) -> Element {
         div { class: "flex flex-col lg:flex-row gap-6",
             div { class: "flex flex-col gap-6 flex-1 min-w-0",
                 for card in Card::ALL {
-                    SettingsCard { key: "{card.title()}", card, saved, draft }
+                    SettingsCard { key: "{card.fields()[0].id}", card, saved, draft }
                 }
             }
             // The wrapper stretches with the row; the preview card keeps its own height.
@@ -208,10 +261,11 @@ fn SettingsForm(initial: OrgBranding) -> Element {
 
 #[component]
 fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBranding>) -> Element {
+    let tr = use_tr();
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut notice = use_signal(|| false);
-    let mut invalid = use_signal(|| None::<(&'static str, &'static str)>);
+    let mut invalid = use_signal(|| None::<(&'static str, String)>);
     let heading = format!("{}-title", card.fields()[0].id);
 
     let save = move |event: FormEvent| {
@@ -221,7 +275,7 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
         }
         notice.set(false);
         error.set(None);
-        invalid.set(card.first_error(&draft.peek()));
+        invalid.set(card.first_error(tr, &draft.peek()));
         if invalid.peek().is_some() {
             return;
         }
@@ -248,8 +302,8 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
 
     rsx! {
         form { class: "card p-5", novalidate: true, aria_labelledby: "{heading}", onsubmit: save,
-            h2 { id: "{heading}", class: "card-title", "{card.title()}" }
-            p { class: "text-sm text-secondary mb-4", "{card.description()}" }
+            h2 { id: "{heading}", class: "card-title", {card.title(tr)} }
+            p { class: "text-sm text-secondary mb-4", {card.description(tr)} }
             if let Some(message) = error() {
                 div { class: "alert alert-danger", role: "alert", "{message}" }
             }
@@ -258,16 +312,16 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
                     {
                         let value = (field.value)(&mut draft.read().clone()).clone().unwrap_or_default();
                         let message = invalid().filter(|(id, _)| *id == field.id).map(|(_, message)| message);
-                        let error_id = message.map(|_| format!("{}-error", field.id));
+                        let error_id = message.as_ref().map(|_| format!("{}-error", field.id));
                         let edit = move |event: FormEvent| {
                             notice.set(false);
-                            if invalid.peek().is_some_and(|(id, _)| id == field.id) {
+                            if invalid.peek().as_ref().is_some_and(|(id, _)| *id == field.id) {
                                 invalid.set(None);
                             }
                             *(field.value)(&mut draft.write()) = Some(event.value());
                         };
                         rsx! {
-                            FormGroup { key: "{field.id}", label: field.label, id: field.id,
+                            FormGroup { key: "{field.id}", label: (field.label)(tr), id: field.id,
                                 if field.multiline {
                                     Textarea { id: field.id, error_id: error_id.clone(), value, rows: 4, oninput: edit }
                                 } else {
@@ -283,10 +337,10 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
             }
             div { class: "flex flex-wrap items-center gap-3",
                 button { r#type: "submit", class: "btn btn-primary", disabled: busy(),
-                    if busy() { "Saving…" } else { "Save {card.title().to_lowercase()}" }
+                    if busy() { {tr.invoices_settings_saving()} } else { {card.save_label(tr)} }
                 }
                 p { class: "text-sm text-secondary m-0", role: "status",
-                    if notice() { "Saved." }
+                    if notice() { {tr.invoices_settings_saved()} }
                 }
             }
         }
@@ -297,36 +351,43 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
 /// PDF; it follows `templates/invoice.typ` and shows unsaved edits.
 #[component]
 fn InvoicePreview(draft: Signal<OrgBranding>) -> Element {
+    let tr = use_tr();
     let b = draft.read();
     let filled = |value: &Option<String>| value.clone().filter(|value| !value.trim().is_empty());
+    // The PDF prints these labels in English (`templates/invoice.typ`); the
+    // preview names them in the viewer's language.
     let issuer = [
         b.provider_address.clone(),
-        b.provider_tax_id.as_ref().map(|id| format!("Tax ID: {id}")),
+        b.provider_tax_id
+            .as_ref()
+            .map(|id| tr.invoices_settings_preview_tax_id(id.clone())),
         b.provider_email.clone(),
         b.provider_phone.clone(),
     ];
     let payment = [
-        ("Bank", &b.bank_name),
-        ("IBAN", &b.bank_iban),
-        ("BIC", &b.bank_bic),
-        ("Routing", &b.bank_routing),
-        ("Account", &b.bank_account),
+        (tr.invoices_settings_preview_bank(), &b.bank_name),
+        (tr.invoices_settings_iban(), &b.bank_iban),
+        (tr.invoices_settings_preview_bic(), &b.bank_bic),
+        (tr.invoices_settings_preview_routing(), &b.bank_routing),
+        (tr.invoices_settings_preview_account(), &b.bank_account),
     ]
     .into_iter()
-    .filter_map(|(label, value)| filled(value).map(|value| format!("{label}: {value}")))
+    .filter_map(|(label, value)| {
+        filled(value).map(|value| tr.invoices_settings_preview_line(label, value))
+    })
     .collect::<Vec<_>>();
     let terms = filled(&b.invoice_payment_terms);
     let notes = filled(&b.invoice_notes);
     rsx! {
         section { class: "card p-5 min-w-0", aria_labelledby: "inv-settings-preview-title",
-            h2 { id: "inv-settings-preview-title", class: "card-title", "Preview" }
-            p { class: "text-sm text-secondary mb-4", "How these details read on an invoice, including unsaved edits." }
+            h2 { id: "inv-settings-preview-title", class: "card-title", {tr.invoices_preview()} }
+            p { class: "text-sm text-secondary mb-4", {tr.invoices_settings_preview_hint()} }
             div { class: "flex flex-col gap-4 text-sm wrap-anywhere",
                 div {
                     if let Some(name) = filled(&b.provider_name) {
                         p { class: "font-semibold m-0", "{name}" }
                     } else {
-                        p { class: "text-muted m-0", "No company name" }
+                        p { class: "text-muted m-0", {tr.invoices_settings_preview_no_name()} }
                     }
                     // Addresses and notes keep the line breaks they were typed with, as on the PDF.
                     for line in issuer.into_iter().filter_map(|value| filled(&value)) {
@@ -334,13 +395,13 @@ fn InvoicePreview(draft: Signal<OrgBranding>) -> Element {
                     }
                 }
                 if !payment.is_empty() {
-                    PreviewBlock { title: "Payment details", lines: payment }
+                    PreviewBlock { title: tr.invoices_settings_payment(), lines: payment }
                 }
                 if let Some(terms) = terms {
-                    PreviewBlock { title: "Terms", lines: vec![terms] }
+                    PreviewBlock { title: tr.invoices_settings_preview_terms(), lines: vec![terms] }
                 }
                 if let Some(notes) = notes {
-                    PreviewBlock { title: "Notes", lines: vec![notes] }
+                    PreviewBlock { title: tr.invoices_notes(), lines: vec![notes] }
                 }
             }
         }
@@ -348,7 +409,7 @@ fn InvoicePreview(draft: Signal<OrgBranding>) -> Element {
 }
 
 #[component]
-fn PreviewBlock(title: &'static str, lines: Vec<String>) -> Element {
+fn PreviewBlock(title: String, lines: Vec<String>) -> Element {
     rsx! {
         div {
             p { class: "text-xs font-semibold uppercase tracking-wide text-muted m-0 mb-1", "{title}" }
@@ -480,14 +541,15 @@ mod tests {
             invoice_notes: Some("bad\0".into()),
             ..branding()
         };
-        assert_eq!(Card::Company.first_error(&draft), None);
+        let tr = Tr::default();
+        assert_eq!(Card::Company.first_error(tr, &draft), None);
         assert_eq!(
-            Card::Payment.first_error(&draft).map(|(id, _)| id),
-            Some("inv-settings-iban")
+            Card::Payment.first_error(tr, &draft),
+            Some(("inv-settings-iban", tr.invoices_settings_too_long()))
         );
         assert_eq!(
-            Card::Defaults.first_error(&draft).map(|(id, _)| id),
-            Some("inv-settings-notes")
+            Card::Defaults.first_error(tr, &draft),
+            Some(("inv-settings-notes", tr.invoices_settings_nul()))
         );
     }
 }

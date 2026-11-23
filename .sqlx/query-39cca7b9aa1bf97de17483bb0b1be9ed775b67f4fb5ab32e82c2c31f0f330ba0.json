@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices SET status = 'void' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "39cca7b9aa1bf97de17483bb0b1be9ed775b67f4fb5ab32e82c2c31f0f330ba0"
+}

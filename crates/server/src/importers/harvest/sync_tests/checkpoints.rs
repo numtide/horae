@@ -5,7 +5,7 @@ use super::super::api_source::http::{
 use super::*;
 use crate::jobs;
 
-fn config() -> HarvestConfig {
+pub(super) fn config() -> HarvestConfig {
     HarvestConfig {
         client_id: "test".into(),
         client_secret: "test".into(),
@@ -15,13 +15,13 @@ fn config() -> HarvestConfig {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum FirstEntry {
+pub(super) enum FirstEntry {
     Valid,
     InvalidUser,
     MissingTimestamp,
 }
 
-fn fixture_page(url: &openidconnect::url::Url, first: FirstEntry) -> Response {
+pub(super) fn fixture_page(url: &openidconnect::url::Url, first: FirstEntry) -> Response {
     let collection = url.path().rsplit('/').next().unwrap();
     let second = url
         .query_pairs()
@@ -35,6 +35,7 @@ fn fixture_page(url: &openidconnect::url::Url, first: FirstEntry) -> Response {
             json!([{"id":3,"name":"Task","default_hourly_rate":serde_json::from_str::<serde_json::Value>("1.004999999999999999").unwrap()}])
         }
         "users" => json!([{"id":4,"email":"known@example.com"}]),
+        "invoices" => json!([]),
         "time_entries" => json!([{
             "id":if second {11} else {10}, "spent_date":"2026-01-01", "hours":1,
             "project":{"id":2}, "task":{"id":3},
@@ -530,16 +531,36 @@ async fn a_running_job_saves_the_catalog_total_once_downloaded(pool: PgPool) {
 async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgPool) {
     let org = setup(&pool).await;
     use crate::models::JobErrorKind;
-    for (status, outcome, message, kind) in [
+    for (path, status, outcome, message, kind) in [
         (
+            "/users",
             401,
             "failed",
             "reconnect Harvest",
             Some(JobErrorKind::ReconnectRequired),
         ),
-        (403, "failed", "HTTP 403", Some(JobErrorKind::Forbidden)),
-        (500, "queued", "HTTP 500", Some(JobErrorKind::Unavailable)),
-        (404, "queued", "HTTP 404", None),
+        (
+            "/users",
+            403,
+            "failed",
+            "HTTP 403",
+            Some(JobErrorKind::Forbidden),
+        ),
+        (
+            "/invoices",
+            403,
+            "failed",
+            "manager who can create and edit invoices",
+            Some(JobErrorKind::InvoicesForbidden),
+        ),
+        (
+            "/users",
+            500,
+            "queued",
+            "HTTP 500",
+            Some(JobErrorKind::Unavailable),
+        ),
+        ("/users", 404, "queued", "HTTP 404", None),
     ] {
         let id = jobs::enqueue(
             &pool,
@@ -548,13 +569,13 @@ async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgP
                 mode: ImportMode::Commit,
                 sync: SyncScope::Full,
             },
-            &format!("rejected-{status}"),
+            &format!("rejected-{status}{path}"),
             crate::config::JobPolicy { max_attempts: 5 },
         )
         .await
         .unwrap();
         let server = Server::start(move |url| {
-            if url.path().ends_with("/users") {
+            if url.path().ends_with(path) {
                 return Response {
                     status,
                     headers: vec![],
@@ -660,9 +681,10 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool, mode: ImportMode) {
         }
         fixture_page(url, FirstEntry::Valid)
     });
-    // Five downloaded catalog pages, one parent batch, then the first entry page.
+    // Six downloaded catalog pages (the last is the invoices), one parent
+    // batch, then the first entry page.
     let committed = Committed {
-        remaining: Arc::new(AtomicUsize::new(7)),
+        remaining: Arc::new(AtomicUsize::new(8)),
         ready: Arc::new(tokio::sync::Notify::new()),
     };
     let subscriber = tracing_subscriber::registry().with(committed.clone());

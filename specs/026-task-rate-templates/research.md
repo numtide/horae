@@ -64,10 +64,12 @@ threshold on upgrade. Both changes are what the rule is for.
 
 Outside the rule: invoice discounts and taxes (`invoice_amounts`, `allocate_invoice_discount`), fixed
 fees and typed line amounts (`ops/invoices/editing.rs`). None of them is computed from a rate and a
-duration, and they keep hundredths in every currency. Rounding them too would be a separate decision.
+duration, and they keep hundredths in every currency. The maintainer deferred rounding them, to
+revisit with the invoice editor (spec.md, Follow-up).
 
 Display: `format_cents` and the PDF's money format print two decimals for every currency, so JPY 121
-shows as "JPY 121.00". This spec does not change the display.
+shows as "JPY 121.00". The maintainer deferred a zero-decimal display, to
+revisit with i18n number formatting (spec.md, Follow-up).
 
 **Delivery**: this rule does not depend on templates and ships first, as its own PR with its own
 migration (R9, plan.md).
