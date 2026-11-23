@@ -119,7 +119,7 @@ pub(super) fn Team(
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-4", aria_labelledby: "np-team-heading",
             div { class: "flex flex-wrap items-baseline gap-3 py-4 px-project-panel border-b",
-                h2 { id: "np-team-heading", class: "text-xl font-semibold m-0", "Team" }
+                h2 { id: "np-team-heading", class: "card-title m-0", "Team" }
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
                 span { class: "text-xs text-label ml-auto", "Check = manages this project" }
             }

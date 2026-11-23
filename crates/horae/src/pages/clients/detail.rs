@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::components::{
     back_link::BackLink,
     badge::Badge,
+    card::Card,
     menu::{Menu, MenuDivider, MenuItem},
     page_header::PageHeader,
     screen_state::{EmptyState, LoadError, Loading},
@@ -151,8 +152,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                 div { class: "client-detail-grid grid gap-4 items-start",
                     ClientProjects { client_id: id }
                     div { class: "flex flex-col gap-4 min-w-0",
-                        section { class: "border rounded-xl bg-secondary p-5 min-w-0", aria_labelledby: "client-billing-title",
-                            h2 { id: "client-billing-title", class: "text-lg font-semibold m-0 mb-3", "Billing" }
+                        Card { title: "Billing", id: "client-billing-title", class: "min-w-0",
                             p { class: "text-sm wrap-anywhere m-0 mb-4",
                                 if let Some(address) = detail.client.address.as_deref().filter(|value| !value.trim().is_empty()) {
                                     for line in address.lines() { span { class: "block", "{line}" } }
@@ -221,9 +221,9 @@ fn ClientProjects(client_id: Uuid) -> Element {
         .flatten();
 
     rsx! {
-        section { class: "border rounded-xl bg-secondary min-w-0 overflow-hidden", aria_labelledby: "client-projects-title",
+        section { class: "card p-0 min-w-0 overflow-hidden", aria_labelledby: "client-projects-title",
             div { class: "flex flex-wrap items-center gap-3 px-5 py-4 border-b",
-                h2 { id: "client-projects-title", tabindex: "-1", class: "text-lg font-semibold m-0", "Projects" }
+                h2 { id: "client-projects-title", tabindex: "-1", class: "card-title m-0", "Projects" }
                 if ready {
                     if let Some(Ok(rows)) = &*data {
                         span { class: "text-xs text-secondary",
@@ -300,8 +300,7 @@ fn ClientInvoices(client_id: Uuid) -> Element {
     let ready = invoices.state()() == UseResourceState::Ready;
     let data = invoices.read();
     rsx! {
-        section { class: "border rounded-xl bg-secondary p-5 min-w-0", aria_labelledby: "client-invoices-title",
-            h2 { id: "client-invoices-title", tabindex: "-1", class: "text-lg font-semibold m-0 mb-3", "Invoices" }
+        Card { title: "Invoices", id: "client-invoices-title", class: "min-w-0",
             if !ready && !matches!(&*data, Some(Err(_))) {
                 Loading { label: "Loading invoices…" }
             } else if let Some(Ok(rows)) = &*data {
@@ -310,7 +309,7 @@ fn ClientInvoices(client_id: Uuid) -> Element {
                         body: "Invoices generated for this client appear here.",
                     }
                 } else {
-                    ul { role: "list", class: "m-0 p-0 flex flex-col gap-3",
+                    ul { role: "list", class: "data-list",
                         for invoice in rows {
                             li { key: "{invoice.id}", class: "flex flex-wrap items-center justify-between gap-2 text-sm",
                                 Link { to: Route::InvoiceDetail { id: invoice.id }, class: "font-semibold wrap-anywhere", "{invoice.number}" }

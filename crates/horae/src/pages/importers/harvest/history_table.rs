@@ -6,11 +6,11 @@ use crate::models::{CommitAvailability, JobStatus};
 use crate::route::Route;
 
 /// Runs newest first: when, preview or import, result, status, and what to
-/// do with each next.
+/// do with each next. The caller draws the panel around it.
 #[component]
 pub(super) fn HistoryTable(jobs: Vec<JobStatus>) -> Element {
     rsx! {
-        div { class: "card p-0 overflow-x-auto",
+        div { class: "overflow-x-auto",
             table { class: "table",
                 thead {
                     tr {

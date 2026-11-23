@@ -191,7 +191,7 @@ pub fn TaskCatalog() -> Element {
                     for (common, group_id, title, hint) in TASK_GROUPS {
                         if page.tasks.iter().any(|task| task.is_default == common) {
                     section { aria_labelledby: group_id, class: "mb-6",
-                    h2 { id: group_id, class: "text-lg font-semibold", {title} }
+                    h2 { id: group_id, class: "card-title mb-1", {title} }
                     p { class: "text-sm text-secondary mb-3", {hint} }
                     div { class: "table-container rounded-xl bg-secondary",
                         table { class: "name-table", aria_label: title,

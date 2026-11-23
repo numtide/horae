@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::importers::harvest::types::{EntityType, ImportMode, ImportReport};
 
 use super::{entity_label, presentation};
+use crate::components::card::Card;
 
 /// Per entity, what a run creates, updates, finds already in Horae and skips.
 #[component]
@@ -12,9 +13,8 @@ pub(super) fn EntityTable(report: ImportReport, partial: bool) -> Element {
         (ImportMode::Commit, false) => "What changed in Horae",
     };
     rsx! {
-        section { class: "flex flex-col gap-3 mt-6", aria_labelledby: "entities-title",
-            h2 { id: "entities-title", class: "himp-title", "{title}" }
-            div { class: "card p-0 overflow-x-auto",
+        Card { title, id: "entities-title", flush: true, class: "mt-6",
+            div { class: "overflow-x-auto border-t",
                 table { class: "table",
                     thead {
                         tr {

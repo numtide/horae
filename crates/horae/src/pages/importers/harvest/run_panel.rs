@@ -132,7 +132,7 @@ pub(super) fn RunPanel(
     rsx! {
         section { class: "himp-panel flex flex-col gap-4", "data-testid": "run-panel", aria_busy: busy(),
             div { class: "flex items-center gap-3 flex-wrap",
-                h2 { class: "himp-title", if preview { "Preview" } else if sync { "Sync" } else { "Import" } }
+                h2 { class: "card-title m-0", if preview { "Preview" } else if sync { "Sync" } else { "Import" } }
                 span { class: "badge {badge}", "data-testid": "run-badge", "{badge_text}" }
             }
             if job.is_active() {
@@ -169,7 +169,7 @@ pub(super) fn RunPanel(
                 match job.status.as_str() {
                     "succeeded" if preview => rsx! {
                         div { class: "flex flex-col gap-2",
-                            h3 { class: "himp-title", "{presentation::count(ready)} records are ready" }
+                            h3 { class: "card-title m-0", "{presentation::count(ready)} records are ready" }
                             p { class: "text-sm text-secondary",
                                 if skipped > 0 { "{presentation::count(skipped)} will be skipped. " }
                                 if api { "Importing reads Harvest again, so anything changed since this preview comes across too." }

@@ -14,7 +14,7 @@ use crate::components::screen_state::{LoadError, Loading};
 use crate::route::Route;
 use crate::server_fns;
 
-const LABEL: &str = "block text-xs uppercase tracking-eyebrow text-faint mb-2";
+const LABEL: &str = "form-label";
 
 /// A change waiting for confirmation because it disconnects Harvest.
 #[derive(Clone, Copy, PartialEq)]
@@ -157,10 +157,10 @@ pub(super) fn HarvestOAuthApp(
                     "Register Horae once as an OAuth2 app in Harvest, then connect your Harvest account from the importer."
                 }
             }
-            section { class: "card p-0 overflow-hidden", aria_label: "Harvest OAuth2 app",
+            section { class: "card p-0 overflow-hidden max-w-form", aria_label: "Harvest OAuth2 app",
                 div { class: "flex items-center gap-3 flex-wrap px-5 py-4 border-b",
                     span { class: "integration-logo harvest", "h" }
-                    h2 { class: "text-sm font-semibold", "Harvest OAuth2 app" }
+                    h2 { class: "card-title m-0", "Harvest OAuth2 app" }
                     span { class: "badge {tone} badge-sm", "{status}" }
                 }
                 div { class: "flex flex-col gap-5 p-5",

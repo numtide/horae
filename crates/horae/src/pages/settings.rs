@@ -87,7 +87,7 @@ pub fn SettingsPreferences() -> Element {
 
     rsx! {
         PageHeader { title: tr.settings_preferences_title() }
-        section { class: "card", aria_label: tr.settings_preferences_title(),
+        section { class: "card max-w-form", aria_label: tr.settings_preferences_title(),
             FormGroup { label: tr.settings_theme_label(), id: "theme", hint: tr.settings_theme_hint(),
                 Select {
                     id: "theme",

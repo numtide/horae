@@ -4,6 +4,7 @@ use horae_core::importers::harvest::types::{
 };
 
 use super::presentation;
+use crate::components::card::Card;
 use crate::i18n::use_tr;
 
 /// What a run did to the billing of its time entries (spec 025): entries
@@ -32,15 +33,14 @@ pub(super) fn BillingTable(report: ImportReport) -> Element {
         ImportMode::Commit => tr.harvest_billing_title(),
     };
     rsx! {
-        section { class: "flex flex-col gap-3 mt-6", aria_labelledby: "billing-title",
-            h2 { id: "billing-title", class: "himp-title", "{title}" }
+        Card { title, id: "billing-title", class: "mt-6 flex flex-col gap-3",
             if report.invoice_scan == Some(EntryScan::Full) && report.source == SourceKind::HarvestApi {
                 p { class: "text-sm text-secondary", {tr.harvest_billing_full_scan()} }
             }
             if report.watermarks_held() {
                 p { class: "alert alert-warning text-sm", role: "status", {tr.harvest_billing_watermarks_held()} }
             }
-            div { class: "card p-0 overflow-x-auto",
+            div { class: "overflow-x-auto",
                 table { class: "table",
                     tbody {
                         for (index, (label, value, hint)) in rows.into_iter().enumerate() {
@@ -78,7 +78,7 @@ pub(super) fn BillingTable(report: ImportReport) -> Element {
                 }
             }
             if !report.link_conflicts.is_empty() {
-                ul { class: "text-sm",
+                ul { class: "data-list text-sm",
                     for conflict in report.link_conflicts.iter() {
                         li { key: "{conflict.source_location}",
                             {match conflict.kind {
