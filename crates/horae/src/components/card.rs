@@ -1,13 +1,36 @@
 use dioxus::prelude::*;
 
-/// A panel with an optional title.
+/// One section of a screen: a `.card` panel with its title as an
+/// `h2.card-title`, which names the section. Without a title it is a plain
+/// panel. `id` goes on the title, so a link or a retry can focus it; `flush`
+/// drops the padding for a table or a list that draws its own rows; `class`
+/// adds layout utilities such as `max-w-form` or a margin.
 #[component]
-pub fn Card(#[props(default)] title: String, children: Element) -> Element {
+pub fn Card(
+    #[props(into, default)] title: Option<String>,
+    #[props(into, default)] id: Option<String>,
+    #[props(default)] flush: bool,
+    #[props(into, default)] class: String,
+    children: Element,
+) -> Element {
+    let class = if flush {
+        format!("card p-0 overflow-hidden {class}")
+    } else {
+        format!("card {class}")
+    };
+    let Some(title) = title else {
+        return rsx! { section { class, {children} } };
+    };
+    let title_class = if flush {
+        "card-title px-6 pt-5"
+    } else {
+        "card-title"
+    };
+    let tabindex = id.as_ref().map(|_| "-1");
     rsx! {
-        div { class: "card",
-            if !title.is_empty() {
-                h3 { class: "card-title", "{title}" }
-            }
+        section { class, aria_label: if id.is_none() { Some(title.clone()) } else { None },
+            aria_labelledby: id.clone(),
+            h2 { id, tabindex, class: title_class, "{title}" }
             {children}
         }
     }

@@ -146,6 +146,7 @@
   --size-icon-lg: 1.375rem;
   --width-empty-copy: 23.75rem;
   --width-project-form: 73.75rem;
+  --width-form: 45rem;
   --width-form-label: 13.75rem;
   --width-planning-date: 11.25rem;
   --width-project-code: 10rem;
@@ -165,10 +166,10 @@
   /* Border radius */
   --radius-sm: 4px;
   --radius: 6px;           /* controls, inputs */
-  --radius-lg: 11px;       /* cards, tables */
-  --radius-xl: 16px;      /* grouped list cards */
+  --radius-lg: 11px;       /* menus, popovers, notices */
+  --radius-xl: 16px;       /* panels: cards, tables, grouped lists, screen states */
   --radius-icon: 12px;    /* empty-state icon tiles */
-  --radius-panel: 20px;    /* auth card, large panels */
+  --radius-panel: 20px;    /* modals, auth card */
   --radius-full: 9999px;   /* pills */
   --radius-btn: 8px;       /* buttons */
 
@@ -692,7 +693,6 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-bg-tertiary); border-color: var(--color-border);
   color: var(--color-text); font-weight: 600;
 }
-.adm-main { max-width: 760px; }
 .adm-main.flex-1 { flex: 1 1 420px; }
 
 /* Collapsed rail (icon strip) */
@@ -793,9 +793,13 @@ h1, h2, h3, h4, h5, h6 {
 .card {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   padding: var(--space-6);
 }
+/* A list of records inside a card (tasks, a team): rows with dividers, no bullets. */
+.data-list { list-style: none; margin: 0; padding: 0; }
+.data-list > li { padding: var(--space-2) 0; }
+.data-list > li + li { border-top: 1px solid var(--color-border); }
 .card-title {
   font-family: var(--font-family-display);
   font-size: var(--font-size-lg);
@@ -1013,7 +1017,7 @@ h1, h2, h3, h4, h5, h6 {
 .form-textarea { resize: vertical; min-height: 76px; max-height: 320px; }
 
 /* Tables */
-.table-container { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-panel); }
+.table-container { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-xl); }
 
 /* Reports — underline tabs over the results, and the grand-total footer row.
    The row layout is composed from utilities in the markup; only the shared
@@ -1244,7 +1248,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 .metric-card {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   padding: var(--space-6);
   display: flex; flex-direction: column; gap: var(--space-2);
 }
@@ -1425,7 +1429,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 .banner-danger .banner-title { color: var(--color-danger-fg); }
 
 /* Collapsible — caret + label + optional count pill over a hairline body. */
-.collapse { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.collapse { border: 1px solid var(--color-border); border-radius: var(--radius-xl); overflow: hidden; }
 .collapse-head {
   display: flex; align-items: center; gap: var(--space-3);
   width: 100%; padding: var(--space-3) var(--space-4);
@@ -1469,7 +1473,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
   display: flex; align-items: center; gap: var(--space-3);
   padding: var(--space-4);
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
 }
 .integration-logo {
   width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius-btn);
@@ -1520,7 +1524,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 /* Counter tile — a big total over a mono breakdown (import summaries). */
 .counter-tile {
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); padding: var(--space-5);
+  border-radius: var(--radius-xl); padding: var(--space-5);
 }
 .counter-total { font-family: var(--font-family-mono); font-size: var(--font-size-3xl); font-weight: 600; color: var(--color-text-strong); line-height: 1; }
 .counter-total-label { font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-label); margin-top: var(--space-2); }
@@ -1597,7 +1601,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 
 /* Audit log: rows grouped by day. A row's line holds time, kind, sentence,
    "+2 −1" and the toggle button that opens what changed below it. */
-.audit-log { border: 1px solid var(--color-border); border-radius: var(--radius-panel); overflow: hidden; }
+.audit-log { border: 1px solid var(--color-border); border-radius: var(--radius-xl); overflow: hidden; }
 .audit-day {
   margin: 0; padding: var(--space-3) var(--space-5); background: var(--color-bg-secondary);
   border-bottom: 1px solid var(--color-border); color: var(--color-label);
@@ -1695,7 +1699,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
   .ts-toolbar .menu-anchor:has(.ts-pager) { flex-basis: 100%; }
 }
 
-.ts-grid-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-panel); overflow: hidden; }
+.ts-grid-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-xl); overflow: hidden; }
 .ts-grid-scroll { overflow-x: auto; }
 .ts-row {
   display: grid;
@@ -2052,7 +2056,6 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 @keyframes himp-spin { to { transform: rotate(360deg); } }
 /* The panel spaces its own lines; paragraph margins would double the gap. */
 .himp-panel p { margin: 0; }
-.himp-title { font-family: var(--font-family-display); font-size: var(--font-size-xl); font-weight: 500; margin: 0; color: var(--color-text); }
 /* Preview → Import: the current step is mint, a finished one pine. */
 .himp-steps { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .himp-step { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); color: var(--color-text-secondary); }
@@ -2085,7 +2088,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 .badge-pine::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--color-pine-fg); }
 .himp-counts {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 1px;
-  background: var(--color-border); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden;
+  background: var(--color-border); border: 1px solid var(--color-border); border-radius: var(--radius-xl); overflow: hidden;
 }
 .himp-counts > div { background: var(--color-bg-secondary); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
 .himp-group + .himp-group { border-top: 1px solid var(--color-border); }
@@ -2104,7 +2107,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
   padding: var(--space-4) var(--space-5); text-align: left; font: inherit;
   color: inherit; cursor: pointer;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   transition: background 0.14s ease, border-color 0.14s ease, transform 0.08s ease;
 }
 /* A card, not a link: the global a:hover would otherwise underline and tint its text. */

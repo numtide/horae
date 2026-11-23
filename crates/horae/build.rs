@@ -236,6 +236,7 @@ fn families() -> Vec<Family> {
                 ("min-w-0", "min-width: 0"),
                 ("min-h-0", "min-height: 0"),
                 ("min-h-control", "min-height: var(--height-form-control)"),
+                ("max-w-form", "max-width: var(--width-form)"),
                 ("max-w-project-form", "max-width: var(--width-project-form)"),
                 ("max-w-sm", "max-width: 24rem"),
                 ("max-w-md", "max-width: 28rem"),
