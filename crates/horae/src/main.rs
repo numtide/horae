@@ -281,6 +281,7 @@ fn main() -> anyhow::Result<()> {
                         .with_harvest_api(cfg.harvest_api)
                         .with_job_policy(cfg.job_policy)
                         .with_mail(cfg.mail.clone())
+                        .with_oauth(cfg.oauth)
                         .with_version(version::current()),
                 )
                 .await;

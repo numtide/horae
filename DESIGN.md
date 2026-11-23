@@ -118,7 +118,7 @@ The kit draws modals and `ConfirmDialog` at 16px; Horae's dialogs use `--radius-
 - **Mobile navigation** (up to 768px): a labelled toggle expands the same sidebar above the content. It stays in normal document flow, so short screens can scroll to every link. Selecting a link closes the panel and focuses the content; Escape closes it and returns focus to the toggle. Desktop width and collapse state are preserved independently.
 - **Narrow content**: page headers and actions wrap; the admin subnavigation moves above its panel when the two columns no longer fit. Dense project/time grids and the day-total strip scroll within their own containers. Project names and badges wrap inside an aligned name column instead of overlapping budget figures.
 - **Wide tables at desktop width**: at 1280px with the expanded sidebar, every column of a table or grid is visible without scrolling. The Timesheet week (name, seven days, Total and the delete column) fits in that space, and so do all of Projects' columns. The name column has a minimum width, so names wrap inside it instead of breaking one word per line: `--width-name-column` for the Timesheet, Projects and any table marked `.name-table` (People, Tasks, Approvals, Reports), and the wider `--width-client-name` for `.client-table`. In Projects the type badge moves below the name when both do not fit on one line. Below that width the grid or table scrolls inside its own container.
-- **Form width**: a form, or a form card, is at most `--width-form` (720px) wide and aligned left. Lists and tables use the full width of the content area, including the tables on a screen that also has forms (My settings). A single-field form at 952px (Theme, a token's name) is hard to scan, and every settings page drew its own limit (about 510px in Workspace settings, 540px in Invoice settings). The admin shell sets no width of its own: `.adm-main { max-width: 760px }` cuts the People and API tokens tables at 1280px, and PR-S removes it so the content sets the width. *Pending code (PR-S):* `--width-form` is a new token.
+- **Form width**: a form, or a form card, is at most `--width-form` (720px) wide and aligned left. Lists and tables use the full width of the content area, including the tables on a screen that also has forms (My settings). A single-field form at 952px (Theme, a token's name) is hard to scan, and every settings page drew its own limit (about 510px in Workspace settings, 540px in Invoice settings). The admin shell sets no width of its own: `.adm-main { max-width: 760px }` cuts the API tokens table at 1280px, and PR-S removes it so the content sets the width. *Pending code (PR-S):* `--width-form` is a new token.
 - **Tables on mobile: *Pending design*.** Neither this file nor the prototypes (which stop at 900px) cover phones. The direction under review is a mixed rule: list tables stack each row as a card, and wide data tables (the Timesheet week, reports) keep horizontal scrolling with a visible indicator that more columns exist. The stacked card and the Timesheet at 390px still need designing, so do not build either until this note is replaced by a rule.
 
 ## Component Inventory
@@ -139,7 +139,7 @@ Status:
 |---|---|---|---|
 | `AppLayout` | `layout.rs` | Shell and navigation | in use (route layout) |
 | `Sidebar` | `sidebar.rs` | Shell and navigation | in use (inside `AppLayout`) |
-| `AdminShell` | `admin_shell.rs` | Shell and navigation | in use (route layout); People leaves it in PR-People |
+| `AdminShell` | `admin_shell.rs` | Shell and navigation | in use (route layout) |
 | `PageHeader`, `BackLink` | `page_header.rs`, `back_link.rs` | Shell and navigation | in use (every screen) |
 | `NavItem` | `nav.rs` | Shell and navigation | kept, not yet used (0 calls; the rail renders its own `nav-item` links) |
 | `NavIcon` | `icons.rs` | Shell and navigation | in use (13) |
@@ -156,8 +156,8 @@ Status:
 | `DatePicker` | `date_picker.rs` | Menus and pickers | in use (2; 7 `Input { kind: "date" }` move to it in PR-6) |
 | `DateField` | `date_field.rs` | Menus and pickers | in use (New Project, New invoice) |
 | `ProjectTaskPicker` | `project_task_picker.rs` | Menus and pickers | in use (`TimerWidget`); renders native `<select>`s until PR-5 |
-| `FilterBar`, `SearchField` | — | Menus and pickers | planned in PR-5 |
-| `PeriodNav` | — | Menus and pickers | planned in PR-6 |
+| `FilterBar`, `SearchField` | `filter_bar.rs` | Menus and pickers | in use (People, the audit log); the other lists move to it in PR-5 |
+| `PeriodNav` | `period_nav.rs` | Menus and pickers | in use (Timesheet, People); Approvals moves to it in PR-6 |
 | `PeoplePicker` | — | Menus and pickers | planned in the Tasks PR |
 | `FormCard` | `form.rs` | Forms | in use (2) |
 | `FormGroup` | `form.rs` | Forms | in use (47; 6 hand-written `form-group`) |
@@ -177,7 +177,7 @@ Status:
 | `BulkBar` | — | Data display | planned in the Tasks PR |
 | `Toast`, `ToastContainer` | `toast.rs` | Feedback | in use (3 pages, each with its own container); one container in `AppLayout` and the new look in PR-9 |
 | `NoTrackingHint` | `no_tracking.rs` | Feedback | in use (Timesheet, `TimerWidget`) |
-| `EmptyState`, `ErrorState`, `LoadError`, `Loading`, `Skeleton` | `screen_state.rs` | Feedback | in use (`Skeleton` in the Invoices list) |
+| `EmptyState`, `ErrorState`, `LoadError`, `Loading`, `Skeleton` | `screen_state.rs` | Feedback | in use (`Skeleton` in the Invoices screens, People and the audit log) |
 | `Modal`, `ModalHeader`, `ModalBody`, `ModalActions` | `modal.rs` | Overlays | in use (9 dialogs) |
 | `ConfirmDialog` | `confirm_dialog.rs` | Overlays | in use (9) |
 | `ExportDialog` | — | Overlays | planned in the Tasks PR |
@@ -194,7 +194,7 @@ Status:
 
 - `AppLayout` (`layout.rs`) is the signed-in shell: the sidebar, its resize handle, the mobile navigation toggle and the `main` region that renders the route. It provides the session, the running timer and the person's UTC offset to everything below it. The router mounts it with `#[layout(AppLayout)]`; pages never render it. No props. See [Layout](#layout).
 - `Sidebar` (`sidebar.rs`) is the left rail: brand, `TimerWidget`, the navigation sections the person may open, `VersionInfo` for administrators and the account menu. Only `AppLayout` renders it. Props: `collapsed: Signal<bool>`, `on_navigate`. See [Sidebar](#sidebar-srccomponentssidebarrs).
-- `AdminShell` (`admin_shell.rs`) wraps the Workspace and Data sections (People, Settings, API tokens, Importers, Audit log) with their subnavigation and checks that the person may open the section. The router mounts it with `#[layout(AdminShell)]`. No props. People leaves it in PR-People and becomes a main screen (see [People](#people)). It is to set no maximum width (see Form width in [Layout](#layout)). *Pending code (PR-S):* `.adm-main` still limits it to 760px.
+- `AdminShell` (`admin_shell.rs`) wraps the Workspace and Data sections (Settings, API tokens, Importers, Audit log) with their subnavigation and checks that the person may open the section. The router mounts it with `#[layout(AdminShell)]`. No props. People is a main screen outside it (see [People](#people)). It is to set no maximum width (see Form width in [Layout](#layout)). *Pending code (PR-S):* `.adm-main` still limits it to 760px.
 - `PageHeader` (`page_header.rs`) and `BackLink` (`back_link.rs`) draw the top of every screen. Props of `PageHeader`: `title`, `title_id` (makes the heading a focus target), `leading`, `context`, `meta`, `actions`. See [Page header](#page-header-srccomponents).
 - `NavItem` (`nav.rs`) is a rail row with an optional text icon. Today it is a `button` with an `onclick` and draws a trailing dot on the active row, so the rail renders its own `Link`s with the same `nav-item` classes instead, and `NavItem` only appears in the gallery. When a screen starts using it, it must take a `Route` and navigate with `Link` (see [Component Conventions](#component-conventions)), and drop the dot, which [Sidebar](#sidebar-srccomponentssidebarrs) no longer has. Props today: `label`, `icon`, `active`, `onclick`.
 - `NavIcon` (`icons.rs`) draws one of the 16px stroked glyphs (`timesheet`, `clients`, `projects`, `arrow-left`, `chevron-down`, `pencil`, `info` and the rest) in `currentColor`. Use it for every icon these names cover rather than a text glyph. An unknown name renders nothing. Props: `name`, `class`.
@@ -220,7 +220,7 @@ Status:
 - `DateField` (`date_field.rs`) is a form's date field: a trigger showing the date in the app's format (`01 Sep 2026`) that opens `DatePicker` in a popover, with a clear button. Its value is an ISO date or empty. New Project's dates and a new invoice's custom period use it; PR-6 moves the remaining `Input { kind: "date" }` fields to it. Props: `id`, `label`, `placeholder`, `value`, `error_id`, `onchange`.
 - `ProjectTaskPicker` (`project_task_picker.rs`) is the pair of project and task fields for new time. It offers only the projects and tasks the server says the person can track, and clears a selection that falls out of that list. Use it wherever new time is entered; the timer uses it today. Props: `project` and `task` (`Signal<String>`), `projects` and `tasks` (resources), `disabled` (keeps an existing entry's names read-only). It still renders native `<select>`s, which PR-5 replaces.
 - `PeoplePicker`: planned in the Tasks PR, for choosing several people (a task's default assignees). Its API is decided in that PR.
-- `FilterBar` and `SearchField`: planned in PR-5. `PeriodNav`: planned in PR-6. See [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs).
+- `FilterBar` and `SearchField` (`filter_bar.rs`) are the bar of filters and search below the header. People and the audit log use them; PR-5 moves the other lists to them. Props of `FilterBar`: `filters`, `search` (optional, drawn on the right); of `SearchField`: `id`, `label`, `query`. `PeriodNav` (`period_nav.rs`) is the week pager, with a date picker and "This week", used by the Timesheet and People; Approvals moves to it in PR-6. Props: `id`, `week_start`, `day`, `today`, `day_paged`, `on_step`, `on_pick`. See [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs).
 
 #### Forms
 
@@ -244,7 +244,7 @@ Status:
 - `Avatar` (`avatar.rs`) is a person's round avatar with an image or initials; `empty` draws the dashed placeholder of an unassigned slot. Props: `initials`, `image_url`, `size` (`sm`, empty or `lg`), `empty`. Initials are always two letters, from one shared function. Today there are two functions: `first_initial` in this file gives one letter, and `initials` in `sidebar.rs` gives two; they are to be merged into the two-letter one.
 - `Chip` (`avatar.rs`) is a compact person chip (avatar and name), or with `plain` a tag chip without the avatar. It has no remove button, so it does not cover New Project's removable tags. Props: `label`, `initials`, `plain`, `variant`.
 - `BulkBar`: planned in the Tasks PR. When rows of a list are selected, a bar at the bottom of the screen shows how many and the actions that apply to all of them. Its API is decided in that PR.
-- **Lists of data have no bullets.** Tasks, a team, permissions: rows with dividers, or a table. A list of more than about ten items is grouped or folded. Project detail (26 people in its team) and My settings (about 50 permissions) use bulleted `ul`s today. *Pending code (PR-S, and PR-P for the permissions).*
+- **Lists of data have no bullets.** Tasks, a team, permissions: rows with dividers, or a table. A list of more than about ten items is grouped or folded. Project detail (26 people in its team) still uses bulleted `ul`s for its tasks and team. *Pending code (PR-S).*
 
 #### Feedback
 
@@ -277,7 +277,7 @@ These modules render nothing (or almost nothing) but are shared the same way.
 
 Full-height left rail. The brand row leads with the Horae mark and wordmark plus the golden accent dot. Nav rows default to `--color-text-secondary`; hover darkens the background to `--color-bg-tertiary`; the active row raises to `--color-bg-tertiary` with a `--color-border` hairline and tints its glyph `--color-primary`; that highlight is its only marker, with no trailing dot. Section labels: all-caps, wide letter-spacing, muted warm gray. Navigation labels follow the [glossary](#glossary) ("People", not "Team").
 
-The rail offers only the sections the person can open: Invoices and Approvals are filtered by permission like Clients and Tasks, so a member never follows a link to "Access unavailable" (*Pending code, PR-P*). The Organize group already links to People for people who may see people, labelled "Team" today; it is renamed People, and People leaves the admin subnavigation (see [People](#people)).
+The rail offers only the sections the person can open: Invoices and Approvals are filtered by permission like Clients and Tasks, so a member never follows a link to "Access unavailable". The Organize group links to People for people who may see people; People is not in the admin subnavigation (see [People](#people)).
 
 ### Page header (`src/components/`)
 
@@ -311,7 +311,7 @@ Anything longer, such as a status sentence or a description, goes below the head
 
 Wrapped in `.table-container` (border + 16px `--radius-xl`, see [Border Radius](#border-radius); 20px until PR-S). Headers: uppercase, 0.1em letter-spacing, transparent surface, label-tone ink (`--color-label`). Row hover sinks to `--color-row-hover`. Last row has no bottom border. Status is always a `Badge`, never plain text. A record's actions (edit, archive, permissions, rates…) go in one compact "Actions" menu per row (`Menu`), the same way on every table, rather than as loose buttons that wrap at narrow widths. One exception: Approvals keeps "Approve" and "Reopen" inline in each row, as Secondary `btn-sm` buttons, because approving row by row is the screen's job and a menu would add a click to every approval. The menu shows only the actions the viewer may take on that row; when none remain, the row has no menu. Its trigger is named after the record ("Actions for Acme Corp"), and while an action chosen from it is still running the trigger says so (`busy`: `aria-busy` and the pending label), since the closed menu cannot. Inline row buttons are named after their row the same way ("Approve Ana's week", "Edit Acme Website Redesign, Design"). A row whose only action is opening its record has no menu and no "View" button: the record's link covers the whole row (`tr.row-link`), as Invoices does. See [Layout](#layout) for column widths and mobile behaviour.
 
-**Catalogues load whole; histories load more.** Clients, Projects, Tasks and People load every record at once and narrow it with the `FilterBar` and its search, so finding a record never means paging through 25 at a time. Only histories (the audit log, Harvest import runs, the detailed report) page, with a single "Load more" at the end of the list that appears only when there is more. Never Previous/Next, and never a pager under an empty state or an error. Today Tasks and People page by 25 with Previous/Next (also around a member's access error in Tasks), and Harvest runs use an "Older runs" link. *Pending code:* PR-People for People, the Tasks PR for Tasks, and PR-C for Harvest runs and the scoped detailed report.
+**Catalogues load whole; histories load more.** Clients, Projects, Tasks and People load every record at once and narrow it with the `FilterBar` and its search, so finding a record never means paging through 25 at a time. Only histories (the audit log, Harvest import runs, the detailed report) page, with a single "Load more" at the end of the list that appears only when there is more. Never Previous/Next, and never a pager under an empty state or an error. Today Tasks pages by 25 with Previous/Next, and Harvest runs use an "Older runs" link. *Pending code:* the Tasks PR for Tasks, and PR-C for Harvest runs and the scoped detailed report.
 
 ### Forms (`src/components/form.rs`)
 
@@ -382,7 +382,7 @@ Every successful action is confirmed with a toast, the one in `Toast.dc.html`, s
 - **`LoadError`**: the `ErrorState` for a failed server read, chosen by what the failure means. A refusal (401, 403) names who can grant access and offers no retry; a missing record (404) takes the server's "… not found" as its title and offers no retry; anything else is `LOAD_FAILED` with "Try again". Props: `error`, `what` (as in "Could not load {what}"), `retry`, `pending`, `inset`, `focus_on_recovery`, `retry_id`.
 - **Inset**: inside a panel that already has its own border and heading (a card section, the client detail's Projects and Invoices), `inset` drops the state's card and titles it with an `h3`, so a card never sits inside a card.
 - **`Loading`**: one component for every inline loading message, a `role=status` line, so assistive technology hears the same thing everywhere. Text is only for small regions (a picker's options, a status badge reading "Checking…"); a list, grid, form or detail loads with a `Skeleton` (see [Screen States](#screen-states)). The message itself is not `aria-busy`, which would let a screen reader hold the announcement back; a container that keeps its old content while it reloads (the Timesheet grid, the Projects list) carries `aria-busy` instead. It replaces the ad hoc `p { "Loading…" }` variants. Props: `label` (default "Loading…"), `class`.
-- **`Skeleton`**: a placeholder shaped like the content that will arrive (the rows and columns of a list, the Timesheet week's grid, a form's fields, a detail's sections), so nothing jumps when the data lands. It appears only after about 300 ms, so a fast answer shows no flash. Only the data region is replaced; the header, filters and actions stay live. Its rows are `aria-busy` and hidden from assistive technology, and its `label` is a visually hidden `role=status` text (`.sr-only`). Props: `rows`, `columns`, `grouped` (a group heading above the rows, for a listing grouped by day such as the audit log), `label`. *Pending code:* today only the Invoices list uses it, with 6 columns for a 7-column table, and it shows on the first frame. A region inside a card with its own title needs an `inset` like `EmptyState`'s, which `Skeleton` does not have yet.
+- **`Skeleton`**: a placeholder shaped like the content that will arrive (the rows and columns of a list, the Timesheet week's grid, a form's fields, a detail's sections), so nothing jumps when the data lands. It appears only after about 300 ms, so a fast answer shows no flash. Only the data region is replaced; the header, filters and actions stay live. Its rows are `aria-busy` and hidden from assistive technology, and its `label` is a visually hidden `role=status` text (`.sr-only`). Props: `rows`, `columns`, `grouped` (a group heading above the rows, for a listing grouped by day such as the audit log), `label`. The Invoices screens, People and the audit log use it. *Pending code:* it shows on the first frame, and the Uninvoiced view draws 5 columns for its 6. A region inside a card with its own title needs an `inset` like `EmptyState`'s, which `Skeleton` does not have yet.
 - **`loaded`** (`pages::loaded`) renders a resource with all three: `Loading` before the first answer, a `LoadError` while the latest answer is a failure (a pending retry included), and the content otherwise. Its `Failure` argument carries `what`, `retry`, `pending`, `inset` and `focus`.
 
 ## Formats
@@ -420,7 +420,7 @@ Conventions:
 - **An ellipsis** ends the label of an action that opens a dialog asking for more input or a confirmation ("Delete…", "Archive client…" when it carries its projects), and only those. Labels that act at once, or that navigate, have none, so archiving a single record is "Archive".
 - **Empty-state titles** have no closing period ("No projects yet"); body copy is full sentences that end in one.
 - **Toast messages** name the object and what happened, in that order: "Project archived", "Client created", "Settings saved".
-- **Copy is for the people who use Horae.** The interface never names environment variables, directories, internal file extensions or test cases ("Drop .wasm files into the plugins/ directory.", "If you changed accounts, reopen this page.", "Unknown currency 0.00"), and never repeats a specification's wording ("The estimate reserves nothing; generation rechecks available charges."). What the operator needs goes in `docs/`, or, on an administration screen, under a collapsed "For the operator" section: the `HORAE_HARVEST_*` variables of the Harvest OAuth screen fold there. *Pending code (PR-T, PR-P).*
+- **Copy is for the people who use Horae.** The interface never names environment variables, directories, internal file extensions or test cases ("Drop .wasm files into the plugins/ directory.", "If you changed accounts, reopen this page.", "Unknown currency 0.00"), and never repeats a specification's wording ("The estimate reserves nothing; generation rechecks available charges."). What the operator needs goes in `docs/`, or, on an administration screen, under a collapsed "For the operator" section: the `HORAE_HARVEST_*` variables of the Harvest OAuth screen fold there. *Pending code (PR-T).*
 
 ## Component Conventions
 
@@ -507,7 +507,7 @@ Routes of the Dioxus router (`crates/horae/src/route.rs`). Sign-in lives outside
 | `/invoices/settings` | `InvoiceSettings` | Issuer, payment details and invoice defaults, one save per card (manager/admin) |
 | `/invoices/:id` | `InvoiceDetail` | One invoice as issued, its Primary by status |
 | `/invoices/:id/edit` | `EditInvoice` | The draft editor |
-| `/admin/users` | `AdminUsers` | People, their rates and permissions; becomes a main screen (see [People](#people)) |
+| `/people` | `People` | People, their week's hours, rates and permissions (see [People](#people)); `/admin/users` redirects here |
 | `/admin/workspace` | `WorkspaceSettings` | Settings: the workspace's own settings, and its installed plugins (see [Workspace settings](#workspace-settings)) |
 | `/admin/importers` | `ImporterIndex` | Available importers |
 | `/admin/importers/harvest` | `HarvestOverview` | Harvest connection, preview and import |
@@ -517,7 +517,10 @@ Routes of the Dioxus router (`crates/horae/src/route.rs`). Sign-in lives outside
 | `/admin/importers/harvest/runs/:id` | `HarvestRun` | One import run |
 | `/admin/audit?kind&person&period` | `PermissionAudit` | Permission audit log, its filters in the query (see [Audit log](#audit-log)) |
 | `/admin/api-tokens` | `AdminApiTokens` | Every API token created in the workspace, with revocation |
-| `/settings` | `Settings` | My settings: profile, appearance, own permissions, API tokens and plugins; becomes subpages (see [My settings](#my-settings)) |
+| `/settings/profile` | `SettingsProfile` | My settings: name, email, sign-in and time zone (see [My settings](#my-settings)); `/settings` redirects here |
+| `/settings/preferences` | `SettingsPreferences` | My settings: theme |
+| `/settings/api-tokens` | `SettingsApiTokens` | My settings: the person's own API tokens |
+| `/settings/access` | `SettingsAccess` | My settings: Your access |
 | `/components` | `Gallery` | Component gallery |
 | anything else | `NotFound` | Not found |
 
@@ -545,19 +548,19 @@ handoff panels to components/tokens and records the persistence, authorization a
 requirements. The [task checklist](specs/011-new-project-screen/tasks.md) tracks remaining
 acceptance work; this page is not evidence that every final gate has passed.
 
-The subsections below record the redesign of four screens decided on 2026-11-20, plus where plugins live. Each names the PR in the inventory that builds it; until then the screen keeps its current behaviour.
+The subsections below record the redesign of four screens decided on 2026-11-20, plus where plugins live. People, My settings, Workspace settings and the audit log are built; Tasks names the PR in the inventory that builds it, and keeps its current behaviour until then.
 
 ### People
 
-People becomes a main screen, like the Timesheet, and leaves the admin shell. *Pending code (PR-People).*
+People is a main screen at `/people`, like the Timesheet, outside the admin shell (`/admin/users` redirects to it).
 
-- **Navigation.** The main sidebar's Organize section already links to it for people who may see people, labelled "Team" today. PR-People renames that entry People (the [glossary](#glossary) word), removes the "Team" link from the admin subnavigation and takes the screen out of `AdminShell`. The route path is decided in PR-People.
+- **Navigation.** The main sidebar's Organize section links to it for people who may see people, under the [glossary](#glossary) word People. The admin subnavigation does not list it.
 - **Header.** The title "People" and "Add person" (Primary), which opens a `Modal` with the name, the email and the profile, chosen with `Radio` cards.
-- **Week and summary.** A `PeriodNav` week selector, which PR-People extracts from the Timesheet's week pager (PR-6 then reuses it in Approvals), then a summary card with the week's total, billable and non-billable hours and the bar that splits them.
+- **Week and summary.** A `PeriodNav` week selector (PR-6 reuses it in Approvals), then a summary card with the week's total, billable and non-billable hours and the bar that splits them.
 - **Filters.** A `FilterBar` with a search by name or email, a profile `Menu`, and a status `Menu` (Active, Archived, All; Active by default, each option with its count), as in the other catalogues. It is not a `Segmented`, which switches views and never filters a list.
-- **Table.** Columns: the person (avatar, name as a link, profile badge, email), hours with a billable/non-billable bar, billable hours, billable %, and an "Actions" `Menu`. The menu shows only what the viewer may do: View timesheet; Edit details…, Permissions…, Rates…, Permission history (the audit log filtered to that person); a divider; Archive. Archive follows [Destructive actions](#destructive-actions): it applies at once with an "Undo" toast, with no ellipsis and no danger styling.
-- **Loading.** The whole list loads at once, with no pagination. Changing the week dims the rows until the new hours arrive: the screen keeps its data on reload, as part of PR-People.
-- **Phases.** Phase 1 needs the profile and the week's hours in the people listing, a small server change. Phase 2, its own PR, adds a weekly capacity per person (a new column and its editor), then utilization and available capacity. An assignments tab and Export come later.
+- **Table.** Columns: the person (avatar, name, profile badge, email), hours with a billable/non-billable bar, billable hours, billable %, and an "Actions" `Menu`. The name is not a link, since View timesheet covers it. The menu shows only what the viewer may do: View timesheet; Edit details…, Permissions…, Rates…, Permission history (the audit log filtered to that person); a divider; Archive. *Pending code:* Edit details… waits for its own PR, since no operation edits a person's name or email yet. Archive follows [Destructive actions](#destructive-actions): it applies at once with an "Undo" toast, with no ellipsis and no danger styling.
+- **Loading.** The whole list loads at once, with no pagination. Changing the week dims the rows until the new hours arrive: the screen keeps its data on reload.
+- **Phases.** Phase 1 is built. Phase 2, its own PR, adds a weekly capacity per person (a new column and its editor), then utilization and available capacity. An assignments tab and Export come later.
 
 ### Tasks
 
@@ -573,21 +576,21 @@ People becomes a main screen, like the Timesheet, and leaves the admin shell. *P
 
 ### My settings
 
-My settings splits into subpages in a side menu, the way the admin shell does. *Pending code (PR-P).*
+My settings is split into subpages in a side menu, the way the admin shell is (`/settings/profile`, `/settings/preferences`, `/settings/api-tokens`, `/settings/access`; `/settings` opens Profile).
 
 - **SETTINGS group:** Profile, Preferences, API tokens.
 - **ACCOUNT group:** Your access. It is not a setting, so it has its own group.
 - **Your access** depends on who is looking:
   - A member sees their access as a table of areas against View, Edit and Approve, then the line "To change your access, ask an administrator of this workspace."
-  - An administrator sees no table, only one sentence ("You can see and change everything here…") that links to People > Permissions.
+  - An administrator sees no table, only one sentence ("You can see and change everything here…") that links to People.
   - Both see People you manage and Projects you manage.
   - The link "See changes to your access" (the audit log filtered to the person) shows only to someone who may read the audit log, today an administrator. A member gets no view of their own history and no link to the log.
   - No one sees the amber "Only an Administrator can edit your permissions" notice, and there is no "Refresh permissions". The person's profile is shown here once, not also as a disabled field in Profile.
-- **Plugins** leave My settings: they are installed per server, so they belong to [Workspace settings](#workspace-settings).
+- **Plugins** are not in My settings: they are installed per server, so they belong to [Workspace settings](#workspace-settings).
 
 ### Workspace settings
 
-Installed plugins are listed in Workspace settings (`/admin/workspace`), for administrators. A plugin is loaded by the server installation (`HORAE_PLUGINS_DIR`, read at startup), not chosen by a person, so it is not a personal setting. How to install one is operator documentation and goes in `docs/`, not in the interface (see the copy convention in the [Glossary](#glossary)). *Pending code (PR-P).*
+Installed plugins are listed in Workspace settings (`/admin/workspace`), for administrators. A plugin is loaded by the server installation (`HORAE_PLUGINS_DIR`, read at startup), not chosen by a person, so it is not a personal setting. How to install one is operator documentation and goes in `docs/`, not in the interface (see the copy convention in the [Glossary](#glossary)).
 
 ### Audit log
 
@@ -640,16 +643,16 @@ Every new or changed screen and data-bearing component covers these states befor
 - **Empty**: `EmptyState` with copy that says what to do next and, where the user can act, the action itself; not a blank table or a loose line of text.
 - **Loading** works the same way on every screen:
   - The shell and the page header come first. The title, filters and actions are visible from the first frame; nothing above or around the header waits on data (Invoices no longer shows "Checking invoice recovery…" above the title: its actions wait for the check instead).
-  - The session is rendered on the server, so the sidebar, its sections and every action that depends on a permission are in the first HTML, with no "Not signed in", and screens that waited on the session first lose one wave. This is the `use_loader` session PR.
+  - The session is rendered on the server, so the sidebar, its sections and every action that depends on a permission are in the first HTML, with no "Not signed in", and screens that waited on the session first lose one wave. One `use_loader` in `use_session_provider` loads the person, their permissions, the week start and the workspace name.
   - The content region shows a `Skeleton` shaped like what arrives, after about 300 ms. `Loading` text is only for small regions.
   - Nothing that depends on the data shows before it: no pager, no "Refresh", no totals as "—", no filters without their options.
   - A reload (a filter, a new week, a refresh after a mutation) keeps the old data on screen, dimmed and `aria-busy`, until the new data replaces it. It never swaps the table back to a loading line, and the dimming makes clear that what is shown is not yet the new answer (the Timesheet's previous week under the new dates).
   - No cascades: a screen asks for what it needs at once instead of in waves (the Timesheet waits on three today, Projects for client on three, Reports on two). Data every screen needs, such as the week start, travels with the session.
-  - *Pending code:* no screen renders data on the server yet (the session PR). Clients, Tasks, People and Reports unmount their table on reload, because they check `state() != Ready`; PR-C fixes that screen by screen, unless a screen's own PR (PR-People, the Tasks PR) has already done it (see the inventory).
+  - *Pending code:* only the session is rendered on the server; screens still load their own data on the client. Clients, Tasks and Reports unmount their table on reload, because they check `state() != Ready`; PR-C fixes that screen by screen, unless a screen's own PR (the Tasks PR) has already done it (see the inventory).
 - **Error**: `.alert.alert-danger` for form errors and for a failed action on a page that otherwise loaded, inline `text-danger` for field errors, `ErrorState` (with "Try again") for a region or screen that failed to load, and `.banner-danger` for an error that needs an action inside a page. Form fields keep the values the user entered after a failed submit.
 - **Success**: a toast (see [Toast](#toast-srccomponentstoastrs)); never a silent save.
-- **No permission**: non-disclosing (spec 015). Name the role that can grant access ("Ask an Administrator", as in `pages/settings/own_permissions.rs`) without revealing the resource, its owner or other people's permissions; out-of-scope direct links behave as not found. Hide actions the user can never take in this context; disable, with the reason, actions that are only temporarily unavailable.
-  - **One form for no access.** The title is always "Access unavailable" and the body names who can grant it. Around it the screen keeps its header without actions, and shows no filters, pager or "Refresh". Today the title is written seven ways ("Client access is unavailable", "Could not load tasks", "Could not load project settings"…), Tasks wraps its error in a filter and Previous/Next, and New/Edit project reports a load failure for something the member may not do. The sidebar never offers a section the person cannot open (see [Sidebar](#sidebar-srccomponentssidebarrs)). *Pending code (PR-P).*
+- **No permission**: non-disclosing (spec 015). Name the role that can grant access ("Ask an administrator of this workspace", as `NoAccess` does) without revealing the resource, its owner or other people's permissions; out-of-scope direct links behave as not found. Hide actions the user can never take in this context; disable, with the reason, actions that are only temporarily unavailable.
+  - **One form for no access.** The title is always "Access unavailable" and the body names who can grant it. Around it the screen keeps its header without actions, and shows no filters, pager or "Refresh". `NoAccess` draws it, and `LoadError` shows it for any refused read (403). The sidebar never offers a section the person cannot open (see [Sidebar](#sidebar-srccomponentssidebarrs)).
 - **Long content**: 60-character names, large amounts and many rows wrap or truncate inside their column without overlapping (see Layout → Narrow content).
 - **Narrow**: usable at 390px and at the 768px mobile-navigation breakpoint. How tables behave on phones is pending (see [Layout](#layout)).
 - **Keyboard**: the whole flow completes without a mouse, with a visible `--ring` focus and focus returned after dialogs and menus close (see Accessibility).
@@ -660,7 +663,7 @@ Every new or changed screen and data-bearing component covers these states befor
 - All data mutations go through `#[server]` functions — never direct fetch calls
 - Optimistic UI where appropriate; rollback on error
 - Loading states shown inline, not full-page spinners, the same way on every screen (see Loading in [Screen States](#screen-states))
-- **No refresh buttons.** A list refreshes by itself after the mutations made on its screen and when the browser tab regains focus (one `visibilitychange` listener in `AppLayout` that the screens' resources follow). No screen shows "Refresh", and no copy tells the user to refresh. A refresh keeps the old data on screen while it runs, so the table never blinks. Today these remain: "Refresh tasks", People's "Refresh", "Refresh details", "Refresh permissions", and "Refresh report" with "Refresh access" in the scoped Reports. *Pending code:* each screen's own PR removes its button (PR-P, PR-People, the Tasks PR); PR-C adds the `visibilitychange` listener and removes the rest.
+- **No refresh buttons.** A list refreshes by itself after the mutations made on its screen and when the browser tab regains focus (one `visibilitychange` listener in `AppLayout` that the screens' resources follow). No screen shows "Refresh", and no copy tells the user to refresh. A refresh keeps the old data on screen while it runs, so the table never blinks. Today these remain: "Refresh tasks", "Refresh details" and "Refresh access" in Projects, and "Refresh report", "Refresh breakdown" and "Refresh access" in the scoped Reports. *Pending code:* the Tasks PR removes "Refresh tasks"; PR-C adds the `visibilitychange` listener and removes the rest.
 - **Catalogues load whole**, with search; only histories use "Load more" (see [Data Tables](#data-tables-srccomponentstablers)).
 - **`Toggle` for what applies at once, `Checkbox` for what a form saves** (see the [catalog](#forms)).
 - **Dialogs.** `Modal` draws every footer: the primary action first and on the left, then the secondary, then Cancel, the buttons sharing the width. Every confirmation goes through `ConfirmDialog`, and no dialog is made by hand (see [Dialogs](#dialogs-srccomponentsmodalrs)).

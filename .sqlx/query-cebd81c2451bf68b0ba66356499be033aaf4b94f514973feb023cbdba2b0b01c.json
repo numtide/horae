@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oauth_refresh_tokens (id, org_id, grant_id, token_sha256, scopes,\n                                           idle_expires_at)\n         SELECT $1, org_id, id, $2, scopes, now() + interval '30 days'\n         FROM oauth_grants WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cebd81c2451bf68b0ba66356499be033aaf4b94f514973feb023cbdba2b0b01c"
+}

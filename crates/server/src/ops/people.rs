@@ -232,7 +232,9 @@ pub async fn add(
                 return Err(OpError::forbidden(PROFILE_NEEDS_ADMINISTRATOR));
             }
         }
-        Channel::Token { .. } => return Err(OpError::forbidden(TOKEN_ADDS_NO_ONE)),
+        Channel::Token { .. } | Channel::OAuth { .. } => {
+            return Err(OpError::forbidden(TOKEN_ADDS_NO_ONE));
+        }
         Channel::Operator => {}
         Channel::System => {
             if profile != BuiltInProfile::Member {

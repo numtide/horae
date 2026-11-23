@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM oauth_grants\n         WHERE revoked_at < now() - interval '1 day' OR expires_at < now() - interval '1 day'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "910015ada0f2e4acad1980cb580d5c2ea28e658e5f0845de64a163febccee578"
+}
