@@ -2,7 +2,7 @@
 //! arithmetic, for every value rather than a sample. Built only by `cargo kani`
 //! (the `kani` cfg), so normal builds and tests never see them.
 
-use crate::invoice::{invoice_amounts, line_amount_cents};
+use crate::invoice::{invoice_amounts, line_amount_in_step};
 use crate::project::Percentage;
 use crate::types::RoundDir;
 
@@ -93,18 +93,18 @@ fn invoice_amounts_add_up_for_every_subtotal() {
 
 /// A line amount never panics for any `i64` rate and `i32` minutes, and for
 /// stored non-negative inputs it is rate × minutes / 60 rounded half up to the
-/// currency's step: a hundredth for EUR, a whole unit (100) for JPY.
+/// step: a multiple of the step, less than half a step below or at most half a
+/// step above the exact value. The steps are the two `line_amount_cents` can
+/// pick, 1 hundredth and 100 (a zero-decimal currency's whole unit); a
+/// three-decimal currency also gets 1. Which currency gets which step is
+/// `currency_decimals`' mapping, which the unit tests in `money.rs` and the
+/// SQL/Rust parity test in `crates/horae/tests/integration.rs` cover, so the
+/// proof leaves it out.
 #[kani::proof]
-// One more than the 18 codes `currency_decimals` searches.
-#[kani::unwind(19)]
 fn line_amount_is_half_up_for_every_input() {
     let (rate, minutes): (i64, i32) = (kani::any(), kani::any());
-    let (currency, step) = if kani::any() {
-        ("JPY", 100)
-    } else {
-        ("EUR", 1)
-    };
-    if let Ok(cents) = line_amount_cents(rate, minutes, currency)
+    let step: i128 = if kani::any() { 100 } else { 1 };
+    if let Ok(cents) = line_amount_in_step(rate, minutes, step)
         && rate >= 0
         && minutes >= 0
     {

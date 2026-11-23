@@ -55,7 +55,7 @@ ______________________________________________________________________
 
 - [x] T015 [US3] On a copy of a real database (`pg_dump` of a deployment, restored locally and `ANALYZE`d; ask the maintainer before taking the dump), record invoice totals, report totals and project figures before and after the migration; they must be equal apart from uninvoiced per-entry amounts in zero-decimal currencies (FR-011)
 - [x] T016 Regenerate `.sqlx/` (touch command and `cargo sqlx prepare --workspace -- --features server --all-targets`), then build offline
-- [ ] T017 Run `cargo test -p horae-core`, `cargo kani -p horae-core`, the `horae-server` and `horae --features server` tests, and clippy for `horae-server`, `horae-api`, `horae-harvest-api` and `horae --features server`
+- [x] T017 Run `cargo test -p horae-core`, `cargo kani -p horae-core`, the `horae-server` and `horae --features server` tests, and clippy for `horae-server`, `horae-api`, `horae-harvest-api` and `horae --features server`
 - [x] T018 `nix fmt` and `nix flake check`; write the PR body, saying that uninvoiced amounts and amount-budget consumption in zero-decimal currencies now round to whole units (so a budget alert may cross its threshold on upgrade), that discounts, taxes, fees and typed lines are unchanged, and that stored invoices do not change
 
 ______________________________________________________________________

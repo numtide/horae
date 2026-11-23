@@ -169,11 +169,21 @@ pub fn line_amount_cents(
     minutes: i32,
     currency: &str,
 ) -> Result<i64, std::num::TryFromIntError> {
-    let step: i128 = if crate::money::currency_decimals(currency) == 0 {
+    let step = if crate::money::currency_decimals(currency) == 0 {
         100
     } else {
         1
     };
+    line_amount_in_step(rate_cents, minutes, step)
+}
+
+/// [`line_amount_cents`] once the currency's step is known, in hundredths:
+/// 1, or 100 for a zero-decimal currency.
+pub(crate) fn line_amount_in_step(
+    rate_cents: i64,
+    minutes: i32,
+    step: i128,
+) -> Result<i64, std::num::TryFromIntError> {
     ((i128::from(rate_cents) * i128::from(minutes) + 30 * step) / (60 * step) * step).try_into()
 }
 
