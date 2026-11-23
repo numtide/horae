@@ -1,0 +1,216 @@
+# Research: Task rate templates
+
+Each section gives the decision, why, and what else was considered. The maintainer answered the
+spec's open questions on 2026-11-23 (spec.md, Clarifications); R1 to R3 record those answers.
+
+## R0. How Horae stores money today
+
+**Finding**: every amount is an integer in hundredths of the major unit, whatever the currency.
+`parse_cents` and `format_cents` always use two decimals, and `format_major_units` documents it:
+"Horae stores every currency in hundredths, so a zero-decimal currency keeps its two decimals when
+the stored amount has hundredths". The Harvest importer converts Harvest's decimals with the same
+two-decimal rule. JPY 121 is stored as 12100; BHD 1.250 as 125.
+
+**Consequence**: a template with a fixed scale of two decimals has the same integer as the rate it
+becomes in any project currency. Applying a template copies the number. The migration rescales
+nothing, including tasks whose stored currency is JPY or KWD (the handoff of PR 1 left that open).
+The constitution's "minor units" means these hundredths in practice. The maintainer will fix that
+wording in a separate PATCH, outside this spec.
+
+**Alternatives**: storing ISO minor units per currency (JPY in units, KWD in thousandths) would make
+the template convert by a power of ten, and would be a migration of every money column. Out of
+scope; nothing in this feature needs it.
+
+## R1. Rounding amounts to the currency's precision (FR-008, FR-009, FR-011)
+
+**Decision**: one rule in `horae-core`, used by every amount computed from a rate and a duration:
+
+```text
+step   = 100 if the currency has 0 decimals, else 1        (in hundredths)
+amount = ((rate × minutes + 30 × step) div (60 × step)) × step
+```
+
+`div` is integer division that truncates toward zero, as today's function does in both languages
+(Rust `/` on `i128`, SQL `div(numeric, numeric)`). For the non-negative rates and minutes Horae
+stores, that is floor. Signed inputs keep today's truncation, and the parity test keeps its negative
+cases, so neither side may switch to `floor`.
+
+The currency is matched as `currency_decimals` matches it today: trimmed, case-sensitive, and any
+code not in the table counts as two decimals. The SQL step function must do the same (`btrim`, no
+`upper`). The function is `STRICT`, so a NULL currency gives NULL; every currency column it reads is
+`NOT NULL`.
+
+That is one half-up rounding from the exact value `rate × minutes ÷ 60`, straight to the currency's
+precision. Rounding to hundredths first and then to units would turn 120.496 into 120.50 and then
+121; the single step gives 120. Three-decimal currencies use step 1 (hundredths), the finest unit
+Horae stores, so their amounts stay exact.
+
+Examples: 80.50 × 90 min in JPY = (724500 + 3000) ÷ 6000 = 121 → 12100 (JPY 121). 5.00 × 30 min in
+JPY = (15000 + 3000) ÷ 6000 = 3 → 300 (JPY 3). The same in EUR: 12075 and 250, as today, because for
+step 1 the formula is today's `line_amount_cents`.
+
+The decimal table already exists as the private `currency_decimals` in `horae_core::money`; it
+becomes public and the only list. The SQL twin `line_amount_cents` gains a currency argument and
+calls a SQL `currency_amount_step(text)` that lists the same zero-decimal codes. A test runs both
+over every code in the Rust table and over amounts near every half, so the two lists cannot drift.
+
+**Scope (maintainer's answer to FR-011)**: every per-entry amount: invoice previews and lines
+(`ops/invoices/entries.rs`), reports (`ops/reports.rs`), project figures (`ops/projects/reads.rs`)
+and budgets (`ops/projects/budgets.rs`). Each already has the currency in the same row. Stored
+invoice line amounts (`frozen_amount_cents`, `line.amount_cents`) win over the computed value, so
+existing invoices do not change. Uninvoiced JPY figures do change (120.75 becomes 121), and so does
+the consumption of amount budgets in zero-decimal currencies, so a budget alert can cross its
+threshold on upgrade. Both changes are what the rule is for.
+
+Outside the rule: invoice discounts and taxes (`invoice_amounts`, `allocate_invoice_discount`), fixed
+fees and typed line amounts (`ops/invoices/editing.rs`). None of them is computed from a rate and a
+duration, and they keep hundredths in every currency. The maintainer deferred rounding them, to
+revisit with the invoice editor (spec.md, Follow-up).
+
+Display: `format_cents` and the PDF's money format print two decimals for every currency, so JPY 121
+shows as "JPY 121.00". The maintainer deferred a zero-decimal display, to
+revisit with i18n number formatting (spec.md, Follow-up).
+
+**Delivery**: this rule does not depend on templates and ships first, as its own PR with its own
+migration (R9, plan.md).
+
+**Totals**: unchanged code. The subtotal is the sum of the line amounts
+(`ops/invoices/preview.rs::subtotal`, which `generate.rs` also uses), so FR-010 holds by
+construction. `invoice_amounts` takes that subtotal as input and never sees lines, so a property over
+it proves nothing about FR-010. Instead, the invoice tests check that the preview's and the generated
+invoice's `subtotal_cents` equal the sum of `line.amount_cents` for JPY, EUR and KWD, and a core
+property checks that any sum of `line_amount_cents` results in one currency is a multiple of its
+step.
+
+**Alternatives**: Harvest's subtotal (round the unrounded sum) was rejected by the maintainer:
+invoices must add up (spec 001 FR-023). Rounding only at display was rejected: stored amounts would
+carry fractions the currency does not have, and the PDF would not add up.
+
+## R2. Zero templates (FR-006)
+
+**Decision (maintainer, 2026-11-23)**: 0 is no rate. The editor stores no rate for 0, the migration clears the
+stored zeros that PR 1 kept (entered in the editor, with a currency), and a CHECK makes the column
+positive or null.
+
+**Rationale**: Harvest's API sends 0 for a task without a default rate, PR 1 already treats Harvest's
+0 as none, and a template of zero applied to a project would set a zero rate the manager did not
+choose. A project that bills a task at zero can still set 0.00 as the project's own task rate.
+
+**Alternative (rejected)**: keep 0.00 as a valid template that applies a zero rate.
+
+## R3. Rates stored in a currency other than the workspace's (FR-012)
+
+**Decision (maintainer, 2026-11-23)**: keep the number. A task stored as 80 USD in an EUR workspace becomes the
+template 80.00, which an EUR project later applies as EUR 80.00.
+
+**Rationale**: that is what the template means, and what Harvest does with the same number. Only
+future additions use the template; existing project rates are copies and stay as they are. The
+upgrade notes in `quickstart.md` give a query that lists the affected tasks before upgrading, so an
+administrator can review them.
+
+**Alternative (rejected)**: clear such rates. Safer against the 011 incident, but it throws away
+rates the CSV importer read from real rows.
+
+## R4. Names: keep `default_rate_cents`
+
+**Decision**: the column `tasks.default_rate_cents`, the wire fields `default_rate_cents` and
+`amount_cents`, and the plugin event field keep their names. `default_rate_currency` and every
+`currency` beside a template go. A column comment and the type docs say that the value is a template
+in hundredths with no currency.
+
+**Rationale**: import preview checkpoints restore tasks with
+`jsonb_populate_recordset(NULL::tasks, …)`, which matches keys to column names; a rename would make
+old checkpoints restore tasks without their rate. The plugin read role can read `tasks`, and plugins
+receive `default_rate_cents` in `TaskCreated`; a rename would break both for no gain. Dropping the
+currency column needs nothing for old checkpoints: `jsonb_populate_recordset` ignores keys that are
+no longer columns (FR-018).
+
+The tighter CHECK does need something. A checkpoint captured before the upgrade can hold
+`default_rate_cents = 0`: an editor-entered zero, which PR 1's migration keeps, or a zero from an
+import before PR 1. Restored as is, it fails the new `> 0` CHECK and the commit fails. So
+`ParentSnapshot::restore` in `importers/harvest/resolve/preview.rs` restores the rate with
+`NULLIF(default_rate_cents, 0)`, and a zero becomes no rate, as R2 says it should.
+
+**Alternatives**: renaming to `default_rate_hundredths` reads better and was rejected for the two
+compatibility costs above.
+
+## R5. A core type for templates
+
+**Decision**: `horae_core::money::RateTemplate`, a newtype over a positive `i64` of hundredths, with
+`parse` (at most two decimals, through `parse_cents`), `hundredths`, `format` ("80.50") and
+`apply(currency) -> i64`, which returns the project-task rate in the currency's hundredths (the same
+number, per R0). The server and the UI use it where a template is read, written or applied, so the
+rule "a template is not money until applied" has one home (Principle II).
+
+**Alternatives**: plain `i64` everywhere, as today. Rejected because the template and money would
+again be the same type, which is how the 011 bug happened.
+
+## R6. Where templates are applied
+
+The places that copy a task's default rate into `project_tasks.rate_cents`:
+
+| Place | Today | After |
+| --- | --- | --- |
+| `ops/projects/creation/finalize.rs` (New Project) | copies only when the project bills by task rate (`if task_rates`) and the task's currency equals the project's, else refuses | copies `RateTemplate::apply(project currency)` under the same `task_rates` condition |
+| `ops/projects/editor/associations.rs` (project editor) | copies only when `before.configured && task_rates && reset_rate && rate.is_none()` and the currencies match, else "Enter an explicit task rate in the project currency" | same conditions without the currency match; `ON CONFLICT … DO UPDATE` keeps re-applying the template when someone clears an existing link's rate, now in any currency |
+| `pages/new_project/tasks.rs` (placeholder) | shows the default only when currencies match | shows "EUR 80.50 / h" from the template in the draft's currency |
+| `ops/projects/creation/options.rs`, `editor/catalog.rs`, `editor/projection.rs` | read and redact the currency with the rate | read and redact the template only |
+| Harvest importer (`resolve.rs`, `ensure_project_task`) | uses the CSV row's project-task rate, real money | unchanged |
+| `seed.rs` | inserts project tasks with explicit rates | stops writing a task currency |
+
+The currency match is the only condition that goes (FR-003). No other code path inserts into
+`project_tasks` (checked with `rg "INTO project_tasks"`). Reports and
+invoices never read `tasks.default_rate_cents`; billing resolves the project's own task rate
+(`resolve_project_rate(…, pt.rate_cents, …)`), so FR-013 holds without changes there.
+
+## R7. Task editor and catalog wording
+
+**Decision**: the editor's field is "Default hourly rate" without a currency, parsed with
+`RateTemplate::parse`. `authorize_rate` in `ops/projects/task_writes.rs` keeps its permission check
+(`BillableRateWriteAll`) and drops the workspace currency check and the "Task rate currency changed.
+Reload" refusal. The Tasks screen's `rate_label` writes "80.50 / h" and a note that the rate takes
+each project's currency; PR 1's `tasks-rate-currency-not-set` message is removed and
+`tasks-rate-none` stays. All text goes in `crates/i18n/locales/en/horae.ftl`.
+
+## R8. Interfaces
+
+- Harvest-compatible API: `task_row_to_harvest` builds `Amount::new(cents, currency or "")`
+  (`crates/harvest/src/v2/compat.rs`), written through `format_major_units`. Today a task stored in
+  JPY is written with the JPY rule and an imported one with two decimals. After the change every
+  task takes the no-currency path, so the value is the template at two decimals. Shape unchanged.
+  `task_reads.rs` drops the column.
+- `/api/v1` has no task rates (`rg rate crates/api/openapi/v1.json` lists project rates and budgets
+  only). The snapshot test proves it unchanged.
+- `TaskRateEdit::Set { amount_cents, currency }` becomes `Set { amount_cents }`, and
+  `TaskCatalog::rate_currency` (the workspace currency the editor showed) goes. The enum already has
+  `deny_unknown_fields`, so a request that still sends `currency` is refused and an old client cannot
+  believe its currency was stored. The transport tests swap their cases: `{"action":"set", "amount_cents":8000}` is now valid, and the same with `"currency":"EUR"` is refused.
+
+## R9. Migration
+
+**Decision**: two migrations, one per delivery, each at the next free number when its PR is written
+(PR 1 owns 0009, so 0010 and 0011 if nothing else lands between them).
+
+Rounding PR, `NNNN_currency_line_amounts.sql`:
+
+1. Create `currency_amount_step(text)` and the three-argument `line_amount_cents`, drop the
+   two-argument one, and update the plugin role's function allowlist
+   (`crates/server/src/plugin/database.rs`) in the same PR.
+
+Templates PR, `NNNN_task_rate_templates.sql`:
+
+1. `UPDATE tasks SET default_rate_cents = NULL WHERE default_rate_cents = 0` (R2).
+1. Drop `tasks.default_rate_currency` (its CHECK goes with it).
+1. Replace `tasks_default_rate_cents_nonneg` with `default_rate_cents IS NULL OR default_rate_cents > 0`.
+1. Comment the column as a template.
+
+The rows: a rate with the workspace currency, another currency, or none keeps its number (R0, R3).
+Project tasks, clients, invoices and time entries are not touched by either migration.
+
+## R10. Spec 011
+
+`research.md` "Catalog denomination", `data-model.md` (the migration 0038 paragraph),
+`quickstart.md` and `tasks.md` get a one-line note at the top of each affected passage: superseded by
+spec 026. What stays: Horae never guesses a currency; a project-task rate is a copy that later
+catalog edits do not reprice. What changes: a task's default rate has no currency, so there is
+nothing to match, and every project currency can use it.
