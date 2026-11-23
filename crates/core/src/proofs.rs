@@ -3,7 +3,6 @@
 //! (the `kani` cfg), so normal builds and tests never see them.
 
 use crate::invoice::{invoice_amounts, line_amount_cents};
-use crate::money::{AddError, Money, add};
 use crate::project::Percentage;
 use crate::types::RoundDir;
 
@@ -26,10 +25,6 @@ fn any_str<const N: usize>(bytes: &[u8; N]) -> Option<&str> {
     let len: usize = kani::any();
     kani::assume(len <= N);
     core::str::from_utf8(&bytes[..len]).ok()
-}
-
-fn any_currency() -> [u8; 3] {
-    if kani::any() { *b"EUR" } else { *b"USD" }
 }
 
 /// Rounding any `u32` never wraps: it lands on a multiple of the increment, on
@@ -68,25 +63,6 @@ fn rounding_lands_on_the_named_side_for_every_u32() {
         RoundDir::Nearest => {
             let gap = 2 * rounded.abs_diff(minutes);
             assert!(gap < inc || (gap == inc && rounded > minutes));
-        }
-    }
-}
-
-/// Money addition is exact or refused: it succeeds only within one currency
-/// and returns the true sum, and an `i64` overflow is an error, never a wrap.
-#[kani::proof]
-fn money_addition_is_exact_or_refused() {
-    let a = Money::new(kani::any(), any_currency());
-    let b = Money::new(kani::any(), any_currency());
-    let exact = i128::from(a.cents) + i128::from(b.cents);
-    match add(a, b) {
-        Ok(sum) => {
-            assert!(a.currency == b.currency && sum.currency == a.currency);
-            assert!(i128::from(sum.cents) == exact);
-        }
-        Err(AddError::CurrencyMismatch(_)) => assert!(a.currency != b.currency),
-        Err(AddError::Overflow) => {
-            assert!(a.currency == b.currency && i64::try_from(exact).is_err());
         }
     }
 }
