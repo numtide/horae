@@ -4,6 +4,7 @@ use horae_core::importers::harvest::types::{
 };
 use uuid::Uuid;
 
+use super::billing::BillingTable;
 use super::entity_table::EntityTable;
 use super::error_groups::ErrorGroups;
 use super::missing_people::MissingPeople;
@@ -158,6 +159,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
             match &*report.read() {
                 Some(Ok(report)) if !run.is_active() => rsx! {
                     EntityTable { report: report.clone(), partial }
+                    BillingTable { report: report.clone() }
                 },
                 Some(Err(error)) => rsx! {
                     div { class: "alert alert-danger mt-4", role: "alert",

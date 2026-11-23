@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, h.harvest_invoice_id AS \"harvest_id?\"\n           FROM invoices i LEFT JOIN harvest_invoices h ON h.invoice_id = i.id\n           WHERE i.org_id = $1 AND i.number = $2 AND i.id <> $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "harvest_id?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c691ae996679feef60c3c9f015ef9894736b5ea561045fb422ec6aee082f5b2c"
+}

@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.status AS \"status: InvoiceStatus\", i.total_cents, i.subtotal_cents,\n                  i.discount_cents, i.tax1_cents, i.tax2_cents, i.po_number, i.subject, i.notes,\n                  h.due_cents, h.discount_rate::text AS \"discount_rate?\",\n                  h.tax1_rate::text AS \"tax1_rate?\", h.tax2_rate::text AS \"tax2_rate?\"\n           FROM invoices i JOIN harvest_invoices h ON h.invoice_id = i.id\n           WHERE i.org_id = $1 AND i.number = '1001'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void",
+                "closed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "total_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "subtotal_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "discount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "tax1_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "tax2_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "po_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "due_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "discount_rate?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "tax1_rate?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "tax2_rate?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d9cbf7496ffee70ca3bdaafcfcab7abc8a7af507355d7b9a1a392ebc926ab954"
+}

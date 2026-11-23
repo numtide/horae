@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.harvest_import_id, te.state AS \"state: EntryState\", i.number AS \"number?\",\n                  te.rounded_minutes\n           FROM harvest_import_map m\n           JOIN time_entries te ON te.id = m.horae_id\n           LEFT JOIN invoices i ON i.id = te.invoice_id\n           WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'\n           ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_import_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "state: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "number?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "rounded_minutes",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "d934f96bb78382b0f54639fca31d5d7932eb029bcb02de5868714a51b1cf2a3e"
+}

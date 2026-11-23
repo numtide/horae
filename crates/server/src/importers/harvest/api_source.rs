@@ -7,9 +7,12 @@
 
 use std::collections::HashMap;
 
-use horae_core::importers::harvest::types::SourceRow;
+use chrono::{DateTime, Utc};
+use horae_core::importers::harvest::types::{EntryScan, SourceRow};
 pub(super) use horae_harvest::http;
-pub use horae_harvest::v2::{ApiClient, ApiProject, ApiTask, ApiTimeEntry, ApiUser};
+pub use horae_harvest::v2::{
+    ApiClient, ApiInvoice, ApiInvoiceLine, ApiProject, ApiTask, ApiTimeEntry, ApiUser,
+};
 use serde::{Deserialize, Serialize};
 
 use super::RowSource;
@@ -22,6 +25,12 @@ pub struct HarvestData {
     pub projects: Vec<ApiProject>,
     pub tasks: Vec<ApiTask>,
     pub users: Vec<ApiUser>,
+    /// Absent from checkpoints saved before invoices were imported.
+    #[serde(default)]
+    pub invoices: Vec<ApiInvoice>,
+    /// How an inline run's download reads time entries, for its report.
+    #[serde(skip)]
+    pub entry_scan: Option<EntryScan>,
     #[cfg(test)]
     #[serde(skip)]
     pub time_entries: Vec<ApiTimeEntry>,
@@ -65,6 +74,79 @@ pub(super) fn decimal(n: &serde_json::Number) -> String {
         }
         format!("{sign}{digits}")
     }
+}
+
+/// Whether an incremental run may read only the time entries changed since
+/// `since`. Entries imported before invoices were never linked, so every entry
+/// is read until invoices have imported once without errors (`invoice_mark`).
+/// After that, billing and unbilling an entry move its `updated_at` in
+/// Harvest (checked against the test account, spec 025 T002), so an
+/// incremental read sees them.
+///
+/// `revived` covers the one change on the invoice side that leaves its entries
+/// untouched: an invoice voided in Horae (which reopened its time) that
+/// Harvest has changed since. The run brings it back, and only a full read
+/// links its entries again.
+pub(super) fn entry_scan(
+    since: Option<DateTime<Utc>>,
+    invoice_mark: Option<DateTime<Utc>>,
+    revived: bool,
+) -> (EntryScan, Option<DateTime<Utc>>) {
+    match (since, invoice_mark) {
+        (Some(since), Some(_)) if !revived => (EntryScan::Incremental, Some(since)),
+        _ => (EntryScan::Full, None),
+    }
+}
+
+/// What the fetch needs to choose the entry read once invoices are listed.
+#[derive(Debug, Clone)]
+pub(super) struct EntryWindow {
+    since: Option<DateTime<Utc>>,
+    invoice_mark: Option<DateTime<Utc>>,
+    /// Harvest versions of the imported invoices voided in Horae.
+    voided: HashMap<i64, DateTime<Utc>>,
+    revived: bool,
+}
+
+impl EntryWindow {
+    pub fn new(
+        since: Option<DateTime<Utc>>,
+        invoice_mark: Option<DateTime<Utc>>,
+        voided: Vec<(i64, DateTime<Utc>)>,
+    ) -> Self {
+        Self {
+            since,
+            invoice_mark,
+            voided: voided.into_iter().collect(),
+            revived: false,
+        }
+    }
+
+    /// Note the invoices of one listed page.
+    pub fn see(&mut self, invoices: &[ApiInvoice]) {
+        self.revived |= invoices.iter().any(|invoice| {
+            self.voided
+                .get(&invoice.id)
+                .is_some_and(|version| invoice.updated_at > *version)
+        });
+    }
+
+    pub fn scan(&self) -> (EntryScan, Option<DateTime<Utc>>) {
+        entry_scan(self.since, self.invoice_mark, self.revived)
+    }
+}
+
+/// The invoice watermark a committed run stores: the newest invoice it read,
+/// or the start of the run when the account has none.
+pub(super) fn invoice_mark(
+    invoices: &[ApiInvoice],
+    captured_at: DateTime<Utc>,
+) -> Option<DateTime<Utc>> {
+    invoices
+        .iter()
+        .map(|invoice| invoice.updated_at)
+        .max()
+        .or_else(|| captured_at.checked_sub_signed(chrono::Duration::seconds(1)))
 }
 
 /// Join the fetched collections into `SourceRow`s — one per time entry, carrying
@@ -140,6 +222,7 @@ impl<'a> RowLookup<'a> {
             notes: te.notes.clone(),
             billable: te.billable,
             invoiced: te.is_billed,
+            harvest_invoice_id: te.invoice.as_ref().map(|invoice| invoice.id),
             running: te.is_running,
 
             billable_rate: te.billable_rate.as_ref().map(decimal),
@@ -214,6 +297,7 @@ mod tests {
             tasks,
             users,
             time_entries,
+            ..HarvestData::default()
         }
     }
 

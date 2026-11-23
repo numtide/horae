@@ -198,7 +198,7 @@ async fn the_subject_is_saved_on_the_draft_and_printed_on_the_pdf(pool: PgPool) 
     let branding = crate::ops::organization::fetch_branding_from(&pool, ids.org_id)
         .await
         .unwrap();
-    let text = horae_server::render::invoice_text(&detail.invoice, &detail.lines, &branding);
+    let text = horae_server::render::invoice_text(&detail.invoice, &detail.lines, None, &branding);
     assert!(text.contains("Website redesign, September"), "{text}");
 }
 

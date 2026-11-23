@@ -15,6 +15,7 @@ pub mod client_settings;
 pub mod credentials;
 pub mod csv_source;
 pub mod ids;
+mod invoices;
 pub mod oauth;
 mod parents;
 pub mod provenance;
@@ -135,16 +136,16 @@ async fn apply_rows<S: RowSource>(
     org: OrgDefaults<'_>,
     mut src: S,
 ) -> anyhow::Result<()> {
+    // A source yields one page of rows: their billing is written together.
+    let mut writes = Vec::new();
     while let Some(row) = src.next_row().await? {
-        let result = apply::apply_row(tx, cache, org, &row, report.source).await;
-        for (entity, outcome) in &result.outcomes {
-            report.record(*entity, outcome);
-        }
-        report.people.extend(result.person);
-        for notice in result.notices {
-            report.note_id(notice);
-        }
+        writes.extend(
+            apply::apply_row(tx, cache, org, &row, report.source, report.mode)
+                .await
+                .record_into(report),
+        );
     }
+    apply::write_links(tx, org.org_id, &mut writes, report).await?;
 
     debug_assert!(report.reconciles());
     Ok(())
@@ -188,6 +189,11 @@ pub enum ApiImportError {
         "Harvest refused access (HTTP 403) — reconnect Harvest as a user who can see all clients, projects, people and time entries"
     )]
     Forbidden,
+    /// A manager can read the rest of the account but not its invoices.
+    #[error(
+        "Harvest refused access to invoices (HTTP 403) — reconnect Harvest as an administrator, or as a manager who can create and edit invoices"
+    )]
+    InvoicesForbidden,
     /// Harvest timed out or answered with a server error; worth retrying.
     #[error("{0}")]
     Unavailable(String),
@@ -217,8 +223,21 @@ impl ApiImportError {
     pub(crate) fn is_permanent(error: &anyhow::Error) -> bool {
         matches!(
             error.downcast_ref::<Self>(),
-            Some(Self::NotConnected | Self::ReconnectRequired | Self::Forbidden)
+            Some(
+                Self::NotConnected
+                    | Self::ReconnectRequired
+                    | Self::Forbidden
+                    | Self::InvoicesForbidden
+            )
         )
+    }
+
+    /// A 403 while reading invoices names what the connection lacks.
+    pub(super) fn on_invoices(error: anyhow::Error) -> anyhow::Error {
+        match error.downcast_ref() {
+            Some(horae_harvest::Error::Forbidden) => Self::InvoicesForbidden.into(),
+            _ => error,
+        }
     }
 
     /// What a failed job attempt shows the administrator, if Harvest caused it.
@@ -227,6 +246,7 @@ impl ApiImportError {
         match error.downcast_ref::<Self>()? {
             Self::ReconnectRequired => Some(JobErrorKind::ReconnectRequired),
             Self::Forbidden => Some(JobErrorKind::Forbidden),
+            Self::InvoicesForbidden => Some(JobErrorKind::InvoicesForbidden),
             Self::Unavailable(_) => Some(JobErrorKind::Unavailable),
             Self::Busy | Self::NotConnected | Self::Other(_) => None,
         }
@@ -319,6 +339,7 @@ pub async fn complete_cli_api_fixture(
             "projects" => json!([{"id":102,"name":"CLI API Project","client":{"id":101}}]),
             "tasks" => json!([{"id":103,"name":"CLI API Task"}]),
             "users" => json!([{"id":104,"email":email}]),
+            "invoices" => json!([]),
             "time_entries" => json!([{
                 "id":105,"spent_date":"2026-09-14","hours":1,
                 "notes":"cli-api-acceptance","project":{"id":102},
@@ -479,6 +500,7 @@ async fn run_api_import_with_http(
         SyncScope::Full => None,
         SyncScope::Incremental => conn.watermark_for(EntityType::TimeEntry),
     };
+    let invoice_mark = conn.watermark_for(EntityType::Invoice);
 
     // A bounded queue joins blocking HTTP pages to the async row pipeline.
     let capture_started_at = Utc::now();
@@ -491,6 +513,7 @@ async fn run_api_import_with_http(
                 currency: default_currency.to_owned(),
                 sync,
                 since,
+                invoice_mark,
                 captured_at: capture_started_at,
             },
             mode,
@@ -501,13 +524,21 @@ async fn run_api_import_with_http(
         .await
         .map_err(Into::into);
     }
+    let voided = match invoices::voided_versions(&mut connection, org_id).await {
+        Ok(voided) => voided,
+        Err(error) => {
+            release_import(connection).await?;
+            return Err(anyhow::Error::from(error).into());
+        }
+    };
+    let window = api_source::EntryWindow::new(since, invoice_mark, voided);
     streaming::run(
         connection,
         org_id,
         default_currency,
         mode,
         capture_started_at,
-        move |pages| streaming::fetch(http, &conn.access_token, &conn.account_id, since, pages),
+        move |pages| streaming::fetch(http, &conn.access_token, &conn.account_id, window, pages),
         lease,
     )
     .await

@@ -5,8 +5,16 @@
 use typst::foundations::{Dict, IntoValue, Value};
 use typst_as_lib::TypstEngine;
 
-use crate::models::invoice::InvoiceLine;
+use crate::models::invoice::{ImportedInvoice, ImportedInvoiceLine, InvoiceLine};
 use crate::models::{Invoice, OrgBranding};
+
+/// What an invoice imported from Harvest renders instead of Horae's lines and
+/// breakdown: Harvest's lines and the amounts it stated.
+#[derive(Clone, Copy)]
+pub struct Imported<'a> {
+    pub invoice: &'a ImportedInvoice,
+    pub lines: &'a [ImportedInvoiceLine],
+}
 
 static INVOICE_TEMPLATE: &str = include_str!("../templates/invoice.typ");
 
@@ -31,6 +39,7 @@ fn opt(s: &Option<String>) -> Value {
 fn build_inputs(
     invoice: &Invoice,
     lines: &[InvoiceLine],
+    imported: Option<Imported<'_>>,
     client_name: &str,
     client_address: Option<&str>,
     client_tax_id: Option<&str>,
@@ -54,8 +63,11 @@ fn build_inputs(
     );
     dict.insert("po_number".into(), invoice.po_number.clone().into_value());
     dict.insert("subject".into(), invoice.subject.clone().into_value());
-    let breakdown: Vec<Value> = invoice
-        .breakdown()
+    let breakdown = match imported {
+        Some(imported) => imported.invoice.breakdown(invoice),
+        None => invoice.breakdown(),
+    };
+    let breakdown: Vec<Value> = breakdown
         .into_iter()
         .map(|(label, cents)| {
             let mut row = Dict::new();
@@ -99,9 +111,19 @@ fn build_inputs(
     dict.insert("bank_account".into(), opt(&branding.bank_account));
     dict.insert("payment_terms".into(), opt(&branding.invoice_payment_terms));
 
-    let line_values: Vec<Value> = lines
+    dict.insert("imported".into(), imported.is_some().into_value());
+    let imported_lines = imported.map_or(&[][..], |imported| imported.lines);
+    let line_values: Vec<Value> = imported_lines
         .iter()
         .map(|l| {
+            let mut ld = Dict::new();
+            ld.insert("description".into(), l.description.clone().into_value());
+            ld.insert("quantity".into(), l.quantity.clone().into_value());
+            ld.insert("unit_price".into(), l.unit_price.clone().into_value());
+            ld.insert("amount_cents".into(), l.amount_cents.into_value());
+            Value::Dict(ld)
+        })
+        .chain(lines.iter().map(|l| {
             let mut ld = Dict::new();
             ld.insert("description".into(), l.description.clone().into_value());
             ld.insert(
@@ -118,7 +140,7 @@ fn build_inputs(
             );
             ld.insert("amount_cents".into(), l.amount_cents.into_value());
             Value::Dict(ld)
-        })
+        }))
         .collect();
     dict.insert("lines".into(), Value::Array(line_values.as_slice().into()));
 
@@ -132,6 +154,7 @@ fn build_inputs(
 pub fn render_invoice_pdf(
     invoice: &Invoice,
     lines: &[InvoiceLine],
+    imported: Option<Imported<'_>>,
     client_name: &str,
     client_address: Option<&str>,
     client_tax_id: Option<&str>,
@@ -141,6 +164,7 @@ pub fn render_invoice_pdf(
     let inputs = build_inputs(
         invoice,
         lines,
+        imported,
         client_name,
         client_address,
         client_tax_id,
@@ -164,7 +188,12 @@ pub fn render_invoice_pdf(
 }
 
 #[cfg(any(test, feature = "test-support"))]
-pub fn invoice_text(invoice: &Invoice, lines: &[InvoiceLine], branding: &OrgBranding) -> String {
+pub fn invoice_text(
+    invoice: &Invoice,
+    lines: &[InvoiceLine],
+    imported: Option<Imported<'_>>,
+    branding: &OrgBranding,
+) -> String {
     fn visit(frame: &typst::layout::Frame, text: &mut String) {
         for (_, item) in frame.items() {
             match item {
@@ -178,7 +207,9 @@ pub fn invoice_text(invoice: &Invoice, lines: &[InvoiceLine], branding: &OrgBran
         }
     }
     let document: typst_layout::PagedDocument = build_engine()
-        .compile_with_input(build_inputs(invoice, lines, "Client", None, None, branding))
+        .compile_with_input(build_inputs(
+            invoice, lines, imported, "Client", None, None, branding,
+        ))
         .output
         .unwrap();
     let mut text = String::new();
@@ -191,6 +222,82 @@ pub fn invoice_text(invoice: &Invoice, lines: &[InvoiceLine], branding: &OrgBran
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_imported_invoice_renders_its_lines_and_stated_amounts() {
+        let invoice = Invoice {
+            id: uuid::Uuid::nil(),
+            org_id: uuid::Uuid::nil(),
+            client_id: uuid::Uuid::nil(),
+            number: "1001".into(),
+            status: horae_core::types::InvoiceStatus::Sent,
+            issued_on: chrono::NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+            due_on: chrono::NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
+            currency: "USD".into(),
+            total_cents: 105_000,
+            terms_days: 28,
+            po_number: String::new(),
+            discount_bps: 0,
+            tax1_bps: 0,
+            tax2_name: None,
+            tax2_bps: None,
+            subtotal_cents: 110_000,
+            discount_cents: 11_000,
+            tax1_cents: 5_000,
+            tax2_cents: 1_000,
+            notes: None,
+            subject: String::new(),
+            created_at: chrono::DateTime::UNIX_EPOCH,
+        };
+        let imported = ImportedInvoice {
+            due_cents: 45_000,
+            paid_on: None,
+            discount_rate: Some("10".into()),
+            tax1_rate: Some("8.875".into()),
+            tax2_rate: Some("2".into()),
+            period_start: None,
+            period_end: None,
+        };
+        let line = |description: &str, amount_cents| ImportedInvoiceLine {
+            kind: "Service".into(),
+            description: description.into(),
+            quantity: "1.5".into(),
+            unit_price: "95.2381".into(),
+            amount_cents,
+            taxed: true,
+            taxed2: false,
+            project_id: None,
+        };
+        let lines = [line("Design", 120_000), line("Credit", -10_000)];
+        let text = invoice_text(
+            &invoice,
+            &[],
+            Some(Imported {
+                invoice: &imported,
+                lines: &lines,
+            }),
+            &OrgBranding::default(),
+        );
+        for expected in [
+            "Quantity",
+            "Unit price",
+            "Design",
+            "1.5",
+            "USD 95.2381",
+            "USD 1200.00",
+            "−USD 100.00",
+            "Discount (10%)",
+            "Tax (8.875%)",
+            "Second tax (2%)",
+            "USD 1050.00",
+            "Paid",
+            "−USD 600.00",
+            "Due",
+            "USD 450.00",
+        ] {
+            assert!(text.contains(expected), "{expected} missing from {text}");
+        }
+    }
 
     #[test]
     fn invoice_template_formats_large_minor_units_exactly() {

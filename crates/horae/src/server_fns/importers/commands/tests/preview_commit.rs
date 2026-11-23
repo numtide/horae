@@ -269,6 +269,7 @@ fn unmatched(location: &str, email: &str) -> RowError {
             name: Some("Dana Dev".into()),
         }),
         entry_kind: None,
+        invoice_kind: None,
     }
 }
 

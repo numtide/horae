@@ -4,14 +4,15 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use chrono::{DateTime, Utc};
-use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceKind};
+use horae_core::importers::harvest::types::{EntityType, EntryScan, ImportMode, SourceKind};
 use sqlx::{PgConnection, Postgres, Transaction, pool::PoolConnection};
 use tokio::sync::{Mutex, mpsc};
 use uuid::Uuid;
 
 use super::api_source::http::ApiHttp;
 use super::api_source::{
-    ApiClient, ApiProject, ApiSource, ApiTask, ApiTimeEntry, ApiUser, HarvestData, RowLookup,
+    ApiClient, ApiInvoice, ApiProject, ApiSource, ApiTask, ApiTimeEntry, ApiUser, HarvestData,
+    RowLookup,
 };
 use super::report::ImportReport;
 use super::resolve::{OrgDefaults, RunCache};
@@ -24,7 +25,7 @@ pub(super) enum Page {
     Entries(Vec<ApiTimeEntry>),
     Complete,
     Batch(Box<durable::Batch>),
-    CatalogReady(Box<durable::Download>),
+    CatalogReady(Box<durable::Download>, EntryScan),
 }
 
 enum Settings<'a> {
@@ -44,7 +45,7 @@ pub(super) fn fetch(
     mut http: ApiHttp,
     access: &str,
     account: &str,
-    since: Option<DateTime<Utc>>,
+    mut window: super::api_source::EntryWindow,
     pages: &mpsc::Sender<Page>,
 ) -> anyhow::Result<()> {
     let mut catalog = HarvestData::default();
@@ -92,6 +93,23 @@ pub(super) fn fetch(
             Ok(())
         },
     )?;
+    // Every state, every run: drafts tell which billed time stays open, and an
+    // unchanged invoice costs a comparison, not a write.
+    http.pages::<ApiInvoice>(
+        access,
+        account,
+        "invoices",
+        None,
+        || pages.is_closed(),
+        |page| {
+            catalog.invoices.extend(page);
+            Ok(())
+        },
+    )
+    .map_err(super::ApiImportError::on_invoices)?;
+    window.see(&catalog.invoices);
+    let (scan, since) = window.scan();
+    catalog.entry_scan = Some(scan);
     pages
         .blocking_send(Page::Catalog(catalog))
         .context("Harvest import cancelled")?;
@@ -228,6 +246,7 @@ async fn apply(
     };
     let mut cache = RunCache::default();
     let mut report = ImportReport::new(SourceKind::HarvestApi, mode);
+    report.invoice_scan = catalog.entry_scan;
     parents::apply(&mut tx, &mut cache, org, &catalog, &mut report).await?;
     let lookup = RowLookup::new(&catalog);
     let mut high_water = None;
@@ -254,23 +273,52 @@ async fn apply(
                 .await?;
             }
             Page::Complete => break,
-            Page::Catalog(_) | Page::Batch(_) | Page::CatalogReady(_) => {
+            Page::Catalog(_) | Page::Batch(_) | Page::CatalogReady(..) => {
                 bail!("unexpected Harvest catalog message")
             }
         }
     }
-    if mode == ImportMode::Commit
-        && report.error_count() == 0
-        && !missing_timestamp
+    advance_watermarks(
+        &mut tx,
+        org_id,
+        &report,
+        (high_water, missing_timestamp),
+        super::api_source::invoice_mark(&catalog.invoices, captured_at),
+        captured_at,
+    )
+    .await?;
+    super::finish_import(tx, &mut report, lease).await?;
+    Ok(report)
+}
+
+/// After an error-free commit: the entry watermark from the newest entry read,
+/// and the invoice watermark that lets later runs read entries incrementally.
+async fn advance_watermarks(
+    tx: &mut Transaction<'_, Postgres>,
+    org_id: Uuid,
+    report: &ImportReport,
+    (high_water, missing_timestamp): (Option<DateTime<Utc>>, bool),
+    invoice_mark: Option<DateTime<Utc>>,
+    captured_at: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    // Errors, entry or invoice (Q10), hold the watermarks back so the next
+    // run reads them again (`ImportReport::watermarks_held` says so).
+    if report.mode != ImportMode::Commit || report.error_count() != 0 {
+        return Ok(());
+    }
+    let mut marks = Vec::new();
+    if !missing_timestamp
         && let Some(high_water) = high_water
         && let Some(mark) = high_water
             .min(captured_at)
             .checked_sub_signed(chrono::Duration::seconds(1))
     {
-        credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
+        marks.push((EntityType::TimeEntry, mark));
     }
-    super::finish_import(tx, &mut report, lease).await?;
-    Ok(report)
+    if let Some(mark) = invoice_mark {
+        marks.push((EntityType::Invoice, mark));
+    }
+    credentials::advance_watermark(&mut **tx, org_id, &marks).await
 }
 
 async fn begin_transaction(

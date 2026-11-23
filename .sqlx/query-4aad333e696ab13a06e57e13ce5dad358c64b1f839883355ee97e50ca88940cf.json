@@ -15,7 +15,8 @@
                 "project",
                 "task",
                 "time_entry",
-                "person"
+                "person",
+                "invoice"
               ]
             }
           }

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT h.harvest_invoice_id, i.number FROM invoices i\n           JOIN harvest_invoices h ON h.invoice_id = i.id\n          WHERE i.org_id = $1 AND h.harvest_invoice_id IN (100, 101) ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_invoice_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "number",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "74d650e59e53c23957a6f495badfba1f8d8aec6e7a6c4be712d6a8c12e002e87"
+}

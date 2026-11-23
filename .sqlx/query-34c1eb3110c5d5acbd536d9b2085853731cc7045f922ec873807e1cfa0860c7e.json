@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.currency, l.unit_price::text AS \"unit_price!\", l.amount_cents, i.total_cents\n           FROM harvest_invoice_lines l JOIN invoices i ON i.id = l.invoice_id\n           WHERE i.org_id = $1 ORDER BY i.number",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "unit_price!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "34c1eb3110c5d5acbd536d9b2085853731cc7045f922ec873807e1cfa0860c7e"
+}

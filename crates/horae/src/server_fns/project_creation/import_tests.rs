@@ -356,6 +356,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
                             notes: None,
                             billable: true,
                             invoiced: true,
+                            harvest_invoice_id: None,
                             running: false,
                             billable_rate: Some("99".into()),
                             billable_amount: None,
@@ -393,10 +394,12 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
                     project,
                 ).fetch_all(&pool).await.unwrap();
                 assert_eq!(entry.len(), persisted);
+                // Billed in Harvest ("Invoiced?" Yes) on no invoice Horae has:
+                // invoiced with none, so it is never billed again (spec 025).
                 if let Some(entry) = entry.first() {
                     assert_eq!(
                         (entry.minutes, entry.state.as_deref(), entry.invoice_id),
-                        (75, Some("open"), None)
+                        (75, Some("invoiced"), None)
                     );
                 }
                 let can_track = sqlx::query_scalar!(

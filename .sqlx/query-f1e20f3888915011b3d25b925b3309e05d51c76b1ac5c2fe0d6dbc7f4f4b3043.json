@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH before AS (\n           SELECT id, updated_at, created_at, state, invoice_id FROM time_entries WHERE id = ANY($2)),\n         written AS (\n           UPDATE time_entries AS te\n              SET invoice_id = w.invoice_id,\n                  state = CASE WHEN w.billed THEN 'invoiced'::entry_state ELSE 'open'::entry_state END,\n                  rounded_minutes = CASE WHEN w.billed THEN effective_minutes(\n                      te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) END\n             FROM unnest($2::uuid[], $3::uuid[], $4::bool[]) AS w(id, invoice_id, billed),\n                  organizations AS o\n            WHERE te.id = ANY($2) AND te.id = w.id AND te.org_id = $1 AND o.id = $1\n              AND te.state <> 'submitted'\n              AND (te.invoice_id IS NULL OR EXISTS (\n                SELECT 1 FROM invoices AS i WHERE i.id = te.invoice_id AND i.source = 'harvest'))\n        RETURNING te.id, te.updated_at),\n         by_harvest_id AS (\n           UPDATE harvest_import_map AS m SET horae_updated_at = written.updated_at\n             FROM written JOIN before ON before.id = written.id\n            WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n              AND m.harvest_import_id = ANY($5) AND m.horae_id = written.id\n              AND m.horae_updated_at IS DISTINCT FROM written.updated_at\n              AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at)),\n         by_entry AS (\n           UPDATE harvest_import_map AS m SET horae_updated_at = written.updated_at\n             FROM written JOIN before ON before.id = written.id\n            WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n              AND m.horae_id = ANY($6) AND m.horae_id = written.id\n              AND m.horae_updated_at IS DISTINCT FROM written.updated_at\n              AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at))\n         SELECT b.id AS \"id!\", b.state AS \"state!: EntryState\", i.number AS \"number?\"\n           FROM before AS b LEFT JOIN invoices AS i ON i.id = b.invoice_id\n          WHERE NOT EXISTS (SELECT 1 FROM written AS w WHERE w.id = b.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "state!: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "number?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "BoolArray",
+        "Int8Array",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f1e20f3888915011b3d25b925b3309e05d51c76b1ac5c2fe0d6dbc7f4f4b3043"
+}

@@ -227,18 +227,20 @@ pub async fn generate(
     )
     .await?;
 
-    // Generate invoice number: INV-YYYYMM-NNN
+    // Generate invoice number: INV-YYYYMM-NNN, after the highest number of the
+    // month, so a number an import took or a gap is never handed out again.
     let now = chrono::Utc::now();
-    let year_month = now.format("%Y%m").to_string();
-    let count: i64 = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) as "count!: i64" FROM invoices
-           WHERE org_id = $1 AND number LIKE $2"#,
+    let prefix = format!("INV-{}-", now.format("%Y%m"));
+    let highest: i64 = sqlx::query_scalar!(
+        r#"SELECT COALESCE(MAX(substring(number FROM char_length($2) + 1)::bigint), 0) AS "highest!"
+           FROM invoices
+           WHERE org_id = $1 AND number ~ ('^' || $2 || '[0-9]{1,18}$')"#,
         org_id,
-        format!("INV-{year_month}-%"),
+        prefix,
     )
     .fetch_one(&mut **tx)
     .await?;
-    let invoice_number = format!("INV-{year_month}-{:03}", count + 1);
+    let invoice_number = format!("{prefix}{:03}", highest.saturating_add(1));
 
     let invoice_id = Uuid::now_v7();
     let issued_on = now.date_naive();

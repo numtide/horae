@@ -50,8 +50,9 @@ async fn http_pages_preview_commit_and_reimport(pool: PgPool) {
         assert!(report.reconciles());
         assert_eq!(report.summary.time_entries.processed(), 205);
         assert_eq!(report.summary.time_entries.errored, 1);
-        assert_eq!(server.count.load(Ordering::Acquire) - before, 7);
-        if before < 14 {
+        // Five catalog pages with the invoices, then three entry pages.
+        assert_eq!(server.count.load(Ordering::Acquire) - before, 8);
+        if before < 16 {
             assert_eq!(report.summary.time_entries.created, 204);
         } else {
             assert_eq!(report.summary.time_entries.skipped, 204);
@@ -77,6 +78,15 @@ fn scale_server(records: u64) -> Server {
 }
 
 fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server {
+    scale_server_with_invoices(records, invalid_every, 0)
+}
+
+/// Entries billed per invoice in the invoice scale fixture.
+const BILLED_PER_INVOICE: u64 = 7;
+
+/// `invoices` open invoices of 7.00 each, invoice `k` billing entries
+/// `7k..7k+7`, paged by 100 like the entries.
+fn scale_server_with_invoices(records: u64, invalid_every: u64, invoices: u64) -> Server {
     let start = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
     Server::start(move |url| {
         let collection = url.path().rsplit('/').next().unwrap();
@@ -94,9 +104,29 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
             "tasks" => json!([{"id":3,"name":"Task"}]),
             // Person 5 is not listed, so each of their entries is an error.
             "users" => json!([{"id":4,"email":"known@example.com"}]),
+            "invoices" => json!(
+                (offset..(offset + 100).min(invoices))
+                    .map(|k| {
+                        json!({
+                            "id": 500_000 + k, "client": {"id": 1}, "number": format!("S-{k}"),
+                            "purchase_order": null, "amount": 7, "due_amount": 7,
+                            "tax": null, "tax_amount": 0, "tax2": null, "tax2_amount": 0,
+                            "discount": null, "discount_amount": 0, "subject": null, "notes": null,
+                            "currency": "USD", "state": "open", "period_start": null,
+                            "period_end": null, "issue_date": "2025-12-31", "due_date": null,
+                            "paid_date": null, "updated_at": day(3),
+                            "line_items": [{"id": k, "kind": "Service", "description": "Hours",
+                                            "quantity": 7, "unit_price": 1, "amount": 7,
+                                            "taxed": false, "taxed2": false, "project": {"id": 2}}]
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            ),
             "time_entries" => json!(
                 (offset..(offset + 100).min(records))
                     .map(|n| {
+                        let invoice = n / BILLED_PER_INVOICE;
+                        let billed = invoice < invoices;
                         json!({
                             "id": 1_000_000 + n,
                             "spent_date": start + chrono::Duration::days((n % 365) as i64),
@@ -104,7 +134,10 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
                             "notes": format!("scale entry {n}"),
                             "project": {"id": 2},
                             "task": {"id": 3},
-                            "user": {"id": if n % invalid_every == 0 { 5 } else { 4 }},
+                            // An interval of 0 makes every entry valid.
+                            "user": {"id": if invalid_every != 0 && n % invalid_every == 0 { 5 } else { 4 }},
+                            "is_billed": billed,
+                            "invoice": billed.then(|| json!({"id": 500_000 + invoice})),
                             "updated_at": day(3)
                         })
                     })
@@ -112,7 +145,12 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
             ),
             _ => panic!("unexpected collection {collection}"),
         };
-        let next = if collection == "time_entries" && offset + 100 < records {
+        let total = match collection {
+            "time_entries" => records,
+            "invoices" => invoices,
+            _ => 0,
+        };
+        let next = if offset + 100 < total {
             let mut next = url.clone();
             next.query_pairs_mut()
                 .clear()
@@ -173,7 +211,8 @@ async fn measured_apply(
     };
     assert_eq!(
         server.count.load(Ordering::Acquire) - requests_before,
-        RECORDS as usize / 100 + 4
+        // The entry pages, then clients, projects, tasks, people and invoices.
+        RECORDS as usize / 100 + 5
     );
     eprintln!(
         "apply_complete mode={mode:?} durable={durable} elapsed_s={:.3} {}",
@@ -285,6 +324,91 @@ async fn measured_job(pool: &PgPool, org: Uuid, server: &Server, mode: ImportMod
     assert_eq!(complete.status, "succeeded");
     assert_eq!(complete.report, status.report);
     serde_json::from_value(complete.report.unwrap()).unwrap()
+}
+
+/// One import job, run as production runs it: enqueued, claimed under a
+/// lease, through the durable path with its per-page checkpoints.
+async fn timed_job(
+    pool: &PgPool,
+    org: Uuid,
+    server: &Server,
+    sync: SyncScope,
+) -> (f64, ImportReport) {
+    use crate::{config::JobPolicy, jobs};
+    jobs::enqueue(
+        pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::Commit,
+            sync,
+        },
+        &Uuid::now_v7().to_string(),
+        JobPolicy { max_attempts: 1 },
+    )
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+    let started = Instant::now();
+    let mut finished = None;
+    jobs::run_claimed(pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            &config(),
+            ImportMode::Commit,
+            sync,
+            ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        let stored = job_report(&report);
+        finished = Some(report);
+        stored
+    })
+    .await
+    .unwrap();
+    (started.elapsed().as_secs_f64(), finished.unwrap())
+}
+
+/// One SC-006 scenario on the job runner: a first commit of 15,000 entries,
+/// with `invoices` invoices billing 7 entries each, in the test's own fresh
+/// database, then an unchanged incremental re-run (the steady state). Prints
+/// both times; `job_15k_*` are run alternately and compared outside, since a
+/// shared machine slows single runs by a fifth or more.
+async fn scale_15k(pool: &PgPool, invoices: u64) {
+    require_release();
+    const ENTRIES: u64 = 15_000;
+    let org = setup(pool).await;
+    let server = scale_server_with_invoices(ENTRIES, 0, invoices);
+    let (first, report) = timed_job(pool, org, &server, SyncScope::Full).await;
+    assert_eq!(report.error_count(), 0, "{:?}", report.row_errors);
+    assert_eq!(report.summary.time_entries.created, ENTRIES);
+    assert_eq!(report.summary.invoices.created, invoices);
+    assert_eq!(
+        report.summary.links.linked,
+        (invoices * BILLED_PER_INVOICE).min(ENTRIES)
+    );
+    let (rerun, report) = timed_job(pool, org, &server, SyncScope::Incremental).await;
+    assert_eq!(report.summary.time_entries.skipped, ENTRIES);
+    assert_eq!(report.summary.invoices.skipped, invoices);
+    assert_eq!(report.summary.links, Default::default());
+    eprintln!(
+        "SC-006 invoices={invoices} first_s={first:.3} rerun_s={rerun:.3} {}",
+        memory_status()
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[ignore = "invoice scale measurement (SC-006); run explicitly with --release --nocapture"]
+async fn job_15k_entries_without_invoices(pool: PgPool) {
+    scale_15k(&pool, 0).await;
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[ignore = "invoice scale measurement (SC-006); run explicitly with --release --nocapture"]
+async fn job_15k_entries_with_2k_invoices(pool: PgPool) {
+    scale_15k(&pool, 2_000).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.status AS \"status: InvoiceStatus\", h.due_cents,\n                  h.paid_on AS \"paid_on: chrono::NaiveDate\"\n           FROM invoices i JOIN harvest_invoices h ON h.invoice_id = i.id WHERE i.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void",
+                "closed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "due_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "paid_on: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f6e1923cb6b5721d8b146bdba866b0a3719069bd140eb5c2fc14e61bc28b68d0"
+}

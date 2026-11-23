@@ -1403,6 +1403,8 @@ mod server_fns {
             lines: Vec::new(),
             client_name: "Historical client".into(),
             overdue: false,
+            imported: None,
+            imported_lines: Vec::new(),
         })
     }
 

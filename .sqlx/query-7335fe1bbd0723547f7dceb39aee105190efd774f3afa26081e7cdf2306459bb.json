@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries te SET invoice_id = $2, state = 'invoiced'\n         FROM harvest_import_map m\n         WHERE m.horae_id = te.id AND m.harvest_import_id = 13 AND m.org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7335fe1bbd0723547f7dceb39aee105190efd774f3afa26081e7cdf2306459bb"
+}

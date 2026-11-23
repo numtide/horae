@@ -353,7 +353,6 @@ struct TimeEntryRow {
     is_running: bool,
     started_at: Option<DateTime<Utc>>,
     state: String,
-    invoice_id: Option<Uuid>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     // Joined fields
@@ -433,7 +432,9 @@ fn time_entry_row_to_harvest(
         is_locked,
         locked_reason,
         is_closed: is_locked,
-        is_billed: row.invoice_id.is_some(),
+        // With or without an invoice: time billed in Harvest on an invoice
+        // Horae could not import is invoiced with none.
+        is_billed: row.state == "invoiced",
         is_running: row.is_running,
         timer_started_at: row.started_at.map(|t| t.to_rfc3339()),
         billable: row.billable,
@@ -573,7 +574,7 @@ async fn time_entry_rows(
                AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
                AND ($12::uuid IS NULL OR p.client_id = $12)
                AND ($13::uuid IS NULL OR te.task_id = $13)
-               AND ($14::bool IS NULL OR (te.invoice_id IS NOT NULL) = $14)
+               AND ($14::bool IS NULL OR (te.state = 'invoiced') = $14)
                AND ($15::text[] IS NULL OR te.state::text = ANY($15))
                AND $16::text IS NULL
                AND te.updated_at < $17
@@ -638,9 +639,9 @@ async fn entries_by_id(
         r#"SELECT te.id AS uuid, te.harvest_id AS id,
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
-               (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
+               (te.billable AND (te.state = 'invoiced' OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
                te.started_at as "started_at: chrono::DateTime<chrono::Utc>",
-               te.state::text AS "state!: String", te.invoice_id,
+               te.state::text AS "state!: String",
                te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
                te.updated_at as "updated_at: chrono::DateTime<chrono::Utc>",
                u.harvest_id AS user_id, u.name AS user_name,
@@ -1458,6 +1459,31 @@ mod tests {
             .unwrap();
         assert_eq!(entry.billable_rate, Some(eur(1234)));
         assert_eq!(page.data["time_entries"][0].billable_rate, Some(eur(1234)));
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn is_billed_follows_the_state_with_or_without_an_invoice(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+        let id = insert_entry(&pool, &ids, ids.user_id, "Billed in Harvest").await;
+        let caller = caller(&ids);
+        let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
+        assert!(!entry.is_billed);
+        // An import marks time Harvest billed on an invoice it lacks this way.
+        sqlx::query!(
+            "UPDATE time_entries SET state = 'invoiced' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
+        let mut billed = no_time_entry_filters();
+        billed.is_billed = Some(true);
+        let Json(page) = time_entries_page(&pool, &caller, billed, &list())
+            .await
+            .unwrap();
+        assert!(entry.is_billed);
+        assert!(page.data["time_entries"][0].is_billed);
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]

@@ -142,6 +142,17 @@ pub struct RunCache {
     /// pages and rolled back, set for the page being applied only.
     #[serde(skip)]
     simulated_entries: HashMap<i64, DateTime<Utc>>,
+    /// What the invoice phase made of each Harvest invoice, by Harvest id.
+    #[serde(default)]
+    invoices: HashMap<i64, InvoiceSlot>,
+}
+
+/// A Harvest invoice as the entries of the same run see it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum InvoiceSlot {
+    Imported { id: Uuid, voided: bool },
+    Draft,
+    Failed,
 }
 
 // JSON object keys cannot represent the email/full-name enum namespaces.
@@ -166,6 +177,23 @@ impl RunCache {
 
     pub fn parent_failed(&self, entity: EntityType, id: i64) -> bool {
         self.failed_parents.contains(&(entity, id))
+    }
+
+    pub fn set_invoice(&mut self, harvest_id: i64, slot: InvoiceSlot) {
+        self.invoices.insert(harvest_id, slot);
+    }
+
+    pub fn invoice(&self, harvest_id: i64) -> Option<InvoiceSlot> {
+        self.invoices.get(&harvest_id).copied()
+    }
+
+    /// The client or project the catalog phase imported for a Harvest id.
+    pub fn client_by_harvest_id(&self, id: i64) -> Option<Uuid> {
+        self.get(ParentKind::Client, &format!("hid:{id}"))
+    }
+
+    pub fn project_by_harvest_id(&self, id: i64) -> Option<Uuid> {
+        self.get(ParentKind::Project, &format!("hid:{id}"))
     }
 
     pub fn person_counted(&self, id: Uuid) -> bool {
@@ -340,12 +368,15 @@ pub(super) async fn free_harvest_id(
     let Some(harvest_id) = harvest_id.filter(|id| *id > 0) else {
         return Ok(None);
     };
-    let sequence = match entity {
-        EntityType::Client => "clients_harvest_id_seq",
-        EntityType::Project => "projects_harvest_id_seq",
-        EntityType::Task => "tasks_harvest_id_seq",
-        EntityType::TimeEntry => "time_entries_harvest_id_seq",
-        EntityType::Person => "users_harvest_id_seq",
+    let Some(kind) = super::ids::Kind::of(entity) else {
+        return Ok(None);
+    };
+    let sequence = match kind {
+        super::ids::Kind::Client => "clients_harvest_id_seq",
+        super::ids::Kind::Project => "projects_harvest_id_seq",
+        super::ids::Kind::Task => "tasks_harvest_id_seq",
+        super::ids::Kind::TimeEntry => "time_entries_harvest_id_seq",
+        super::ids::Kind::User => "users_harvest_id_seq",
     };
     let handed_out = sqlx::query_scalar!(
         r#"SELECT COALESCE(pg_sequence_last_value($1::text::regclass), 0) AS "last!""#,
@@ -356,7 +387,7 @@ pub(super) async fn free_harvest_id(
     if harvest_id <= handed_out.saturating_add(HARVEST_ID_GUARD) {
         return Ok(None);
     }
-    let holder = super::ids::record(&mut *conn, org_id, entity.into(), harvest_id).await?;
+    let holder = super::ids::record(&mut *conn, org_id, kind, harvest_id).await?;
     Ok(holder.is_none().then_some(harvest_id))
 }
 

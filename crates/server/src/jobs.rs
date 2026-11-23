@@ -578,6 +578,7 @@ fn error_kind_column(kind: crate::models::JobErrorKind) -> &'static str {
     match kind {
         JobErrorKind::ReconnectRequired => "reconnect_required",
         JobErrorKind::Forbidden => "forbidden",
+        JobErrorKind::InvoicesForbidden => "invoices_forbidden",
         JobErrorKind::Unavailable => "unavailable",
     }
 }
@@ -587,6 +588,7 @@ fn error_kind(column: Option<&str>) -> Option<crate::models::JobErrorKind> {
     match column? {
         "reconnect_required" => Some(JobErrorKind::ReconnectRequired),
         "forbidden" => Some(JobErrorKind::Forbidden),
+        "invoices_forbidden" => Some(JobErrorKind::InvoicesForbidden),
         "unavailable" => Some(JobErrorKind::Unavailable),
         _ => None,
     }

@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices\n                SET client_id = $3, number = $4, status = $5, issued_on = $6, due_on = $7,\n                    currency = $8, total_cents = $9, notes = $10, po_number = $11,\n                    discount_cents = $12, tax1_cents = $13, tax2_cents = $14, subject = $15\n              WHERE id = $1 AND org_id = $2 AND source = 'harvest'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void",
+                "closed"
+              ]
+            }
+          }
+        },
+        "Date",
+        "Date",
+        "Bpchar",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb7605d2431688d81034b7ca069d8576b6ccda32af48a2b876de9d8d987857a4"
+}

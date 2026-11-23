@@ -6,6 +6,7 @@ use sqlx::PgPool;
 mod additions;
 mod authority;
 mod financial_fields;
+mod harvest_invoices;
 mod imported_rates;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

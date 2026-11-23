@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, i.number, i.issued_on AS \"issued_on: NaiveDate\",\n                  COALESCE(GREATEST(max(te.spent_date), max(f.due_on),\n                    (SELECT max(linked.spent_date) FROM time_entries linked WHERE linked.invoice_id = i.id)),\n                    i.issued_on) AS \"covered_to!: NaiveDate\"\n           FROM invoices i\n           LEFT JOIN invoice_line_items l ON l.invoice_id = i.id\n           LEFT JOIN time_entries te ON te.id = l.time_entry_id\n           LEFT JOIN project_fee_occurrences f ON f.id = l.fee_occurrence_id\n           WHERE i.org_id = $1 AND i.client_id = $2 AND i.status <> 'void'\n           GROUP BY i.id\n           ORDER BY i.issued_on DESC, i.created_at DESC, i.id DESC\n           LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "issued_on: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "covered_to!: NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "efb051e7338acc8335944c0187d7948ef6f72e35cc66419992e69afc050ac094"
+}

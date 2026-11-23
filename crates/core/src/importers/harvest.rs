@@ -17,5 +17,7 @@
 
 pub mod client;
 pub mod convert;
+pub mod invoice;
 pub mod keys;
+pub mod link;
 pub mod types;

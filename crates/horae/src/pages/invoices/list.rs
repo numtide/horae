@@ -5,6 +5,7 @@ use horae_core::types::InvoiceStatus;
 use super::filter::{InvoiceFilter, PeriodValue, StatusValue};
 use super::recovery::RecoveryStorage;
 use super::{INVOICES_HEADING, Shown, StatusBadge, date, money, prepares_invoices, settings};
+use crate::components::badge::Badge;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::card::MetricCard;
 use crate::components::combobox::{ComboOption, Combobox};
@@ -30,6 +31,7 @@ fn status_label(tr: Tr, status: StatusValue) -> String {
         StatusValue::Overdue => tr.invoices_status_overdue(),
         StatusValue::Paid => tr.invoices_status_paid(),
         StatusValue::Void => tr.invoices_status_void(),
+        StatusValue::Closed => tr.invoices_status_closed(),
     }
 }
 
@@ -44,6 +46,7 @@ fn keeps_status(status: Option<StatusValue>, item: &InvoiceListItem) -> bool {
         Some(StatusValue::Overdue) => item.overdue,
         Some(StatusValue::Paid) => stored == InvoiceStatus::Paid,
         Some(StatusValue::Void) => stored == InvoiceStatus::Void,
+        Some(StatusValue::Closed) => stored == InvoiceStatus::Closed,
     }
 }
 
@@ -85,7 +88,7 @@ fn totals<'a>(
         let sum = sums
             .entry(item.invoice.currency.trim().to_owned())
             .or_default();
-        *sum = sum.checked_add(item.invoice.total_cents)?;
+        *sum = sum.checked_add(item.due_cents())?;
     }
     let sums = sums
         .into_iter()
@@ -409,6 +412,7 @@ fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter) -> Element {
 /// compare equal when unchanged, so they take their item by value.
 #[component]
 fn InvoiceRow(item: InvoiceListItem) -> Element {
+    let tr = use_tr();
     let invoice = &item.invoice;
     let shown = Shown::of(invoice.status, item.overdue);
     let void = invoice.status == InvoiceStatus::Void;
@@ -423,7 +427,14 @@ fn InvoiceRow(item: InvoiceListItem) -> Element {
             td { class: if void { "text-mono text-right inv-void-amount text-muted" } else { "text-mono text-right" },
                 {money(invoice.total_cents, &invoice.currency)}
             }
-            td { StatusBadge { shown } }
+            td {
+                span { class: "flex flex-wrap gap-2 items-center",
+                    StatusBadge { shown }
+                    if item.imported.is_some() {
+                        Badge { variant: "neutral", {tr.invoices_imported()} }
+                    }
+                }
+            }
         }
     }
 }
@@ -562,7 +573,25 @@ mod tests {
             },
             client_name: "Acme".into(),
             overdue,
+            imported: None,
         }
+    }
+
+    #[test]
+    fn an_imported_invoice_counts_for_what_is_still_due() {
+        let mut partly_paid = item("EUR", 1000, InvoiceStatus::Sent, true);
+        partly_paid.imported = Some(crate::models::invoice::ImportedInvoice {
+            due_cents: 400,
+            paid_on: None,
+            discount_rate: None,
+            tax1_rate: None,
+            tax2_rate: None,
+            period_start: None,
+            period_end: None,
+        });
+        let list = [partly_paid, item("EUR", 100, InvoiceStatus::Sent, false)];
+        let (sums, count) = totals(list.iter()).unwrap();
+        assert_eq!((amounts(&sums).as_str(), count), ("EUR 5.00", 2));
     }
 
     #[test]

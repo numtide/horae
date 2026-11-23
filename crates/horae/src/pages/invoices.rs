@@ -85,6 +85,7 @@ impl Shown {
             Self::Status(InvoiceStatus::Sent) => tr.invoices_status_sent(),
             Self::Status(InvoiceStatus::Paid) => tr.invoices_status_paid(),
             Self::Status(InvoiceStatus::Void) => tr.invoices_status_void(),
+            Self::Status(InvoiceStatus::Closed) => tr.invoices_status_closed(),
             Self::Overdue => tr.invoices_status_overdue(),
         }
     }
@@ -94,7 +95,7 @@ impl Shown {
             Self::Status(InvoiceStatus::Draft) => "warning",
             Self::Status(InvoiceStatus::Sent) => "info",
             Self::Status(InvoiceStatus::Paid) => "success",
-            Self::Status(InvoiceStatus::Void) => "neutral",
+            Self::Status(InvoiceStatus::Void | InvoiceStatus::Closed) => "neutral",
             Self::Overdue => "danger",
         }
     }
@@ -123,6 +124,8 @@ fn breakdown_label(tr: Tr, label: &str) -> String {
     match label {
         "Subtotal" => tr.invoices_subtotal(),
         "Total" => tr.invoices_total(),
+        "Paid" => tr.invoices_paid(),
+        "Due" => tr.invoices_amount_due(),
         other => other.to_owned(),
     }
 }

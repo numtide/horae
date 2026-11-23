@@ -19,7 +19,8 @@
                 "draft",
                 "sent",
                 "paid",
-                "void"
+                "void",
+                "closed"
               ]
             }
           }

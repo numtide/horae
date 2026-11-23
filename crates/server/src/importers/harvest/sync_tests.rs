@@ -6,6 +6,7 @@ use serde_json::json;
 mod api_ids;
 mod archived_clients;
 mod checkpoints;
+mod invoices;
 mod paging;
 pub(super) mod people;
 mod scale;
@@ -622,12 +623,18 @@ async fn add_user(pool: &PgPool, org: Uuid, email: &str) {
     .unwrap();
 }
 
+/// The stored watermark of the records these tests read incrementally. The
+/// invoice mark is checked by the invoice tests.
 async fn watermark(pool: &PgPool, org: Uuid) -> serde_json::Value {
-    credentials::load(pool, org, KEY)
+    let mut watermark = credentials::load(pool, org, KEY)
         .await
         .unwrap()
         .unwrap()
-        .watermark
+        .watermark;
+    if let Some(marks) = watermark.as_object_mut() {
+        marks.remove("invoice");
+    }
+    watermark
 }
 
 fn data() -> HarvestData {
@@ -646,6 +653,7 @@ fn data() -> HarvestData {
              "task":{"id":3},"user":{"id":5},"updated_at":day(2)}
         ]))
         .unwrap(),
+        ..HarvestData::default()
     }
 }
 

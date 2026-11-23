@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use super::{RowSource, VecSource, run_import};
 
+mod csv_invoiced;
 mod csv_people;
 mod csv_streaming;
 mod lookup_cache;
@@ -685,6 +686,7 @@ fn api_row(
         notes: notes.map(str::to_string),
         billable: true,
         invoiced: false,
+        harvest_invoice_id: None,
         running: false,
         billable_rate: Some("150".to_string()),
         billable_amount: None,
@@ -730,6 +732,7 @@ fn nk_row(
         notes: notes.map(str::to_string),
         billable: true,
         invoiced: false,
+        harvest_invoice_id: None,
         running: false,
         billable_rate: None,
         billable_amount: None,

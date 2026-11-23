@@ -34,7 +34,8 @@
                 "draft",
                 "sent",
                 "paid",
-                "void"
+                "void",
+                "closed"
               ]
             }
           }
@@ -138,7 +139,8 @@
                 "draft",
                 "sent",
                 "paid",
-                "void"
+                "void",
+                "closed"
               ]
             }
           }

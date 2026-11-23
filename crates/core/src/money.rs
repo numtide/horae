@@ -129,12 +129,55 @@ pub fn format_major_units(cents: i64, currency: &str) -> String {
     }
 }
 
-/// ISO 4217 minor-unit digits; every currency not listed has two.
-fn currency_decimals(currency: &str) -> u8 {
+/// Pads a plain decimal with zeros to the places Horae shows amounts in for
+/// `currency` (its minor unit, at most two), so Harvest's `1.0` or `100`
+/// reads `1.00` and `100.00` beside the amounts. It never removes a digit:
+/// `95.2381` stays as written.
+pub fn pad_to_currency(decimal: &str, currency: &str) -> String {
+    let places = usize::from(currency_decimals(currency).min(2));
+    let written = decimal
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    if written >= places {
+        return decimal.to_owned();
+    }
+    let point = if written == 0 { "." } else { "" };
+    format!("{decimal}{point}{}", "0".repeat(places - written))
+}
+
+/// ISO 4217 codes, sorted: those in use, and those withdrawn since 2014 that
+/// an old invoice can still carry (HRK, LTL, MRO, …). The codes for testing
+/// (XTS) and for no currency (XXX) are left out.
+const ISO_4217: &[&str] = &[
+    "AED", "AFN", "ALL", "AMD", "ANG", "AOA", "ARS", "AUD", "AWG", "AZN", "BAM", "BBD", "BDT",
+    "BGN", "BHD", "BIF", "BMD", "BND", "BOB", "BOV", "BRL", "BSD", "BTN", "BWP", "BYN", "BYR",
+    "BZD", "CAD", "CDF", "CHE", "CHF", "CHW", "CLF", "CLP", "CNY", "COP", "COU", "CRC", "CUC",
+    "CUP", "CVE", "CZK", "DJF", "DKK", "DOP", "DZD", "EGP", "ERN", "ETB", "EUR", "FJD", "FKP",
+    "GBP", "GEL", "GHS", "GIP", "GMD", "GNF", "GTQ", "GYD", "HKD", "HNL", "HRK", "HTG", "HUF",
+    "IDR", "ILS", "INR", "IQD", "IRR", "ISK", "JMD", "JOD", "JPY", "KES", "KGS", "KHR", "KMF",
+    "KPW", "KRW", "KWD", "KYD", "KZT", "LAK", "LBP", "LKR", "LRD", "LSL", "LTL", "LVL", "LYD",
+    "MAD", "MDL", "MGA", "MKD", "MMK", "MNT", "MOP", "MRO", "MRU", "MUR", "MVR", "MWK", "MXN",
+    "MXV", "MYR", "MZN", "NAD", "NGN", "NIO", "NOK", "NPR", "NZD", "OMR", "PAB", "PEN", "PGK",
+    "PHP", "PKR", "PLN", "PYG", "QAR", "RON", "RSD", "RUB", "RWF", "SAR", "SBD", "SCR", "SDG",
+    "SEK", "SGD", "SHP", "SLE", "SLL", "SOS", "SRD", "SSP", "STD", "STN", "SVC", "SYP", "SZL",
+    "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TWD", "TZS", "UAH", "UGX", "USD", "USN",
+    "USS", "UYI", "UYU", "UYW", "UZS", "VED", "VEF", "VES", "VND", "VUV", "WST", "XAD", "XAF",
+    "XAG", "XAU", "XBA", "XBB", "XBC", "XBD", "XCD", "XCG", "XDR", "XOF", "XPD", "XPF", "XPT",
+    "XSU", "XUA", "YER", "ZAR", "ZMW", "ZWG", "ZWL",
+];
+
+/// Whether `currency` is an ISO 4217 code (see [`ISO_4217`]).
+pub fn is_iso_currency(currency: &str) -> bool {
+    ISO_4217.binary_search(&currency).is_ok()
+}
+
+/// ISO 4217 minor-unit digits; every currency not listed has two. CLF and UYW
+/// have four, which makes no difference: Horae keeps hundredths at most.
+pub(crate) fn currency_decimals(currency: &str) -> u8 {
     match currency.trim() {
         "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => 3,
-        "BIF" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF" | "UGX"
-        | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
+        "BIF" | "BYR" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF"
+        | "UGX" | "UYI" | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
         _ => 2,
     }
 }
@@ -162,6 +205,29 @@ pub fn format_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iso_currencies_are_listed_in_order() {
+        assert!(ISO_4217.windows(2).all(|pair| pair[0] < pair[1]));
+        for known in ["EUR", "USD", "JPY", "HRK", "XCG", "XAD", "USS"] {
+            assert!(is_iso_currency(known), "{known}");
+        }
+        for unknown in ["XYZ", "XTS", "XXX", "eur", "EURO", ""] {
+            assert!(!is_iso_currency(unknown), "{unknown}");
+        }
+        assert_eq!(currency_decimals("UYI"), 0);
+    }
+
+    #[test]
+    fn unit_prices_pad_to_the_currency_without_losing_digits() {
+        assert_eq!(pad_to_currency("1.0", "USD"), "1.00");
+        assert_eq!(pad_to_currency("0", "USD"), "0.00");
+        assert_eq!(pad_to_currency("100", "EUR"), "100.00");
+        assert_eq!(pad_to_currency("95.2381", "USD"), "95.2381");
+        assert_eq!(pad_to_currency("80.50", "JPY"), "80.50");
+        assert_eq!(pad_to_currency("80", "JPY"), "80");
+        assert_eq!(pad_to_currency("1.5", "KWD"), "1.50");
+    }
 
     #[test]
     fn major_units_use_the_currencys_own_decimals() {

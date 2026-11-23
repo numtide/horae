@@ -52,6 +52,29 @@ Harvest's line items do not say which time entries they cover; only the entry po
 - Q8: A Harvest number already used by a Horae invoice: report the Harvest invoice as an error, or
   import it under a suffixed number? → A: Error (FR-015).
 
+### Session 2026-11-23
+
+- Q9: A line's unit price with more decimals than the currency (95.2381, or 80.50 in JPY): refuse
+  the invoice, or keep the price? → A: Keep each line's amount in exact hundredths and the unit
+  price as exact decimal text, display only, never used in arithmetic (FR-004).
+- Q10: Should invoice errors hold back the watermarks, as entry errors do? → A: Yes; the report
+  says when they were held back.
+- T002 (2026-11-23, test account): billing an entry and deleting its invoice both move the entry's
+  `updated_at` in Harvest, so incremental runs see them (research R-7).
+- Q11 (2026-11-23): Which currencies may an imported invoice have? → A: ISO 4217 codes only (in
+  use, or withdrawn since 2014 for old invoices); any other code makes the invoice an error. An
+  invoice in another currency than its client's is still imported in its own currency (FR-007).
+- Q12 (2026-11-23): A connection whose Harvest user cannot read invoices (HTTP 403 on them)? → A:
+  The run fails, as for any 403, saying that the connection needs a Harvest administrator or a
+  manager who can create and edit invoices, and offering to reconnect (FR-019).
+- Q13 (2026-11-23): Can a Harvest number collide with an imported invoice? → A: Two listed invoices
+  that swap numbers between runs stay reported errors. An invoice deleted in Harvest whose number a
+  new Harvest invoice takes is removed from Horae, its time reopened, and the new one imported
+  (FR-015).
+- Q14 (2026-11-23): An imported invoice that Harvest turns back into a draft? → A: The import voids
+  it in Horae and reopens its time, once; issued again in Harvest, it comes back as a changed
+  invoice, not void (FR-014).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Billed history stays billed after an import (Priority: P1)
@@ -195,12 +218,23 @@ state of their entries.
 - A Horae-made invoice voided after the import: its entries reopen as today; imported links are
   unaffected.
 - An imported invoice voided in Horae: its entries reopen, and a later import does not link them to
-  it again while Harvest has not changed that invoice (FR-016).
+  it again while Harvest has not changed that invoice (FR-016). Once Harvest changes it, the next
+  run reads every time entry, whatever the scope, and links them again: their own `updated_at` did
+  not move, so an incremental read would miss them.
+- An imported invoice that Harvest turns back into a draft: voided in Horae and its entries reopened
+  in the invoice phase of the next run, read or not (Q14). Later runs change nothing while it stays a
+  draft; issued again, it is updated to its new state and its time linked again by a full read. That
+  full read stays due until a run finishes without errors, so a job that stops after the invoice
+  phase leaves it to the next one.
+- An invoice deleted in Harvest whose number a new Harvest invoice takes (deleting the latest
+  invoice makes its number Harvest's next suggestion): Horae's copy is removed and the new one
+  imported (Q13). A submitted entry it still held keeps its state and loses the link.
 - A running timer that Harvest reports billed: not possible in Harvest; the timer rule (skip running
   entries) applies first anyway.
 - Two runs at once: prevented by the existing import lock.
 - An entry that was edited in Horae after the first import and that Harvest later bills: linked; the
-  link freezes it as a Horae invoice would.
+  link freezes it as a Horae invoice would. If Harvest also changed one of its fields, Horae's
+  fields stay and the row is reported as changed in Horae, as for an entry Harvest does not bill.
 
 ## Requirements *(mandatory)*
 
@@ -219,16 +253,21 @@ state of their entries.
 
 **Amounts**
 
-- **FR-004**: Every amount MUST be converted from Harvest's decimal to integer minor units of the
-  invoice's currency with exact integer arithmetic. An amount with more decimals than the currency
-  allows MUST make the invoice an error, never be rounded.
+- **FR-004**: Every amount that is summed or stored as money (each line's amount, the discount, both
+  taxes, the total and the amount due) MUST be converted from Harvest's decimal to exact hundredths,
+  the unit Horae stores money in, with exact integer arithmetic. An amount with more decimals than
+  the currency allows MUST make the invoice an error, never be rounded. A line's unit price is not
+  such an amount: it MUST be kept as the exact decimal text Harvest gave, for display only, and
+  never used in arithmetic (Harvest allows more decimals there, and imported invoices are read
+  only).
 - **FR-005**: An imported invoice MUST store Harvest's own subtotal, discount amount, first and second
   tax amounts, total and amount due, and MUST NOT recompute them from rates. Before writing, the
   import MUST check that the lines' amounts sum to the subtotal and that subtotal − discount + taxes =
   total, exactly; a mismatch MUST make the invoice an error.
 - **FR-006**: The discount and tax rates MUST be kept exactly as Harvest wrote them, for display only,
   and never used in a calculation.
-- **FR-007**: An invoice in a currency Horae does not recognize MUST be an error.
+- **FR-007**: An invoice whose currency is not an ISO 4217 code MUST be an error. An invoice in
+  another currency than its client's MUST be imported in its own currency.
 
 **Lines**
 
@@ -259,10 +298,15 @@ state of their entries.
   and MUST NOT be rewritten.
 - **FR-014**: A later run MUST update an imported invoice's state, amounts due, dates, texts and lines
   to Harvest's. An imported invoice that Harvest no longer lists MUST be left as it is and reported.
+  An imported invoice that Harvest turns back into a draft MUST be voided, its time reopened, and
+  counted; a later run MUST change nothing more while it stays a draft, and MUST update it to
+  Harvest's state once Harvest issues it again.
   Invoices made in Horae MUST never be changed by an import.
 - **FR-015**: An imported invoice MUST keep Harvest's number. A Harvest number that a Horae-made
-  invoice already uses MUST make that Harvest invoice an error. Horae's own numbering MUST skip every
-  number already taken, imported or not.
+  invoice already uses MUST make that Harvest invoice an error. A number that an imported invoice
+  Harvest no longer lists still holds MUST be freed: that invoice is removed, its time reopened,
+  and its number listed in the report. A number another listed Harvest invoice holds MUST make the
+  invoice an error. Horae's own numbering MUST skip every number already taken, imported or not.
 
 **What an administrator can do with an imported invoice**
 
@@ -281,7 +325,9 @@ state of their entries.
   linked, unlinked, billed-without-invoice and conflicting entry counts that the commit would
   produce, and MUST write nothing.
 - **FR-019**: Each invoice error MUST name the Harvest invoice number and id and the reason, and MUST
-  appear in the run's error list and error download beside the entry errors.
+  appear in the run's error list and error download beside the entry errors. A run whose Harvest
+  user cannot read invoices MUST fail, saying that the connection needs a Harvest administrator or a
+  manager who can create and edit invoices, and offering to reconnect.
 - **FR-020**: Starting, previewing and committing an import MUST stay limited to administrators, as
   today. Seeing imported invoices MUST need the same invoice permissions as seeing any invoice.
 - **FR-021**: The account switch MUST treat imported invoices as provenance of the connected account,
@@ -289,7 +335,9 @@ state of their entries.
   records.
 - **FR-022**: A CSV import MUST NOT create invoices (Harvest's time CSV carries no invoice data). An
   entry whose "Invoiced?" column says yes MUST be set to invoiced with no invoice and counted as
-  billed without an imported invoice (FR-011).
+  billed without an imported invoice (FR-011). A CSV never unlinks or reopens an entry (FR-012 does
+  not apply): it cannot tell an entry that was never billed from one whose invoice it lacks, and it
+  never moves an entry off an imported invoice.
 - **FR-023**: An import MUST NOT raise the invoice sent, paid or voided plugin events for imported
   invoices.
 

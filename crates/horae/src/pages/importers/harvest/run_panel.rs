@@ -26,6 +26,7 @@ pub(super) fn RunPanel(
     #[props(default)]
     summary: bool,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let id = job.id;
@@ -112,7 +113,15 @@ pub(super) fn RunPanel(
     let can_retry = job.retry_availability == RetryAvailability::Available;
     let access_error = matches!(
         job.error_kind,
-        Some(JobErrorKind::ReconnectRequired | JobErrorKind::Forbidden)
+        Some(
+            JobErrorKind::ReconnectRequired
+                | JobErrorKind::Forbidden
+                | JobErrorKind::InvoicesForbidden
+        )
+    );
+    let forbidden = matches!(
+        job.error_kind,
+        Some(JobErrorKind::Forbidden | JobErrorKind::InvoicesForbidden)
     );
     let run_link = rsx! {
         if summary {
@@ -259,6 +268,7 @@ pub(super) fn RunPanel(
                             match job.error_kind {
                                 Some(JobErrorKind::ReconnectRequired) => rsx! { "Harvest no longer accepts Horae's access, so the {noun} stopped." },
                                 Some(JobErrorKind::Forbidden) => rsx! { "The Harvest user who connected Horae can't read everything the import needs." },
+                                Some(JobErrorKind::InvoicesForbidden) => rsx! { {tr.harvest_run_invoices_forbidden()} },
                                 Some(JobErrorKind::Unavailable) => rsx! { "Harvest didn't respond after several tries. It is usually temporary." },
                                 None => rsx! {
                                     "The {noun} stopped. "
@@ -268,10 +278,14 @@ pub(super) fn RunPanel(
                             if preview { " Nothing in Horae changed." }
                         }
                         if let Some(written) = &written { p { class: "text-sm", "{written}" } }
-                        if job.error_kind == Some(JobErrorKind::Forbidden) {
+                        if forbidden {
                             p { class: "text-sm text-secondary",
                                 if let Some(account) = &account { "Connected to Harvest account {account}. " }
-                                "Ask a Harvest administrator to reconnect, or give this user administrator rights in Harvest."
+                                if job.error_kind == Some(JobErrorKind::InvoicesForbidden) {
+                                    {tr.harvest_run_invoices_forbidden_hint()}
+                                } else {
+                                    "Ask a Harvest administrator to reconnect, or give this user administrator rights in Harvest."
+                                }
                             }
                         }
                         div { class: "flex gap-3 flex-wrap items-center",
@@ -281,7 +295,7 @@ pub(super) fn RunPanel(
                                         disabled: busy(), onclick: move |_| act(Action::Reconnect), "Reconnect Harvest"
                                     }
                                 },
-                                Some(JobErrorKind::Forbidden) => rsx! {
+                                Some(JobErrorKind::Forbidden | JobErrorKind::InvoicesForbidden) => rsx! {
                                     button { r#type: "button", class: "btn btn-primary", "data-testid": "reconnect".to_owned(),
                                         disabled: busy(), onclick: move |_| act(Action::Reconnect), "Reconnect as another user"
                                     }

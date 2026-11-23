@@ -121,7 +121,9 @@ pub async fn list(tx: &mut Tx, actor: &Actor) -> Result<Vec<UninvoicedClient>, O
            FROM sums s JOIN clients c ON c.id = s.client_id AND c.org_id = $1 AND c.active
            LEFT JOIN LATERAL (
              SELECT i.id, i.number, i.issued_on,
-                    COALESCE(GREATEST(max(te.spent_date), max(f.due_on)), i.issued_on) AS covered_to
+                    COALESCE(GREATEST(max(te.spent_date), max(f.due_on),
+                      (SELECT max(linked.spent_date) FROM time_entries linked WHERE linked.invoice_id = i.id)),
+                      i.issued_on) AS covered_to
              FROM invoices i
              LEFT JOIN invoice_line_items l ON l.invoice_id = i.id
              LEFT JOIN time_entries te ON te.id = l.time_entry_id
@@ -191,7 +193,8 @@ fn collect(rows: Vec<Sum>) -> Vec<UninvoicedClient> {
 }
 
 /// The client's latest invoice that is not void, and the last day it billed:
-/// where the next invoice for the client starts.
+/// where the next invoice for the client starts. An invoice imported from
+/// Harvest has no lines for its time, so its linked entries count (FR-025).
 pub async fn last_invoice(
     tx: &mut Tx,
     actor: &Actor,
@@ -202,7 +205,9 @@ pub async fn last_invoice(
     Ok(sqlx::query_as!(
         LastInvoice,
         r#"SELECT i.id, i.number, i.issued_on AS "issued_on: NaiveDate",
-                  COALESCE(GREATEST(max(te.spent_date), max(f.due_on)), i.issued_on) AS "covered_to!: NaiveDate"
+                  COALESCE(GREATEST(max(te.spent_date), max(f.due_on),
+                    (SELECT max(linked.spent_date) FROM time_entries linked WHERE linked.invoice_id = i.id)),
+                    i.issued_on) AS "covered_to!: NaiveDate"
            FROM invoices i
            LEFT JOIN invoice_line_items l ON l.invoice_id = i.id
            LEFT JOIN time_entries te ON te.id = l.time_entry_id
