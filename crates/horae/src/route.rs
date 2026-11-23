@@ -5,7 +5,7 @@ use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
 use crate::models::permission_audit::AuditFilter;
 use crate::pages::{
-    admin::{AdminApiTokens, WorkspaceSettings},
+    admin::{AdminApiTokens, WorkspacePlugins, WorkspaceSettings},
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
@@ -114,6 +114,8 @@ pub enum Route {
     #[layout(AdminShell)]
     #[route("/admin/workspace")]
     WorkspaceSettings {},
+    #[route("/admin/plugins")]
+    WorkspacePlugins {},
     #[route("/admin/importers")]
     ImporterIndex {},
     // The OAuth callback reports a failed connection in the query.

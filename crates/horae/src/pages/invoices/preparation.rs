@@ -175,7 +175,7 @@ pub(super) fn ChooseClient() -> Element {
                             pending: clients.state()() != UseResourceState::Ready, focus_on_recovery: INVOICES_HEADING }
                     },
                     Some(Ok(list)) => rsx! {
-                        section { class: "card p-6 max-w-lg", aria_labelledby: "invoice-step-1",
+                        section { class: "card p-6 max-w-form", aria_labelledby: "invoice-step-1",
                             p { class: "text-sm text-muted mb-2", {tr.invoices_step(1, 2)} }
                             h2 { id: "invoice-step-1", class: "card-title mb-4", {tr.invoices_step_client_title()} }
                             FormGroup { label: tr.invoices_column_client(), id: "inv-client",
@@ -733,13 +733,13 @@ fn Prepare(sources: Sources) -> Element {
             }
         }
         if started() {
-            section { class: "card p-5 mb-6", aria_labelledby: "inv-values-title",
+            section { class: "card p-5 mb-6 max-w-form", aria_labelledby: "inv-values-title",
                 h2 { id: "inv-values-title", class: "card-title mb-4", {tr.invoices_values()} }
                 DefaultsFields { fields, disabled: busy() }
             }
         }
         if same_sources && !fees.read().is_empty() {
-            section { class: "card p-5 mb-6",
+            section { class: "card p-5 mb-6 max-w-form",
                 fees::FeeFields { fees, disabled: busy() }
                 // Fees changed elsewhere (a new schedule, another draft) since
                 // this list was loaded: reload them, keeping the edits.

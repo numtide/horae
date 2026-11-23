@@ -23,16 +23,16 @@ pub(super) fn ErrorGroups(
         return rsx! {};
     }
     rsx! {
-        section { class: "flex flex-col gap-3 mt-6", aria_labelledby: "attention-title",
-            div { class: "flex items-center justify-between gap-3 flex-wrap",
-                h2 { id: "attention-title", class: "himp-title", "Needs your attention" }
+        section { class: "card p-0 overflow-hidden mt-6", aria_labelledby: "attention-title",
+            div { class: "flex items-center justify-between gap-3 flex-wrap px-6 py-4",
+                h2 { id: "attention-title", class: "card-title m-0", "Needs your attention" }
                 if !groups.is_empty() {
                     a { class: "text-sm", href: format!("/api/import/harvest/jobs/{job_id}/errors"),
                         "Download every issue (NDJSON)"
                     }
                 }
             }
-            div { class: "card p-0 overflow-hidden",
+            div { class: "border-t",
                 for (index, group) in groups.iter().enumerate() {
                     details { key: "{index}", class: "himp-group", open: index == 0,
                         summary {

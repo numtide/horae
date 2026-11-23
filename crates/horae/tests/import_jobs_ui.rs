@@ -72,11 +72,14 @@ pub mod screen_state;
 
 #[path = "../src/components/button.rs"]
 pub mod button;
+#[allow(dead_code)]
+#[path = "../src/components/card.rs"]
+pub mod card;
 #[path = "../src/components/confirm_dialog.rs"]
 pub mod confirm_dialog;
 
 mod components {
-    pub use crate::{back_link, confirm_dialog, icons, menu, page_header, screen_state};
+    pub use crate::{back_link, card, confirm_dialog, icons, menu, page_header, screen_state};
 }
 
 /// The importer routes, as the app declares them.

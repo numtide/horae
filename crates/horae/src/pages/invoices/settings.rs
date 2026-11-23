@@ -246,7 +246,7 @@ fn SettingsForm(initial: OrgBranding) -> Element {
     let draft = use_signal(|| initial.clone());
     rsx! {
         div { class: "flex flex-col lg:flex-row gap-6",
-            div { class: "flex flex-col gap-6 flex-1 min-w-0",
+            div { class: "flex flex-col gap-6 flex-1 min-w-0 max-w-form",
                 for card in Card::ALL {
                     SettingsCard { key: "{card.fields()[0].id}", card, saved, draft }
                 }

@@ -9,11 +9,16 @@ pub struct PluginInfo {
     pub hooks: String,
 }
 
-/// List the plugins currently loaded by the server.
+/// List the plugins currently loaded by the server, for the workspace
+/// settings' Plugins page and with the same permission.
 #[server]
 pub async fn list_plugins() -> Result<Vec<PluginInfo>, ServerFnError> {
-    session_caller().await?;
+    use crate::ops;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
+    let read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let allowed = ops::organization::require_settings(&read.actor);
+    read.finish(allowed).await.map_err(op_error)?;
 
     Ok(state
         .plugins

@@ -1,18 +1,16 @@
 use dioxus::prelude::*;
 
-/// Card chrome for an inline create/edit form: uppercase title, the form's
-/// error banner, then the fields.
+/// Card chrome for an inline create/edit form, at most the form width: the
+/// section title, the form's error banner, then the fields.
 #[component]
 pub fn FormCard(title: String, error: ReadSignal<Option<String>>, children: Element) -> Element {
     rsx! {
-        div { class: "card",
-            div { class: "p-5",
-                h3 { class: "text-sm mb-4 uppercase tracking-wide text-faint", "{title}" }
-                if let Some(err) = &*error.read() {
-                    div { class: "alert alert-danger", "{err}" }
-                }
-                {children}
+        div { class: "card max-w-form",
+            h3 { class: "card-title", "{title}" }
+            if let Some(err) = &*error.read() {
+                div { class: "alert alert-danger", "{err}" }
             }
+            {children}
         }
     }
 }
