@@ -124,6 +124,13 @@ consequential and are recorded there.
   are priced on.
 - Q: What period do Horae's own invoices report? → A: `null` for now; Horae stores none.
 - Q: Do tags stay in FR-044? → A: No. Harvest's public API v2 reference has no tags resource.
+- Q: The Harvest importer creates no assignment rows, so imported people would have empty
+  project assignment lists. How do they get rows? → A: The Harvest API import brings Harvest's
+  user assignments as assignment rows, so an imported administrator gets their real list. The
+  CSV import stays as it is: no derived assignments and no backfill.
+- Q: Is a time entry's `invoice` reference (`id`, `number`) served to an OAuth token with only
+  `time:read`? → A: Yes, to any caller who can see the entry, as Harvest does (members get it
+  too). Reading the invoice itself still needs invoice access.
 
 ## User Scenarios & Testing *(mandatory)*
 

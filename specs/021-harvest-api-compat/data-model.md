@@ -133,10 +133,11 @@ step 1's design: a `harvest_id bigint` column, a global sequence per kind, the
 - **Imported records** follow step 1's rule. The invoice import (spec 025) passes the Harvest
   invoice id and each line's Harvest id as `harvest_id` when no record of the kind in the
   organization has it and it is more than 10,000 above the sequence; otherwise the trigger
-  numbers the record and the report gets an `IdNotice`. The importer creates project tasks from
-  time entries and creates no assignments; it reads no Harvest assignment ids, so task
-  assignments are always numbered by the trigger. Whether the importer should create
-  assignment rows is a question open with the maintainer (contracts/harvest-api-v2.md *Step 5*).
+  numbers the record and the report gets an `IdNotice`. The Harvest API import also brings
+  Harvest's user assignments as `assignments` rows (T080), passing each one's Harvest id under
+  the same rule and recording it in `harvest_import_map` (kind `user_assignment`). Project tasks
+  are still created from time entries without Harvest's task assignment ids, so task
+  assignments are always numbered by the trigger. The CSV import creates no assignments.
 - **Update times** use `set_updated_at`, stamped at write time (step 4's
   `0006_updated_at_at_write.sql`). An invoice's `updated_at` also moves when one of its lines is
   inserted, changed or deleted, because the lines are part of the invoice object. As in step 4,

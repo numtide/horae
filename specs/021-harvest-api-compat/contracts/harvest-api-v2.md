@@ -128,9 +128,12 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   partly reverses the 2026-11-19 decision in step 3's row above, which listed every pair the
   Timesheet offers. With real assignment ids, keeping those pairs would need a table of
   administrator and project pairs kept by triggers: more schema for a case Harvest does not
-  have. The demo administrator has assignment rows. The Harvest importer creates none, so
-  imported people, the administrator included, would have empty lists; how they get rows is a
-  question open with the maintainer, and T042 waits for the answer.
+  have. The demo administrator has assignment rows. Imported people get theirs from the Harvest
+  API import, which brings Harvest's user assignments as `assignments` rows (decided
+  2026-11-23, task T080), so an imported administrator sees the list they had on Harvest. An
+  organization imported earlier gets the rows on its next API import. The CSV import carries
+  no assignments and creates none, so a CSV-imported organization has empty lists until people
+  are assigned in Horae.
 - User assignment fields: `id`; `project` (`id`, `name`, `code`); `user` (`id`, `name`);
   `is_active` true (Horae does not archive an assignment, so `is_active=false` lists nothing);
   `is_project_manager` from `project_management_assignments`; `use_default_rates` true when the
@@ -272,8 +275,10 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 
 Personal access tokens and session reads are unaffected (024 FR-064). No scope covers rates
 (024 FR-063), so an OAuth token reads `hourly_rate: null` on user and task assignments whatever
-its owner's rate grants. Whether a time entry's `invoice` reference (`id`, `number`) is served
-under `time:read` is a question open with the maintainer.
+its owner's rate grants. A time entry's `invoice` reference (`id`, `number`) is served to any
+caller who can see the entry, an OAuth token with only `time:read` included (decided
+2026-11-23). Harvest's time entries carry the reference with no permission rule, and members,
+who cannot read invoices, get it too. `GET /invoices/{id}` still needs invoice access.
 
 ## Write semantics (step 3, FR-030–FR-032)
 
