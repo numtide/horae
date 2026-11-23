@@ -67,43 +67,51 @@ fn rounding_lands_on_the_named_side_for_every_u32() {
 }
 
 /// For every non-negative subtotal and any three percentages, invoice amounts
-/// never panic and fail only with `Overflow`.
+/// never panic or wrap (Kani's own overflow and panic checks), keep the
+/// subtotal they were given and never make the discount negative.
 #[kani::proof]
 fn invoice_amounts_never_panic_for_every_subtotal() {
     let subtotal: i64 = kani::any();
     kani::assume(subtotal >= 0);
-    if let Err(e) = invoice_amounts(
+    let amounts = invoice_amounts(
         subtotal,
         any_percentage(),
         any_percentage(),
         any_percentage(),
-    ) {
-        assert!(e == InvoiceAmountError::Overflow);
+    );
+    kani::cover!(amounts.is_err());
+    if let Ok(a) = amounts {
+        assert!(a.subtotal_cents == subtotal && a.discount_cents >= 0);
     }
 }
 
 /// For every non-negative amount and any two tax rates, both taxes are
-/// non-negative and the total is exactly the amount plus them; the only
-/// failure is a total past `i64::MAX`, never a wrap. With the discount zero
-/// the amount is the taxable amount, which the next proof keeps non-negative.
+/// non-negative and the total is exactly the amount plus them, and it fails
+/// only for amounts past a third of `i64::MAX`. With the discount zero the
+/// amount is the taxable amount. After a discount, the next proof keeps that
+/// non-negative only for subtotals up to 2^28 cents; above it, the proptest
+/// properties sample it.
 #[kani::proof]
 fn invoice_taxes_are_non_negative_and_add_up_for_every_amount() {
     let taxable: i64 = kani::any();
     kani::assume(taxable >= 0);
-    match invoice_amounts(
-        taxable,
-        Percentage::ZERO,
-        any_percentage(),
-        any_percentage(),
-    ) {
+    let (tax1, tax2) = (any_percentage(), any_percentage());
+    match invoice_amounts(taxable, Percentage::ZERO, tax1, tax2) {
         Ok(a) => {
+            kani::cover!();
             assert!(a.discount_cents == 0 && a.tax1_cents >= 0 && a.tax2_cents >= 0);
             assert!(
                 i128::from(a.total_cents)
                     == i128::from(taxable) + i128::from(a.tax1_cents) + i128::from(a.tax2_cents)
             );
         }
-        Err(e) => assert!(e == InvoiceAmountError::Overflow),
+        Err(e) => {
+            kani::cover!();
+            // Each tax is at most the amount, so only an amount past a third
+            // of `i64::MAX` can overflow. The exact total in `i128` ran past
+            // five minutes.
+            assert!(e == InvoiceAmountError::Overflow && taxable > i64::MAX / 3);
+        }
     }
 }
 

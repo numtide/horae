@@ -1,9 +1,12 @@
-//! Kani proofs over every scope bit pattern and every permission (FR-060,
-//! FR-063). They reason over each scope's permission list, not over
-//! `PermissionSelection`: its `BTreeSet` keeps CBMC busy past ten minutes even
-//! for one symbolic grant. Together they make the ceiling the plain union of
-//! the lists; that a request's grants are the person's intersected with it is
-//! sampled by `properties.rs` over whole selections.
+//! Kani proofs of the scope ceiling, over every scope bit pattern and every
+//! permission (FR-060, FR-063). They reason over each scope's permission list,
+//! not over `PermissionSelection`: its `BTreeSet` keeps CBMC busy past ten
+//! minutes even for one symbolic grant. Together they make the ceiling the
+//! plain union of the lists, all on the time and catalog allow-list. The
+//! narrowing (a request's grants are the person's intersected with the
+//! ceiling) is a std set intersection in `horae-server`'s `ops::actor`, and
+//! its `#[sqlx::test]`s check it for every scope set with the Member and
+//! Administrator profiles; no proof here covers it.
 
 use super::{Scope, ScopeSet};
 use crate::permissions::catalog::Permission;
@@ -42,6 +45,7 @@ fn normalize_is_idempotent_and_only_adds_time_read() {
 fn time_write_lets_through_everything_time_read_does() {
     let permission = any_permission();
     if Scope::TimeRead.permissions().contains(&permission) {
+        kani::cover!();
         assert!(Scope::TimeWrite.permissions().contains(&permission));
     }
 }
