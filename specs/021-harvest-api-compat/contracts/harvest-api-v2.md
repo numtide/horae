@@ -117,13 +117,14 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   refused both with 422.
 - The ids differ from the ones step 3 served (project and task ids). Clients that cached them
   get new ones once; the release notes say so.
-- **An administrator's projects without an assignment row** (decision pending with the
-  maintainer; the step-5 tasks assume the recommendation). Horae lets an administrator track any project; Harvest does not, so
-  such pairs have no assignment to number. Recommended: leave them out of the project
-  assignments lists, as Harvest would; the administrator still writes time to them by project
-  and task id. The demo administrator and imported administrators have assignment rows. The
-  alternative keeps listing them and numbers each administrator and project pair in a table kept
-  by triggers, which is more schema for a case Harvest does not have.
+- **An administrator's projects without an assignment row are left out** (decided by the
+  maintainer on 2026-11-23). Horae lets an administrator track any project; Harvest does not, so
+  such pairs have no assignment to number. The lists show only `assignments` rows, as Harvest
+  would; the administrator still writes time to those projects by project and task id. This
+  partly reverses the 2026-11-19 decision in step 3's row above, which listed every pair the
+  Timesheet offers. With real assignment ids, keeping those pairs would need a table of
+  administrator and project pairs kept by triggers: more schema for a case Harvest does not
+  have. The demo administrator and imported administrators have assignment rows.
 - User assignment fields: `id`; `project` (`id`, `name`, `code`); `user` (`id`, `name`);
   `is_active` true (Horae does not archive an assignment, so `is_active=false` lists nothing);
   `is_project_manager` from `project_management_assignments`; `use_default_rates` true when the
@@ -149,8 +150,8 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 - `GET /users/{id}/teammates`: the people that user manages (`person_management_assignments`),
   with `id`, `first_name`, `last_name` and `email`; the caller needs `PeopleReadAll` or to be
   that user.
-- Tags are not in step 5. FR-044 item 4 lists them, but the public API v2 reference has no tags
-  resource (checked 2026-11-22), so there is no documented shape to serve.
+- Tags are not served. The public API v2 reference has no tags resource (checked 2026-11-22),
+  so there is no documented shape to serve; FR-044 item 4 was amended to match on 2026-11-23.
 
 ### Invoices
 
@@ -160,7 +161,7 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 | sent | `open` | yes |
 | paid | `paid` | yes |
 | closed (imported only, spec 025) | `closed` | yes |
-| void | none | no: left out of lists, 404 by id, and `state=void` is 422 |
+| void | none | no: left out of lists, 404 by id, and `state=void` is 422 (decided 2026-11-23) |
 
 - Overdue (PR #453) is not a state on Harvest either. An overdue invoice is `open` with a
   `due_date` before the organization's today, which is how a client tells it apart; nothing is
@@ -190,8 +191,9 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   - Imported lines (`harvest_invoice_lines`): their stored kind, description, quantity, unit
     price, amount, taxed flags and project.
 - Harvest documents `period_start` and `period_end` as the start and end of the period during
-  which the invoice's time entries were added (checked 2026-11-22). Whether Horae's own invoices
-  fill them is still open; until decided they are `null`.
+  which the invoice's time entries were added (checked 2026-11-22). Horae's own invoices serve
+  `null` for both for now (decided 2026-11-23): Horae stores no period, and deriving one from
+  the lines' dates can come later.
 - Filters: `client_id`, `project_id` (invoices with a line for that project), `state` (one
   value, `draft`, `open`, `paid` or `closed`, as Harvest's filter takes one; checked
   2026-11-22), `from` and `to` (on `issue_date`), `updated_since`. Keyed by id, newest
@@ -213,7 +215,7 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   no `updated_since`), in the order the operation returns. Checked against the public
   reference on 2026-11-22.
 - Totals are integer minutes and minor units until the response (FR-045). Hours are the
-  organization's rounded minutes, which billable amounts are priced on.
+  organization's rounded minutes, which billable amounts are priced on (decided 2026-11-23).
 - `/reports/time/clients`, `/projects`, `/tasks`, `/team`: one row per group and currency from
   `ops::reports::time` (group `client`, `project`, `task`, `person`), so a client with work in
   two currencies has two rows. Fields: the group's `*_id` and `*_name` (project rows also carry

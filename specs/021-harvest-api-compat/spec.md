@@ -113,6 +113,18 @@ consequential and are recorded there.
 - Q: The constitution amendment? → A: Approved verbatim on 2026-11-09 and applied as constitution
   5.0.0 in the step-1 pull request.
 
+### Session 2026-11-23 (maintainer decisions for step 5)
+
+- Q: Do an administrator's projects without an assignment row appear in the project assignments
+  lists? → A: No, as on Harvest. This partly reverses the 2026-11-19 step-3 choice: once
+  assignments have their own ids (FR-015), those pairs have nothing to number.
+- Q: Are void invoices served? → A: No. They are absent from lists and 404 by id, as a deleted
+  Harvest invoice is.
+- Q: Which hours do reports show? → A: The organization's rounded minutes, which billable amounts
+  are priced on.
+- Q: What period do Horae's own invoices report? → A: `null` for now; Horae stores none.
+- Q: Do tags stay in FR-044? → A: No. Harvest's public API v2 reference has no tags resource.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A Harvest client reads Horae with a personal access token (Priority: P1)
@@ -447,7 +459,8 @@ ______________________________________________________________________
      teammates.
   1. The time reports (clients, projects, tasks, team), the uninvoiced report and the project
      budget report.
-  1. Invoices and tags.
+  1. Invoices. Tags are not served: Harvest's public API v2 reference documents no tags
+     resource (checked 2026-11-22).
 - **FR-045**: Report totals MUST be computed from integer minutes and minor units, and only the
   final values converted for the wire (Principle I).
 
@@ -594,7 +607,7 @@ many surveyed clients each step unlocks ([research.md §1.5](research.md#15-most
    absolute links, real update times on every kind, all time-entry filters and fields, empty
    lists for absent kinds. Unlocks pipelines and archive tools.
 1. **Catalogue and report reads** (FR-044 items 2–4). Assignments, teammates, users by id,
-   reports, invoices, tags.
+   reports, invoices.
 1. **Catalogue writes and invoice status** (FR-033, FR-034).
 1. **OAuth2 provider** (FR-060–FR-062), last, as OQ-1 decided.
 
