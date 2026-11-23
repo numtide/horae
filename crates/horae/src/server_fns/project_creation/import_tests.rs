@@ -100,10 +100,10 @@ async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: 
     .unwrap();
     assert_eq!(rate, Some(8000));
 
-    // Old catalog rates and API catalog rates can have no known denomination.
-    // Even zero requires confirmation; guessing would establish a false unit.
+    // API catalog rates have no known denomination; guessing would establish
+    // a false unit, so a non-zero one requires an explicit project rate.
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents = 0, default_rate_currency = NULL WHERE id = $1",
+        "UPDATE tasks SET default_rate_cents = 8000, default_rate_currency = NULL WHERE id = $1",
         task.id,
     )
     .execute(&pool)
@@ -152,6 +152,30 @@ async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: 
         Some(8000),
         "catalog edits cannot change the project snapshot"
     );
+
+    // An imported Harvest 0 is stored as no rate. The task links without a
+    // rate, so task billing falls back to the client's default rate.
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = NULL, default_rate_currency = NULL WHERE id = $1",
+        task.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    compatible.tasks[0].source = TaskSource::Existing { task_id: task.id };
+    let rateless =
+        finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &compatible, false)
+            .await
+            .unwrap();
+    let rate = sqlx::query_scalar!(
+        "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
+        rateless,
+        task.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rate, None);
 }
 
 async fn configuration(pool: &PgPool, org: Uuid) -> serde_json::Value {

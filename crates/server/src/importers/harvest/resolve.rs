@@ -680,7 +680,8 @@ pub async fn resolve_task(
     if name.is_empty() {
         return Err(RowFailure::new("task name is empty"));
     }
-    let default_rate_cents = rate_cents(row.billable_rate)?;
+    // Harvest reports a task without a default rate as 0; zero is no rate.
+    let default_rate_cents = rate_cents(row.billable_rate)?.filter(|&cents| cents != 0);
     let rate_currency = row
         .rate_currency
         .map(|value| value.trim().to_ascii_uppercase())

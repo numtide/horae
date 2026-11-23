@@ -1288,6 +1288,43 @@ async fn csv_name_only_matches_one_org_user_and_reimports_without_duplicates(poo
     assert_eq!(count(&pool, "users").await, 2);
 }
 
+/// The first row of a task sets its default rate: a zero rate is no rate,
+/// and a real rate keeps the row's currency.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn csv_zero_task_rate_is_stored_as_no_rate(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let csv = b"Date,Client,Project,Task,Hours,Email,Billable Rate,Currency\n\
+2026-01-15,Acme,Website,Free task,1,dev@acme.com,0,USD\n\
+2026-01-15,Acme,Website,Paid task,1,dev@acme.com,80,USD\n";
+    let report = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(report.summary.time_entries.created, 2, "{report:?}");
+    let tasks = sqlx::query!(
+        "SELECT name, default_rate_cents, default_rate_currency FROM tasks
+          WHERE org_id = $1 ORDER BY name",
+        org
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        tasks
+            .iter()
+            .map(|task| (
+                task.name.as_str(),
+                task.default_rate_cents,
+                task.default_rate_currency.as_deref()
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("Free task", None, None),
+            ("Paid task", Some(8000), Some("USD"))
+        ]
+    );
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn import_rejects_ambiguous_normalized_email_without_partial_writes(pool: PgPool) {
     let org = seed_org(&pool).await;
