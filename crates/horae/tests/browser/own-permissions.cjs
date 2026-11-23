@@ -28,7 +28,9 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
   const main = page.locator('.adm-main');
   const table = main.getByRole('table', { name: 'Your access by area', exact: true });
   // Opening the account menu re-reads the session, as returning to the page does.
+  // The server renders the rail; the button handles clicks only once hydrated.
   const reread = async () => {
+    await expect(page.locator('.sidebar-footer')).toHaveAttribute('data-dioxus-id', /\d+/);
     await page.locator('.sidebar-footer').click();
     await page.locator('.sidebar-footer').click();
   };

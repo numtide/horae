@@ -8,6 +8,7 @@ pub mod card;
 pub mod combobox;
 pub mod confirm_dialog;
 pub mod controls;
+pub mod date_field;
 pub mod date_picker;
 pub mod debounce;
 pub mod filter_bar;

@@ -154,6 +154,7 @@ Status:
 | `SelectField` | `select_field.rs` | Menus and pickers | in use (11) |
 | `Combobox` | `combobox.rs` | Menus and pickers | in use (1) |
 | `DatePicker` | `date_picker.rs` | Menus and pickers | in use (2; 7 `Input { kind: "date" }` move to it in PR-6) |
+| `DateField` | `date_field.rs` | Menus and pickers | in use (New Project, New invoice) |
 | `ProjectTaskPicker` | `project_task_picker.rs` | Menus and pickers | in use (`TimerWidget`); renders native `<select>`s until PR-5 |
 | `FilterBar`, `SearchField` | — | Menus and pickers | planned in PR-5 |
 | `PeriodNav` | — | Menus and pickers | planned in PR-6 |
@@ -170,7 +171,7 @@ Status:
 | `DataTable` | `table.rs` | Data display | in use (9; 8 hand-written table wrappers) |
 | `Badge` | `badge.rs` | Data display | in use (15; 14 hand-written `badge` spans) |
 | `Card` | `card.rs` | Data display | kept, not yet used (0 calls, 31 hand-written `card` classes) |
-| `MetricCard` | `card.rs` | Data display | kept, not yet used (0 calls) |
+| `MetricCard` | `card.rs` | Data display | in use (the Invoices summary) |
 | `Avatar` | `avatar.rs` | Data display | in use (3, plus the sidebar) |
 | `Chip` | `avatar.rs` | Data display | kept, not yet used (0 calls; New Project's tag chips are hand-written) |
 | `BulkBar` | — | Data display | planned in the Tasks PR |
@@ -215,7 +216,8 @@ Status:
 - `Menu`, `MenuItem`, `MenuDivider` (`menu.rs`) are the dropdown: a trigger button with a caret that opens a native popover of items. Use `Menu` for a row's or a page's "Actions" and for a filter with a few fixed values (see [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs)). It is not a form field: to choose a value in a form, use `SelectField`. `MenuItem` takes `selected` (for a filter's current value), `danger` (Delete, last, after a `MenuDivider`) and `disabled`. Props of `Menu`: `id` (stable and unique; it ties the trigger to the menu), `label`, `align_right`, `trigger_class`, `disabled`, `children`. `trigger_class` adds optional utilities to the trigger: its default remains `btn btn-secondary btn-sm`, and a surface may opt into `text-sm px-4` without changing other callers or adding page-specific descendant overrides. `disabled` opts into a native disabled trigger; Projects uses it when its selection is empty or a bulk operation is pending, and other menus remain enabled. Rules in [Data Tables](#data-tables-srccomponentstablers), [Destructive actions](#destructive-actions) and [Accessibility](#accessibility).
 - `SelectField` (`select_field.rs`) is the form selector: a full-width trigger styled as an input, opening a listbox on the menu surface. Give it a `query` signal to add a search box for long lists, and `pending` while the options load. Use it for every single-value choice in a form, in place of `Select` and native `<select>`. Props: `id`, `label`, `options: Vec<(value, label)>`, `selected`, `onselect`, `error_id`, `disabled_values`, `query: Option<Signal<String>>`, `pending`, `children` (rendered under the list). See [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs).
 - `Combobox` (`combobox.rs`) is a compact searchable picker drawn as a `btn-sm` trigger, with an "All" row that clears the choice and options that can be grouped under headings (`ComboOption::grouped`). Its one call is the client filter in Projects. Use it for a filter with many values, where search helps; a filter with a few fixed values uses `Menu`, and in a form use `SelectField` with a `query`. Props: `options: Vec<ComboOption>`, `value`, `placeholder`, `all_label`, `trigger_class`, `onselect`. `trigger_class` works as in `Menu`: optional utilities on a trigger whose default remains `btn btn-secondary btn-sm`, so a surface may opt into `text-sm px-4` without changing other callers or adding page-specific descendant overrides. Unlike `Menu` and `SelectField` it draws its own overlay; PR-5 decides whether it moves to the native popover.
-- `DatePicker` (`date_picker.rs`) is the month calendar panel. It highlights a day or, with `week`, the whole week, and emits the picked date. It draws only the panel: the caller supplies the trigger and the popover, as `pages/new_project/date_field.rs` and the Timesheet pager do. Props: `selected: NaiveDate`, `week`, `first_day`, `onpick`. See [Formats](#formats). When PR-6 replaces the 7 `Input { kind: "date" }` fields, it decides whether `DateField` (the trigger, popover and display format around this panel, private to `pages/new_project/`) moves to `components/`.
+- `DatePicker` (`date_picker.rs`) is the month calendar panel. It highlights a day or, with `week`, the whole week, and emits the picked date. It draws only the panel: the caller supplies the trigger and the popover, as `DateField` and the Timesheet pager do. Props: `selected: NaiveDate`, `week`, `first_day`, `onpick`. See [Formats](#formats).
+- `DateField` (`date_field.rs`) is a form's date field: a trigger showing the date in the app's format (`01 Sep 2026`) that opens `DatePicker` in a popover, with a clear button. Its value is an ISO date or empty. New Project's dates and a new invoice's custom period use it; PR-6 moves the remaining `Input { kind: "date" }` fields to it. Props: `id`, `label`, `placeholder`, `value`, `error_id`, `onchange`.
 - `ProjectTaskPicker` (`project_task_picker.rs`) is the pair of project and task fields for new time. It offers only the projects and tasks the server says the person can track, and clears a selection that falls out of that list. Use it wherever new time is entered; the timer uses it today. Props: `project` and `task` (`Signal<String>`), `projects` and `tasks` (resources), `disabled` (keeps an existing entry's names read-only). It still renders native `<select>`s, which PR-5 replaces.
 - `PeoplePicker`: planned in the Tasks PR, for choosing several people (a task's default assignees). Its API is decided in that PR.
 - `FilterBar` and `SearchField`: planned in PR-5. `PeriodNav`: planned in PR-6. See [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs).
@@ -289,7 +291,7 @@ One `PageHeader` component (`page_header.rs`, with `back_link.rs`) renders the t
 
 Anything longer, such as a status sentence or a description, goes below the header, not in it.
 
-- **The main action is in the header.** A screen's Primary action sits in `PageHeader`'s actions. A form's submit goes at the end of the form instead (New Project's fixed footer, the Save of each Invoice settings card), and a row's actions stay in the row. Preparing an invoice is its own screen (`/invoices/new`), so its one Primary is "Generate draft" and the way out is the back link, not a header Cancel. A record's other actions go in the header's "Actions" menu (Invoice detail's "Edit invoice values" and "Void…", Client detail's Edit and Archive).
+- **The main action is in the header.** A screen's Primary action sits in `PageHeader`'s actions. A form's submit goes at the end of the form instead (New Project's fixed footer, the Save of each Invoice settings card), and a row's actions stay in the row. A new invoice is its own screen in two steps (`/invoices/new`), so each step has one Primary ("Continue", then "Create draft") and the way out is the back link, not a header Cancel. A record's other actions go in the header's menu (Invoice detail's "More": Edit draft, Duplicate and "Void…"; Client detail's Edit and Archive).
 
 - **No search or filters in the header.** The header holds actions only; search and filters go in the `FilterBar` below it (see [Selects, filters and search](#selects-filters-and-search-srccomponentsselect_fieldrs-menurs)). Clients and Projects put their search among the header actions today. *Pending code (PR-5).*
 
@@ -498,10 +500,13 @@ Routes of the Dioxus router (`crates/horae/src/route.rs`). Sign-in lives outside
 | `/tasks` | `TaskCatalog` | The workspace's task catalog (see [Tasks](#tasks)) |
 | `/approvals` | `Approvals` | Submitted timesheets to approve or reopen |
 | `/reports` | `Reports` | Grouped and detailed time reports with exports |
-| `/invoices` | `InvoiceList` | Invoice table |
-| `/invoices/new/client/:client` | `NewInvoiceForClient` | Invoice preparation for one client |
+| `/invoices?tab&status&client&period&q` | `InvoiceList` | Invoices and the Uninvoiced view, its filters in the query (see [Invoices](#invoices)) |
+| `/invoices/new` | `NewInvoice` | New invoice, step 1: the client |
+| `/invoices/new/client/:client` | `NewInvoiceForClient` | New invoice, step 2: period, projects, values and preview |
+| `/invoices/new/client/:client/from/:source` | `DuplicateInvoice` | Step 2 started from invoice `source` (Duplicate) |
 | `/invoices/settings` | `InvoiceSettings` | Issuer, payment details and invoice defaults, one save per card (manager/admin) |
-| `/invoices/:id` | `InvoiceDetail` | Invoice line items |
+| `/invoices/:id` | `InvoiceDetail` | One invoice as issued, its Primary by status |
+| `/invoices/:id/edit` | `EditInvoice` | The draft editor |
 | `/admin/users` | `AdminUsers` | People, their rates and permissions; becomes a main screen (see [People](#people)) |
 | `/admin/workspace` | `WorkspaceSettings` | Settings: the workspace's own settings, and its installed plugins (see [Workspace settings](#workspace-settings)) |
 | `/admin/importers` | `ImporterIndex` | Available importers |
@@ -598,6 +603,24 @@ The audit log (`/admin/audit`) lists every permission change, newest first. Only
 - **States.** Empty: its own history icon, "No permission changes yet" and a button to People. With filters and no match: "No changes match these filters" and "Clear filters". Loading: a skeleton shaped like the grouped rows (`Skeleton` with `grouped`).
 - **Later, in its own PR** (server work): an optional reason on a permission change, CSV export, and "Restore this version" for custom profiles.
 
+### Invoices
+
+Decided on 2026-11-22, step 1 of the invoice plan (see the inventory). Statuses stay draft, sent, paid and void; Overdue is computed, never stored.
+
+- **List.** The header holds "New invoice" (Primary) and a "More" menu with Invoice settings, for those who may edit them. Under it a summary of `MetricCard`s: Outstanding (sent and unpaid), Overdue, and Ready to invoice (clients with unbilled work, shown only to those who may prepare invoices). Amounts in different currencies are listed side by side, never added. "Paid this month" waits for payments (step 3), which bring a paid date.
+- **Views.** A `Segmented` switch between Invoices and Uninvoiced, for those who may prepare invoices. Uninvoiced lists each active client with unbilled time or fees due up to today, as a new invoice for "Everything up to today" would find them, with its last invoice (not void) and its own "New invoice" (Secondary `btn-sm`, named after the client). The server answers it with one aggregated read (`ops::invoices::uninvoiced`), never a preview per client, so a long history costs one query and has no row limit.
+- **Filters.** A `FilterBar`: status (`Menu`: Any status, Draft, Sent, Overdue, Paid, Void; Sent includes the overdue ones, Overdue narrows to them), client (`Combobox`), period of the issue date (`Menu`: any time, this or last month, this or last year) and a search by number or client. The whole list loads at once and the filters narrow it on the screen; "Clear filters" resets them when nothing matches. The view and the filters are the URL's query (`?tab=uninvoiced&status=overdue&client=<id>&period=last-year&q=<search>`), as in the audit log, so a filtered list can be shared and Back returns to it. A menu choice adds a history entry; the search replaces it once typing pauses.
+- **Table.** One table, not a table inside a card: Number, Client, Issued, Due, Amount, Status. The number's link covers the whole row, so there is no Actions column. Status is a `Badge` (Draft warning, Sent info, Overdue danger, Paid success, Void neutral); an overdue due date is red and a void amount is struck through.
+- **Overdue.** A sent invoice whose due date is before the organization's today (`horae_core::invoice::is_overdue`). The server computes it for the list and the detail, so every viewer sees the same answer.
+- **New invoice, step 1** (`/invoices/new`). The client, chosen with `SelectField` and its search, then "Continue". A page, not a dialog, so the URL can be shared and Back works.
+- **New invoice, step 2** (`/invoices/new/client/:client`). The client (with "Change client"), the period (`Menu`: Since the last invoice, This month, Last month, Everything up to today, or Custom dates with two `DateField`s; by default the period starts the day after the last day the client's latest non-void invoice billed, or its issue date when it billed neither, and runs to today, and a client never invoiced starts at This month; Everything up to today is never the default, so old or imported time is billed only on request), the client's projects to tick with what each has unbilled, the invoice values, the fees to invoice, then the preview: the lines the draft will hold, currency on every amount, totals inside the table. The preview follows the form once edits pause; there is no separate review button. "Create draft" is the one Primary and opens the draft editor. Fee limits and the over-invoicing confirmation are unchanged. Only what exists is offered: no blank invoice and no grouping of time into lines yet, and no disabled placeholders for them.
+- **Unapproved time.** When the period holds billable time that waits for approval, step 2 says how much, that it stays out of this invoice until approved, and links to Approvals. Open time that was never submitted is invoiceable, as before, so it is not part of the warning. A period with nothing billable, for example because all of its time waits for approval, is never an error: the preview is empty ("No billable time or fees in this period") and the warning stays.
+- **Failed previews.** A preview that fails keeps the form and offers "Try again"; a request the server refuses as out of date is previewed again by itself.
+- **Draft editor** (`/invoices/:id/edit`). Its own screen, back to the invoice. The subject, the invoice values and the fee lines on the left; a totals card on the right, sticky on wide screens, with "Save draft" (Primary) and "Discard changes". The totals follow the form as it changes; totals that no longer match the form are dimmed until they do, and a failed review offers "Try again". Saving confirms with a toast and stays in the editor.
+- **Subject.** One optional line (at most 200 characters) saying what the invoice is for. Edited in the draft editor, shown on the detail and printed on the PDF under Bill to.
+- **Detail** (`/invoices/:id`). The status badge beside the title; a summary (client, issued, due, payment terms, PO number, total, subject); the lines with currency on every amount and the totals in the table's footer; the notes. The Primary follows the status: Draft "Mark as sent", Sent "Mark as paid", Paid and Void none. "Download PDF" is Secondary. "More" holds Edit draft (drafts), Duplicate, then "Void…" (danger, after a divider, through `ConfirmDialog`). Status changes confirm with a toast.
+- **Duplicate.** Opens step 2 at `/invoices/new/client/:client/from/:source`, with the source's projects ticked and its values (terms, PO number, discount, taxes) filled in. The new draft takes the source's subject and notes when it is created. Time already on an invoice is never copied: the lines come from what is unbilled now. A void invoice can be duplicated, which is how one is issued again.
+
 ## Accessibility
 
 - Keyboard navigation throughout
@@ -616,7 +639,7 @@ Every new or changed screen and data-bearing component covers these states befor
 
 - **Empty**: `EmptyState` with copy that says what to do next and, where the user can act, the action itself; not a blank table or a loose line of text.
 - **Loading** works the same way on every screen:
-  - The shell and the page header come first. The title, filters and actions are visible from the first frame; nothing above or around the header waits on data (Invoices' "Checking invoice recovery…" above the title moves below the header).
+  - The shell and the page header come first. The title, filters and actions are visible from the first frame; nothing above or around the header waits on data (Invoices no longer shows "Checking invoice recovery…" above the title: its actions wait for the check instead).
   - The session is rendered on the server, so the sidebar, its sections and every action that depends on a permission are in the first HTML, with no "Not signed in", and screens that waited on the session first lose one wave. This is the `use_loader` session PR.
   - The content region shows a `Skeleton` shaped like what arrives, after about 300 ms. `Loading` text is only for small regions.
   - Nothing that depends on the data shows before it: no pager, no "Refresh", no totals as "—", no filters without their options.

@@ -198,6 +198,7 @@ async fn generating_an_invoice_needs_everyones_billable_rates(pool: PgPool) {
             .await
             .unwrap(),
         confirmed_excess: vec![],
+        duplicate_of: None,
     };
     let generate = || {
         generate_invoice_with_request(

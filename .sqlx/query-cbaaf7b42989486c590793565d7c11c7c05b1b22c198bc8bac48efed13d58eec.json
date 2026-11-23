@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT p.id AS \"id!\"\n           FROM invoice_line_items l\n           LEFT JOIN time_entries te ON te.id = l.time_entry_id\n           LEFT JOIN project_fee_occurrences f ON f.id = l.fee_occurrence_id\n           JOIN projects p ON p.id = COALESCE(te.project_id, f.project_id)\n           WHERE l.invoice_id = $1 AND p.org_id = $2 AND p.client_id = $3\n           ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cbaaf7b42989486c590793565d7c11c7c05b1b22c198bc8bac48efed13d58eec"
+}
