@@ -22,6 +22,7 @@
 //! organization's invoice lock ([`balances::lock_invoices`]).
 
 use futures_util::{Stream, TryStreamExt};
+use horae_core::invoice::is_overdue;
 use horae_core::permissions::catalog::Permission;
 use horae_core::permissions::invoices;
 use horae_core::types::InvoiceStatus;
@@ -29,7 +30,9 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
-use crate::models::invoice::{InvoiceDetailView, InvoiceLine, InvoiceListItem};
+use crate::models::invoice::{
+    InvoiceDefaults, InvoiceDetailView, InvoiceDuplicate, InvoiceLine, InvoiceListItem,
+};
 use crate::models::{Invoice, InvoiceWithLines};
 use crate::plugin::AppEvent;
 use crate::plugin::event::invoice_payload;
@@ -41,6 +44,7 @@ mod entries;
 mod fees;
 mod generate;
 pub mod preview;
+pub mod uninvoiced;
 
 pub use generate::{Generation, generate};
 
@@ -109,7 +113,7 @@ pub async fn list(
                   due_on as "due_on: chrono::NaiveDate",
                   currency, total_cents, notes, terms_days, po_number,
                   discount_bps, tax1_bps, tax2_name, tax2_bps,
-                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
+                  subtotal_cents, discount_cents, tax1_cents, tax2_cents, subject,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM invoices
            WHERE org_id = $1
@@ -136,6 +140,7 @@ pub async fn list_items(
     let invoices = list(tx, org_id, status, None).await?;
     let client_ids: Vec<_> = invoices.iter().map(|invoice| invoice.client_id).collect();
     let names = client_names(tx, org_id, &client_ids).await?;
+    let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
     invoices
         .into_iter()
         .map(|invoice| {
@@ -144,6 +149,7 @@ pub async fn list_items(
                 .cloned()
                 .ok_or_else(|| OpError::not_found("Invoice client not found"))?;
             Ok(InvoiceListItem {
+                overdue: is_overdue(invoice.status, invoice.due_on, today),
                 invoice,
                 client_name,
             })
@@ -166,10 +172,60 @@ pub async fn detail(
         .await?
         .remove(&invoice.client_id)
         .ok_or_else(|| OpError::not_found("Invoice client not found"))?;
+    let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
     Ok(InvoiceDetailView {
+        overdue: is_overdue(invoice.status, invoice.due_on, today),
         invoice,
         lines,
         client_name,
+    })
+}
+
+/// What Duplicate copies from an invoice: its client, the projects its lines
+/// billed and its values, for preparing a new draft. It reads the source
+/// invoice and prices nothing, but leads only to preparation, so it asks for
+/// both the read and the preparation grants.
+pub async fn duplicate(
+    tx: &mut Tx,
+    actor: &Actor,
+    invoice_id: Uuid,
+) -> Result<InvoiceDuplicate, OpError> {
+    authorize_read(actor, READ)?;
+    authorize_read(actor, PREPARE)?;
+    let org_id = actor.org_id();
+    let invoice = fetch_invoice_metadata(&mut **tx, invoice_id, org_id)
+        .await?
+        .ok_or_else(|| OpError::not_found("Invoice not found"))?;
+    // Projects of the client only: a project moved to another client since
+    // could not be prepared with this one.
+    let project_ids = sqlx::query_scalar!(
+        r#"SELECT DISTINCT p.id AS "id!"
+           FROM invoice_line_items l
+           LEFT JOIN time_entries te ON te.id = l.time_entry_id
+           LEFT JOIN project_fee_occurrences f ON f.id = l.fee_occurrence_id
+           JOIN projects p ON p.id = COALESCE(te.project_id, f.project_id)
+           WHERE l.invoice_id = $1 AND p.org_id = $2 AND p.client_id = $3
+           ORDER BY 1"#,
+        invoice_id,
+        org_id,
+        invoice.client_id,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(InvoiceDuplicate {
+        source_id: invoice.id,
+        source_number: invoice.number,
+        client_id: invoice.client_id,
+        project_ids,
+        defaults: InvoiceDefaults {
+            terms_days: i16::try_from(invoice.terms_days)
+                .map_err(|_| OpError::conflict("Invoice payment terms are out of range"))?,
+            po_number: invoice.po_number,
+            discount_bps: invoice.discount_bps,
+            tax1_bps: invoice.tax1_bps,
+            tax2_name: invoice.tax2_name,
+            tax2_bps: invoice.tax2_bps,
+        },
     })
 }
 
@@ -256,7 +312,7 @@ pub async fn set_status(
                      due_on as "due_on: chrono::NaiveDate",
                      currency, total_cents, notes, terms_days, po_number,
                      discount_bps, tax1_bps, tax2_name, tax2_bps,
-                     subtotal_cents, discount_cents, tax1_cents, tax2_cents,
+                     subtotal_cents, discount_cents, tax1_cents, tax2_cents, subject,
                      created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
         id,
         org_id,
@@ -328,7 +384,7 @@ pub async fn fetch_invoice_metadata(
                   due_on as "due_on: chrono::NaiveDate",
                   currency, total_cents, notes, terms_days, po_number,
                   discount_bps, tax1_bps, tax2_name, tax2_bps,
-                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
+                  subtotal_cents, discount_cents, tax1_cents, tax2_cents, subject,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM invoices
            WHERE id = $1 AND org_id = $2"#,

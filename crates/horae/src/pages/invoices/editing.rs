@@ -1,45 +1,81 @@
+//! The draft editor: an invoice's values, subject and fee lines, with its
+//! totals beside them.
+
+use std::cell::Cell;
+use std::rc::Rc;
+
+use dioxus::dioxus_core::Task;
 use dioxus::prelude::*;
 use horae_core::money::{format_cents_plain, parse_cents};
 use uuid::Uuid;
 
 use super::defaults_form::{DefaultsFields, fields_from, parse_fields};
 use super::recovery::{PendingInvoice, RecoveryStorage};
+use super::{breakdown_label, money, prepares_invoices};
+use crate::components::back_link::BackLink;
+use crate::components::button::{Button, ButtonVariant};
 use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
-use crate::components::form::{FormCard, FormGroup, Input};
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, error_line};
+use crate::components::form::{FormGroup, Input};
+use crate::components::page_header::PageHeader;
+use crate::components::screen_state::{LoadError, NoAccess, Skeleton};
+use crate::components::toast::{Toast, ToastContainer};
+use crate::i18n::{Tr, use_tr};
 use crate::models::invoice::*;
+use crate::route::Route;
 use crate::server_fns;
 
+/// How long edits must pause before the totals are reviewed again.
+const REVIEW_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
 #[component]
-pub(super) fn DraftEditor(
-    id: Uuid,
-    mut editing: Signal<bool>,
-    busy: Signal<bool>,
-    onsaved: EventHandler<()>,
-) -> Element {
-    let mut editor =
-        use_resource(move || async move { server_fns::get_invoice_editor(id.to_string()).await });
-    let retry = use_callback(move |_| editor.restart());
+pub(super) fn DraftEditorPage(id: Uuid) -> Element {
+    let tr = use_tr();
+    let session = crate::components::session::use_session();
+    let prepares = prepares_invoices(session);
+    let mut editor = use_resource(move || async move {
+        let (editor, invoice) = futures_util::join!(
+            server_fns::get_invoice_editor(id.to_string()),
+            server_fns::get_invoice(id.to_string()),
+        );
+        Ok::<_, ServerFnError>((editor?, invoice?.invoice.number))
+    });
+    let retry = use_callback(move |()| editor.restart());
+    let mut notice = use_signal(|| None::<String>);
+    let saved = use_callback(move |()| {
+        notice.set(Some(tr.invoices_draft_saved()));
+        editor.restart();
+    });
+    let dismiss = use_callback(move |_: MouseEvent| notice.set(None));
+    let title = match &*editor.read() {
+        Some(Ok((_, number))) => tr.invoices_edit_title(number.clone()),
+        _ => tr.invoices_edit_draft(),
+    };
     rsx! {
-        match &*editor.read() {
-            Some(Ok(snapshot)) => rsx! { DraftEditForm { id, snapshot: snapshot.clone(), editing, busy, onsaved } },
-            state => rsx! {
-                div { class: "card p-5 mb-6",
-                    if let Some(Err(error)) = state {
-                        ErrorState {
-                            title: "Could not load the invoice values",
-                            body: LOAD_FAILED,
-                            request: error_line(error).unwrap_or_default(),
-                            inset: true,
-                            onretry: retry,
-                            actions: rsx! { button { class: "btn btn-secondary", onclick: move |_| editing.set(false), "Cancel changes" } },
+        div {
+            BackLink { to: Route::InvoiceDetail { id }, label: tr.invoices_back_to_invoice() }
+            PageHeader { title, title_id: "invoice-editor-heading" }
+            if !prepares {
+                NoAccess {}
+            } else {
+                match &*editor.read() {
+                    None => rsx! { Skeleton { rows: 6, columns: 2, label: tr.invoices_editor_loading() } },
+                    Some(Err(error)) => rsx! {
+                        LoadError { error: error.clone(), what: tr.invoices_editor_what(), retry,
+                            pending: editor.state()() != UseResourceState::Ready, focus_on_recovery: "invoice-editor-heading" }
+                    },
+                    Some(Ok((snapshot, _))) => rsx! {
+                        // A new revision starts the form again from what was saved.
+                        for revision in [snapshot.edit.revision] {
+                            DraftEditForm { key: "{revision}", id, snapshot: snapshot.clone(), onsaved: saved }
                         }
-                    } else {
-                        Loading { label: "Loading invoice values…", class: "mb-4" }
-                        button { class: "btn btn-secondary", onclick: move |_| editing.set(false), "Cancel changes" }
-                    }
+                    },
                 }
-            },
+            }
+            ToastContainer {
+                if let Some(message) = notice() {
+                    Toast { message, variant: "success", icon: "✓", dismissible: true, ondismiss: dismiss }
+                }
+            }
         }
     }
 }
@@ -52,13 +88,20 @@ struct FeeInput {
 }
 
 fn parse_edit(
+    tr: Tr,
     revision: i64,
+    subject: &str,
     fields: &crate::models::project_creation::InvoiceDefaultsInput,
     fees: &[FeeInput],
 ) -> Result<InvoiceDraftEdit, String> {
+    let subject = subject.trim();
+    if subject.chars().count() > 200 || subject.contains('\0') {
+        return Err(tr.invoices_subject_too_long());
+    }
     Ok(InvoiceDraftEdit {
         revision,
-        defaults: parse_fields(fields)?,
+        defaults: parse_fields(tr, fields)?,
+        subject: subject.to_owned(),
         fees: fees
             .iter()
             .map(|fee| {
@@ -66,15 +109,12 @@ fn parse_edit(
                     || fee.description.chars().count() > 1000
                     || fee.description.contains('\0')
                 {
-                    return Err(
-                        "Fee descriptions must contain 1–1000 characters without NUL.".into(),
-                    );
+                    return Err(tr.invoices_fee_description_invalid());
                 }
-                let amount_cents = parse_cents(&fee.amount).map_err(|_| {
-                    "Enter an exact fee amount with at most two decimal places.".to_owned()
-                })?;
+                let amount_cents =
+                    parse_cents(&fee.amount).map_err(|_| tr.invoices_fee_amount_invalid())?;
                 if amount_cents < 0 {
-                    return Err("Fee amounts cannot be negative.".into());
+                    return Err(tr.invoices_fee_amount_negative());
                 }
                 Ok(InvoiceFeeEdit {
                     line_id: fee.id,
@@ -87,15 +127,12 @@ fn parse_edit(
 }
 
 #[component]
-fn DraftEditForm(
-    id: Uuid,
-    snapshot: InvoiceEditor,
-    mut editing: Signal<bool>,
-    mut busy: Signal<bool>,
-    onsaved: EventHandler<()>,
-) -> Element {
+fn DraftEditForm(id: Uuid, snapshot: InvoiceEditor, onsaved: EventHandler<()>) -> Element {
+    let tr = use_tr();
     let storage = use_context::<RecoveryStorage>();
+    let navigator = use_navigator();
     let fields = use_signal(|| fields_from(&snapshot.edit.defaults));
+    let mut subject = use_signal(|| snapshot.edit.subject.clone());
     let mut fees = use_signal(|| {
         snapshot
             .edit
@@ -108,25 +145,85 @@ fn DraftEditForm(
             })
             .collect::<Vec<_>>()
     });
-    let mut reviewed = use_signal(|| None::<(InvoiceDraftEdit, InvoiceEditReview)>);
+    let initial = (snapshot.edit.clone(), snapshot.review.clone());
+    let mut reviewed = use_signal(move || Some(initial));
+    let mut reviewing = use_signal(|| false);
+    let mut review_error = use_signal(|| None::<String>);
+    let mut attempt = use_signal(|| 0_u32);
+    let mut busy = use_signal(|| false);
     let mut request = use_signal(|| None::<InvoiceDraftSave>);
     let mut uncertain = use_signal(|| false);
     let mut confirm = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
-    let current = parse_edit(snapshot.edit.revision, &fields.read(), &fees.read());
+    let current = parse_edit(
+        tr,
+        snapshot.edit.revision,
+        &subject.read(),
+        &fields.read(),
+        &fees.read(),
+    );
     let dirty = current.as_ref() != Ok(&snapshot.edit);
+
+    // The totals follow the form once edits pause.
+    let waiting = use_hook(|| Rc::new(Cell::new(None::<Task>)));
+    let wanted = current.clone();
+    use_effect(use_reactive!(|wanted| {
+        // "Try again" asks for the same values once more.
+        let _ = attempt();
+        if let Some(task) = waiting.take() {
+            task.cancel();
+            reviewing.set(false);
+        }
+        let Ok(edit) = wanted else {
+            return;
+        };
+        if reviewed
+            .peek()
+            .as_ref()
+            .is_some_and(|(done, _)| *done == edit)
+        {
+            return;
+        }
+        waiting.set(Some(spawn(async move {
+            crate::components::debounce::sleep(REVIEW_DEBOUNCE).await;
+            reviewing.set(true);
+            match server_fns::review_invoice_edit(id.to_string(), edit.clone()).await {
+                Ok(review) => {
+                    review_error.set(None);
+                    reviewed.set(Some((edit, review)));
+                }
+                Err(failure) => review_error.set(Some(failure.to_string())),
+            }
+            reviewing.set(false);
+        })));
+    }));
+    let retry_review = use_callback(move |_: MouseEvent| {
+        review_error.set(None);
+        attempt += 1;
+    });
+
     let ready = reviewed
         .read()
         .as_ref()
         .filter(|(edit, _)| current.as_ref() == Ok(edit))
         .cloned();
-    let review_input = current.clone();
+    let shown = reviewed.read().as_ref().map(|(edit, review)| {
+        adjustment_breakdown(
+            &review.amounts,
+            edit.defaults.discount_bps,
+            edit.defaults.tax1_bps,
+            edit.defaults
+                .tax2_name
+                .as_deref()
+                .zip(edit.defaults.tax2_bps),
+        )
+    });
     let save_ready = ready.clone();
     let save = use_callback(move |confirm_excess: bool| {
-        if busy() && !uncertain() {
+        if (*busy.peek() && !*uncertain.peek()) || !storage.ready() {
             return;
         }
-        let next = if uncertain() {
+        let next = if *uncertain.peek() {
             request.peek().clone()
         } else {
             save_ready.clone().map(|(edit, review)| {
@@ -166,35 +263,32 @@ fn DraftEditForm(
             };
             if let Err(message) = storage.store(&pending).await {
                 busy.set(false);
-                error.set(Some(format!("{message} No invoice request was sent.")));
+                error.set(Some(tr.invoices_request_not_sent(message)));
                 return;
             }
             match pending.submit().await {
                 Ok(_) => match storage.clear().await {
                     Ok(()) => {
                         busy.set(false);
-                        editing.set(false);
                         onsaved.call(());
                     }
                     Err(message) => {
                         uncertain.set(true);
-                        error.set(Some(format!(
-                            "The invoice is saved, but recovery could not be cleared: {message}"
-                        )));
+                        error.set(Some(tr.invoices_recovery_not_cleared(message)));
                     }
                 },
-                Err(err) => {
-                    if matches!(&err, ServerFnError::ServerError {code, ..} if (400..500).contains(code))
+                Err(failure) => {
+                    if matches!(&failure, ServerFnError::ServerError {code, ..} if (400..500).contains(code))
                     {
                         reviewed.set(None);
-                        error.set(Some(err.to_string()));
+                        error.set(Some(failure.to_string()));
                         if let Err(message) = storage.clear().await {
-                            error.set(Some(format!("{err}. {message}")));
+                            error.set(Some(format!("{failure}. {message}")));
                         }
                         busy.set(false);
                     } else {
                         uncertain.set(true);
-                        error.set(Some("The save may have completed. Retry the same changes to recover the result safely.".into()));
+                        error.set(Some(tr.invoices_save_uncertain()));
                     }
                 }
             }
@@ -203,79 +297,106 @@ fn DraftEditForm(
     let has_excess = ready
         .as_ref()
         .is_some_and(|(_, review)| review.fees.iter().any(|fee| fee.excess_cents > 0));
-    let currency = snapshot.currency.trim();
-    let save_excess = use_callback(move |_| save.call(true));
-    let keep_editing = use_callback(move |_| confirm.set(false));
+    let currency = snapshot.currency.trim().to_owned();
+    let click_save = use_callback(move |_: MouseEvent| {
+        if *uncertain.peek() {
+            save.call(false);
+        } else if has_excess {
+            confirm.set(true);
+        } else {
+            save.call(false);
+        }
+    });
+    let save_excess = use_callback(move |()| save.call(true));
+    let keep_editing = use_callback(move |()| confirm.set(false));
+    let discard = use_callback(move |_: MouseEvent| {
+        navigator.push(Route::InvoiceDetail { id });
+    });
+    let set_subject = use_callback(move |event: FormEvent| subject.set(event.value()));
     rsx! {
-        div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if dirty { "dirty" } else { "clean" },
-        FormCard { title: "Edit invoice values", error,
-            p { class: "text-sm text-muted mb-4", "Only this draft changes. Agreed project fees, time entries and other invoices stay unchanged. Other invoiced amounts include draft reservations; balances exclude tax." }
-            DefaultsFields { fields, disabled: busy() }
-            fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: busy(), aria_label: "Invoice fee lines",
-                for (index, fee) in fees.read().iter().enumerate() {
-                    div { key: "{fee.id}", class: "card p-4 mb-4",
-                        FormGroup { label: "Fee description", id: "fee-description-{fee.id}",
-                            Input { id: "fee-description-{fee.id}", value: fee.description.clone(), oninput: move |event: FormEvent| fees.write()[index].description = event.value() }
-                        }
-                        FormGroup { label: "Fee amount ({currency})", id: "fee-amount-{fee.id}",
-                            Input { id: "fee-amount-{fee.id}", class: "text-mono", value: fee.amount.clone(), oninput: move |event: FormEvent| fees.write()[index].amount = event.value() }
-                        }
-                        if let Some(balance) = snapshot.review.fees.iter().find(|balance| balance.line_id == fee.id) {
-                            p { class: "text-sm text-muted",
-                                "Agreed: {currency} " {format_cents_plain(balance.agreed_cents)}
-                                " · Other invoiced: {currency} " {format_cents_plain(balance.other_invoiced_cents)}
+        div { class: "inv-editor", "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if dirty { "dirty" } else { "clean" },
+            div { class: "flex flex-col gap-6 min-w-0",
+                if let Err(message) = &current {
+                    div { class: "alert alert-danger", role: "alert", "{message}" }
+                }
+                if let Some(message) = error() {
+                    div { class: "alert alert-danger", role: "alert", "{message}" }
+                }
+                if let Some(message) = review_error() {
+                    div { class: "alert alert-danger", role: "alert",
+                        p { "{message}" }
+                        button { r#type: "button", class: "btn btn-secondary btn-sm mt-3", disabled: busy() || reviewing(),
+                            onclick: retry_review, {tr.invoices_preview_retry()} }
+                    }
+                }
+                section { class: "card p-5", aria_labelledby: "inv-details-title",
+                    h2 { id: "inv-details-title", class: "card-title mb-4", {tr.invoices_details()} }
+                    FormGroup { label: tr.invoices_subject(), id: "inv-subject", hint: tr.invoices_subject_hint(),
+                        Input { id: "inv-subject", value: subject(), disabled: busy(), oninput: set_subject }
+                    }
+                    DefaultsFields { fields, disabled: busy() }
+                }
+                if !fees.read().is_empty() {
+                    section { class: "card p-5", aria_labelledby: "inv-fees-title",
+                        h2 { id: "inv-fees-title", class: "card-title mb-2", {tr.invoices_fee_lines()} }
+                        p { class: "text-sm text-muted mb-4", {tr.invoices_fee_lines_hint()} }
+                        fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: busy(), aria_label: tr.invoices_fee_lines(),
+                            for (index, fee) in fees.read().iter().enumerate() {
+                                div { key: "{fee.id}", class: "grid md:grid-cols-2 gap-3 mb-2",
+                                    FormGroup { label: tr.invoices_fee_description(), id: "fee-description-{fee.id}",
+                                        Input { id: "fee-description-{fee.id}", value: fee.description.clone(), oninput: move |event: FormEvent| fees.write()[index].description = event.value() }
+                                    }
+                                    FormGroup { label: tr.invoices_fee_amount(currency.clone()), id: "fee-amount-{fee.id}",
+                                        Input { id: "fee-amount-{fee.id}", class: "text-mono", value: fee.amount.clone(), oninput: move |event: FormEvent| fees.write()[index].amount = event.value() }
+                                    }
+                                    if let Some(balance) = ready.as_ref().and_then(|(_, review)| review.fees.iter().find(|balance| balance.line_id == fee.id)) {
+                                        p { class: "text-sm text-muted md:col-span-2 mb-2",
+                                            {tr.invoices_fee_edit_balance(money(balance.agreed_cents, &currency), money(balance.other_invoiced_cents, &currency), money(balance.remaining_cents, &currency))}
+                                            if balance.excess_cents > 0 { strong { " " {tr.invoices_over_invoiced()} } }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-            if let Some((_, review)) = &ready {
-                div { class: "mb-4", role: "status",
-                    p { "Reviewed total: {currency} " {format_cents_plain(review.amounts.total_cents)} }
-                    for fee in &review.fees {
-                        p { key: "{fee.line_id}", class: "text-sm",
-                            "{fee.period_key} · Net charge: {currency} " {format_cents_plain(fee.net_cents)}
-                            " · Remaining: {currency} " {format_cents_plain(fee.remaining_cents)}
-                            if fee.excess_cents > 0 { strong { " · Over-invoiced" } }
+            aside { class: "inv-editor-totals card p-5", aria_labelledby: "inv-totals-title",
+                h2 { id: "inv-totals-title", class: "card-title mb-4", {tr.invoices_totals()} }
+                // Totals that no longer match the form are dimmed until a
+                // review of the current values replaces them.
+                div { class: "inv-content", aria_busy: reviewing() || ready.is_none(),
+                    if let Some(rows) = shown {
+                        dl { class: "flex flex-col gap-2 mb-5",
+                            for (label, cents) in rows {
+                                div { key: "{label}", class: if label == "Total" { "flex justify-between gap-4 font-semibold" } else { "flex justify-between gap-4" },
+                                    dt { class: "wrap-anywhere", {breakdown_label(tr, &label)} }
+                                    dd { class: "text-mono", {money(cents, &currency)} }
+                                }
+                            }
                         }
                     }
                 }
-            }
-            div { class: "flex flex-wrap gap-3",
-                button { r#type: "button", class: "btn btn-secondary", disabled: busy(),
-                    onclick: move |_| {
-                        let edit = match &review_input { Ok(edit) => edit.clone(), Err(message) => { error.set(Some(message.clone())); return; } };
-                        busy.set(true); error.set(None); reviewed.set(None);
-                        spawn(async move {
-                            match server_fns::review_invoice_edit(id.to_string(), edit.clone()).await {
-                                Ok(review) => reviewed.set(Some((edit, review))),
-                                Err(err) => error.set(Some(err.to_string())),
-                            }
-                            busy.set(false);
-                        });
-                    }, "Review invoice changes"
+                div { class: "flex flex-col gap-3",
+                    Button { id: "invoice-save", label: if uncertain() { tr.invoices_retry_save() } else { tr.invoices_save_draft() },
+                        disabled: (busy() && !uncertain()) || ready.is_none() || (!dirty && !uncertain()),
+                        onclick: click_save }
+                    Button { variant: ButtonVariant::Secondary, label: tr.invoices_discard_changes(), disabled: busy(), onclick: discard }
                 }
-                button { r#type: "button", class: "btn btn-primary", disabled: (busy() && !uncertain()) || ready.is_none(),
-                    onclick: move |_| { if uncertain() { save.call(false); } else if has_excess { confirm.set(true); } else { save.call(false); } },
-                    if uncertain() { "Retry invoice save" } else { "Save invoice values" }
-                }
-                button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| editing.set(false), "Cancel changes" }
             }
         }
         // Over-invoicing can be corrected in the draft afterwards, so it is not
         // a destructive confirmation.
         ConfirmDialog { id: "invoice-excess", labelledby: "invoice-excess-title", open: confirm(), busy: busy(),
-            tone: ConfirmTone::Neutral, title: "Confirm over-invoicing",
-            confirm_label: "Confirm excess and save", cancel_label: "Cancel over-invoicing",
-            on_confirm: save_excess,
-            on_dismiss: keep_editing,
-            p { "Saving will exceed the agreed fees by the amounts below. Cancelling changes nothing." }
+            tone: ConfirmTone::Neutral, title: tr.invoices_excess_title(),
+            confirm_label: tr.invoices_excess_save(), cancel_label: tr.invoices_excess_cancel(),
+            on_confirm: save_excess, on_dismiss: keep_editing,
+            p { {tr.invoices_excess_save_body()} }
             if let Some((_, review)) = &ready {
                 for fee in review.fees.iter().filter(|fee| fee.excess_cents > 0) {
-                    p { key: "{fee.line_id}", "{fee.period_key} · Excess: {currency} " {format_cents_plain(fee.excess_cents)} }
+                    p { key: "{fee.line_id}", {tr.invoices_excess_line(money(fee.excess_cents, &currency), fee.period_key.clone())} }
                 }
             }
-        }
         }
     }
 }

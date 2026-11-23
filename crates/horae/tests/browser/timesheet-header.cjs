@@ -92,8 +92,14 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await trigger.click();
     const start = new Date(await picker.locator('.dp-day.picked').first().getAttribute('aria-label'));
     // The eighth day is in the next week, where the label stops saying "This week".
-    for (let i = 0; i < 8; i++) {
-      const day = iso(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+    const days = Array.from({ length: 8 }, (_, i) => iso(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)));
+    // With a week start from Saturday to Monday (the seed uses Monday) these
+    // Wednesdays' weeks stay inside a month, cross into the next one and cross into
+    // the next year. With any start their range labels differ from each other, so
+    // at least two differ from today's week's.
+    const fixed = ['2026-11-18', '2026-12-02', '2026-12-30'];
+    for (const day of fixed) assert.equal((await pagerBox('week', day)).width, weekPager.width, `week of ${day}`);
+    for (const day of [...days, ...fixed]) {
       const dayPager = await pagerBox('day', day);
       assert.equal(dayPager.width, weekPager.width, day);
       await trigger.click();

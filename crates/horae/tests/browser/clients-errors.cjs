@@ -138,7 +138,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page.getByRole('alert')).toBeVisible();
     await page.unroute('**/api/list_clients*');
     await page.getByRole('button', { name: 'Try again', exact: true }).click();
-    await expect(page.locator('#inv-client')).toHaveValue(client);
+    await expect(page).toHaveURL(`${base}/invoices/new/client/${client}`);
+    await expect(page.getByRole('link', { name: 'Change client', exact: true })).toBeVisible();
     console.log('PASS: contextual project/invoice client loading retries preserve the requested client');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
