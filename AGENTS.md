@@ -79,7 +79,7 @@ http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, wh
 cargo test -p horae-core                        # pure domain unit tests (no DB, no features)
 cargo test -p horae-types                       # serde contracts of the UI↔server types (no DB)
 cargo test -p horae-i18n                        # the catalog's build checks and the unused-message test (no DB)
-cargo kani -p horae-core                        # bounded proofs behind cfg(kani); setup in crates/core/src/permissions/proofs.rs
+cargo kani -p horae-core                        # bounded proofs behind cfg(kani); Kani comes with the dev shell (nix/packages/kani.nix)
 DATABASE_URL=… cargo test -p horae-server               # backend tests: ops, jobs, importers, … (need Postgres with CREATEDB)
 DATABASE_URL=… cargo test -p horae-api                  # HTTP routes: /api/v1, exports, import error downloads, /auth/*
 DATABASE_URL=… cargo test -p horae-harvest-api          # the Harvest-compatible API and its switch
@@ -94,7 +94,7 @@ nix fmt                                         # treefmt: rustfmt, taplo, nixpk
 cargo run -p horae-dioxus-lint                  # Dioxus rules ratchet (or: nix build .#checks.x86_64-linux.dioxus-lint)
 ```
 
-`cargo test -p horae-core` also runs the proptest properties in `crates/core/tests/properties.rs` and `crates/core/src/permissions/properties.rs`. The Kani harnesses live in `crates/core/src/proofs.rs` and `crates/core/src/permissions/proofs.rs`. Follow-up: no CI job runs them yet. Add one (e.g. `model-checking/kani-github-action`) once each harness's run time fits the CI budget.
+`cargo test -p horae-core` also runs the proptest properties in `crates/core/tests/properties.rs` and `crates/core/src/permissions/properties.rs`. The Kani harnesses live in `crates/core/src/proofs.rs` and `crates/core/src/permissions/proofs.rs`. They do not all finish: `proofs.rs` does not compile under Kani (it still proves `money::add`, which was removed), and once that harness is set aside, `time_of_day_parse_never_panics` used 44 GB, while `invoice_amounts_add_up_for_every_subtotal` and `duration_parse_never_panics` ran past 20 minutes. The others take under a minute each. Run one harness at a time (`--exact --harness proofs::<name>`), with a memory cap such as `systemd-run --user --scope -p MemoryMax=8G`. Follow-up: no CI job runs them yet. Add one (`nix develop -c cargo kani -p horae-core`) once each harness's run time fits the CI budget.
 
 `crates/dioxus-lint` enforces the `dioxus-best-practices` skill: it parses every `rsx!` with `dioxus-rsx` and fails when a file's count for a rule differs from `crates/dioxus-lint/baseline.toml`, either up (a new violation: fix it) or down (lower the count). `clippy.toml` bans `Callback::new`/`EventHandler::new` in favour of `use_callback`. `cargo test -p horae-dioxus-lint` runs its fixtures and checks every rule against a SKILL.md heading.
 

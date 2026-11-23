@@ -1,11 +1,11 @@
 //! Kani proofs over unbounded identifiers, every scope bit pattern, every rate
 //! amount and every catalog version; run with `cargo kani -p horae-core`.
 //!
-//! Kani is not in nixpkgs and its setup downloads a pinned nightly toolchain,
-//! so these proofs are not a nix check. Install it outside the dev shell's
-//! toolchain with `cargo install --locked kani-verifier && cargo kani setup`
-//! (setup needs `rustup`). The proptest properties in `properties.rs` cover the
-//! same decisions inside the normal test run.
+//! The dev shell provides Kani (`nix/packages/kani.nix`, with the nightly
+//! toolchain it needs), so no `cargo kani setup` is required. These four take
+//! between 0.1 s and 25 s each. The proofs are not a nix check because some in
+//! `crate::proofs` take far longer; the proptest properties in
+//! `properties.rs` cover the same decisions inside the normal test run.
 
 use uuid::Uuid;
 
