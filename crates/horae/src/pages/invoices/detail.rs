@@ -200,7 +200,10 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
                 }
                 Fact { label: tr.invoices_total(), value: money(inv.total_cents, &currency), mono: true }
                 if let Some(imported) = &imported {
-                    Fact { label: tr.invoices_amount_due(), value: money(imported.due_cents, &currency), mono: true }
+                    // Written off or voided, nothing is due any more.
+                    if !matches!(inv.status, InvoiceStatus::Closed | InvoiceStatus::Void) {
+                        Fact { label: tr.invoices_amount_due(), value: money(imported.due_cents, &currency), mono: true }
+                    }
                     if let Some(paid_on) = imported.paid_on {
                         Fact { label: tr.invoices_paid_on(), value: date(paid_on), mono: true }
                     }
@@ -237,7 +240,8 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
                                     div { class: "text-sm text-muted", "{line.kind}" }
                                 }
                                 td { class: "text-mono text-right", "{line.quantity}" }
-                                td { class: "text-mono text-right", {money(line.unit_price_cents, &currency)} }
+                                // Harvest's price as written: it may have more decimals than the currency.
+                                td { class: "text-mono text-right", "{currency} {line.unit_price}" }
                                 td { class: "text-mono text-right", {money(line.amount_cents, &currency)} }
                             }
                         }

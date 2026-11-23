@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT kind, description, quantity::text AS \"quantity!\", unit_price_cents,\n                  amount_cents, taxed, taxed2, project_id\n           FROM harvest_invoice_lines WHERE invoice_id = $1 ORDER BY position",
+  "query": "SELECT kind, description, quantity::text AS \"quantity!\", unit_price::text AS \"unit_price!\",\n                  amount_cents, taxed, taxed2, project_id\n           FROM harvest_invoice_lines WHERE invoice_id = $1 ORDER BY position",
   "describe": {
     "columns": [
       {
@@ -20,8 +20,8 @@
       },
       {
         "ordinal": 3,
-        "name": "unit_price_cents",
-        "type_info": "Int8"
+        "name": "unit_price!",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
@@ -53,12 +53,12 @@
       false,
       false,
       null,
-      false,
+      null,
       false,
       false,
       false,
       true
     ]
   },
-  "hash": "40f81a8f6e5ae70e95365048ae03b2f03facede6c78db1a378449c50d9a6fc4f"
+  "hash": "53a221c20ff03810ca1396f56a4b24107a78043ce535f76f962fa902ae89e877"
 }

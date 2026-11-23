@@ -37,6 +37,9 @@ pub(super) fn BillingTable(report: ImportReport) -> Element {
             if report.invoice_scan == Some(EntryScan::Full) && report.source == SourceKind::HarvestApi {
                 p { class: "text-sm text-secondary", {tr.harvest_billing_full_scan()} }
             }
+            if report.watermarks_held() {
+                p { class: "alert alert-warning text-sm", role: "status", {tr.harvest_billing_watermarks_held()} }
+            }
             div { class: "card p-0 overflow-x-auto",
                 table { class: "table",
                     tbody {

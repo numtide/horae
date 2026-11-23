@@ -224,7 +224,7 @@ pub async fn imported_lines(
 ) -> Result<Vec<ImportedInvoiceLine>, sqlx::Error> {
     sqlx::query_as!(
         ImportedInvoiceLine,
-        r#"SELECT kind, description, quantity::text AS "quantity!", unit_price_cents,
+        r#"SELECT kind, description, quantity::text AS "quantity!", unit_price::text AS "unit_price!",
                   amount_cents, taxed, taxed2, project_id
            FROM harvest_invoice_lines WHERE invoice_id = $1 ORDER BY position"#,
         invoice_id,

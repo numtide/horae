@@ -114,7 +114,8 @@
       (
         text(size: 9pt, line.description),
         text(size: 9pt, line.quantity),
-        text(size: 9pt, fmt-money(line.unit_cents, currency)),
+        // Harvest's price as written, which may have more decimals than the currency.
+        text(size: 9pt, currency + " " + line.unit_price),
         align(right, text(size: 9pt, fmt-money(line.amount_cents, currency))),
       )
     } else {

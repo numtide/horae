@@ -628,6 +628,15 @@ impl ImportReport {
         }
     }
 
+    /// Whether this run held back the watermarks: a committed API run with
+    /// errors, entry or invoice (spec 025, Q10), does not advance them, so the
+    /// next run reads every time entry again until the errors are fixed.
+    pub fn watermarks_held(&self) -> bool {
+        self.source == SourceKind::HarvestApi
+            && self.mode == ImportMode::Commit
+            && self.error_count() > 0
+    }
+
     pub fn note_conflict(&mut self, conflict: LinkConflict) {
         self.summary.links.conflicts += 1;
         if self.link_conflicts.len() < LINK_CONFLICTS_KEPT {

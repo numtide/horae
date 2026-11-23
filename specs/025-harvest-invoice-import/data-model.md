@@ -64,7 +64,7 @@ Paid amount shown = total − `due_cents`. Step 3 (payments) can create one paym
 | `kind` | `text NOT NULL` | 1–100 characters |
 | `description` | `text NOT NULL` | |
 | `quantity` | `numeric NOT NULL` | display only |
-| `unit_price_cents` | `bigint NOT NULL` | may be negative |
+| `unit_price` | `numeric NOT NULL` | exact decimal as Harvest wrote it (`95.2381`, JPY `80.50`); display only, never used in arithmetic (FR-004) |
 | `amount_cents` | `bigint NOT NULL` | may be negative; authoritative |
 | `taxed`, `taxed2` | `boolean NOT NULL` | |
 | `project_id` | `uuid` | the imported project when Harvest names one and it resolved |
@@ -115,5 +115,5 @@ entries in full (R-7).
 
 - `Invoice` gains `imported: Option<ImportedInvoice>` with `due_cents`, `paid_on`, the three rates as
   decimal text and the period.
-- `ImportedInvoiceLine { kind, description, quantity: String, unit_price_cents, amount_cents, taxed, taxed2, project_id }`.
+- `ImportedInvoiceLine { kind, description, quantity: String, unit_price: String, amount_cents, taxed, taxed2, project_id }`; `quantity` and `unit_price` are exact decimal text for display.
 - `InvoiceDetailView` gains `imported_lines: Vec<ImportedInvoiceLine>` (empty for Horae invoices).

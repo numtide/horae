@@ -5,6 +5,7 @@ use horae_core::types::InvoiceStatus;
 use super::filter::{InvoiceFilter, PeriodValue, StatusValue};
 use super::recovery::RecoveryStorage;
 use super::{INVOICES_HEADING, Shown, StatusBadge, date, money, prepares_invoices, settings};
+use crate::components::badge::Badge;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::card::MetricCard;
 use crate::components::combobox::{ComboOption, Combobox};
@@ -30,6 +31,7 @@ fn status_label(tr: Tr, status: StatusValue) -> String {
         StatusValue::Overdue => tr.invoices_status_overdue(),
         StatusValue::Paid => tr.invoices_status_paid(),
         StatusValue::Void => tr.invoices_status_void(),
+        StatusValue::Closed => tr.invoices_status_closed(),
     }
 }
 
@@ -44,6 +46,7 @@ fn keeps_status(status: Option<StatusValue>, item: &InvoiceListItem) -> bool {
         Some(StatusValue::Overdue) => item.overdue,
         Some(StatusValue::Paid) => stored == InvoiceStatus::Paid,
         Some(StatusValue::Void) => stored == InvoiceStatus::Void,
+        Some(StatusValue::Closed) => stored == InvoiceStatus::Closed,
     }
 }
 
@@ -409,6 +412,7 @@ fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter) -> Element {
 /// compare equal when unchanged, so they take their item by value.
 #[component]
 fn InvoiceRow(item: InvoiceListItem) -> Element {
+    let tr = use_tr();
     let invoice = &item.invoice;
     let shown = Shown::of(invoice.status, item.overdue);
     let void = invoice.status == InvoiceStatus::Void;
@@ -423,7 +427,14 @@ fn InvoiceRow(item: InvoiceListItem) -> Element {
             td { class: if void { "text-mono text-right inv-void-amount text-muted" } else { "text-mono text-right" },
                 {money(invoice.total_cents, &invoice.currency)}
             }
-            td { StatusBadge { shown } }
+            td {
+                span { class: "flex flex-wrap gap-2 items-center",
+                    StatusBadge { shown }
+                    if item.imported.is_some() {
+                        Badge { variant: "neutral", {tr.invoices_imported()} }
+                    }
+                }
+            }
         }
     }
 }

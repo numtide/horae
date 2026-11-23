@@ -52,6 +52,16 @@ Harvest's line items do not say which time entries they cover; only the entry po
 - Q8: A Harvest number already used by a Horae invoice: report the Harvest invoice as an error, or
   import it under a suffixed number? → A: Error (FR-015).
 
+### Session 2026-11-23
+
+- Q9: A line's unit price with more decimals than the currency (95.2381, or 80.50 in JPY): refuse
+  the invoice, or keep the price? → A: Keep each line's amount in exact hundredths and the unit
+  price as exact decimal text, display only, never used in arithmetic (FR-004).
+- Q10: Should invoice errors hold back the watermarks, as entry errors do? → A: Yes; the report
+  says when they were held back.
+- T002 (2026-11-23, test account): billing an entry and deleting its invoice both move the entry's
+  `updated_at` in Harvest, so incremental runs see them (research R-7).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Billed history stays billed after an import (Priority: P1)
@@ -219,9 +229,13 @@ state of their entries.
 
 **Amounts**
 
-- **FR-004**: Every amount MUST be converted from Harvest's decimal to integer minor units of the
-  invoice's currency with exact integer arithmetic. An amount with more decimals than the currency
-  allows MUST make the invoice an error, never be rounded.
+- **FR-004**: Every amount that is summed or stored as money (each line's amount, the discount, both
+  taxes, the total and the amount due) MUST be converted from Harvest's decimal to exact hundredths,
+  the unit Horae stores money in, with exact integer arithmetic. An amount with more decimals than
+  the currency allows MUST make the invoice an error, never be rounded. A line's unit price is not
+  such an amount: it MUST be kept as the exact decimal text Harvest gave, for display only, and
+  never used in arithmetic (Harvest allows more decimals there, and imported invoices are read
+  only).
 - **FR-005**: An imported invoice MUST store Harvest's own subtotal, discount amount, first and second
   tax amounts, total and amount due, and MUST NOT recompute them from rates. Before writing, the
   import MUST check that the lines' amounts sum to the subtotal and that subtotal − discount + taxes =
@@ -289,7 +303,9 @@ state of their entries.
   records.
 - **FR-022**: A CSV import MUST NOT create invoices (Harvest's time CSV carries no invoice data). An
   entry whose "Invoiced?" column says yes MUST be set to invoiced with no invoice and counted as
-  billed without an imported invoice (FR-011).
+  billed without an imported invoice (FR-011). A CSV never unlinks or reopens an entry (FR-012 does
+  not apply): it cannot tell an entry that was never billed from one whose invoice it lacks, and it
+  never moves an entry off an imported invoice.
 - **FR-023**: An import MUST NOT raise the invoice sent, paid or voided plugin events for imported
   invoices.
 

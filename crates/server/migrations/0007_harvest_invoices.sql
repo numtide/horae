@@ -56,12 +56,14 @@ CREATE TABLE harvest_invoice_lines (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES organizations (id),
     invoice_id uuid NOT NULL,
-    position integer NOT NULL,
+    position integer NOT NULL CHECK (position >= 0),
     harvest_line_id bigint NOT NULL,
     kind text NOT NULL CHECK (char_length(kind) BETWEEN 1 AND 100),
     description text NOT NULL,
+    -- Exact decimals as Harvest wrote them, for display only: a unit price
+    -- may have more decimals than the currency, and nothing sums it.
     quantity numeric NOT NULL,
-    unit_price_cents bigint NOT NULL,
+    unit_price numeric NOT NULL,
     amount_cents bigint NOT NULL,
     taxed boolean NOT NULL,
     taxed2 boolean NOT NULL,

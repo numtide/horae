@@ -14,15 +14,18 @@ pub enum StatusValue {
     Overdue,
     Paid,
     Void,
+    /// Written off; only invoices imported from Harvest reach it.
+    Closed,
 }
 
 impl StatusValue {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Draft,
         Self::Sent,
         Self::Overdue,
         Self::Paid,
         Self::Void,
+        Self::Closed,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -32,6 +35,7 @@ impl StatusValue {
             Self::Overdue => "overdue",
             Self::Paid => "paid",
             Self::Void => "void",
+            Self::Closed => "written-off",
         }
     }
 }

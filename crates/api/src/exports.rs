@@ -495,11 +495,12 @@ pub async fn export_invoice_xlsx(
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let (invoice, lines) = limits::invoice(&state.db, org_id, actor_id, invoice_id).await?;
+    let (invoice, lines, imported) =
+        limits::invoice(&state.db, org_id, actor_id, invoice_id).await?;
 
     let filename = format!("invoice-{}.xlsx", invoice.number);
     let data = render_invoice_export(permit, &state.db, org_id, actor_id, move || {
-        invoice_xlsx(&invoice, &lines)
+        invoice_xlsx(&invoice, &lines, limits::imported_view(&imported))
     })
     .await?;
 
@@ -573,9 +574,13 @@ fn write_invoice_amount(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+/// The invoice as a workbook. An invoice imported from Harvest shows
+/// Harvest's lines, with the quantity and unit price as written (text), and
+/// the amounts Harvest stated, as its PDF does.
 fn invoice_xlsx(
     invoice: &crate::models::Invoice,
     lines: &[crate::models::invoice::InvoiceLine],
+    imported: Option<crate::render::Imported<'_>>,
 ) -> Result<Vec<u8>, StatusCode> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
@@ -585,6 +590,21 @@ fn invoice_xlsx(
             .write_string(0, col as u16, *h)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
+
+    let imported_lines = imported.map_or(&[][..], |imported| imported.lines);
+    for (row, line) in imported_lines.iter().enumerate() {
+        let r = (row + 1) as u32;
+        for (column, text) in [&line.description, &line.quantity, &line.unit_price]
+            .into_iter()
+            .enumerate()
+        {
+            worksheet
+                .write_string(r, column as u16, text)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+        write_invoice_amount(worksheet, r, 3, line.amount_cents)?;
+    }
+    let row_count = lines.len() + imported_lines.len();
 
     for (row, line) in lines.iter().enumerate() {
         let r = (row + 1) as u32;
@@ -602,16 +622,19 @@ fn invoice_xlsx(
         write_invoice_amount(worksheet, r, 3, line.amount_cents)?;
     }
 
-    let breakdown = invoice.breakdown();
+    let breakdown = match imported {
+        Some(imported) => imported.invoice.breakdown(invoice),
+        None => invoice.breakdown(),
+    };
     for (index, (label, cents)) in breakdown.iter().enumerate() {
-        let row = (lines.len() + index + 1) as u32;
+        let row = (row_count + index + 1) as u32;
         worksheet
             .write_string(row, 0, label)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         write_invoice_amount(worksheet, row, 3, *cents)?;
     }
     let metadata = invoice_export_metadata(invoice);
-    for row in 1..=(lines.len() + breakdown.len()) as u32 {
+    for row in 1..=(row_count + breakdown.len()) as u32 {
         for (column, value) in metadata.iter().enumerate() {
             worksheet
                 .write_string(row, column as u16 + 4, value)

@@ -28,11 +28,11 @@ sql(`BEGIN;
   INSERT INTO harvest_invoices (invoice_id, org_id, harvest_invoice_id, due_cents, tax1_rate, harvest_updated_at)
     SELECT '${invoice}', org_id, 1042, 38000, 8.875, now() FROM clients WHERE id = '${client}';
   INSERT INTO harvest_invoice_lines (id, org_id, invoice_id, position, harvest_line_id, kind, description,
-                                     quantity, unit_price_cents, amount_cents, taxed, taxed2)
+                                     quantity, unit_price, amount_cents, taxed, taxed2)
     SELECT l.id::uuid, c.org_id, '${invoice}', l.position, l.position, l.kind, l.description,
            l.quantity, l.price, l.amount, true, false
-    FROM clients c, (VALUES ('${id(11)}', 0, 'Service', 'Design sprint', 12.5, 8000, 100000),
-                            ('${id(12)}', 1, 'Credit', 'Goodwill credit', 1, -10000, -10000))
+    FROM clients c, (VALUES ('${id(11)}', 0, 'Service', 'Design sprint', 12.5, 80.0000, 100000),
+                            ('${id(12)}', 1, 'Credit', 'Goodwill credit', 1, -100.00, -10000))
          AS l(id, position, kind, description, quantity, price, amount)
     WHERE c.id = '${client}';
   INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable,
@@ -61,6 +61,8 @@ sql(`BEGIN;
     await expect(lines.nth(0)).toContainText('Design sprint');
     await expect(lines.nth(0)).toContainText('Service');
     await expect(lines.nth(0)).toContainText('12.5');
+    // The unit price as Harvest wrote it, with all its decimals.
+    await expect(lines.nth(0)).toContainText('EUR 80.0000');
     await expect(lines.nth(1)).toContainText('Goodwill credit');
     const totals = page.locator('main tfoot');
     for (const label of ['Subtotal', 'Tax (8.875%)', 'Total', 'Paid', 'Amount due']) {

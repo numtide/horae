@@ -34,9 +34,9 @@ async fn imported_invoice(pool: &PgPool, ids: &crate::testing::SeedIds, number: 
     .unwrap();
     sqlx::query!(
         "INSERT INTO harvest_invoice_lines (id, org_id, invoice_id, position, harvest_line_id, kind,
-                                            description, quantity, unit_price_cents, amount_cents,
+                                            description, quantity, unit_price, amount_cents,
                                             taxed, taxed2)
-         VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 2.5, 4000, 10000, true, false)",
+         VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 2.5, 40.00, 10000, true, false)",
         Uuid::now_v7(),
         ids.org_id,
         id,

@@ -163,7 +163,9 @@ pub struct ImportedInvoiceLine {
     pub description: String,
     /// Exact decimal text, for display.
     pub quantity: String,
-    pub unit_price_cents: i64,
+    /// Exact decimal text as Harvest wrote it (`95.2381`), for display only:
+    /// it may have more decimals than the currency, and nothing sums it.
+    pub unit_price: String,
     pub amount_cents: i64,
     pub taxed: bool,
     pub taxed2: bool,

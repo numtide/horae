@@ -137,12 +137,32 @@ pub(super) async fn invoice(
     org_id: Uuid,
     actor_id: Uuid,
     invoice_id: Uuid,
-) -> Result<(Invoice, Vec<InvoiceLine>), StatusCode> {
+) -> Result<(Invoice, Vec<InvoiceLine>, Option<ImportedParts>), StatusCode> {
     let mut tx = super::begin_invoice_export(pool, org_id, actor_id)
         .await?
         .tx;
-    let result = read_invoice(&mut tx, org_id, invoice_id, XLSX).await;
+    let result = async {
+        let (invoice, lines) = read_invoice(&mut tx, org_id, invoice_id, XLSX).await?;
+        // shortcut: imported lines are not counted against the export limits;
+        // Harvest invoices are bounded by Harvest. Count them if one is reached.
+        let imported = crate::ops::invoices::fetch_imported(&mut tx, org_id, invoice_id)
+            .await
+            .map_err(database_error)?;
+        Ok((invoice, lines, imported))
+    }
+    .await;
     finish(tx, result).await
+}
+
+/// An imported invoice's Harvest values and lines, which its exports show
+/// instead of Horae's lines and breakdown.
+pub(super) type ImportedParts = (ImportedInvoice, Vec<ImportedInvoiceLine>);
+
+/// The exports' view of [`ImportedParts`].
+pub(super) fn imported_view(parts: &Option<ImportedParts>) -> Option<crate::render::Imported<'_>> {
+    parts
+        .as_ref()
+        .map(|(invoice, lines)| crate::render::Imported { invoice, lines })
 }
 
 pub(super) struct PdfInvoice {
@@ -153,14 +173,12 @@ pub(super) struct PdfInvoice {
     pub client_tax_id: Option<String>,
     pub branding: OrgBranding,
     /// Harvest's values and lines, for an imported invoice.
-    pub imported: Option<(ImportedInvoice, Vec<ImportedInvoiceLine>)>,
+    pub imported: Option<ImportedParts>,
 }
 
 impl PdfInvoice {
     pub fn imported(&self) -> Option<crate::render::Imported<'_>> {
-        self.imported
-            .as_ref()
-            .map(|(invoice, lines)| crate::render::Imported { invoice, lines })
+        imported_view(&self.imported)
     }
 }
 
@@ -277,7 +295,7 @@ mod tests {
         inv.po_number = "PO <123>".into();
         document.lines[0].amount_cents = 10001;
         document.lines[0].rate_cents = Some(10001);
-        let workbook = super::super::invoice_xlsx(inv, &document.lines).unwrap();
+        let workbook = super::super::invoice_xlsx(inv, &document.lines, None).unwrap();
         let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
         for (row, label, amount) in [
             (3, "Subtotal", "100.01"),
@@ -320,7 +338,7 @@ mod tests {
         inv.tax2_cents = 0;
         document.lines[0].amount_cents = i64::MAX;
         document.lines[0].rate_cents = Some(i64::MAX);
-        let workbook = super::super::invoice_xlsx(inv, &document.lines).unwrap();
+        let workbook = super::super::invoice_xlsx(inv, &document.lines, None).unwrap();
         for cell in ["C2", "D2", "D3", "D4"] {
             assert_text_cell(&workbook, cell, "92233720368547758.07");
         }
@@ -699,6 +717,59 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// An imported invoice's workbook shows Harvest's lines, its unit price as
+    /// written, and amounts that add up: subtotal, tax, total, paid and due.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn an_imported_invoice_exports_its_lines_and_stated_amounts(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency,
+                                   total_cents, tax1_cents, source)
+             VALUES ($1, $2, $3, 'HV-1', 'sent', '2026-09-07', '2026-10-07', 'EUR', 10875, 875, 'harvest')",
+            id, ids.org_id, ids.client_id,
+        ).execute(&pool).await.unwrap();
+        sqlx::query!(
+            "INSERT INTO harvest_invoices (invoice_id, org_id, harvest_invoice_id, due_cents, tax1_rate,
+                                           harvest_updated_at)
+             VALUES ($1, $2, 1, 4000, 8.875, now())",
+            id, ids.org_id,
+        ).execute(&pool).await.unwrap();
+        sqlx::query!(
+            "INSERT INTO harvest_invoice_lines (id, org_id, invoice_id, position, harvest_line_id, kind,
+                                                description, quantity, unit_price, amount_cents, taxed, taxed2)
+             VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 1.05, 95.2381, 10000, true, false)",
+            Uuid::now_v7(), ids.org_id, id,
+        ).execute(&pool).await.unwrap();
+        let (invoice, lines, imported) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let workbook =
+            super::super::invoice_xlsx(&invoice, &lines, imported_view(&imported)).unwrap();
+        let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
+        for (cell, text) in [
+            ("A2", "Design"),
+            ("B2", "1.05"),
+            ("C2", "95.2381"),
+            ("A3", "Subtotal"),
+            ("A4", "Tax (8.875%)"),
+            ("A5", "Total"),
+            ("A6", "Paid"),
+            ("A7", "Due"),
+        ] {
+            assert_text_cell(&workbook, cell, text);
+        }
+        for (cell, value) in [
+            ("D2", "100"),
+            ("D3", "100"),
+            ("D4", "8.75"),
+            ("D5", "108.75"),
+            ("D6", "-68.75"),
+            ("D7", "40"),
+        ] {
+            assert_cell(&xml, cell, value);
+        }
+    }
+
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn fee_exports_preserve_absent_quantities_and_render_a_real_pdf(pool: PgPool) {
@@ -711,8 +782,8 @@ mod tests {
             .unwrap();
         sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
         sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", uuid::Uuid::now_v7(), id, fee_id).execute(&pool).await.unwrap();
-        let (invoice, lines) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
-        let workbook = super::super::invoice_xlsx(&invoice, &lines).unwrap();
+        let (invoice, lines, _) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let workbook = super::super::invoice_xlsx(&invoice, &lines, None).unwrap();
         let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
         assert!(!xml.contains("r=\"B2\""));
         assert!(!xml.contains("r=\"C2\""));
@@ -766,8 +837,8 @@ mod tests {
             .unwrap();
         let sheet = super::super::projects_xlsx(&rows).unwrap();
         assert!(xlsx_part(&sheet, "xl/sharedStrings.xml").contains("Widget"));
-        let (invoice, lines) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
-        let sheet = super::super::invoice_xlsx(&invoice, &lines).unwrap();
+        let (invoice, lines, _) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let sheet = super::super::invoice_xlsx(&invoice, &lines, None).unwrap();
         let xml = xlsx_part(&sheet, "xl/worksheets/sheet1.xml");
         assert_cell(&xml, "C2", "12.34");
         assert_cell(&xml, "D2", "12.34");

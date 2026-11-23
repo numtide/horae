@@ -119,7 +119,7 @@ fn build_inputs(
             let mut ld = Dict::new();
             ld.insert("description".into(), l.description.clone().into_value());
             ld.insert("quantity".into(), l.quantity.clone().into_value());
-            ld.insert("unit_cents".into(), l.unit_price_cents.into_value());
+            ld.insert("unit_price".into(), l.unit_price.clone().into_value());
             ld.insert("amount_cents".into(), l.amount_cents.into_value());
             Value::Dict(ld)
         })
@@ -262,7 +262,7 @@ mod tests {
             kind: "Service".into(),
             description: description.into(),
             quantity: "1.5".into(),
-            unit_price_cents: amount_cents,
+            unit_price: "95.2381".into(),
             amount_cents,
             taxed: true,
             taxed2: false,
@@ -283,6 +283,7 @@ mod tests {
             "Unit price",
             "Design",
             "1.5",
+            "USD 95.2381",
             "USD 1200.00",
             "−USD 100.00",
             "Discount (10%)",

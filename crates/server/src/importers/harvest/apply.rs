@@ -606,31 +606,39 @@ async fn apply_time_entry(
                 ..EntryApplied::new(outcome, None, mapped.entry_id)
             });
         }
-        // Billing moves an entry's version in Harvest. An entry Harvest bills
-        // that is no longer open here, or was edited here, keeps its fields;
-        // the link step bills it or reports the conflict (FR-010). Time the
-        // import billed that Harvest no longer bills reopens first, then takes
-        // Harvest's edit.
+        // Billing and unbilling move an entry's version in Harvest (T002). An
+        // entry Harvest bills that is no longer open here, or was edited
+        // here, keeps its fields; the link step bills it or reports the
+        // conflict (FR-010). Harvest's version is not recorded as applied,
+        // since none of its fields were.
         if row.invoiced && (mapped.open != Some(true) || mapped.edited != Some(false)) {
-            super::provenance::upsert(
-                &mut **sp,
-                org.org_id,
-                EntityType::TimeEntry,
-                hid,
-                mapped.horae_id,
-                row.harvest_updated_at,
-            )
-            .await?;
             return Ok(EntryApplied {
                 current,
                 ..EntryApplied::new(RowOutcome::Skipped, None, Some(mapped.horae_id))
             });
         }
-        let mut reopened = false;
-        if matches!(
+        let import_billed = matches!(
             current,
             Some(Current::BilledWithoutInvoice | Current::OnImported(_))
-        ) {
+        );
+        // Time the import billed that Harvest no longer bills reopens (the
+        // page's billing write, FR-012). Edited in Horae meanwhile, it keeps
+        // its fields and the row reports it, rather than Harvest's version
+        // overwriting the edit.
+        if import_billed && mapped.edited != Some(false) {
+            let changed = RowOutcome::Errored {
+                source_location: row.source_location.clone(),
+                reason: "entry was changed in Horae while Harvest billed it; reopened, not updated from Harvest".into(),
+                person: None,
+                entry_kind: Some(EntryErrorKind::ChangedInHorae),
+            };
+            return Ok(EntryApplied {
+                current,
+                ..EntryApplied::new(changed, None, Some(mapped.horae_id))
+            });
+        }
+        let mut reopened = false;
+        if import_billed {
             reopen(sp, mapped.horae_id).await?;
             remember_version(sp, org.org_id, mapped.horae_id).await?;
             reopened = true;

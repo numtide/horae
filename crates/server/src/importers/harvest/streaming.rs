@@ -299,6 +299,8 @@ async fn advance_watermarks(
     invoices: &[ApiInvoice],
     captured_at: DateTime<Utc>,
 ) -> anyhow::Result<()> {
+    // Errors, entry or invoice (Q10), hold the watermarks back so the next
+    // run reads them again (`ImportReport::watermarks_held` says so).
     if report.mode != ImportMode::Commit || report.error_count() != 0 {
         return Ok(());
     }

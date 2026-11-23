@@ -1,7 +1,9 @@
 //! Importing Harvest invoices and linking the time they billed (spec 025).
 
 use super::*;
-use horae_core::importers::harvest::types::{EntryScan, InvoiceErrorKind, LinkCounts};
+use horae_core::importers::harvest::types::{
+    EntryErrorKind, EntryScan, InvoiceErrorKind, LinkCounts,
+};
 use horae_core::types::{EntryState, InvoiceStatus};
 
 /// A JSON number keeping its decimal text exactly, as Harvest sends it.
@@ -399,6 +401,85 @@ async fn a_commit_imports_invoices_and_links_the_time_they_billed(pool: PgPool) 
     assert_eq!(events, Some(0), "an import raises no invoice events");
 }
 
+/// Review H1 and M3: an entry edited in Horae, then billed and unbilled in
+/// Harvest, keeps its edit throughout, and is reported rather than updated.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_horae_edit_survives_billing_and_unbilling_in_harvest(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut source = valid_data();
+    source.time_entries = serde_json::from_value(json!([entry(10, 10, None)])).unwrap();
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE time_entries SET notes = 'edited in Horae' WHERE org_id = $1",
+        org
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let db = &pool;
+    let stored = || async move {
+        sqlx::query!(
+            r#"SELECT te.state::text AS "state!", te.notes, te.invoice_id IS NOT NULL AS "linked!",
+                      m.harvest_updated_at AS "version: DateTime<Utc>"
+               FROM time_entries te JOIN harvest_import_map m ON m.horae_id = te.id
+               WHERE te.org_id = $1"#,
+            org,
+        )
+        .fetch_one(db)
+        .await
+        .unwrap()
+    };
+
+    // Harvest bills it: linked, its fields and Harvest's version kept as they were.
+    source.invoices = serde_json::from_value(json!([invoice(
+        100,
+        "1001",
+        "open",
+        &["10.00"],
+        "10.00",
+        "10.00"
+    )]))
+    .unwrap();
+    source.time_entries[0].is_billed = true;
+    source.time_entries[0].invoice = serde_json::from_value(json!({"id": 100})).unwrap();
+    source.time_entries[0].updated_at = Some(day(5));
+    let billed = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(6))
+        .await
+        .unwrap();
+    assert_eq!(billed.summary.links.linked, 1);
+    let after = stored().await;
+    assert_eq!(
+        (after.state.as_str(), after.notes.as_deref(), after.linked),
+        ("invoiced", Some("edited in Horae"), true)
+    );
+    assert_eq!(
+        after.version,
+        Some(day(3)),
+        "Harvest's edit was not applied"
+    );
+
+    // Harvest unbills it with other notes: reopened, the Horae edit kept, reported.
+    source.time_entries[0].is_billed = false;
+    source.time_entries[0].invoice = None;
+    source.time_entries[0].notes = Some("Harvest notes".into());
+    source.time_entries[0].updated_at = Some(day(7));
+    let unbilled = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(8))
+        .await
+        .unwrap();
+    assert_eq!(unbilled.summary.links.unlinked, 1);
+    assert_eq!(
+        unbilled.row_errors[0].entry_kind,
+        Some(EntryErrorKind::ChangedInHorae)
+    );
+    let after = stored().await;
+    assert_eq!(
+        (after.state.as_str(), after.notes.as_deref(), after.linked),
+        ("open", Some("edited in Horae"), false)
+    );
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_unchanged_rerun_skips_every_invoice_and_writes_nothing(pool: PgPool) {
     let org = setup(&pool).await;
@@ -463,6 +544,8 @@ async fn entries_imported_before_invoices_are_linked_by_a_full_scan(pool: PgPool
     assert_eq!(report.summary.links.linked, 3);
     // 104 is no longer listed, 105 does not add up, 999 never was.
     assert_eq!(report.summary.links.billed_without_invoice, 3);
+    // The invoice error holds the watermarks back (Q10), and the report says so.
+    assert!(report.watermarks_held());
 
     let connection = credentials::load(&pool, org, KEY).await.unwrap().unwrap();
     let since = connection.watermark_for(EntityType::TimeEntry);
@@ -476,6 +559,52 @@ async fn entries_imported_before_invoices_are_linked_by_a_full_scan(pool: PgPool
     assert_eq!(
         api_source::entry_scan(since, Some(day(3))),
         (EntryScan::Incremental, since)
+    );
+}
+
+/// A unit price is kept exactly as written, display only, even with more
+/// decimals than the currency; amounts stay in exact hundredths (FR-004).
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn unit_prices_are_kept_as_written(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut source = valid_data();
+    let mut usd = invoice(401, "4001", "open", &["1000.00"], "1000.00", "1000.00");
+    usd["line_items"][0]["quantity"] = num("10.5");
+    usd["line_items"][0]["unit_price"] = num("95.2381");
+    let mut jpy = invoice(402, "4002", "open", &["161"], "161", "161");
+    jpy["currency"] = json!("JPY");
+    jpy["line_items"][0]["quantity"] = num("2");
+    jpy["line_items"][0]["unit_price"] = num("80.50");
+    source.invoices = serde_json::from_value(json!([usd, jpy])).unwrap();
+    source.time_entries.clear();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    assert_eq!(report.error_count(), 0, "{:?}", report.row_errors);
+    assert_eq!(report.summary.invoices.created, 2);
+    let lines = sqlx::query!(
+        r#"SELECT i.currency, l.unit_price::text AS "unit_price!", l.amount_cents, i.total_cents
+           FROM harvest_invoice_lines l JOIN invoices i ON i.id = l.invoice_id
+           WHERE i.org_id = $1 ORDER BY i.number"#,
+        org,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        lines
+            .iter()
+            .map(|l| (
+                l.currency.as_str(),
+                l.unit_price.as_str(),
+                l.amount_cents,
+                l.total_cents
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("USD", "95.2381", 100_000, 100_000),
+            ("JPY", "80.50", 16_100, 16_100)
+        ]
     );
 }
 

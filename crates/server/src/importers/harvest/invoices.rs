@@ -178,7 +178,9 @@ struct Line {
     kind: String,
     description: String,
     quantity: String,
-    unit_price_cents: i64,
+    /// Exact decimal text, display only (FR-004): it may have more decimals
+    /// than the currency, and nothing sums it.
+    unit_price: String,
     amount_cents: i64,
     taxed: bool,
     taxed2: bool,
@@ -218,7 +220,9 @@ fn check_texts(source: &ApiInvoice, lines: &[Line]) -> Result<(), Failure> {
         .into_iter()
         .flatten()
         .map(decimal);
-    let quantities = lines.iter().map(|line| line.quantity.clone());
+    let quantities = lines
+        .iter()
+        .flat_map(|line| [line.quantity.clone(), line.unit_price.clone()]);
     if let Some(bad) = rates.chain(quantities).find(|text| !plain(text)) {
         return refuse(format!("{bad} is not a decimal number"));
     }
@@ -279,7 +283,7 @@ async fn apply_one(
                 .collect(),
             description: line.description.clone().unwrap_or_default(),
             quantity: decimal(&line.quantity),
-            unit_price_cents: money(Some(&line.unit_price))?,
+            unit_price: decimal(&line.unit_price),
             amount_cents: money(Some(&line.amount))?,
             taxed: line.taxed,
             taxed2: line.taxed2,
@@ -295,17 +299,23 @@ async fn apply_one(
 
     let id = existing.map_or_else(Uuid::now_v7, |(id, _, _)| id);
     let taken = sqlx::query_scalar!(
-        "SELECT number FROM invoices WHERE org_id = $1 AND number = $2 AND id <> $3",
+        r#"SELECT source = 'harvest' AS "imported!" FROM invoices
+           WHERE org_id = $1 AND number = $2 AND id <> $3"#,
         org_id,
         source.number,
         id,
     )
     .fetch_optional(&mut **tx)
     .await?;
-    if taken.is_some() {
+    if let Some(imported) = taken {
+        let holder = if imported {
+            "Another invoice imported from Harvest"
+        } else {
+            "An invoice made in Horae"
+        };
         return Err(Failure::new(
             InvoiceErrorKind::NumberTaken,
-            format!("A Horae invoice already uses number {}", source.number),
+            format!("{holder} already uses number {}", source.number),
         ));
     }
 
@@ -404,18 +414,18 @@ async fn apply_one(
     let kinds: Vec<String> = lines.iter().map(|line| line.kind.clone()).collect();
     let descriptions: Vec<String> = lines.iter().map(|l| l.description.clone()).collect();
     let quantities: Vec<String> = lines.iter().map(|line| line.quantity.clone()).collect();
-    let prices: Vec<i64> = lines.iter().map(|line| line.unit_price_cents).collect();
+    let prices: Vec<String> = lines.iter().map(|line| line.unit_price.clone()).collect();
     let taxed: Vec<bool> = lines.iter().map(|line| line.taxed).collect();
     let taxed2: Vec<bool> = lines.iter().map(|line| line.taxed2).collect();
     let projects: Vec<Option<Uuid>> = lines.iter().map(|line| line.project_id).collect();
     sqlx::query!(
         "INSERT INTO harvest_invoice_lines
            (id, org_id, invoice_id, position, harvest_line_id, kind, description, quantity,
-            unit_price_cents, amount_cents, taxed, taxed2, project_id)
+            unit_price, amount_cents, taxed, taxed2, project_id)
          SELECT l.id, $2, $3, l.position, l.harvest_id, l.kind, l.description,
-                l.quantity::numeric, l.price, l.amount, l.taxed, l.taxed2, l.project
+                l.quantity::numeric, l.price::numeric, l.amount, l.taxed, l.taxed2, l.project
          FROM unnest($1::uuid[], $4::int4[], $5::int8[], $6::text[], $7::text[], $8::text[],
-                     $9::int8[], $10::int8[], $11::bool[], $12::bool[], $13::uuid[])
+                     $9::text[], $10::int8[], $11::bool[], $12::bool[], $13::uuid[])
               AS l(id, position, harvest_id, kind, description, quantity, price, amount,
                    taxed, taxed2, project)",
         &ids,
