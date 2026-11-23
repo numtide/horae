@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET currency = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bpchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74e48753c35d8835ff3590136c41233850bd4bf8a401241d6c24ea66f56d0593"
+}

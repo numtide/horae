@@ -171,14 +171,32 @@ pub fn is_iso_currency(currency: &str) -> bool {
     ISO_4217.binary_search(&currency).is_ok()
 }
 
+/// ISO 4217 currencies with no minor unit.
+pub const ZERO_DECIMAL_CURRENCIES: &[&str] = &[
+    "BIF", "BYR", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "UYI",
+    "VND", "VUV", "XAF", "XOF", "XPF",
+];
+
+/// ISO 4217 currencies with three decimals.
+pub const THREE_DECIMAL_CURRENCIES: &[&str] = &["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"];
+
 /// ISO 4217 minor-unit digits; every currency not listed has two. CLF and UYW
-/// have four, which makes no difference: Horae keeps hundredths at most.
-pub(crate) fn currency_decimals(currency: &str) -> u8 {
-    match currency.trim() {
-        "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => 3,
-        "BIF" | "BYR" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF"
-        | "UGX" | "UYI" | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
-        _ => 2,
+/// have four, which makes no difference: Horae keeps hundredths at most. The
+/// code is trimmed and matched case-sensitively.
+///
+/// This and the two lists above are the only table of currency decimals in
+/// Rust, and a test checks that every listed code is in [`ISO_4217`]. Its SQL
+/// twin, `currency_amount_step(text)`, lists the same zero-decimal codes; a
+/// parity test checks that each list holds exactly the other's zero-decimal
+/// codes.
+pub fn currency_decimals(currency: &str) -> u8 {
+    let code = currency.trim();
+    if ZERO_DECIMAL_CURRENCIES.contains(&code) {
+        0
+    } else if THREE_DECIMAL_CURRENCIES.contains(&code) {
+        3
+    } else {
+        2
     }
 }
 
@@ -236,6 +254,30 @@ mod tests {
         assert_eq!(format_major_units(-100, "KRW"), "-1");
         assert_eq!(format_major_units(1_230, "BHD"), "12.300");
         assert_eq!(format_major_units(-5, "KWD"), "-0.050");
+    }
+
+    #[test]
+    fn currency_decimals_follow_iso_4217() {
+        assert_eq!(currency_decimals("JPY"), 0);
+        assert_eq!(currency_decimals(" JPY"), 0);
+        assert_eq!(currency_decimals("EUR"), 2);
+        assert_eq!(currency_decimals("KWD"), 3);
+    }
+
+    #[test]
+    fn every_currency_with_other_decimals_is_an_iso_code() {
+        for code in ZERO_DECIMAL_CURRENCIES
+            .iter()
+            .chain(THREE_DECIMAL_CURRENCIES)
+        {
+            assert!(is_iso_currency(code), "{code}");
+        }
+    }
+
+    #[test]
+    fn currency_decimals_are_two_for_unknown_and_lowercase_codes() {
+        assert_eq!(currency_decimals("XYZ"), 2);
+        assert_eq!(currency_decimals("jpy"), 2);
     }
 
     #[test]

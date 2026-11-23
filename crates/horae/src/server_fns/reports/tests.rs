@@ -592,9 +592,9 @@ async fn every_grouping_reconciles_with_the_entries(pool: PgPool) {
             expected.1 += i64::from(rounded);
             if billable {
                 expected.2 += i64::from(rounded);
-                expected.3 += line_amount_cents(rate, rounded).unwrap();
+                expected.3 += line_amount_cents(rate, rounded, "EUR").unwrap();
             }
-            expected.4 += line_amount_cents(6030, minutes).unwrap();
+            expected.4 += line_amount_cents(6030, minutes, "EUR").unwrap();
         }
         for dimension in ["project", "task", "client", "person"] {
             let groups = report(&pool, &first, dimension).await;
