@@ -72,6 +72,57 @@ integers only.
 - Kinds Horae does not have return an empty list with the full envelope (D-2), and
   `GET /company` reports their feature flags as off.
 
+As implemented in step 4:
+
+- Order. Clients, projects, tasks and users run newest first, by creation (their UUID v7 id), as
+  Harvest orders them by creation date. Time entries run by `spent_date`, latest first, then by
+  id. Before step 4 the catalogue lists ran by name; callers that showed them as received now
+  show the newest first.
+- Cursors. `links.next` and `links.previous` carry a `cursor` on all five lists; `first` and
+  `last` carry page numbers. A cursor is a signed position: the id of the row a page continues
+  after (or ends before), with its `spent_date` on time entries. Harvest's own cursor is likewise
+  an "after id" position. An edit never moves a record, so a cursor walk skips nothing and
+  repeats nothing whatever is edited or deleted meanwhile; a record created during a walk may
+  land behind the cursor, and `updated_since` finds it next time. A cursor the server did not
+  sign is 400, on the empty kinds too, and a cursor wins over `page`. Unlike `/api/v1`'s
+  cursors these do not expire and are not tied to a list or its filters: a position is
+  meaningful on any of them. They are signed, not encrypted, and show the row's internal id.
+- Page numbers stay filled on cursor pages; a page reached by cursor may start between page
+  boundaries, and then counts the partial page before it. A page-number walk is an offset walk,
+  as on Harvest: a record deleted or created before the current page during the walk shifts
+  later pages by one, so it can skip or repeat a record. Follow the links to avoid that.
+- Update times. A project, client or task changes on any edit of its own row; a user also when
+  their stored permission state (which holds `is_admin`) changes. A save that changes nothing
+  keeps the time. Names shown from another record (a project's client, a time entry's project
+  or task) do not move the showing record's time; a sync picks them up from that record's list.
+  Times are stamped when the row is written (`clock_timestamp()`), not when its transaction
+  began.
+- Horizon. A list serves only records stamped before the start of the oldest transaction that
+  is still writing (and before the request). A record a list returns therefore has a final
+  time: no record can later commit with an earlier one, so a client that takes the latest
+  `updated_at` it saw as its next `updated_since` needs no overlap. A record written by a
+  transaction still running, or stamped after the oldest running write began, appears once
+  those transactions end; with the 5 s statement limit on Horae's writes that is normally
+  milliseconds, but a long import delays recent changes in lists until it finishes. Reads of
+  one record by id are not delayed. The horizon reads `pg_stat_activity`, which shows other
+  sessions' transactions only to the same database role, so every writer must use Horae's role.
+- Time-entry filters: `user_id`, `client_id`, `project_id`, `task_id`, `is_billed`,
+  `is_running`, `approval_status` (`unsubmitted`, `submitted`, `approved`, where approved
+  includes invoiced; another value is 422), `from`, `to`, `updated_since`.
+  `external_reference_id` matches nothing, because Horae keeps no external references.
+- Time-entry fields: `approval_status` is `unsubmitted`, `submitted` or `approved`. A running
+  timer's `hours` and `rounded_hours` include the time since it last started, and
+  `hours_without_timer` is the time before that. `user_assignment`, `task_assignment`,
+  `invoice` and `external_reference` are null until Horae numbers those records.
+- `GET /users/me/project_assignments` is paged by number only, and refuses `updated_since` and
+  `cursor` with 422 (FR-042): assignments have no update time and no id of their own, and a
+  person's list fits one page.
+- Empty lists: `expenses`, `expense_categories`, `estimates`, `estimate_item_categories`,
+  `contacts`, `invoice_item_categories` and `roles`. Invoice payments arrive with invoices
+  (step 5), since they are listed under an invoice.
+- Every response carries `Cache-Control: private, no-store`: it is per caller, and list links
+  echo the request's `Host` and `X-Forwarded-Proto`.
+
 ## Rate limits (FR-050)
 
 100 requests per 15 seconds per token; 100 per 15 minutes for `/reports/*`. Exceeding it is 429.
@@ -127,6 +178,6 @@ messages that send email) stays out of scope (spec *Out of scope*).
 Measured by the `harvest-compat` check; clients and pins are in
 `nix/checks/harvest-compat/clients/README.md`.
 
-| Client | Identity and picker | Time workflow |
-| --- | --- | --- |
-| becoded/go-harvest (Go library) | passes: `users/me`, `projects`, `company`, `users/me/project_assignments` | passes: log, edit, start and end times, start (stopping the running timer), stop, restart, delete |
+| Client | Identity and picker | Time workflow | Sync |
+| --- | --- | --- | --- |
+| becoded/go-harvest (Go library) | passes: `users/me`, `projects`, `company`, `users/me/project_assignments` | passes: log, edit, start and end times, start (stopping the running timer), stop, restart, delete | passes: time entries, clients, projects, tasks and users by page and by `links.next` (cursors on the catalogue lists); `updated_since` after one edit |

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents,\n             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents,notes,subject)\n           VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9,$10,$11,$12,$13,$14,$15,$16,\n             CASE WHEN $17 THEN $18 ELSE (SELECT invoice_notes FROM organizations WHERE id = $2) END, $19)\n           RETURNING notes",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Date",
+        "Date",
+        "Bpchar",
+        "Int8",
+        "Text",
+        "Int2",
+        "Int2",
+        "Text",
+        "Int2",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "37a0c13b505d65c20f45da544d8af2e6655820cd36bf1e1c3b84f7408700ce24"
+}

@@ -184,7 +184,8 @@ async fn canonical_project_api_retains_filtered_total_past_last_page(pool: PgPoo
         "is_active=true&client_id={}&updated_since=2000-01-01T00:00:00Z",
         ids.client_id
     );
-    walk(&pool, &app, "projects", &filter, &[ids.project_id, second]).await;
+    // Newest first.
+    walk(&pool, &app, "projects", &filter, &[second, ids.project_id]).await;
     let past = page(
         &app,
         &format!("/harvest/v2/projects?{filter}&per_page=1&page=3"),

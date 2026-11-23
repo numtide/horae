@@ -126,6 +126,25 @@ pub async fn generate(
             return Ok(Done::new(super::with_lines(tx, org_id, previous.invoice_id).await?));
     }
 
+    // A duplicate takes its source's subject and notes; values come through
+    // `overrides` and lines from current sources, so no billed time is copied.
+    let copied = match request.and_then(|request| request.duplicate_of) {
+        Some(source_id) => {
+            super::authorize_read(actor, super::READ)?;
+            let source = sqlx::query!(
+                "SELECT subject, notes FROM invoices WHERE id = $1 AND org_id = $2 AND client_id = $3",
+                source_id,
+                org_id,
+                client_id,
+            )
+            .fetch_optional(&mut **tx)
+            .await?
+            .ok_or_else(|| OpError::not_found("Invoice to duplicate not found"))?;
+            Some((source.subject, source.notes))
+        }
+        None => None,
+    };
+
     if let Some(ids) = &selected {
         let allowed = sqlx::query_scalar!("SELECT id FROM projects WHERE org_id = $1 AND client_id = $2 AND id = ANY($3) ORDER BY id FOR SHARE", org_id, client_id, ids)
             .fetch_all(&mut **tx).await?;
@@ -298,12 +317,15 @@ pub async fn generate(
     let total_cents = amounts.total_cents;
 
     // Insert invoice-owned values; later project or settings edits cannot alter
-    // this snapshot, including the organization's default notes.
+    // this snapshot, including the organization's default notes. A duplicate
+    // keeps its source's notes, even none, instead of the default.
+    let (subject, source_notes) = copied.unzip();
+    let subject = subject.unwrap_or_default();
     let notes = sqlx::query_scalar!(
         r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents,
-             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents,notes)
+             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents,notes,subject)
            VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9,$10,$11,$12,$13,$14,$15,$16,
-             (SELECT invoice_notes FROM organizations WHERE id = $2))
+             CASE WHEN $17 THEN $18 ELSE (SELECT invoice_notes FROM organizations WHERE id = $2) END, $19)
            RETURNING notes"#,
         invoice_id,
         org_id,
@@ -315,6 +337,7 @@ pub async fn generate(
         total_cents,
         settings.po_number, settings.discount_bps, settings.tax1_bps, settings.tax2_name,
         settings.tax2_bps, amounts.discount_cents, amounts.tax1_cents, amounts.tax2_cents,
+        source_notes.is_some(), source_notes.clone().flatten(), subject,
     )
     .fetch_one(&mut **tx)
     .await
@@ -418,6 +441,7 @@ pub async fn generate(
         tax1_cents: amounts.tax1_cents,
         tax2_cents: amounts.tax2_cents,
         notes,
+        subject,
         created_at: now,
     };
     let event = AppEvent::InvoiceCreated {

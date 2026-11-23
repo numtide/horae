@@ -274,6 +274,25 @@ impl PermissionSelection {
         selection
     }
 
+    /// The given grants and their transitive prerequisites, without the Member
+    /// floor: a ceiling to narrow a person's selection with, never a person's
+    /// own selection.
+    pub(crate) fn closure_of(permissions: &[Permission]) -> Self {
+        let mut selection = Self(BTreeSet::new());
+        for &permission in permissions {
+            selection.add(permission);
+        }
+        selection
+    }
+
+    /// The grants present in both selections. Both being closed under
+    /// prerequisites, so is the result; it may lack the Member floor, so it
+    /// narrows a request's authority and is never stored.
+    #[must_use]
+    pub fn intersection(&self, other: &Self) -> Self {
+        Self(self.0.intersection(&other.0).copied().collect())
+    }
+
     /// Tests explicit grant membership, not record access or administrator status.
     #[must_use]
     pub fn contains(&self, permission: Permission) -> bool {
