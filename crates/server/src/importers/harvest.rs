@@ -136,11 +136,16 @@ async fn apply_rows<S: RowSource>(
     org: OrgDefaults<'_>,
     mut src: S,
 ) -> anyhow::Result<()> {
+    // A source yields one page of rows: their billing is written together.
+    let mut writes = Vec::new();
     while let Some(row) = src.next_row().await? {
-        apply::apply_row(tx, cache, org, &row, report.source, report.mode)
-            .await
-            .record_into(report);
+        writes.extend(
+            apply::apply_row(tx, cache, org, &row, report.source, report.mode)
+                .await
+                .record_into(report),
+        );
     }
+    apply::write_links(tx, org.org_id, &mut writes).await?;
 
     debug_assert!(report.reconciles());
     Ok(())

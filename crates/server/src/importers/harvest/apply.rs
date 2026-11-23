@@ -29,10 +29,14 @@ pub struct RowResult {
     pub notices: Vec<IdNotice>,
     /// What the row did to its entry's billing (spec 025).
     pub link: Option<LinkNote>,
+    /// The billing write the caller makes for the whole page, with
+    /// [`write_links`].
+    pub write: Option<LinkWrite>,
 }
 
 impl RowResult {
-    pub fn record_into(self, report: &mut ImportReport) {
+    /// Counts the row in the report and hands back its billing write.
+    pub fn record_into(self, report: &mut ImportReport) -> Option<LinkWrite> {
         for (entity, outcome) in &self.outcomes {
             report.record(*entity, outcome);
         }
@@ -48,7 +52,81 @@ impl RowResult {
             Some(LinkNote::BilledWithoutInvoice) => links.billed_without_invoice += 1,
             Some(LinkNote::Conflict(conflict)) => report.note_conflict(conflict),
         }
+        self.write
     }
+}
+
+/// An entry to bill on an imported invoice, bill with no invoice, or reopen.
+pub struct LinkWrite {
+    entry: Uuid,
+    /// The Harvest entry, whose provenance remembers the new version.
+    harvest_id: Option<i64>,
+    invoice: Option<Uuid>,
+    billed: bool,
+}
+
+/// Writes a page's billing in one statement, after its entries: billed
+/// entries freeze their rounding as generation does, reopened ones clear it,
+/// and provenance remembers each entry's new version, so the import's own
+/// write never reads as an edit made in Horae.
+///
+/// Writing entry by entry, inside each entry's savepoint, made a first import
+/// with 2,000 invoices most of two thirds slower (SC-006). An entry that was
+/// submitted, or put on a Horae invoice, since the row read it is left alone.
+pub async fn write_links(
+    tx: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    writes: &mut Vec<LinkWrite>,
+) -> sqlx::Result<()> {
+    if writes.is_empty() {
+        return Ok(());
+    }
+    let entries: Vec<Uuid> = writes.iter().map(|write| write.entry).collect();
+    let invoices: Vec<Option<Uuid>> = writes.iter().map(|write| write.invoice).collect();
+    let billed: Vec<bool> = writes.iter().map(|write| write.billed).collect();
+    let harvest_ids: Vec<i64> = writes.iter().filter_map(|write| write.harvest_id).collect();
+    // Inside an import the tables have no statistics yet, so every index
+    // looks like one row: each lookup names its whole key (`te.id = ANY`,
+    // and provenance by its primary key) or the planner walks the
+    // organization's rows for every page, which is quadratic.
+    //
+    // Provenance keeps the version the import last wrote, so a later Harvest
+    // edit is not mistaken for one made in Horae. It is refreshed only when
+    // it changes (`updated_at` is the transaction's start, so an entry this
+    // run created needs nothing) and only for an entry not edited in Horae,
+    // whose edit must stay detectable (`edited?` in `apply_time_entry`).
+    sqlx::query!(
+        "WITH before AS (
+           SELECT id, updated_at, created_at FROM time_entries WHERE id = ANY($2)),
+         written AS (
+           UPDATE time_entries AS te
+              SET invoice_id = w.invoice_id,
+                  state = CASE WHEN w.billed THEN 'invoiced'::entry_state ELSE 'open'::entry_state END,
+                  rounded_minutes = CASE WHEN w.billed THEN effective_minutes(
+                      te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) END
+             FROM unnest($2::uuid[], $3::uuid[], $4::bool[]) AS w(id, invoice_id, billed),
+                  organizations AS o
+            WHERE te.id = ANY($2) AND te.id = w.id AND te.org_id = $1 AND o.id = $1
+              AND te.state <> 'submitted'
+              AND (te.invoice_id IS NULL OR EXISTS (
+                SELECT 1 FROM invoices AS i WHERE i.id = te.invoice_id AND i.source = 'harvest'))
+        RETURNING te.id, te.updated_at)
+         UPDATE harvest_import_map AS m SET horae_updated_at = written.updated_at
+           FROM written JOIN before ON before.id = written.id
+          WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+            AND m.harvest_import_id = ANY($5) AND m.horae_id = written.id
+            AND m.horae_updated_at IS DISTINCT FROM written.updated_at
+            AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at)",
+        org_id,
+        &entries,
+        &invoices as &[Option<Uuid>],
+        &billed,
+        &harvest_ids,
+    )
+    .execute(&mut *tx)
+    .await?;
+    writes.clear();
+    Ok(())
 }
 
 /// A change to an entry's billing that the report counts.
@@ -124,7 +202,7 @@ pub async fn apply_row(
     };
 
     match apply_within(&mut sp, cache, org, row, source, mode).await {
-        Ok((outcomes, mut pending, person, link)) => match sp.commit().await {
+        Ok((outcomes, mut pending, person, (link, write))) => match sp.commit().await {
             Ok(()) => {
                 let notices = std::mem::take(&mut pending.notices);
                 cache.merge(pending);
@@ -133,6 +211,7 @@ pub async fn apply_row(
                     person,
                     notices,
                     link,
+                    write,
                 }
             }
             Err(e) => errored(
@@ -152,7 +231,7 @@ type Applied = (
     Vec<(EntityType, RowOutcome)>,
     PendingCache,
     Option<ReportPerson>,
-    Option<LinkNote>,
+    (Option<LinkNote>, Option<LinkWrite>),
 );
 
 /// The resolve → create/skip pipeline for one row inside its savepoint. Returns
@@ -228,12 +307,7 @@ async fn apply_within(
         }
     });
 
-    // Time entry — the record proper. A preview never bills on insert: the
-    // invoice may exist only in a page it rolled back.
-    let bill_on_create = match mode {
-        ImportMode::Commit => billing_on_create(cache, row),
-        ImportMode::DryRun => None,
-    };
+    // Time entry — the record proper.
     let entry = apply_time_entry(
         sp,
         cache,
@@ -241,24 +315,22 @@ async fn apply_within(
         (project_id, task_id, user_id),
         row,
         &mut pending.notices,
-        bill_on_create,
     )
     .await
     .map_err(|e| (EntityType::TimeEntry, e))?;
     outcomes.push((EntityType::TimeEntry, entry.outcome));
     pending.entry_slot = entry.slot;
 
-    let mut link = match (entry.billed_on_create, entry.id) {
-        (Some(note), _) => Some(note),
-        (None, Some(id)) => link_entry(sp, cache, org.org_id, row, (id, entry.current), mode)
+    let (mut link, write) = match entry.id {
+        Some(id) => link_entry(sp, cache, row, (id, entry.current), mode)
             .await
             .map_err(|e| (EntityType::TimeEntry, e))?,
-        (None, None) => None,
+        None => (None, None),
     };
     if entry.reopened {
         link = Some(LinkNote::Unlinked);
     }
-    Ok((outcomes, pending, person, link))
+    Ok((outcomes, pending, person, (link, write)))
 }
 
 /// What applying a row did to its time entry.
@@ -273,8 +345,6 @@ struct EntryApplied {
     /// The entry's billing as the row left it, when the row's reads already
     /// know it; the link step reads it otherwise.
     current: Option<Current>,
-    /// Created already billed, as the link step would have billed it.
-    billed_on_create: Option<LinkNote>,
 }
 
 impl EntryApplied {
@@ -285,24 +355,7 @@ impl EntryApplied {
             id,
             reopened: false,
             current: None,
-            billed_on_create: None,
         }
-    }
-}
-
-/// How a new entry is billed when it is created: on an imported invoice
-/// (`Some(Some(id))`) or with no invoice (`Some(None)`), as [`link_entry`]
-/// would decide for an open entry; `None` leaves it open.
-fn billing_on_create(cache: &RunCache, row: &SourceRow) -> Option<Option<Uuid>> {
-    let action = match row.harvest_time_entry_id {
-        None if row.invoiced => LinkAction::MarkBilled,
-        None => LinkAction::Keep,
-        Some(_) => link::decide(billing(cache, row), Current::Unbilled),
-    };
-    match action {
-        LinkAction::Link(invoice) => Some(Some(invoice)),
-        LinkAction::MarkBilled => Some(None),
-        _ => None,
     }
 }
 
@@ -316,17 +369,17 @@ fn current_of(state: EntryState, invoice: Option<Uuid>, imported: Option<bool>) 
     }
 }
 
-/// Set, keep or clear the entry's link to an imported invoice (spec 025,
-/// research R-6). A preview decides and counts but writes nothing: the
-/// invoice it would link to may exist only in a rolled-back page.
+/// Decide whether the entry is linked to an imported invoice, billed with no
+/// invoice, reopened or left alone (spec 025, research R-6), and return the
+/// write for [`write_links`]. A preview decides and counts but writes
+/// nothing: the invoice it would link to may exist only in a rolled-back page.
 async fn link_entry(
     sp: &mut Transaction<'_, Postgres>,
     cache: &RunCache,
-    org_id: Uuid,
     row: &SourceRow,
     (entry_id, known): (Uuid, Option<Current>),
     mode: ImportMode,
-) -> Result<Option<LinkNote>, RowFailure> {
+) -> Result<(Option<LinkNote>, Option<LinkWrite>), RowFailure> {
     let current = match known {
         Some(current) => current,
         None => {
@@ -353,7 +406,7 @@ async fn link_entry(
         Some(_) => link::decide(billing(cache, row), current),
     };
     let target = match action {
-        LinkAction::Keep => return Ok(None),
+        LinkAction::Keep => return Ok((None, None)),
         LinkAction::Conflict(kind) => {
             let horae_invoice_number = sqlx::query_scalar!(
                 "SELECT i.number FROM time_entries te JOIN invoices i ON i.id = te.invoice_id
@@ -362,49 +415,30 @@ async fn link_entry(
             )
             .fetch_optional(&mut **sp)
             .await?;
-            return Ok(Some(LinkNote::Conflict(LinkConflict {
+            let conflict = LinkConflict {
                 source_location: row.source_location.clone(),
                 harvest_time_entry_id: row.harvest_time_entry_id,
                 harvest_invoice_id: row.harvest_invoice_id,
                 kind,
                 horae_invoice_number,
-            })));
+            };
+            return Ok((Some(LinkNote::Conflict(conflict)), None));
         }
         LinkAction::Link(invoice) => Some(invoice),
         LinkAction::MarkBilled | LinkAction::Unlink => None,
     };
-    if mode == ImportMode::Commit {
-        // One statement: billed entries freeze their rounding as generation
-        // does, reopened ones clear it, and provenance remembers the entry's
-        // new version so the import's own write never reads as a Horae edit.
-        let billed = action != LinkAction::Unlink;
-        sqlx::query!(
-            "WITH written AS (
-               UPDATE time_entries AS te
-                  SET invoice_id = $2,
-                      state = CASE WHEN $3 THEN 'invoiced'::entry_state ELSE 'open'::entry_state END,
-                      rounded_minutes = CASE WHEN $3 THEN effective_minutes(
-                          te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) END
-                 FROM organizations AS o
-                WHERE te.id = $1 AND o.id = te.org_id
-            RETURNING te.updated_at)
-             UPDATE harvest_import_map
-                SET horae_updated_at = (SELECT updated_at FROM written)
-              WHERE org_id = $4 AND harvest_entity_type = 'time_entry'::harvest_entity_type
-                AND horae_id = $1",
-            entry_id,
-            target,
-            billed,
-            org_id,
-        )
-        .execute(&mut **sp)
-        .await?;
-    }
-    Ok(Some(match action {
+    let write = (mode == ImportMode::Commit).then_some(LinkWrite {
+        entry: entry_id,
+        harvest_id: row.harvest_time_entry_id,
+        invoice: target,
+        billed: action != LinkAction::Unlink,
+    });
+    let note = match action {
         LinkAction::Link(_) => LinkNote::Linked,
         LinkAction::Unlink => LinkNote::Unlinked,
         _ => LinkNote::BilledWithoutInvoice,
-    }))
+    };
+    Ok((Some(note), write))
 }
 
 /// What Harvest says about the row's billing, given the run's invoices.
@@ -487,7 +521,6 @@ async fn apply_time_entry(
     (project_id, task_id, user_id): (Uuid, Uuid, Uuid),
     row: &SourceRow,
     notices: &mut Vec<IdNotice>,
-    bill_on_create: Option<Option<Uuid>>,
 ) -> Result<EntryApplied, RowFailure> {
     let minutes_i64 = convert::hours_to_minutes(&row.hours).map_err(|error| match error {
         convert::ConvertError::Negative(hours) => RowFailure::entry(
@@ -522,7 +555,12 @@ async fn apply_time_entry(
                       (SELECT i.source = 'harvest' FROM invoices AS i WHERE i.id = te.invoice_id)
                         AS "invoice_imported?"
                FROM harvest_import_map AS m
-               LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id
+               -- LATERAL starts from the provenance row: without statistics
+               -- inside an import, a plain join can start from the entries.
+               LEFT JOIN LATERAL (
+                 SELECT e.id, e.state, e.updated_at, e.created_at, e.invoice_id
+                 FROM time_entries AS e WHERE e.id = m.horae_id AND e.org_id = m.org_id
+               ) AS te ON true
                WHERE m.org_id = $1
                  AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
                  AND m.harvest_import_id = $2"#,
@@ -702,22 +740,11 @@ async fn apply_time_entry(
     .await?;
     // A record that took the number since the check makes this insert do
     // nothing; the next attempt leaves the number to the trigger.
-    // Billed in Harvest, the entry is written invoiced with its rounding
-    // frozen, as the link step would leave it, in the same insert.
-    let (billed, invoice) = match bill_on_create {
-        Some(invoice) => (true, invoice),
-        None => (false, None),
-    };
     let api_id = loop {
         let inserted = sqlx::query_scalar!(
         "INSERT INTO time_entries
-           (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable, harvest_id,
-            state, invoice_id, rounded_minutes)
-         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                CASE WHEN $11 THEN 'invoiced'::entry_state ELSE 'open'::entry_state END, $12,
-                CASE WHEN $11 THEN effective_minutes($7, NULL, o.round_minutes, o.round_dir) END
-         FROM organizations AS o WHERE o.id = $2
-         ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
+           (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable, harvest_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org.org_id,
         user_id,
@@ -728,8 +755,6 @@ async fn apply_time_entry(
         notes,
         row.billable,
         wanted,
-        billed,
-        invoice,
     )
     .fetch_optional(&mut **sp)
     .await?;
@@ -765,10 +790,6 @@ async fn apply_time_entry(
     }
     Ok(EntryApplied {
         current: Some(Current::Unbilled),
-        billed_on_create: bill_on_create.map(|invoice| match invoice {
-            Some(_) => LinkNote::Linked,
-            None => LinkNote::BilledWithoutInvoice,
-        }),
         ..EntryApplied::new(RowOutcome::Created, entry_slot, Some(id))
     })
 }
@@ -939,5 +960,6 @@ fn errored(entity: EntityType, row: &SourceRow, failure: RowFailure) -> RowResul
         person: None,
         notices: Vec::new(),
         link: None,
+        write: None,
     }
 }

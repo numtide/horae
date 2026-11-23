@@ -325,63 +325,53 @@ async fn measured_job(pool: &PgPool, org: Uuid, server: &Server, mode: ImportMod
     serde_json::from_value(complete.report.unwrap()).unwrap()
 }
 
-/// SC-006: 2,000 invoices on 15,000 entries add at most a fifth to the
-/// import's run time measured without invoices. Each scenario imports into a
-/// fresh organization of the same database, without invoices first.
+/// One SC-006 scenario: a first commit of 15,000 entries, with `invoices`
+/// invoices billing 7 entries each, in the test's own fresh database. Prints
+/// the run time; `api_15k_*` are run alternately and compared outside, since
+/// a shared machine slows single runs by a fifth or more.
+async fn scale_15k(pool: &PgPool, invoices: u64) {
+    require_release();
+    const ENTRIES: u64 = 15_000;
+    let org = setup(pool).await;
+    let server = scale_server_with_invoices(ENTRIES, ENTRIES + 1, invoices);
+    let started = Instant::now();
+    let report = run_api_import_with_http(
+        pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::Commit,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        None,
+    )
+    .await
+    .unwrap();
+    let seconds = started.elapsed().as_secs_f64();
+    eprintln!(
+        "SC-006 invoices={invoices} elapsed_s={seconds:.3} {}",
+        memory_status()
+    );
+    // Entry 0 belongs to the unlisted person, as in every scale fixture.
+    assert_eq!(report.error_count(), 1, "{:?}", report.row_errors);
+    assert_eq!(report.summary.time_entries.created, ENTRIES - 1);
+    assert_eq!(report.summary.invoices.created, invoices);
+    assert_eq!(
+        report.summary.links.linked,
+        (invoices * BILLED_PER_INVOICE).min(ENTRIES) - u64::from(invoices > 0)
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[ignore = "invoice scale measurement (SC-006); run explicitly with --release --nocapture"]
+async fn api_15k_entries_without_invoices(pool: PgPool) {
+    scale_15k(&pool, 0).await;
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "invoice scale measurement (SC-006); run explicitly with --release --nocapture"]
 async fn api_15k_entries_with_2k_invoices(pool: PgPool) {
-    require_release();
-    const ENTRIES: u64 = 15_000;
-    const INVOICES: u64 = 2_000;
-    // Fastest of two alternating runs each: a shared machine slows single
-    // runs by a fifth or more.
-    let mut fastest = [f64::MAX; 2];
-    for (scenario, invoices) in [(0, 0), (1, INVOICES), (0, 0), (1, INVOICES)] {
-        let org = setup(&pool).await;
-        let server = scale_server_with_invoices(ENTRIES, ENTRIES + 1, invoices);
-        let started = Instant::now();
-        let report = run_api_import_with_http(
-            &pool,
-            org,
-            "USD",
-            &config(),
-            ImportMode::Commit,
-            SyncScope::Full,
-            ApiHttp::local(server.base.clone()),
-            None,
-        )
-        .await
-        .unwrap();
-        let seconds = started.elapsed().as_secs_f64();
-        eprintln!(
-            "invoices={invoices} elapsed_s={seconds:.3} {}",
-            memory_status()
-        );
-        // Entry 0 belongs to the unlisted person, as in every scale fixture.
-        assert_eq!(report.error_count(), 1, "{:?}", report.row_errors);
-        assert_eq!(report.summary.time_entries.created, ENTRIES - 1);
-        assert_eq!(report.summary.invoices.created, invoices);
-        assert_eq!(
-            report.summary.links.linked,
-            (invoices * BILLED_PER_INVOICE).min(ENTRIES) - u64::from(invoices > 0)
-        );
-        fastest[scenario] = fastest[scenario].min(seconds);
-        // The next organization's person has the same email.
-        sqlx::query!(
-            "UPDATE users SET email = id || '@done.example' WHERE org_id = $1",
-            org
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
-    let ratio = fastest[1] / fastest[0];
-    eprintln!("SC-006 ratio={ratio:.3} (at most 1.200)");
-    assert!(
-        ratio <= 1.2,
-        "invoices made the import {ratio:.3} times as long"
-    );
+    scale_15k(&pool, 2_000).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

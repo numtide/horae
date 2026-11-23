@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.quantity::text AS \"quantity!\", l.amount_cents, i.total_cents\n           FROM harvest_invoice_lines l JOIN invoices i ON i.id = l.invoice_id\n           WHERE i.org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "quantity!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "14cf85073be752d04273f84cc11b1548f8799c932597168e7f7dfed06d19d0fc"
+}
