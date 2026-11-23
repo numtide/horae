@@ -1,20 +1,23 @@
 #![cfg(feature = "server")]
 
 //! Dioxus 0.7.9, as the server render uses it: build, wait for suspense,
-//! render. While it waits it polls only the tasks a component is suspended
-//! on and drops the wake-up of any other task, and it takes a queued task
-//! before re-running that task's component. A component with two
-//! `use_loader`s suspends on the first, so the wait ends only if the second
-//! read finishes after the first read's re-render has suspended on it. A
+//! render. While it waits it drops the wake-up of a `use_loader` task no
+//! component is suspended on (only suspended and isomorphic tasks run), and
+//! it takes a queued task before re-running that task's component. A
+//! component with two `use_loader`s suspends on the first, so the wait ends
+//! only if the second read finishes after the first read's re-render has
+//! suspended on it. A
 //! second read that finishes first, or together with the first, is never
 //! polled again. One loader that joins the reads finishes in any order. A
 //! server cannot choose when each read finishes, so `use_session_provider`
 //! uses one loader, and a test that starts failing here means the rule can
 //! be revisited.
 //!
-//! Each read waits on a channel the test completes, not on a timer: two
-//! 10 ms timers usually fire together, but under load the second can fire
-//! after the re-render, which is how CI once saw two loaders finish.
+//! Each read waits on a channel the test completes, not on a timer. Tokio
+//! rounds a sleep's deadline up to the next millisecond, so two 10 ms
+//! sleeps started microseconds apart usually fire together; when their
+//! starts straddle a millisecond, which load makes likelier, the second can
+//! fire after the re-render. That is how CI once saw two loaders finish.
 
 use std::cell::RefCell;
 use std::rc::Rc;
