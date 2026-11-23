@@ -46,7 +46,8 @@ pub async fn list(tx: &mut Tx, actor: &Actor) -> Result<Vec<UninvoicedClient>, O
                     sum(m.minutes)::bigint AS minutes,
                     sum(line_amount_cents(COALESCE(resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                           CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
-                          CASE WHEN p.currency = c.currency THEN c.default_rate_cents END), 0), m.minutes))::bigint AS cents
+                          CASE WHEN p.currency = c.currency THEN c.default_rate_cents END), 0), m.minutes,
+                          CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END))::bigint AS cents
              FROM time_entries te
              JOIN projects p ON p.id = te.project_id
              JOIN clients c ON c.id = p.client_id

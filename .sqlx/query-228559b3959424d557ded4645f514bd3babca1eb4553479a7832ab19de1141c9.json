@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT line_amount_cents(NULL::bigint, 60)",
+  "query": "SELECT line_amount_cents(NULL::bigint, 60, 'EUR')",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       null
     ]
   },
-  "hash": "391f4b474e5f1829adaa3b135a6733350ad0ef246706883eedb92acbda6f7453"
+  "hash": "228559b3959424d557ded4645f514bd3babca1eb4553479a7832ab19de1141c9"
 }
