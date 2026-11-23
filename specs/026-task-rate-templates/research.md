@@ -1,8 +1,7 @@
 # Research: Task rate templates
 
-Each section gives the decision, why, and what else was considered. R1 to R3 follow the recommended
-answers to the spec's open questions; if the maintainer answers otherwise, the tasks named there
-change.
+Each section gives the decision, why, and what else was considered. The maintainer answered the
+spec's open questions on 2026-11-23 (spec.md, Clarifications); R1 to R3 record those answers.
 
 ## R0. How Horae stores money today
 
@@ -15,8 +14,8 @@ two-decimal rule. JPY 121 is stored as 12100; BHD 1.250 as 125.
 **Consequence**: a template with a fixed scale of two decimals has the same integer as the rate it
 becomes in any project currency. Applying a template copies the number. The migration rescales
 nothing, including tasks whose stored currency is JPY or KWD (the handoff of PR 1 left that open).
-The constitution's "minor units" means these hundredths in practice; the amendment draft says so in
-one clause instead of redefining the unit.
+The constitution's "minor units" means these hundredths in practice. The maintainer will fix that
+wording in a separate PATCH, outside this spec.
 
 **Alternatives**: storing ISO minor units per currency (JPY in units, KWD in thousandths) would make
 the template convert by a power of ten, and would be a migration of every money column. Out of
@@ -45,12 +44,15 @@ becomes public and the only list. The SQL twin `line_amount_cents` gains a curre
 calls a SQL `currency_amount_step(text)` that lists the same zero-decimal codes. A test runs both
 over every code in the Rust table and over amounts near every half, so the two lists cannot drift.
 
-**Scope (recommended answer to FR-011)**: every per-entry amount: invoice previews and lines
+**Scope (maintainer's answer to FR-011)**: every per-entry amount: invoice previews and lines
 (`ops/invoices/entries.rs`), reports (`ops/reports.rs`), project figures (`ops/projects/reads.rs`)
 and budgets (`ops/projects/budgets.rs`). Each already has the currency in the same row. Stored
 invoice line amounts (`frozen_amount_cents`, `line.amount_cents`) win over the computed value, so
-existing invoices do not change. If the maintainer limits the rule to invoices, T029 to T031 drop
-and reports may differ from invoices by less than one unit per entry in zero-decimal currencies.
+existing invoices do not change. Uninvoiced JPY figures do change (120.75 becomes 121); that is the
+point of the rule.
+
+**Delivery**: this rule does not depend on templates and ships first, as its own PR with its own
+migration (R9, plan.md).
 
 **Totals**: unchanged code. Subtotals and totals already add the stored line amounts
 (`invoice_amounts`, `allocate_invoice_discount`), so FR-010 holds by construction; a property test
@@ -62,7 +64,7 @@ carry fractions the currency does not have, and the PDF would not add up.
 
 ## R2. Zero templates (FR-006)
 
-**Decision (recommended)**: 0 is no rate. The editor stores no rate for 0, the migration clears the
+**Decision (maintainer, 2026-11-23)**: 0 is no rate. The editor stores no rate for 0, the migration clears the
 stored zeros that PR 1 kept (entered in the editor, with a currency), and a CHECK makes the column
 positive or null.
 
@@ -70,13 +72,11 @@ positive or null.
 0 as none, and a template of zero applied to a project would set a zero rate the manager did not
 choose. A project that bills a task at zero can still set 0.00 as the project's own task rate.
 
-**Alternative**: keep 0.00 as a valid template that applies a zero rate. Then T006 keeps the zeros
-and the CHECK stays `>= 0`, T021 and T023 accept 0 as a template, and T003, T007, T020 and T026
-change their zero cases.
+**Alternative (rejected)**: keep 0.00 as a valid template that applies a zero rate.
 
 ## R3. Rates stored in a currency other than the workspace's (FR-012)
 
-**Decision (recommended)**: keep the number. A task stored as 80 USD in an EUR workspace becomes the
+**Decision (maintainer, 2026-11-23)**: keep the number. A task stored as 80 USD in an EUR workspace becomes the
 template 80.00, which an EUR project later applies as EUR 80.00.
 
 **Rationale**: that is what the template means, and what Harvest does with the same number. Only
@@ -84,9 +84,8 @@ future additions use the template; existing project rates are copies and stay as
 upgrade notes in `quickstart.md` give a query that lists the affected tasks before upgrading, so an
 administrator can review them.
 
-**Alternative**: clear such rates. Safer against the 011 incident, but it throws away rates the CSV
-importer read from real rows. Then T006 adds one `UPDATE`, T007 asserts it, and the notes say which tasks lost their
-rate.
+**Alternative (rejected)**: clear such rates. Safer against the 011 incident, but it throws away
+rates the CSV importer read from real rows.
 
 ## R4. Names: keep `default_rate_cents`
 
@@ -158,18 +157,24 @@ each project's currency; PR 1's `tasks-rate-currency-not-set` message is removed
 
 ## R9. Migration
 
-**Decision**: one migration at the next free number (0010 when this was written; PR 1 owns 0009):
+**Decision**: two migrations, one per delivery, each at the next free number when its PR is written
+(PR 1 owns 0009, so 0010 and 0011 if nothing else lands between them).
 
-1. Recommended R2: `UPDATE tasks SET default_rate_cents = NULL WHERE default_rate_cents = 0`.
-1. Drop `tasks.default_rate_currency` (its CHECK goes with it).
-1. Replace `tasks_default_rate_cents_nonneg` with `default_rate_cents IS NULL OR default_rate_cents > 0`.
-1. Comment the column as a template.
+Rounding PR, `NNNN_currency_line_amounts.sql`:
+
 1. Create `currency_amount_step(text)` and the three-argument `line_amount_cents`, drop the
    two-argument one, and update the plugin role's function allowlist
    (`crates/server/src/plugin/database.rs`) in the same PR.
 
+Templates PR, `NNNN_task_rate_templates.sql`:
+
+1. `UPDATE tasks SET default_rate_cents = NULL WHERE default_rate_cents = 0` (R2).
+1. Drop `tasks.default_rate_currency` (its CHECK goes with it).
+1. Replace `tasks_default_rate_cents_nonneg` with `default_rate_cents IS NULL OR default_rate_cents > 0`.
+1. Comment the column as a template.
+
 The rows: a rate with the workspace currency, another currency, or none keeps its number (R0, R3).
-Project tasks, clients, invoices and time entries are not touched.
+Project tasks, clients, invoices and time entries are not touched by either migration.
 
 ## R10. Spec 011
 

@@ -15,7 +15,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -33,9 +33,8 @@
 
 ## Notes
 
-- Three markers stay open for the maintainer (FR-006 zero template, FR-011 rounding scope, FR-012
-  foreign-currency rates). The plan and tasks follow the recommended answers and name the tasks each
-  answer would change.
+- The three markers (FR-006 zero template, FR-011 rounding scope, FR-012 foreign-currency rates)
+  were answered by the maintainer on 2026-11-23 and are recorded in the spec's Clarifications.
 - The spec names a few interface fields (`default_hourly_rate`, `/api/v1`, the plugin event) because
   their shapes are the requirement; they are external contracts, not implementation choices.
 - The Background names `horae_core::money::format_major_units` as the evidence for hundredths

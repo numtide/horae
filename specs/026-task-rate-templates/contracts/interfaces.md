@@ -10,8 +10,7 @@
 {"action": "set", "amount_cents": 8050}
 ```
 
-`amount_cents` is the template in hundredths, positive (recommended R2; `>= 0` if zero stays a
-template). Refused: `{"action": "set", "amount_cents": 8050, "currency": "EUR"}`, a fractional or
+`amount_cents` is the template in hundredths, positive (research R2: zero is no rate). Refused: `{"action": "set", "amount_cents": 8050, "currency": "EUR"}`, a fractional or
 negative `amount_cents`, and any other key.
 
 `TaskCatalogEntry` and `CreationTask` lose `default_rate_currency`; `TaskCatalog` loses
@@ -45,3 +44,4 @@ No change. Tasks expose no rate; `crates/api/openapi/v1.json` stays byte-identic
 
 `line_amount_cents(bigint, integer)` is replaced by `line_amount_cents(bigint, integer, text)` and
 `currency_amount_step(text)`, both added to the allowlist in `crates/server/src/plugin/database.rs`.
+This change ships in the rounding PR; every other contract on this page ships in the templates PR.

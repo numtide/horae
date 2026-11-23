@@ -1,7 +1,8 @@
 # Data model: Task rate templates
 
-Follows the recommended answers in `research.md` (R2: zero is no rate; R3: foreign-currency rates
-keep their number).
+Follows the maintainer's answers recorded in `research.md` (R2: zero is no rate; R3: foreign-currency
+rates keep their number). The currency precision and line amount ship in the rounding PR; the rate
+template ships in the templates PR (plan.md, Delivery).
 
 ## Rate template (`tasks.default_rate_cents`)
 
@@ -45,7 +46,16 @@ result beyond `i64` is an error, as today. Rust: `horae_core::invoice::line_amou
 
 Totals are sums of line amounts (unchanged).
 
-## Migration `0010_task_rate_templates.sql` (number: next free)
+## Migrations (numbers: next free when each PR is written)
+
+Rounding PR, `NNNN_currency_line_amounts.sql`:
+
+```text
+currency_amount_step(text), line_amount_cents(bigint, integer, text) created
+line_amount_cents(bigint, integer) dropped
+```
+
+Templates PR, `NNNN_task_rate_templates.sql`:
 
 ```text
 tasks.default_rate_cents = 0           → NULL            (R2)
@@ -53,12 +63,10 @@ tasks.default_rate_cents, any currency → same number      (R0, R3)
 tasks.default_rate_currency            → column dropped
 CHECK default_rate_cents > 0
 COMMENT ON COLUMN tasks.default_rate_cents
-currency_amount_step(text), line_amount_cents(bigint, integer, text) created
-line_amount_cents(bigint, integer) dropped
 ```
 
-Not touched: `project_tasks`, `projects`, `clients`, `users`, `assignments`, `invoices`,
-`invoice_line_items`, `time_entries`.
+Neither touches `project_tasks`, `projects`, `clients`, `users`, `assignments`, `invoices`,
+`invoice_line_items` or `time_entries`.
 
 ## Wire types (`horae-types`)
 

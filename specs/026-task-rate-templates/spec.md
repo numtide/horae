@@ -1,11 +1,12 @@
 # Feature Specification: Task rate templates
 
-**Feature Branch**: `spec/task-rate-templates` (documents); implementation on its own branch after
-the Harvest invoice import (spec 025) and the next deploy
+**Feature Branch**: `spec/task-rate-templates` (documents). The implementation comes after the
+Harvest invoice import (spec 025) and the next deploy, in two PRs: the rounding change first, then
+the templates
 
 **Created**: 2026-11-22
 
-**Status**: Draft
+**Status**: Clarified (2026-11-23)
 
 **Input**: User description: "Change a task's default rate from money with its own currency into a
 currency-free rate template that takes the project's currency when it is used, as Harvest does."
@@ -42,10 +43,21 @@ currency.
 
 ## Clarifications
 
-### Session 2026-11-22
+### Session 2026-11-23
 
-Open; the questions are listed in `HANDOFF.md` with a recommendation each, and marked below. The
-plan and tasks follow the recommended answers and name the tasks each answer would change.
+- Q: Is a template of 0.00 a valid template that applies a zero rate, or is 0 "no rate"? → A: 0 is
+  no rate (FR-006).
+- Q: Does the rounding apply to invoice lines only, or to every amount computed per time entry? →
+  A: every per-entry amount: invoice previews and lines, uninvoiced amounts, reports, project and
+  budget figures. Amounts already stored on invoices do not change (FR-011).
+- Q: A task rate stored in a currency other than the workspace's: keep the number or clear it? →
+  A: keep the number, and list the affected tasks in the upgrade notes (FR-012).
+- Q: Is the constitution amendment approved, and at which version? → A: approved as a MINOR change,
+  7.2.0, applied after the OAuth amendment (7.1.0) lands (FR-022).
+- Q: Should Principle I's "minor units (cents)" wording be fixed here? → A: no. It is a separate
+  PATCH later, outside this spec (see Follow-up).
+- Q: One PR, or the rounding change first? → A: two deliveries. The rounding change (User Story 3)
+  ships first as its own smaller PR, and the templates follow (plan.md, Delivery).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -102,7 +114,8 @@ what the Tasks screen and the editor show and store.
 1. **Given** a workspace whose currency changes from EUR to USD, **When** an administrator then edits
    a task's name only, **Then** its template is unchanged and no "currency changed, reload" refusal
    appears.
-1. **Given** an administrator who enters 0, **Then** the result follows FR-006.
+1. **Given** a task with the template 80.00, **When** an administrator enters 0, **Then** the task
+   has no rate and the Tasks screen shows "No rate" (FR-006).
 
 ______________________________________________________________________
 
@@ -114,7 +127,7 @@ sum of its lines, 121 + 3.
 
 **Why this priority**: Once templates fill projects in any currency, fractional rates in
 zero-decimal currencies become common, and amounts must not carry fractions the currency does not
-have.
+have. It does not depend on templates, so it ships first, as its own PR (plan.md, Delivery).
 
 **Independent Test**: Preview and create an invoice in JPY with the two lines above, and compare the
 lines, the invoice total and the detailed report.
@@ -176,9 +189,10 @@ before and after.
 
 1. **Given** a task rate of EUR 80.00 in an EUR workspace, **Then** its template is 80.00.
 1. **Given** a task rate with no currency (imported), **Then** its template is the same number.
-1. **Given** a task rate in a currency other than the workspace's, **Then** the result follows FR-012.
-1. **Given** a zero task rate with a currency (entered in the editor), **Then** the result follows
-   FR-006.
+1. **Given** a task rate of USD 80.00 in an EUR workspace, **Then** its template is 80.00, and the
+   upgrade notes' query lists the task before the upgrade (FR-012).
+1. **Given** a zero task rate with a currency (entered in the editor), **Then** the task has no rate
+   (FR-006).
 1. **Given** any project, **Then** its task rates, invoices and report totals are identical before
    and after the migration.
 
@@ -206,7 +220,7 @@ ______________________________________________________________________
 
 **Model**
 
-- **FR-001**: A task's default rate MUST be a rate template: a non-negative number with at most two
+- **FR-001**: A task's default rate MUST be a rate template: a positive number with at most two
   decimals and no currency, or no rate. It is not money and MUST NOT be summed, reported or invoiced
   as money.
 - **FR-002**: Horae MUST NOT store, infer or display a currency for a template. It MUST NOT guess a
@@ -222,9 +236,9 @@ ______________________________________________________________________
 - **FR-004**: A rate that the person types MUST win over the template, as today.
 - **FR-005**: A project's task rate MUST stay a copy: changing or clearing the template later MUST
   NOT change any project's rate.
-- **FR-006**: A template of zero MUST be \[NEEDS CLARIFICATION: is 0.00 a valid template that applies
-  a zero rate, or does the editor treat 0 as "no rate", as Harvest's API and PR 1's import repair
-  do? Recommended: 0 is no rate\].
+- **FR-006**: A template of zero MUST mean no rate, as Harvest's API and PR 1's import repair
+  already treat it: the task editor stores no rate when 0 is entered, and upgrading clears stored
+  zero rates. A project can still set 0.00 as its own task rate.
 - **FR-007**: Wherever a template is about to be applied (New Project's task rows, the project
   editor's task rows), the screen MUST show the resulting rate in the project's currency, for example
   "EUR 80.50 / h", before the project is saved.
@@ -238,18 +252,16 @@ ______________________________________________________________________
   hundredths for every currency; amounts stay exact in that currency.
 - **FR-010**: An invoice's subtotal and total MUST equal the exact sum of its rounded lines, as spec
   001 FR-023 requires, even where Harvest's subtotal differs.
-- **FR-011**: The rounding of FR-008 MUST apply to \[NEEDS CLARIFICATION: invoice lines only, or every
-  amount computed per time entry (invoice previews and lines, uninvoiced amounts, reports, project
-  and budget figures)? Recommended: every per-entry amount, so a report and the invoice for the same
-  time agree\]. Amounts already stored on invoices MUST NOT change.
+- **FR-011**: The rounding of FR-008 MUST apply to every amount computed per time entry: invoice
+  previews and lines, uninvoiced amounts, reports, and project and budget figures, so a report and
+  the invoice for the same time agree. Amounts already stored on invoices MUST NOT change.
 
 **Migration**
 
 - **FR-012**: Upgrading MUST turn every stored task default rate into a template with the same
-  number. A rate whose stored currency is not the workspace currency MUST be \[NEEDS CLARIFICATION:
-  kept as the same number (80 USD becomes the template 80.00, applied as 80.00 in an EUR project), or
-  cleared? Recommended: keep the number, as Harvest would, and list the affected tasks in the upgrade
-  notes\].
+  number, apart from zero rates (FR-006). A rate whose stored currency is not the workspace currency
+  MUST keep its number, as Harvest would (80 USD becomes the template 80.00, applied as 80.00 in an
+  EUR project), and the upgrade notes MUST give a query that lists those tasks before upgrading.
 - **FR-013**: Upgrading MUST NOT change project-task rates, client, person or project rates,
   invoices, or any report figure other than through FR-011.
 
@@ -281,8 +293,9 @@ ______________________________________________________________________
 **Governance**
 
 - **FR-022**: The constitution's Principle I MUST state that a rate template is not money until it
-  is applied, and that money stays integer minor units with an ISO currency. The amendment is drafted
-  in `constitution-amendment.md` and applied by the implementation's first PR after approval.
+  is applied, and that money stays integer minor units with an ISO currency. The approved amendment
+  (MINOR, 7.2.0) is in `constitution-amendment.md`, and the templates PR applies it as its first
+  change, after the OAuth amendment (7.1.0) has landed.
 - **FR-023**: Spec 011's catalog denomination notes MUST be marked as superseded by this spec.
 
 ### Key Entities
@@ -324,3 +337,9 @@ ______________________________________________________________________
 - The migration has to be correct, not reversible: the current deployments can be reset and
   re-imported if needed.
 - Harvest's three-decimal behaviour was not tested; FR-009 follows from Horae's storage.
+
+## Follow-up (outside this spec)
+
+- Principle I says money is "integer minor units (cents)", but Horae stores hundredths of the major
+  unit for every currency, which are not ISO minor units for JPY or KWD. A separate PATCH of the
+  constitution fixes that wording later; this spec and its amendment leave it as it is.

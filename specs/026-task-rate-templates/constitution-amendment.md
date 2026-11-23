@@ -1,13 +1,13 @@
 # Constitution amendment for 026 Task rate templates
 
-**Status**: Draft, for the maintainer's approval. Not applied. After approval, the implementation's
-first PR applies the text below verbatim to `.specify/memory/constitution.md`, with a Sync Impact
-Report.
+**Status**: Approved by the maintainer on 2026-11-23. Not applied yet. The templates PR (delivery 2
+in plan.md) applies the text below verbatim to `.specify/memory/constitution.md` as its first
+change, with a Sync Impact Report. The rounding PR (delivery 1) does not need it: it only rounds
+money.
 
-**Version change**: 7.0.0 → 7.0.1 (PATCH: a clarification). Principle I's rule does not change:
-money is still integer minor units with an explicit ISO currency, and a template is defined as
-something that is not money. If the maintainer reads it as materially expanded guidance, it is
-7.1.0 instead; the text is the same.
+**Version change**: MINOR, 7.1.0 → 7.2.0, as the maintainer chose (materially expanded guidance on
+Principle I). The OAuth amendment of spec 024 takes 7.1.0 and lands first. If it has not landed when
+the templates PR starts, that PR waits for it rather than taking 7.1.0.
 
 ## Why
 
@@ -37,10 +37,10 @@ The note says what a template is and where its use stops.
 
 Nothing else changes.
 
-## Not proposed, for the maintainer to decide
+## Follow-up, not part of this amendment
 
 Principle I says "integer minor units (cents)". Horae stores hundredths of the major unit for every
 currency, including zero-decimal ones (JPY 121 is 12100) and three-decimal ones (BHD amounts have no
 thousandths); `horae_core::money::format_major_units` documents this. The rule as written reads as
-ISO minor units. This amendment does not change it. A later PATCH could say "integer hundredths of
-the major unit (cents)", or a later feature could store ISO minor units; either is outside 026.
+ISO minor units. The maintainer decided on 2026-11-23 to fix that wording in a separate, later PATCH
+outside spec 026. This amendment leaves it as it is.

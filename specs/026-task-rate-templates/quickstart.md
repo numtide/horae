@@ -3,9 +3,13 @@
 For whoever implements or reviews spec 026. The data model is in [data-model.md](data-model.md) and
 the shapes in [contracts/interfaces.md](contracts/interfaces.md).
 
+The feature ships in two PRs (plan.md, Delivery). The rounding PR is validated by "Domain rules"
+(the `line_amount_cents` and `currency_decimals` parts), "Migration" (rounding PR) and "Rounding".
+The templates PR is validated by every other section.
+
 ## Before upgrading: tasks whose rate changes meaning
 
-Run this against the database before the migration. Each row is a task whose stored rate was in a
+For the templates PR. Run this against the database before its migration. Each row is a task whose stored rate was in a
 currency other than the workspace's; after the upgrade its number applies in whatever currency a
 project uses (research R3).
 
@@ -17,7 +21,7 @@ WHERE t.default_rate_cents IS NOT NULL
   AND upper(btrim(t.default_rate_currency)) <> upper(btrim(o.default_currency));
 ```
 
-With the recommended R2, tasks with a stored zero also lose their rate:
+Tasks with a stored zero also lose their rate (research R2):
 `SELECT id, name FROM tasks WHERE default_rate_cents = 0;`
 
 ## Setup
@@ -30,7 +34,7 @@ process-compose up postgres migrate        # database only, migrated
 ## Domain rules (no database)
 
 ```sh
-cargo test -p horae-core money             # RateTemplate, currency_decimals
+cargo test -p horae-core money             # currency_decimals (rounding PR), RateTemplate (templates PR)
 cargo test -p horae-core invoice           # line_amount_cents with a currency
 cargo test -p horae-core --test properties # total = sum of lines, single rounding, step multiples
 cargo kani -p horae-core                   # line amount proofs
@@ -41,13 +45,22 @@ rate and duration whose exact amount is 120.496 JPY give 12000.
 
 ## Migration
 
+Rounding PR:
+
+```sh
+DATABASE_URL=… cargo test -p horae --features server --test integration line_amount_cents
+```
+
+Expected: the Rust and SQL line amounts agree for every listed currency and an unknown code.
+
+Templates PR:
+
 ```sh
 DATABASE_URL=… cargo test -p horae-server task_rate_templates
 ```
 
 Expected: rates with the workspace currency, another currency and none keep their number; zeros
-become no rate; `default_rate_currency` no longer exists; `project_tasks` rows are identical; the
-Rust and SQL line amounts agree for every listed currency.
+become no rate; `default_rate_currency` no longer exists; `project_tasks` rows are identical.
 
 ## Applying templates
 
