@@ -80,6 +80,13 @@
   ],
 )
 
+#if inputs.subject != "" [
+  #v(12pt)
+  #text(size: 9pt, weight: "semibold", fill: luma(100), "SUBJECT") \
+  #v(4pt)
+  #text(inputs.subject)
+]
+
 #v(24pt)
 
 // ── Line items ───────────────────────────────────────────────────────────────

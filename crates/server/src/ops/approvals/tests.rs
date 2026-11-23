@@ -67,6 +67,25 @@ async fn submit_in(
     write.commit(result, &Recorder::default()).await
 }
 
+/// `time:write` covers `TimeWriteOwn`, but no scope covers submitting.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn an_oauth_token_with_every_scope_cannot_submit(pool: PgPool) {
+    use horae_core::permissions::oauth::{Scope, ScopeSet};
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    let all = ScopeSet::of(&Scope::ALL);
+    let caller = Caller::oauth(ids.org_id, ids.user_id, Uuid::now_v7(), Uuid::now_v7(), all);
+    let mut write = ops::begin(&pool, caller).await.unwrap();
+    write.actor.unlock_scope(Scope::TimeWrite).unwrap();
+    assert!(write.actor.has(Permission::TimeWriteOwn));
+    let context = own_context(&write.actor);
+    let result = submit_week(&mut write.tx, &write.actor, week(), &context)
+        .await
+        .map(drop);
+    assert!(matches!(result, Err(OpError::Forbidden(_))), "{result:?}");
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn submission_refuses_a_context_for_another_requester_or_subject(pool: PgPool) {

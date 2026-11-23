@@ -1,7 +1,9 @@
 # Constitution amendment for 024 OAuth 2.0 with PKCE
 
-**Status**: Approved by the maintainer on 2026-11-22 (spec D-3), as drafted. Not applied yet: PR A
-applies this text to `.specify/memory/constitution.md` with a Sync Impact Report.
+**Status**: Approved by the maintainer on 2026-11-22 (spec D-3). On 2026-11-23, before 7.1.0 was
+published, the maintainer added "or, for revocation only, the token being revoked" to the list of
+credentials, so an app without a secret can revoke its access token. PR A applies this text to
+`.specify/memory/constitution.md` with a Sync Impact Report.
 
 **Version change**: 7.0.0 → 7.1.0 (MINOR: materially expanded guidance inside Principle IV; no
 principle is removed or redefined). The maintainer chose MINOR.
@@ -23,7 +25,8 @@ plain HTTP endpoints called by programs with no Horae session:
 - an app revoking its own token when it signs out.
 
 Their authority is not a session but a credential the program presents: a code with its PKCE
-verifier, a refresh token, or a client secret. The spec excludes the alternative that would avoid
+verifier, a refresh token, a client secret, or, to revoke, the token itself (RFC 7009 lets an app
+without a secret revoke its access token by presenting it). The spec excludes the alternative that would avoid
 this (tokens handed out by the approval page through the redirect, the implicit grant), because
 RFC 9700 forbids it.
 
@@ -42,10 +45,11 @@ Proposed:
 >   shared OAuth operations, without a session, to exchange an authorization code for tokens,
 >   exchange a refresh token for new tokens, and revoke a token, with the presented credential as
 >   their authority: a single-use code together with its PKCE verifier, a single-use refresh
->   token, or a client's secret. They MUST NOT create or widen an authorization (only a person's
->   approval through a server function does), MUST NOT issue a token with more scopes than that
->   approval, MUST NOT write anything but OAuth credential and authorization state and its audit
->   records, and MUST store every credential only as a hash.
+>   token, a client's secret, or, for revocation only, the token being revoked. They MUST NOT
+>   create or widen an authorization (only a person's approval through a server function does),
+>   MUST NOT issue a token with more scopes than that approval, MUST NOT write anything but OAuth
+>   credential and authorization state and its audit records, and MUST store every credential
+>   only as a hash.
 
 ### Rationale: append one sentence
 

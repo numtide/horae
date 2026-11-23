@@ -10,6 +10,7 @@ pub mod approvals;
 pub mod catalog;
 pub mod clients;
 pub mod invoices;
+pub mod oauth;
 pub mod person_management;
 pub mod projects;
 pub mod rates;

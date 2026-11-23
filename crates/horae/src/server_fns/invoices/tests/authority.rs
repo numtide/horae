@@ -59,6 +59,7 @@ async fn invoice_generation_and_grant_revocation_commit_in_gate_order(pool: PgPo
             request_id: Uuid::now_v7(),
             review,
             confirmed_excess: vec![],
+            duplicate_of: None,
         };
         let mut barrier = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
@@ -351,6 +352,7 @@ async fn invoice_writers_override_readonly_defaults_without_changing_the_session
         request_id: Uuid::now_v7(),
         review,
         confirmed_excess: vec![],
+        duplicate_of: None,
     };
     let restricted = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
@@ -435,6 +437,7 @@ async fn cancelled_invoice_writers_roll_back_and_release_single_connection(pool:
             request_id: Uuid::now_v7(),
             review,
             confirmed_excess: vec![],
+            duplicate_of: None,
         };
         let (invoice, _) = generate_invoice_with_request(
             &pool,

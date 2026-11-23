@@ -18,36 +18,45 @@ use super::*;
 pub(super) struct AssignmentQuery {
     page: Option<i64>,
     per_page: Option<i64>,
+    updated_since: Option<String>,
+    cursor: Option<String>,
 }
 
 pub(super) async fn mine(
     user: AuthUser,
     State(db): State<PgPool>,
-    OriginalUri(uri): OriginalUri,
+    list: ListRequest,
     Query(query): Query<AssignmentQuery>,
 ) -> ApiResult<HarvestPagination<HarvestProjectAssignment>> {
-    let (page, per_page, offset) = page_window(query.page, query.per_page)?;
+    // Assignments carry no update time and no id of their own, so these
+    // could only widen or misplace the answer (FR-042). Lists of a person's
+    // assignments fit one 2000-row page in practice.
+    for (name, given) in [
+        ("updated_since", query.updated_since.is_some()),
+        ("cursor", query.cursor.is_some()),
+    ] {
+        if given {
+            return Err(ApiError::unprocessable(format!(
+                "{name} is not supported for project assignments"
+            )));
+        }
+    }
+    let window = list.window(query.page, query.per_page, None)?;
     let mut read = begin_read(&db, &user, "Project assignment").await?;
     let result = assignments(&mut read).await;
     let all = finish_read(read, result).await?;
     let total = i64::try_from(all.len()).map_err(internal)?;
-    // `page_window` bounds both to small positive numbers.
     let page_items = all
         .into_iter()
-        .skip(offset as usize)
-        .take(per_page as usize)
+        .skip(usize::try_from(window.offset).unwrap_or(usize::MAX))
+        .take(usize::try_from(window.per_page).unwrap_or(usize::MAX))
         .collect();
-    Ok(Json(
-        HarvestPagination::new(
-            "project_assignments",
-            page_items,
-            page,
-            per_page,
-            total,
-            "/harvest/v2/users/me/project_assignments",
-        )
-        .with_query(uri.query()),
-    ))
+    Ok(Json(list.pages(
+        "project_assignments",
+        page_items,
+        &window,
+        total,
+    )))
 }
 
 async fn assignments(read: &mut ops::ReadTx) -> Result<Vec<HarvestProjectAssignment>, ApiError> {

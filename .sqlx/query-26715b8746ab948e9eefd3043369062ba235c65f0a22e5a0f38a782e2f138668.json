@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.client_id, c.name, c.kind::text AS \"kind!\", c.redirect_uris,\n                  c.scopes, c.built_in, c.enabled, c.secret_prefix,\n                  c.created_at AS \"created_at: DateTime<Utc>\",\n                  c.updated_at AS \"updated_at: DateTime<Utc>\",\n                  (SELECT count(*) FROM oauth_grants g\n                   WHERE g.client_id = c.id AND g.revoked_at IS NULL AND g.expires_at > now())\n                    AS \"active_grants!\"\n           FROM oauth_clients c\n           WHERE c.org_id = $1 AND ($2::uuid IS NULL OR c.id = $2)\n           ORDER BY c.built_in DESC, lower(c.name), c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "client_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "redirect_uris",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 5,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 6,
+        "name": "built_in",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "secret_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "active_grants!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "26715b8746ab948e9eefd3043369062ba235c65f0a22e5a0f38a782e2f138668"
+}

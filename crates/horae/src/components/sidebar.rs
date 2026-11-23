@@ -267,11 +267,15 @@ fn nav_sections(access: NavAccess) -> Vec<(&'static str, Vec<NavRow>)> {
         ),
         (
             "Bill",
-            vec![
-                access
-                    .invoices
-                    .then(|| row(Route::InvoiceList {}, "invoices", "Invoices")),
-            ],
+            vec![access.invoices.then(|| {
+                row(
+                    Route::InvoiceList {
+                        filter: Default::default(),
+                    },
+                    "invoices",
+                    "Invoices",
+                )
+            })],
         ),
         (
             "Review",
