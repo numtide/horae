@@ -75,19 +75,22 @@ Manual check in the running app (`process-compose up`, sign in as Admin):
    it takes each project's currency.
 1. New Project for a client billed in USD, billing by task rate, add "Design". The row shows
    "USD 80.50 / h" before saving. Save; the project's task rate is USD 80.50.
-1. Open an existing EUR project's editor, add "Design" with the rate empty, save: EUR 80.50, no
-   error.
-1. Change the task's default to 90.00; both projects keep 80.50.
+1. Open an existing EUR project's editor (billing by task rate), add "Design" with the rate empty,
+   save: EUR 80.50, no error.
+1. Do the same on a JPY project (New Project offers only EUR, CHF, USD and GBP, so import one or set
+   `projects.currency = 'JPY'` on a seeded project in your own database): JPY 80.50.
+1. Change the task's default to 90.00; every project keeps 80.50.
 
 ## Rounding
 
 With a JPY project (import one, or set `projects.currency = 'JPY'` on a seeded project in your own
 database), a task rate of 80.50, entries of 90 minutes and, at 5.00, 30 minutes:
 
-1. Invoices → new invoice for the client: the preview lines are JPY 121 and JPY 3, the subtotal
-   JPY 124.
+1. Invoices → new invoice for the client: the preview lines are JPY 121.00 and JPY 3.00, the
+   subtotal JPY 124.00 (the display keeps two decimals for every currency).
 1. Create it, download the PDF: the same numbers.
-1. Reports → detailed time for the period: JPY 121 and JPY 3.
+1. Reports → time report for the period, grouped by project or task, and its CSV export: billable
+   amounts of 121 and 3 whole yen.
 
 ## Imports and interfaces
 

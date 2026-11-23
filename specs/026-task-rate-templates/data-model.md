@@ -38,9 +38,11 @@ SQL lists the same zero-decimal codes; a test compares the two.
 ## Line amount
 
 ```text
-line_amount(rate, minutes, currency) = floor((rate × minutes + 30 × step) ÷ (60 × step)) × step
+line_amount(rate, minutes, currency) = ((rate × minutes + 30 × step) div (60 × step)) × step
 ```
 
+`div` truncates toward zero in both Rust and SQL, as today; for stored (non-negative) inputs that is
+floor. The currency is matched trimmed and case-sensitive, as `currency_decimals` does (research R1).
 `rate` and the result are hundredths, `minutes` the rounded minutes billed. Computed in `i128`; a
 result beyond `i64` is an error, as today. Rust: `horae_core::invoice::line_amount_cents(rate, minutes, currency)`. SQL: `line_amount_cents(bigint, integer, text)`, `IMMUTABLE STRICT PARALLEL SAFE`, replacing the two-argument function.
 

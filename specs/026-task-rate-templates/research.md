@@ -27,8 +27,18 @@ scope; nothing in this feature needs it.
 
 ```text
 step   = 100 if the currency has 0 decimals, else 1        (in hundredths)
-amount = floor((rate × minutes + 30 × step) ÷ (60 × step)) × step
+amount = ((rate × minutes + 30 × step) div (60 × step)) × step
 ```
+
+`div` is integer division that truncates toward zero, as today's function does in both languages
+(Rust `/` on `i128`, SQL `div(numeric, numeric)`). For the non-negative rates and minutes Horae
+stores, that is floor. Signed inputs keep today's truncation, and the parity test keeps its negative
+cases, so neither side may switch to `floor`.
+
+The currency is matched as `currency_decimals` matches it today: trimmed, case-sensitive, and any
+code not in the table counts as two decimals. The SQL step function must do the same (`btrim`, no
+`upper`). The function is `STRICT`, so a NULL currency gives NULL; every currency column it reads is
+`NOT NULL`.
 
 That is one half-up rounding from the exact value `rate × minutes ÷ 60`, straight to the currency's
 precision. Rounding to hundredths first and then to units would turn 120.496 into 120.50 and then
@@ -48,15 +58,27 @@ over every code in the Rust table and over amounts near every half, so the two l
 (`ops/invoices/entries.rs`), reports (`ops/reports.rs`), project figures (`ops/projects/reads.rs`)
 and budgets (`ops/projects/budgets.rs`). Each already has the currency in the same row. Stored
 invoice line amounts (`frozen_amount_cents`, `line.amount_cents`) win over the computed value, so
-existing invoices do not change. Uninvoiced JPY figures do change (120.75 becomes 121); that is the
-point of the rule.
+existing invoices do not change. Uninvoiced JPY figures do change (120.75 becomes 121), and so does
+the consumption of amount budgets in zero-decimal currencies, so a budget alert can cross its
+threshold on upgrade. Both changes are what the rule is for.
+
+Outside the rule: invoice discounts and taxes (`invoice_amounts`, `allocate_invoice_discount`), fixed
+fees and typed line amounts (`ops/invoices/editing.rs`). None of them is computed from a rate and a
+duration, and they keep hundredths in every currency. Rounding them too would be a separate decision.
+
+Display: `format_cents` and the PDF's money format print two decimals for every currency, so JPY 121
+shows as "JPY 121.00". This spec does not change the display.
 
 **Delivery**: this rule does not depend on templates and ships first, as its own PR with its own
 migration (R9, plan.md).
 
-**Totals**: unchanged code. Subtotals and totals already add the stored line amounts
-(`invoice_amounts`, `allocate_invoice_discount`), so FR-010 holds by construction; a property test
-proves it for all three precisions.
+**Totals**: unchanged code. The subtotal is the sum of the line amounts
+(`ops/invoices/preview.rs::subtotal`, which `generate.rs` also uses), so FR-010 holds by
+construction. `invoice_amounts` takes that subtotal as input and never sees lines, so a property over
+it proves nothing about FR-010. Instead, the invoice tests check that the preview's and the generated
+invoice's `subtotal_cents` equal the sum of `line.amount_cents` for JPY, EUR and KWD, and a core
+property checks that any sum of `line_amount_cents` results in one currency is a multiple of its
+step.
 
 **Alternatives**: Harvest's subtotal (round the unrounded sum) was rejected by the maintainer:
 invoices must add up (spec 001 FR-023). Rounding only at display was rejected: stored amounts would
@@ -101,6 +123,12 @@ receive `default_rate_cents` in `TaskCreated`; a rename would break both for no 
 currency column needs nothing for old checkpoints: `jsonb_populate_recordset` ignores keys that are
 no longer columns (FR-018).
 
+The tighter CHECK does need something. A checkpoint captured before the upgrade can hold
+`default_rate_cents = 0`: an editor-entered zero, which PR 1's migration keeps, or a zero from an
+import before PR 1. Restored as is, it fails the new `> 0` CHECK and the commit fails. So
+`ParentSnapshot::restore` in `importers/harvest/resolve/preview.rs` restores the rate with
+`NULLIF(default_rate_cents, 0)`, and a zero becomes no rate, as R2 says it should.
+
 **Alternatives**: renaming to `default_rate_hundredths` reads better and was rejected for the two
 compatibility costs above.
 
@@ -121,14 +149,15 @@ The places that copy a task's default rate into `project_tasks.rate_cents`:
 
 | Place | Today | After |
 | --- | --- | --- |
-| `ops/projects/creation/finalize.rs` (New Project) | copies only when the task's currency equals the project's, else refuses | copies `RateTemplate::apply(project currency)` |
-| `ops/projects/editor/associations.rs` (project editor) | same, "Enter an explicit task rate in the project currency" | same as above |
+| `ops/projects/creation/finalize.rs` (New Project) | copies only when the project bills by task rate (`if task_rates`) and the task's currency equals the project's, else refuses | copies `RateTemplate::apply(project currency)` under the same `task_rates` condition |
+| `ops/projects/editor/associations.rs` (project editor) | copies only when `before.configured && task_rates && reset_rate && rate.is_none()` and the currencies match, else "Enter an explicit task rate in the project currency" | same conditions without the currency match; `ON CONFLICT … DO UPDATE` keeps re-applying the template when someone clears an existing link's rate, now in any currency |
 | `pages/new_project/tasks.rs` (placeholder) | shows the default only when currencies match | shows "EUR 80.50 / h" from the template in the draft's currency |
 | `ops/projects/creation/options.rs`, `editor/catalog.rs`, `editor/projection.rs` | read and redact the currency with the rate | read and redact the template only |
 | Harvest importer (`resolve.rs`, `ensure_project_task`) | uses the CSV row's project-task rate, real money | unchanged |
 | `seed.rs` | inserts project tasks with explicit rates | stops writing a task currency |
 
-No other code path inserts into `project_tasks` (checked with `rg "INTO project_tasks"`). Reports and
+The currency match is the only condition that goes (FR-003). No other code path inserts into
+`project_tasks` (checked with `rg "INTO project_tasks"`). Reports and
 invoices never read `tasks.default_rate_cents`; billing resolves the project's own task rate
 (`resolve_project_rate(…, pt.rate_cents, …)`), so FR-013 holds without changes there.
 

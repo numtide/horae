@@ -63,26 +63,30 @@ currency.
 
 ### User Story 1 - A task's default rate fills projects in any currency (Priority: P1)
 
-A project manager adds the task "Design", whose default rate is 80.50, to a new JPY project and to an
-existing EUR project. Each project gets a task rate of 80.50 in its own currency without anyone
-typing it, and the screen shows the rate the project will bill ("JPY 80.50 / h", "EUR 80.50 / h")
-before it is saved.
+A project manager adds the task "Design", whose default rate is 80.50, to a new USD project and to an
+existing JPY project imported from Harvest. Each project gets a task rate of 80.50 in its own
+currency without anyone typing it, and the screen shows the rate the project will bill ("USD 80.50 /
+h", "JPY 80.50 / h") before it is saved.
 
 **Why this priority**: Today every imported default rate and every rate used across currencies is
 refused here, so this is the change people feel.
 
-**Independent Test**: Give a task a default rate, add it to projects in EUR, USD and JPY from New
-Project and from the project editor, and check that each project's task rate equals the template in
-the project's currency.
+**Independent Test**: Give a task a default rate, add it from New Project to projects in EUR and USD
+(New Project offers only the reference currencies of spec 011), and from the project editor to an
+existing EUR project and to an imported or seeded JPY project. Check that each project's task rate
+equals the template in the project's currency.
 
 **Acceptance Scenarios**:
 
-1. **Given** a task with the default rate 80.50 and a New Project draft billed in JPY by task rate,
-   **When** the manager adds the task, **Then** its rate field shows 80.50 with the label in JPY, and
-   saving the project stores the task rate JPY 80.50.
-1. **Given** the same task and an existing EUR project in the project editor, **When** the manager
-   adds the task and leaves its rate empty, **Then** the project's task rate is EUR 80.50 and no error
-   asks for an explicit rate.
+1. **Given** a task with the default rate 80.50 and a New Project draft billed in USD by task rate,
+   **When** the manager adds the task, **Then** its rate field shows 80.50 with the label in USD, and
+   saving the project stores the task rate USD 80.50.
+1. **Given** the same task and an existing EUR project billed by task rate, in the project editor,
+   **When** the manager adds the task and leaves its rate empty, **Then** the project's task rate is
+   EUR 80.50 and no error asks for an explicit rate.
+1. **Given** the same task and an imported JPY project billed by task rate, in the project editor,
+   **When** the manager adds the task and leaves its rate empty, **Then** the project's task rate is
+   JPY 80.50.
 1. **Given** a task with no default rate, **When** it is added to any project, **Then** the task rate
    stays empty, as today.
 1. **Given** a project that already has the task at EUR 70.00, **When** someone changes the task's
@@ -121,16 +125,18 @@ ______________________________________________________________________
 
 ### User Story 3 - Invoice and report amounts round to the currency's decimals (Priority: P2)
 
-A JPY project bills 1.5 hours at JPY 80.50. Its uninvoiced amount, the invoice line and the report
-all show JPY 121, and an invoice with that line and a 0.5 hour line at JPY 5.00 totals JPY 124: the
-sum of its lines, 121 + 3.
+A JPY project bills 1.5 hours at JPY 80.50. Its uninvoiced amount, the invoice line and the time
+report all show JPY 121, and an invoice with that line and a 0.5 hour line at JPY 5.00 totals JPY
+124: the sum of its lines, 121 + 3. Screens and the PDF keep today's display, which prints two
+decimals for every currency, so they read "JPY 121.00".
 
 **Why this priority**: Once templates fill projects in any currency, fractional rates in
-zero-decimal currencies become common, and amounts must not carry fractions the currency does not
-have. It does not depend on templates, so it ships first, as its own PR (plan.md, Delivery).
+zero-decimal currencies become common, and amounts computed per time entry must not carry fractions
+the currency does not have. It does not depend on templates, so it ships first, as its own PR
+(plan.md, Delivery).
 
 **Independent Test**: Preview and create an invoice in JPY with the two lines above, and compare the
-lines, the invoice total and the detailed report.
+lines, the invoice total, the PDF and the time report.
 
 **Acceptance Scenarios**:
 
@@ -168,7 +174,7 @@ and none, and project-task rates in the project's currency and in another curren
 1. **Given** a CSV row whose project-task rate is in a currency other than the project's, **Then**
    the row is refused as today.
 1. **Given** an import preview checkpoint written before this change, **When** the commit reads it,
-   **Then** it still commits.
+   **Then** it still commits, and a task rate of zero in it restores as no rate.
 
 ______________________________________________________________________
 
@@ -212,6 +218,11 @@ ______________________________________________________________________
 - A task added in New Project to a project whose currency the manager changes afterwards: the rate
   shown follows the new currency, since the number is the same.
 - A task is renamed or archived: its template is untouched.
+- In the project editor, clearing the rate of a task the project already has re-applies the
+  template, as it does today; it now works in any project currency (FR-003).
+- Invoice discounts, taxes, fixed fees and typed line amounts are not computed from a rate and a
+  duration, so this spec does not round them: a JPY invoice of 124 with a 10% discount totals JPY
+  111.60, as it would today (FR-011).
 - A person who cannot read billable rates sees neither templates nor the applied rate, as today.
 
 ## Requirements *(mandatory)*
@@ -228,9 +239,11 @@ ______________________________________________________________________
 
 **Applying a template**
 
-- **FR-003**: When a task is added to a project and the person leaves its rate empty, the project's
-  task rate MUST become the template's number in the project's currency, in New Project, in the
-  project editor, and wherever else a task is attached to a project with its default rate. The
+- **FR-003**: Under the conditions where Horae applies a task's default rate today (the project bills
+  by task rate, and the person leaves the rate empty), the project's task rate MUST become the
+  template's number in the project's currency, in New Project, in the project editor, and wherever
+  else a task is attached to a project with its default rate. The currency match is the only
+  condition that goes. The
   refusals "currency is unknown or incompatible" and "Enter an explicit task rate in the project
   currency" MUST be removed.
 - **FR-004**: A rate that the person types MUST win over the template, as today.
@@ -254,7 +267,8 @@ ______________________________________________________________________
   001 FR-023 requires, even where Harvest's subtotal differs.
 - **FR-011**: The rounding of FR-008 MUST apply to every amount computed per time entry: invoice
   previews and lines, uninvoiced amounts, reports, and project and budget figures, so a report and
-  the invoice for the same time agree. Amounts already stored on invoices MUST NOT change.
+  the invoice for the same time agree. Amounts already stored on invoices MUST NOT change. Invoice
+  discounts, taxes, fixed fees and typed line amounts are outside this rule and keep hundredths.
 
 **Migration**
 
@@ -279,7 +293,8 @@ ______________________________________________________________________
   unchanged, and no rate for 0 or none.
 - **FR-017**: The CSV importer MUST store a new task's template from the row's rate without a
   currency, and MUST keep its per-row currency check for project-task rates.
-- **FR-018**: Import preview checkpoints written before the upgrade MUST still commit.
+- **FR-018**: Import preview checkpoints written before the upgrade MUST still commit. A task rate of
+  zero in such a checkpoint restores as no rate (FR-006).
 
 **Interfaces**
 
@@ -315,10 +330,11 @@ ______________________________________________________________________
   zero refusals for "currency is unknown or incompatible" in New Project and the project editor.
 - **SC-002**: After an import from Harvest, 100% of tasks with a non-zero Harvest default rate fill
   the rate of every project they are added to.
-- **SC-003**: For every invoice, the subtotal equals the sum of its lines, checked over generated
-  cases in all three currency precisions.
-- **SC-004**: A JPY invoice line for 1.5 hours at 80.50 reads JPY 121 in the preview, the invoice,
-  the PDF and the report.
+- **SC-003**: For every invoice, the subtotal equals the sum of its lines, checked on JPY, EUR and KWD
+  invoices (one currency of each precision), and every computed line amount is a multiple of its
+  currency's step over generated cases.
+- **SC-004**: A JPY invoice line for 1.5 hours at 80.50 is 121 whole yen (displayed "JPY 121.00") in
+  the preview, the invoice, the PDF and the time report.
 - **SC-005**: Upgrading changes no project-task rate, invoice amount or report total in a 2-decimal
   currency (checked before and after on a copy of a real database).
 - **SC-006**: Nowhere in the interface does a template appear with a currency, and nowhere does an
