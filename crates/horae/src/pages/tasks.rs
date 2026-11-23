@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 use horae_core::money::format_cents;
 
+use crate::i18n::Tr;
+
 use crate::components::badge::Badge;
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{
@@ -204,7 +206,7 @@ pub fn TaskCatalog() -> Element {
                                 tr { key: "{task.id}",
                                     td { "{task.name}" }
                                     td { if task.billable_default { "Yes" } else { "No" } }
-                                    if page.can_read_rates { td { class: "font-mono text-sm whitespace-nowrap", {rate_label(task.default_rate_cents, task.default_rate_currency.as_deref())} } }
+                                    if page.can_read_rates { td { class: "font-mono text-sm whitespace-nowrap", {rate_label(tr, task.default_rate_cents, task.default_rate_currency.as_deref())} } }
                                     td {
                                         if task.active {
                                             Badge { variant: "success", {tr.tasks_status_active()} }
@@ -246,10 +248,15 @@ pub fn TaskCatalog() -> Element {
     }
 }
 
-fn rate_label(cents: Option<i64>, currency: Option<&str>) -> String {
-    match cents {
-        Some(cents) => format_cents(cents, currency.unwrap_or("Unknown currency")),
-        None => "Not set".into(),
+fn rate_label(tr: Tr, cents: Option<i64>, currency: Option<&str>) -> String {
+    match (cents, currency) {
+        (Some(cents), Some(currency)) => tr.tasks_rate_per_hour(format_cents(cents, currency)),
+        // Harvest task rates arrive without a currency, and none is invented.
+        // An empty code leaves the grouped amount after a leading space.
+        (Some(cents), None) => {
+            tr.tasks_rate_currency_not_set(format_cents(cents, "").trim_start().to_owned())
+        }
+        (None, _) => tr.tasks_rate_none(),
     }
 }
 

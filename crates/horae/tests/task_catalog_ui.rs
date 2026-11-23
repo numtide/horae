@@ -261,6 +261,27 @@ async fn an_archived_task_offers_restore_and_shows_an_archived_badge() {
 }
 
 #[tokio::test]
+async fn a_rate_shows_its_currency_or_says_it_has_none() {
+    for (cents, currency, shown) in [
+        (Some(8000), Some("USD"), "USD 80.00 / h"),
+        (Some(123_456), None, "1,234.56 / h · currency not set"),
+        (None, None, "No rate"),
+    ] {
+        let probe = Probe::default();
+        let reply = probe.reply();
+        let mut ui = Harness::new(&probe);
+        let mut page = catalog(false, true);
+        page.tasks[0].default_rate_cents = cents;
+        page.tasks[0].default_rate_currency = currency.map(Into::into);
+        reply.send(Ok(page)).unwrap();
+        ui.settle();
+        let html = ui.html();
+        assert!(html.contains(&format!(">{shown}</td>")), "{html}");
+        assert!(!html.contains("Unknown currency"), "{html}");
+    }
+}
+
+#[tokio::test]
 async fn a_reader_gets_no_row_menu() {
     let probe = Probe::default();
     let reply = probe.reply();

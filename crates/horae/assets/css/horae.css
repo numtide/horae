@@ -1660,6 +1660,11 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 .ts-pager-face { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
 .ts-pager-face.reserve { visibility: hidden; }
 .ts-pager-range { font-family: var(--font-family-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+/* Every week range is 20 characters ("23 Nov – 29 Nov 2026"), but when the mono
+   font is unavailable a fallback face sizes "Dec" and "Nov" differently, and the
+   pager would change width from week to week. 20ch is the range's exact width
+   in a monospace face and wider than it in the usual proportional fallbacks. */
+.ts-pager-range.week { min-width: 20ch; text-align: center; }
 /* The calendar's day-span dropdown sits beside the pager; give its trigger the
    same height and text size as the pager and add button so the row lines up. */
 .ts-toolbar .menu-anchor > .btn { height: 46px; padding: 0 var(--space-4); font-size: var(--font-size-sm); }

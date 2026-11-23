@@ -82,7 +82,7 @@ pub fn PeriodNav(
                                 span { class: if is_this_week { "ts-pager-face" } else { "ts-pager-face reserve" }, {tr.period_nav_this_week()} }
                                 span { class: if is_this_week { "ts-pager-face reserve" } else { "ts-pager-face" }, {tr.period_nav_week()} }
                             }
-                            span { class: "ts-pager-range", "{range_label}" }
+                            span { class: "ts-pager-range week", "{range_label}" }
                         }
                     }
                 }
