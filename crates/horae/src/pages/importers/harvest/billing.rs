@@ -72,9 +72,9 @@ pub(super) fn BillingTable(report: ImportReport) -> Element {
                     {tr.harvest_billing_voided_drafts(report.invoices_voided_drafts as i64)}
                 }
             }
-            if report.invoices_removed > 0 {
+            if !report.invoices_removed.is_empty() {
                 p { class: "text-sm text-secondary",
-                    {tr.harvest_billing_removed(report.invoices_removed as i64)}
+                    {tr.harvest_billing_removed(report.invoices_removed.len() as i64, report.invoices_removed.join(", "))}
                 }
             }
             if !report.link_conflicts.is_empty() {

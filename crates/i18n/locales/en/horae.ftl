@@ -468,7 +468,10 @@ harvest-billing-conflicts = Already billed or submitted in Horae
 harvest-billing-drafts = Draft invoices left out: { $count }
 harvest-billing-no-longer-listed = Imported invoices Harvest no longer lists: { $count }
 harvest-billing-voided-drafts = Imported invoices Harvest turned back into drafts, now void: { $count }
-harvest-billing-removed = Imported invoices Harvest deleted, removed because a new invoice uses their number: { $count }
+harvest-billing-removed = { $count ->
+    [one] Removed imported invoice { $numbers }: Harvest deleted it, and a new invoice uses its number.
+   *[other] Removed imported invoices { $numbers }: Harvest deleted them, and new invoices use their numbers.
+}
 harvest-billing-full-scan = Every time entry was read again, to match it with Harvest's invoices.
 harvest-billing-watermarks-held = Some records could not be imported, so the next run reads again everything since the last run without errors. Fix the errors below to let runs read only what changed.
 harvest-billing-conflict-billed = { $entry } is on Horae invoice { $number }

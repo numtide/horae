@@ -223,10 +223,12 @@ state of their entries.
   not move, so an incremental read would miss them.
 - An imported invoice that Harvest turns back into a draft: voided in Horae and its entries reopened
   in the invoice phase of the next run, read or not (Q14). Later runs change nothing while it stays a
-  draft; issued again, it is updated to its new state and its time linked again by a full read.
+  draft; issued again, it is updated to its new state and its time linked again by a full read. That
+  full read stays due until a run finishes without errors, so a job that stops after the invoice
+  phase leaves it to the next one.
 - An invoice deleted in Harvest whose number a new Harvest invoice takes (deleting the latest
   invoice makes its number Harvest's next suggestion): Horae's copy is removed and the new one
-  imported (Q13).
+  imported (Q13). A submitted entry it still held keeps its state and loses the link.
 - A running timer that Harvest reports billed: not possible in Harvest; the timer rule (skip running
   entries) applies first anyway.
 - Two runs at once: prevented by the existing import lock.
@@ -303,8 +305,8 @@ state of their entries.
 - **FR-015**: An imported invoice MUST keep Harvest's number. A Harvest number that a Horae-made
   invoice already uses MUST make that Harvest invoice an error. A number that an imported invoice
   Harvest no longer lists still holds MUST be freed: that invoice is removed, its time reopened,
-  and the removal counted. A number another listed Harvest invoice holds MUST make the invoice an
-  error. Horae's own numbering MUST skip every number already taken, imported or not.
+  and its number listed in the report. A number another listed Harvest invoice holds MUST make the
+  invoice an error. Horae's own numbering MUST skip every number already taken, imported or not.
 
 **What an administrator can do with an imported invoice**
 

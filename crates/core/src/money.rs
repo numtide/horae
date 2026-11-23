@@ -161,9 +161,9 @@ const ISO_4217: &[&str] = &[
     "PHP", "PKR", "PLN", "PYG", "QAR", "RON", "RSD", "RUB", "RWF", "SAR", "SBD", "SCR", "SDG",
     "SEK", "SGD", "SHP", "SLE", "SLL", "SOS", "SRD", "SSP", "STD", "STN", "SVC", "SYP", "SZL",
     "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TWD", "TZS", "UAH", "UGX", "USD", "USN",
-    "UYI", "UYU", "UYW", "UZS", "VED", "VEF", "VES", "VND", "VUV", "WST", "XAF", "XAG", "XAU",
-    "XBA", "XBB", "XBC", "XBD", "XCD", "XCG", "XDR", "XOF", "XPD", "XPF", "XPT", "XSU", "XUA",
-    "YER", "ZAR", "ZMW", "ZWG", "ZWL",
+    "USS", "UYI", "UYU", "UYW", "UZS", "VED", "VEF", "VES", "VND", "VUV", "WST", "XAD", "XAF",
+    "XAG", "XAU", "XBA", "XBB", "XBC", "XBD", "XCD", "XCG", "XDR", "XOF", "XPD", "XPF", "XPT",
+    "XSU", "XUA", "YER", "ZAR", "ZMW", "ZWG", "ZWL",
 ];
 
 /// Whether `currency` is an ISO 4217 code (see [`ISO_4217`]).
@@ -171,12 +171,13 @@ pub fn is_iso_currency(currency: &str) -> bool {
     ISO_4217.binary_search(&currency).is_ok()
 }
 
-/// ISO 4217 minor-unit digits; every currency not listed has two.
+/// ISO 4217 minor-unit digits; every currency not listed has two. CLF and UYW
+/// have four, which makes no difference: Horae keeps hundredths at most.
 pub(crate) fn currency_decimals(currency: &str) -> u8 {
     match currency.trim() {
         "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => 3,
         "BIF" | "BYR" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF"
-        | "UGX" | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
+        | "UGX" | "UYI" | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
         _ => 2,
     }
 }
@@ -208,12 +209,13 @@ mod tests {
     #[test]
     fn iso_currencies_are_listed_in_order() {
         assert!(ISO_4217.windows(2).all(|pair| pair[0] < pair[1]));
-        for known in ["EUR", "USD", "JPY", "HRK", "XCG"] {
+        for known in ["EUR", "USD", "JPY", "HRK", "XCG", "XAD", "USS"] {
             assert!(is_iso_currency(known), "{known}");
         }
         for unknown in ["XYZ", "XTS", "XXX", "eur", "EURO", ""] {
             assert!(!is_iso_currency(unknown), "{unknown}");
         }
+        assert_eq!(currency_decimals("UYI"), 0);
     }
 
     #[test]

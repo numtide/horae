@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH entry AS (\n           UPDATE time_entries te SET state = 'submitted',\n                  invoice_id = (SELECT id FROM invoices WHERE org_id = $1 AND number = '1001')\n             FROM harvest_import_map m\n            WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'\n              AND m.harvest_import_id = 13 AND te.id = m.horae_id\n           RETURNING te.id, te.updated_at)\n         UPDATE harvest_import_map m SET horae_updated_at = entry.updated_at\n           FROM entry WHERE m.org_id = $1 AND m.horae_id = entry.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4aa0a0fbd0486b0fc042de4ce7c7cce9e5b622999b56cd10d2b51fc92ac933e5"
+}

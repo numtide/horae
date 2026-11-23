@@ -96,7 +96,8 @@ pub(super) async fn apply_batch(
                         if status == InvoiceStatus::Void {
                             report.invoices_skipped_drafts += 1;
                         } else {
-                            report.summary.links.unlinked += reopen_time(tx, org_id, id).await?;
+                            report.summary.links.unlinked +=
+                                reopen_time(tx, org_id, id, Submitted::Keep).await?;
                             report.invoices_voided_drafts += 1;
                         }
                         if status != InvoiceStatus::Void || version != source.updated_at {
@@ -121,10 +122,15 @@ pub(super) async fn apply_batch(
         let existing = existing(tx, org_id, source.id).await?;
         match apply_one(tx, cache, org_id, data, source, status, existing).await {
             Ok((outcome, slot, freed)) => {
+                let was_void =
+                    existing.is_some_and(|(_, current, _)| current == InvoiceStatus::Void);
+                if was_void && matches!(slot, InvoiceSlot::Imported { voided: false, .. }) {
+                    forget_invoice_mark(tx, org_id).await?;
+                }
                 cache.set_invoice(source.id, slot);
                 report.record(EntityType::Invoice, &outcome);
                 if let Some(reopened) = freed {
-                    report.invoices_removed += 1;
+                    report.invoices_removed.push(source.number.clone());
                     report.summary.links.unlinked += reopened;
                 }
             }
@@ -190,15 +196,7 @@ async fn remove_deleted(
     org_id: Uuid,
     invoice_id: Uuid,
 ) -> sqlx::Result<u64> {
-    let reopened = reopen_time(tx, org_id, invoice_id).await?;
-    // A submitted entry keeps its state; only the link has to go.
-    sqlx::query!(
-        "UPDATE time_entries SET invoice_id = NULL WHERE org_id = $1 AND invoice_id = $2",
-        org_id,
-        invoice_id,
-    )
-    .execute(&mut **tx)
-    .await?;
+    let reopened = reopen_time(tx, org_id, invoice_id, Submitted::Detach).await?;
     sqlx::query!(
         "DELETE FROM harvest_import_map
           WHERE org_id = $1 AND harvest_entity_type = 'invoice'::harvest_entity_type
@@ -221,20 +219,25 @@ async fn remove_deleted(
 /// Reopens the time of an imported invoice that Harvest turned back into a
 /// draft or deleted. A draft's entries' own versions probably do not move in
 /// Harvest, so an incremental run would never read them; Horae knows them by
-/// the invoice. Submitted entries are left alone, and provenance takes the new
-/// version of an entry not edited in Horae, as `apply::write_links` does.
+/// the invoice. Submitted entries keep their state, and their link too unless
+/// the invoice is going away. Provenance takes the new version of an entry not
+/// edited in Horae, as `apply::write_links` does. Returns the entries reopened.
 async fn reopen_time(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
     invoice_id: Uuid,
+    submitted: Submitted,
 ) -> sqlx::Result<u64> {
     let reopened = sqlx::query_scalar!(
         r#"WITH before AS (
-             SELECT id, updated_at, created_at FROM time_entries
-              WHERE org_id = $1 AND invoice_id = $2 AND state <> 'submitted'),
+             SELECT id, updated_at, created_at, state = 'submitted' AS submitted
+               FROM time_entries
+              WHERE org_id = $1 AND invoice_id = $2 AND (state <> 'submitted' OR $3)),
            written AS (
              UPDATE time_entries AS te
-                SET invoice_id = NULL, state = 'open', rounded_minutes = NULL
+                SET invoice_id = NULL,
+                    state = CASE WHEN before.submitted THEN te.state ELSE 'open' END,
+                    rounded_minutes = CASE WHEN before.submitted THEN te.rounded_minutes END
                FROM before WHERE te.id = before.id
              RETURNING te.id, te.updated_at),
            refreshed AS (
@@ -244,13 +247,40 @@ async fn reopen_time(
                 AND m.horae_id = written.id
                 AND m.horae_updated_at IS DISTINCT FROM written.updated_at
                 AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at))
-           SELECT count(*) AS "count!" FROM written"#,
+           SELECT count(*) FILTER (WHERE NOT before.submitted) AS "count!"
+             FROM written JOIN before ON before.id = written.id"#,
         org_id,
         invoice_id,
+        submitted == Submitted::Detach,
     )
     .fetch_one(&mut **tx)
     .await?;
     Ok(reopened.unsigned_abs())
+}
+
+/// What `reopen_time` does with a submitted entry on the invoice.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Submitted {
+    /// Leave it, link included: the invoice stays.
+    Keep,
+    /// Unlink it and keep its state: the invoice is being removed.
+    Detach,
+}
+
+/// Has every later run read entries in full, until one finishes without
+/// errors and stores the mark again. A voided invoice that Harvest issued
+/// again needs its time linked by a full read, and on the job path the batch
+/// that brings it back commits before the entries: a job that stops after it
+/// would leave the next one incremental (review 3, M1).
+async fn forget_invoice_mark(tx: &mut Transaction<'_, Postgres>, org_id: Uuid) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE harvest_credentials SET synced_watermark = synced_watermark - 'invoice'
+          WHERE org_id = $1",
+        org_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 /// The Harvest versions of imported invoices voided in Horae. A void reopens

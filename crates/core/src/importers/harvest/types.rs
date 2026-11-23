@@ -528,10 +528,11 @@ pub struct ImportReport {
     /// Imported invoices Harvest turned back into drafts, voided by this run.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub invoices_voided_drafts: u64,
-    /// Imported invoices Harvest deleted, removed because a new Harvest
-    /// invoice took their number.
-    #[serde(default, skip_serializing_if = "is_zero")]
-    pub invoices_removed: u64,
+    /// Numbers of imported invoices Harvest deleted, removed because a new
+    /// Harvest invoice took their number. Each removal frees a number, so
+    /// there are never more than the invoices the run lists.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub invoices_removed: Vec<String>,
     /// API runs only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invoice_scan: Option<EntryScan>,
@@ -574,7 +575,7 @@ struct ImportReportWire {
     #[serde(default)]
     invoices_voided_drafts: u64,
     #[serde(default)]
-    invoices_removed: u64,
+    invoices_removed: Vec<String>,
     #[serde(default)]
     invoice_scan: Option<EntryScan>,
     error_archive: Option<ErrorArchive>,
@@ -637,7 +638,7 @@ impl ImportReport {
             invoices_skipped_drafts: 0,
             invoices_no_longer_listed: 0,
             invoices_voided_drafts: 0,
-            invoices_removed: 0,
+            invoices_removed: Vec::new(),
             invoice_scan: None,
             error_archive: None,
         }

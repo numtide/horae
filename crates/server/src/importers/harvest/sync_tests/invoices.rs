@@ -1,5 +1,6 @@
 //! Importing Harvest invoices and linking the time they billed (spec 025).
 
+use super::checkpoints::{FirstEntry, config, fixture_page};
 use super::*;
 use horae_core::importers::harvest::types::{
     EntryErrorKind, EntryScan, InvoiceErrorKind, LinkConflictKind, LinkCounts,
@@ -990,15 +991,57 @@ async fn a_deleted_invoice_gives_its_number_to_the_next(pool: PgPool) {
         .await
         .unwrap();
 
+    // Entry 13 was submitted in Horae while it still held the link: it keeps
+    // its state, and its provenance stays current (it was not edited).
+    sqlx::query!(
+        "WITH entry AS (
+           UPDATE time_entries te SET state = 'submitted',
+                  invoice_id = (SELECT id FROM invoices WHERE org_id = $1 AND number = '1001')
+             FROM harvest_import_map m
+            WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'
+              AND m.harvest_import_id = 13 AND te.id = m.horae_id
+           RETURNING te.id, te.updated_at)
+         UPDATE harvest_import_map m SET horae_updated_at = entry.updated_at
+           FROM entry WHERE m.org_id = $1 AND m.horae_id = entry.id",
+        org,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let before = billing(&pool, org).await;
+
+    // Entries unread: only the removal changes them.
     let mut next = source.clone();
     next.invoices[0].id = 106;
     next.invoices[0].updated_at = day(5);
-    next.time_entries = serde_json::from_value(json!([entry(10, 10, Some(106))])).unwrap();
+    next.time_entries.clear();
     let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(6))
         .await
         .unwrap();
-    assert_eq!(report.invoices_removed, 1);
+    assert_eq!(report.invoices_removed, ["1001"]);
     assert_eq!(report.summary.invoices.created, 1);
+    assert_eq!(report.summary.links.unlinked, 1);
+    let after = billing(&pool, org).await;
+    assert_eq!(billed_on(&pool, org, 10).await, (EntryState::Open, None));
+    assert_eq!(
+        billed_on(&pool, org, 13).await,
+        (EntryState::Submitted, None)
+    );
+    assert!(provenance_current(&pool, org, 13).await);
+    let untouched = |rows: &[(i64, EntryState, Option<String>, Option<i32>)]| {
+        rows.iter()
+            .filter(|(id, ..)| ![10, 13].contains(id))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(untouched(&after), untouched(&before));
+
+    // Harvest bills entry 10 on the new invoice.
+    next.time_entries = serde_json::from_value(json!([entry(10, 10, Some(106))])).unwrap();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(7))
+        .await
+        .unwrap();
+    assert!(report.invoices_removed.is_empty());
     assert!(
         report
             .row_errors
@@ -1021,12 +1064,56 @@ async fn a_deleted_invoice_gives_its_number_to_the_next(pool: PgPool) {
         *id == 10 && *state == EntryState::Invoiced && number.as_deref() == Some("1001")
     }));
 
-    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(7))
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(8))
         .await
         .unwrap();
-    assert_eq!(report.invoices_removed, 0);
+    assert!(report.invoices_removed.is_empty());
     assert_eq!(report.summary.invoices.created, 0);
     assert_eq!(billing(&pool, org).await, linked);
+}
+
+/// Two listed Harvest invoices that swap numbers between runs block each
+/// other: both are reported, and neither is removed (Q13).
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn invoices_that_swap_numbers_are_reported_not_removed(pool: PgPool) {
+    let org = setup(&pool).await;
+    let source = fixture();
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    let before = billing(&pool, org).await;
+
+    let mut next = source.clone();
+    next.invoices[0].number = "1002".into();
+    next.invoices[0].updated_at = day(5);
+    next.invoices[1].number = "1001".into();
+    next.invoices[1].updated_at = day(5);
+    next.time_entries.clear();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(6))
+        .await
+        .unwrap();
+    assert!(report.invoices_removed.is_empty());
+    let taken: Vec<_> = report
+        .row_errors
+        .iter()
+        .filter(|error| error.invoice_kind == Some(InvoiceErrorKind::NumberTaken))
+        .map(|error| error.source_location.clone())
+        .collect();
+    assert_eq!(taken, ["invoice 100 (1002)", "invoice 101 (1001)"]);
+    let numbers = sqlx::query!(
+        "SELECT h.harvest_invoice_id, i.number FROM invoices i
+           JOIN harvest_invoices h ON h.invoice_id = i.id
+          WHERE i.org_id = $1 AND h.harvest_invoice_id IN (100, 101) ORDER BY 1",
+        org,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.harvest_invoice_id, row.number))
+    .collect::<Vec<_>>();
+    assert_eq!(numbers, [(100, "1001".into()), (101, "1002".into())]);
+    assert_eq!(billing(&pool, org).await, before);
 }
 
 /// A CSV that bills an entry an API run imported keeps its provenance
@@ -1141,5 +1228,257 @@ async fn a_harvest_change_to_an_edited_billed_entry_is_reported(pool: PgPool) {
     assert_eq!(
         (row.minutes, row.state, row.number.as_deref()),
         (75, EntryState::Invoiced, Some("1001"))
+    );
+}
+
+/// What the job-path stub serves: the fixture's catalog, these invoices and
+/// entries, and a 403 on time entries when `entries_fail`.
+struct Account {
+    invoices: Vec<serde_json::Value>,
+    entries: Vec<serde_json::Value>,
+    entries_fail: bool,
+}
+
+/// A Harvest stub over `account` that filters entries by `updated_since`, as
+/// Harvest does, so an incremental job reads only what changed.
+fn account_server(
+    account: std::sync::Arc<std::sync::Mutex<Account>>,
+) -> super::super::api_source::http::test_server::Server {
+    use super::super::api_source::http::test_server::{Response, Server};
+    let catalog = valid_data();
+    Server::start(move |url| {
+        let collection = url.path().rsplit('/').next().unwrap();
+        let account = account.lock().unwrap();
+        let items = match collection {
+            "clients" => serde_json::to_value(&catalog.clients).unwrap(),
+            "projects" => serde_json::to_value(&catalog.projects).unwrap(),
+            "tasks" => serde_json::to_value(&catalog.tasks).unwrap(),
+            "users" => serde_json::to_value(&catalog.users).unwrap(),
+            "invoices" => json!(account.invoices),
+            "time_entries" if account.entries_fail => {
+                return Response {
+                    status: 403,
+                    headers: vec![],
+                    body: vec![],
+                };
+            }
+            "time_entries" => {
+                let since = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "updated_since")
+                    .map(|(_, value)| DateTime::parse_from_rfc3339(&value).unwrap());
+                json!(
+                    account
+                        .entries
+                        .iter()
+                        .filter(|entry| since.is_none_or(|since| {
+                            DateTime::parse_from_rfc3339(entry["updated_at"].as_str().unwrap())
+                                .unwrap()
+                                >= since
+                        }))
+                        .collect::<Vec<_>>()
+                )
+            }
+            other => panic!("unexpected collection {other}"),
+        };
+        Response::json(json!({collection: items, "next_page": null, "links": {"next": null}}))
+    })
+}
+
+/// One import job, enqueued and claimed as production runs it. The report,
+/// when the job finished.
+async fn job(
+    pool: &PgPool,
+    org: Uuid,
+    server: &super::super::api_source::http::test_server::Server,
+    sync: SyncScope,
+) -> Option<ImportReport> {
+    use crate::{config::JobPolicy, jobs};
+    jobs::enqueue(
+        pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::Commit,
+            sync,
+        },
+        &Uuid::now_v7().to_string(),
+        JobPolicy { max_attempts: 1 },
+    )
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+    let mut finished = None;
+    jobs::run_claimed(pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            &config(),
+            ImportMode::Commit,
+            sync,
+            super::super::api_source::http::ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        let stored = job_report(&report);
+        finished = Some(report);
+        stored
+    })
+    .await
+    .unwrap();
+    finished
+}
+
+async fn invoice_mark(pool: &PgPool, org: Uuid) -> Option<DateTime<Utc>> {
+    credentials::load(pool, org, KEY)
+        .await
+        .unwrap()
+        .unwrap()
+        .watermark_for(EntityType::Invoice)
+}
+
+async fn billed_on(pool: &PgPool, org: Uuid, entry: i64) -> (EntryState, Option<String>) {
+    let (_, state, number, _) = billing(pool, org)
+        .await
+        .into_iter()
+        .find(|(id, ..)| *id == entry)
+        .unwrap();
+    (state, number)
+}
+
+/// Q13 and Q14 on the job path, which production runs: a draft voids its
+/// invoice; the job that brings it back stops before its entries, and the
+/// next job still reads them all and bills them again (review 3, M1); then a
+/// deleted invoice gives its number to a new one.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn jobs_void_drafts_bring_them_back_and_free_deleted_numbers(pool: PgPool) {
+    let org = setup(&pool).await;
+    // The newest entry sets the incremental mark, so entries 10 and 11 are read
+    // only by a full read or once Harvest moves them.
+    let mut newest = entry(17, 17, None);
+    newest["updated_at"] = json!(day(4));
+    let account = std::sync::Arc::new(std::sync::Mutex::new(Account {
+        invoices: vec![
+            invoice(100, "1001", "open", &["300.00"], "300.00", "300.00"),
+            invoice(101, "1002", "open", &["50.00"], "50.00", "50.00"),
+        ],
+        entries: vec![entry(10, 10, Some(100)), entry(11, 11, Some(101)), newest],
+        entries_fail: false,
+    }));
+    let server = account_server(account.clone());
+    let first = job(&pool, org, &server, SyncScope::Full).await.unwrap();
+    assert_eq!(first.error_count(), 0, "{:?}", first.row_errors);
+    assert!(invoice_mark(&pool, org).await.is_some());
+    assert_eq!(
+        billed_on(&pool, org, 10).await,
+        (EntryState::Invoiced, Some("1001".into()))
+    );
+
+    // Back to draft: voided, its time reopened without reading the entry.
+    {
+        let mut account = account.lock().unwrap();
+        account.invoices[0]["state"] = json!("draft");
+        account.invoices[0]["updated_at"] = json!(day(5));
+    }
+    let report = job(&pool, org, &server, SyncScope::Incremental)
+        .await
+        .unwrap();
+    assert_eq!(report.invoices_voided_drafts, 1);
+    assert_eq!(report.invoice_scan, Some(EntryScan::Incremental));
+    assert_eq!(
+        invoice_status(&pool, org, "1001").await,
+        InvoiceStatus::Void
+    );
+    assert_eq!(billed_on(&pool, org, 10).await, (EntryState::Open, None));
+
+    // Issued again, and the job stops before its entries.
+    {
+        let mut account = account.lock().unwrap();
+        account.invoices[0]["state"] = json!("open");
+        account.invoices[0]["updated_at"] = json!(day(6));
+        account.entries_fail = true;
+    }
+    assert!(
+        job(&pool, org, &server, SyncScope::Incremental)
+            .await
+            .is_none()
+    );
+    assert_eq!(
+        invoice_status(&pool, org, "1001").await,
+        InvoiceStatus::Sent
+    );
+    assert_eq!(billed_on(&pool, org, 10).await, (EntryState::Open, None));
+    assert_eq!(invoice_mark(&pool, org).await, None);
+
+    // The next job reads every entry and bills the time again.
+    account.lock().unwrap().entries_fail = false;
+    let report = job(&pool, org, &server, SyncScope::Incremental)
+        .await
+        .unwrap();
+    assert_eq!(report.invoice_scan, Some(EntryScan::Full));
+    assert_eq!(
+        billed_on(&pool, org, 10).await,
+        (EntryState::Invoiced, Some("1001".into()))
+    );
+    assert!(invoice_mark(&pool, org).await.is_some());
+
+    // Deleted in Harvest, its number taken by a new invoice that bills the
+    // same time (billing moves the entry's `updated_at`, T002).
+    {
+        let mut account = account.lock().unwrap();
+        account.invoices[0]["id"] = json!(106);
+        account.invoices[0]["updated_at"] = json!(day(7));
+        account.entries[0]["invoice"] = json!({"id": 106, "number": "1001"});
+        account.entries[0]["updated_at"] = json!(day(7));
+    }
+    let report = job(&pool, org, &server, SyncScope::Incremental)
+        .await
+        .unwrap();
+    assert_eq!(report.invoices_removed, ["1001"]);
+    assert_eq!(report.error_count(), 0, "{:?}", report.row_errors);
+    assert_eq!(
+        billed_on(&pool, org, 10).await,
+        (EntryState::Invoiced, Some("1001".into()))
+    );
+    assert_eq!(
+        billed_on(&pool, org, 11).await,
+        (EntryState::Invoiced, Some("1002".into()))
+    );
+    let report = job(&pool, org, &server, SyncScope::Incremental)
+        .await
+        .unwrap();
+    assert!(report.invoices_removed.is_empty());
+    assert_eq!(report.summary.invoices.created, 0);
+}
+
+/// A 403 on invoices names what the connection lacks on the inline path too.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_inline_run_refused_invoices_says_so(pool: PgPool) {
+    use super::super::api_source::http::test_server::{Response, Server};
+    let org = setup(&pool).await;
+    let server = Server::start(|url| {
+        if url.path().ends_with("/invoices") {
+            return Response {
+                status: 403,
+                headers: vec![],
+                body: vec![],
+            };
+        }
+        fixture_page(url, FirstEntry::Valid)
+    });
+    let result = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::Commit,
+        SyncScope::Full,
+        super::super::api_source::http::ApiHttp::local(server.base.clone()),
+        None,
+    )
+    .await;
+    assert!(
+        matches!(result, Err(super::super::ApiImportError::InvoicesForbidden)),
+        "{result:?}"
     );
 }

@@ -5,7 +5,7 @@ use super::super::api_source::http::{
 use super::*;
 use crate::jobs;
 
-fn config() -> HarvestConfig {
+pub(super) fn config() -> HarvestConfig {
     HarvestConfig {
         client_id: "test".into(),
         client_secret: "test".into(),
@@ -15,13 +15,13 @@ fn config() -> HarvestConfig {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum FirstEntry {
+pub(super) enum FirstEntry {
     Valid,
     InvalidUser,
     MissingTimestamp,
 }
 
-fn fixture_page(url: &openidconnect::url::Url, first: FirstEntry) -> Response {
+pub(super) fn fixture_page(url: &openidconnect::url::Url, first: FirstEntry) -> Response {
     let collection = url.path().rsplit('/').next().unwrap();
     let second = url
         .query_pairs()
