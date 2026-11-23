@@ -66,7 +66,7 @@ Starts after Delivery 1 and the OAuth amendment (7.1.0) have merged.
 
 ## Phase 5: Setup
 
-- [ ] T019 Apply the approved text (with any wording the maintainer approves for review finding H3; see HANDOFF.md) of `specs/026-task-rate-templates/constitution-amendment.md` to `.specify/memory/constitution.md` verbatim, as MINOR 7.1.0 → 7.2.0, with a Sync Impact Report; if 7.1.0 has not landed, stop and ask
+- [ ] T019 Apply the approved text of `specs/026-task-rate-templates/constitution-amendment.md` to `.specify/memory/constitution.md` verbatim, as MINOR 7.1.0 → 7.2.0, with a Sync Impact Report; if 7.1.0 has not landed, stop and ask
 - [ ] T020 Check the next free migration number on master (one after Delivery 1's) and use it for `crates/server/migrations/NNNN_task_rate_templates.sql` in every later task
 
 ## Phase 6: Foundational (blocks every Delivery 2 story)
