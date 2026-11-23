@@ -115,7 +115,7 @@ impl<T: Serialize> HarvestPagination<T> {
         let Some(query) = query else { return self };
         let mut encoded = url::form_urlencoded::Serializer::new(String::new());
         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
-            if key != "page" && key != "per_page" {
+            if !matches!(&*key, "page" | "per_page" | "cursor") {
                 encoded.append_pair(&key, &value);
             }
         }
@@ -168,6 +168,8 @@ pub struct HarvestTimeEntry {
     pub id: i64,
     pub spent_date: String,
     pub hours: Hours,
+    /// The stored hours, without a running timer's elapsed time.
+    pub hours_without_timer: Hours,
     pub rounded_hours: Hours,
     /// Wall-clock start/end (Harvest tracks by start/end times); null when the
     /// entry is duration-only (no start time).
@@ -194,6 +196,12 @@ pub struct HarvestTimeEntry {
     pub project: HarvestProjectRef,
     pub task: HarvestRef,
     pub approval_status: String,
+    /// Records Horae does not number yet (assignments, invoices) or does not
+    /// have (external references): always null.
+    pub user_assignment: Option<HarvestRef>,
+    pub task_assignment: Option<HarvestRef>,
+    pub invoice: Option<HarvestRef>,
+    pub external_reference: Option<HarvestRef>,
 }
 
 // ── Project ─────────────────────────────────────────────────────────────────
