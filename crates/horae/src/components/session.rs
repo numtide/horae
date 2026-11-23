@@ -82,8 +82,8 @@ const UNAUTHORIZED: u16 = 401;
 pub fn use_session_provider() -> Result<(), RenderError> {
     let mut refreshing = use_signal(|| false);
     // One loader for all four reads: while the server render waits, Dioxus
-    // polls only the task it is suspended on, so a second loader started
-    // beside it would never be woken.
+    // polls only the task it is suspended on, so a second loader whose read
+    // finished first would never be woken (tests/loader_suspense.rs).
     let loaded = match use_loader(move || async move {
         refreshing.set(true);
         let (me, permissions, week_start, org_name) = futures_util::join!(
