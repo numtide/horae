@@ -17,8 +17,9 @@ const base = process.env.HORAE_TEST_URL;
 const target = new URL(base);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const client = sql("SELECT id FROM clients WHERE active ORDER BY name LIMIT 1");
-const project = sql("SELECT id FROM projects WHERE active ORDER BY name LIMIT 1");
+// The seeded client: earlier suites leave clients in other organizations.
+const client = sql("SELECT id FROM clients WHERE name = 'Acme Corp'");
+const project = sql(`SELECT id FROM projects WHERE client_id = '${client}' ORDER BY name LIMIT 1`);
 
 const screens = [
   ['workspace-settings', '/admin/workspace'],
@@ -87,9 +88,13 @@ const screens = [
       }
     }
 
+    // Wide enough that the admin panel exceeds 720px, so the form limit shows.
+    await page.setViewportSize({ width: 1680, height: 1000 });
+
     // Workspace settings: one form card of at most 720px, one Primary, and
     // Plugins as its own subpage beside Settings.
     await open('/admin/workspace');
+    assert.ok(await width(page.locator('.adm-main')) > 760, 'the admin panel is wider than the old 760px limit');
     const main = page.locator('.adm-main');
     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
     await expect(main.locator('.card')).toHaveCount(1);
@@ -111,7 +116,7 @@ const screens = [
     await open('/admin/api-tokens');
     const tokens = main.locator(':is(.table-container, .empty-state)').first();
     assert.ok(Math.abs(await width(tokens) - await width(main)) <= 1, 'the tokens list is full width');
-    assert.ok(await width(main) > 760, 'the admin panel is wider than the old 760px limit');
+    await expect(main, 'the admin panel has no width limit').toHaveCSS('max-width', 'none');
 
     // My settings: the forms are at most 720px; the token form is one row whose
     // button lines up with the fields, and the list below it is full width.
@@ -129,7 +134,7 @@ const screens = [
       assert.ok(Math.abs(box.y + box.height - (name.y + name.height)) <= 1, 'the row lines up on its controls');
     }
     const list = page.getByRole('region', { name: 'Your tokens', exact: true }).locator(':is(.table-container, .empty-state)').first();
-    assert.ok(await width(list) > await width(form), 'the token list is wider than the form');
+    assert.ok(Math.abs(await width(list) - await width(main)) <= 1, 'the token list is full width');
 
     // Workspace and invoice settings draw their forms at the same limit.
     await open('/invoices/settings');
