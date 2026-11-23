@@ -513,6 +513,8 @@ mod route {
         #[layout(AdminShell)]
         #[route("/admin/workspace")]
         WorkspaceSettings {},
+        #[route("/admin/plugins")]
+        WorkspacePlugins {},
         #[route("/admin/importers")]
         ImporterIndex {},
         #[route("/admin/audit?:..filter")]
@@ -567,6 +569,11 @@ mod route {
     #[component]
     fn AdminApiTokens() -> Element {
         rsx! { "API tokens panel" }
+    }
+
+    #[component]
+    fn WorkspacePlugins() -> Element {
+        rsx! { "Plugins panel" }
     }
 }
 

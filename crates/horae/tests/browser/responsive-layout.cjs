@@ -205,7 +205,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     await check('admin subnavigation and its content remain reachable on mobile', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
       await visit('/admin/workspace', 'get_profile_options');
-      await expect(page.locator('.adm-main .page-title')).toHaveText('Workspace settings');
+      await expect(page.locator('.adm-main .page-title')).toHaveText('Settings');
       await page.locator('.adm-nav').getByRole('link', { name: 'Importers', exact: true }).click();
       await expect(page).toHaveURL(`${base}/admin/importers`);
       await expect(page.locator('.adm-main .page-title')).toHaveText('Importers');

@@ -144,11 +144,28 @@ settings-access-individual-badge = Individual configuration
 
 ## Workspace settings
 
+workspace-settings-title = Settings
+workspace-settings-intro = Defaults for everyone in this workspace.
+workspace-settings-form-label = Workspace settings
+workspace-zone-label = Time zone
+workspace-zone-hint = Used for today, timers and monthly budgets when a person has not chosen their own time zone.
+# Completes "Choose …" and "Search …" in the picker's accessible names.
+workspace-zone-choice = workspace time zone
+workspace-save = Save changes
+workspace-saving = Saving…
+workspace-discard = Discard
+workspace-save-failed = Could not save the settings. Try again.
 workspace-plugins-title = Plugins
+workspace-plugins-intro = What the plugins installed on this server add to { -brand }.
+workspace-plugins-table-label = Installed plugins
+workspace-plugins-column-name = Name
+workspace-plugins-column-version = Version
+workspace-plugins-column-status = Status
+workspace-plugins-column-hooks = Hooks
+workspace-plugins-status-loaded = Loaded
 workspace-plugins-empty = No plugins installed
 workspace-plugins-empty-hint = Plugins add features to { -brand }. The person who runs your { -brand } server installs them.
 workspace-plugin-version = v{ $version }
-workspace-plugin-hooks = Hooks: { $hooks }
 workspace-access-failed = Could not verify workspace access
 workspace-access-failed-hint = Try again, or sign in again if it keeps failing.
 
@@ -157,6 +174,7 @@ workspace-access-failed-hint = Try again, or sign in again if it keeps failing.
 api-tokens-title = API tokens
 api-tokens-intro = A token lets a script or another app use { -brand } as you, with your access. Treat it like a password. The API is described in <link>its OpenAPI document</link>.
 api-tokens-list-label = Your tokens
+api-tokens-form-label = New token
 api-tokens-empty = No tokens yet
 api-tokens-empty-hint = Create a token to let a script or another app use { -brand } on your behalf.
 api-tokens-revoke-title = Revoke “{ $name }”?

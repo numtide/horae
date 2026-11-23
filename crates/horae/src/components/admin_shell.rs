@@ -4,12 +4,14 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{ErrorState, NoAccess};
 use crate::components::session::use_session;
+use crate::i18n::Tr;
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     Settings,
+    Plugins,
     Audit,
     Importers,
     ApiTokens,
@@ -17,12 +19,13 @@ enum Section {
 
 impl Section {
     /// The section page's own title, for the header of its no-access state.
-    fn title(self) -> &'static str {
+    fn title(self, tr: Tr) -> String {
         match self {
-            Section::Settings => "Workspace settings",
-            Section::Audit => "Audit log",
-            Section::Importers => "Importers",
-            Section::ApiTokens => "API tokens",
+            Section::Settings => tr.workspace_settings_title(),
+            Section::Plugins => tr.workspace_plugins_title(),
+            Section::Audit => "Audit log".into(),
+            Section::Importers => "Importers".into(),
+            Section::ApiTokens => "API tokens".into(),
         }
     }
 }
@@ -39,7 +42,8 @@ struct WorkspaceAccess {
 impl WorkspaceAccess {
     fn allows(self, section: Section) -> bool {
         match section {
-            Section::Settings => self.settings,
+            // The plugins were part of the settings page, so the same people see them.
+            Section::Settings | Section::Plugins => self.settings,
             Section::Audit => self.audit,
             Section::Importers => self.importers,
             Section::ApiTokens => self.api_tokens,
@@ -87,14 +91,15 @@ pub(crate) fn first_admin_route(own: &Result<OwnPermissions, ServerFnError>) -> 
 /// so the main rail stays put and this owns only the content panel (per the
 /// design's admin settings shell). Each section has its own access boundary.
 ///
-/// Only sections with a real destination are listed — Settings, API tokens,
-/// Importers (Harvest), and the permission audit log. People and Tasks have
+/// Only sections with a real destination are listed — Settings, Plugins, API
+/// tokens, Importers (Harvest), and the permission audit log. People and Tasks have
 /// their own pages in the main rail, as in Harvest. Other sections are deferred
 /// until they have a backend.
 #[component]
 pub fn AdminShell() -> Element {
     let section = match use_route::<Route>() {
         Route::WorkspaceSettings {} => Section::Settings,
+        Route::WorkspacePlugins {} => Section::Plugins,
         Route::PermissionAudit { .. } => Section::Audit,
         Route::AdminApiTokens {} => Section::ApiTokens,
         _ => Section::Importers,
@@ -113,7 +118,7 @@ pub fn AdminShell() -> Element {
         }
         // Non-disclosing: it names who can grant access, not what the section holds.
         Ok(_) => rsx! {
-            PageHeader { title: section.title() }
+            PageHeader { title: section.title(tr) }
             NoAccess {}
         },
         Err(()) => rsx! {
@@ -129,6 +134,7 @@ pub fn AdminShell() -> Element {
 
 #[component]
 fn AdminWorkspace(access: WorkspaceAccess) -> Element {
+    let tr = crate::i18n::use_tr();
     // The workspace's real name for the header chip (no slug — the schema has no
     // such field, so we show the name only rather than inventing a URL).
     let org_name = use_session().org_name.cloned();
@@ -153,7 +159,10 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                     if access.settings || access.api_tokens {
                         div { class: "adm-group-label", "Workspace" }
                         nav { class: "flex flex-col gap-1 mb-5",
-                            if access.settings { AdmLink { to: Route::WorkspaceSettings {}, label: "Settings" } }
+                            if access.settings {
+                                AdmLink { to: Route::WorkspaceSettings {}, label: tr.workspace_settings_title() }
+                                AdmLink { to: Route::WorkspacePlugins {}, label: tr.workspace_plugins_title() }
+                            }
                             if access.api_tokens { AdmLink { to: Route::AdminApiTokens {}, label: "API tokens" } }
                         }
                     }
@@ -261,7 +270,14 @@ mod tests {
     fn workspace_settings_need_company_write() {
         let version = PERMISSION_CATALOG_VERSION;
         let allowed = |own: &Result<OwnPermissions, ServerFnError>| {
-            workspace_access(own).is_ok_and(|access| access.allows(Section::Settings))
+            workspace_access(own).is_ok_and(|access| {
+                // Plugins open to exactly the people who open the settings.
+                assert_eq!(
+                    access.allows(Section::Settings),
+                    access.allows(Section::Plugins)
+                );
+                access.allows(Section::Settings)
+            })
         };
         let company = canonical(vec![Permission::CompanyWrite], false, version);
         assert!(allowed(&company));

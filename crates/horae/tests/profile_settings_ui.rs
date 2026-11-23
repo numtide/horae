@@ -12,6 +12,8 @@ use dioxus_html::{SerializedFormData, SerializedHtmlEventConverter, SerializedMo
 use futures_util::FutureExt;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[allow(dead_code)]
 #[path = "../src/components/button.rs"]
 pub mod button;
@@ -33,13 +35,19 @@ pub mod select_field;
 #[allow(dead_code)]
 #[path = "../src/components/session.rs"]
 pub mod session;
+#[path = "../src/components/table.rs"]
+pub mod table;
 mod components {
-    pub use super::{button, form, icons, page_header, screen_state, select_field, session};
+    pub use super::{
+        badge, button, form, icons, page_header, screen_state, select_field, session, table,
+    };
 }
 pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};
 }
+#[path = "../src/pages/admin/plugins.rs"]
+mod plugins;
 #[path = "../src/pages/settings/profile.rs"]
 mod profile;
 #[path = "../src/pages/admin/workspace.rs"]
@@ -62,6 +70,7 @@ struct Probe {
     workspace_saves: Rc<RefCell<Vec<String>>>,
     /// The next save's refusal, if any.
     refusal: Rc<RefCell<Option<ServerFnError>>>,
+    plugins: Vec<server_fns::PluginInfo>,
 }
 
 impl Probe {
@@ -91,6 +100,7 @@ impl Probe {
             profile_saves: Rc::default(),
             workspace_saves: Rc::default(),
             refusal: Rc::default(),
+            plugins: Vec::new(),
         }
     }
 
@@ -113,6 +123,11 @@ fn workspace_app(probe: Probe) -> Element {
     use_context_provider(|| probe);
     session::use_session_provider()?;
     rsx! { workspace::WorkspaceSettings {} }
+}
+
+fn plugins_app(probe: Probe) -> Element {
+    use_context_provider(|| probe);
+    rsx! { plugins::WorkspacePlugins {} }
 }
 
 fn mount(app: fn(Probe) -> Element, probe: &Probe) -> VirtualDom {
@@ -274,14 +289,47 @@ async fn a_missing_sign_in_provider_is_named_as_development_sign_in() {
 }
 
 #[tokio::test]
-async fn workspace_settings_list_plugins_with_an_empty_state_for_people() {
-    let html = html(&mount(workspace_app, &Probe::new()));
+async fn the_plugins_page_has_an_empty_state_for_people() {
+    let html = html(&mount(plugins_app, &Probe::new()));
     assert!(html.contains("Plugins"), "{html}");
     assert!(html.contains("No plugins installed"), "{html}");
     assert!(html.contains("Plugins add features to Horae."), "{html}");
     for operator_copy in [".wasm", "plugins/", "HORAE_"] {
         assert!(!html.contains(operator_copy), "{operator_copy}: {html}");
     }
+    assert!(!html.contains("<table"), "{html}");
+}
+
+#[tokio::test]
+async fn the_plugins_page_lists_each_loaded_plugin_in_a_table() {
+    let mut probe = Probe::new();
+    probe.plugins = vec![server_fns::PluginInfo {
+        name: "audit-mirror".into(),
+        version: "1.2.0".into(),
+        hooks: "on_time_entry_saved, on_invoice_sent".into(),
+    }];
+    let html = html(&mount(plugins_app, &probe));
+    assert!(html.contains("aria-label=\"Installed plugins\""), "{html}");
+    for cell in [
+        "audit-mirror",
+        "v1.2.0",
+        "Loaded",
+        "on_time_entry_saved, on_invoice_sent",
+    ] {
+        assert!(html.contains(cell), "{cell}: {html}");
+    }
+    assert!(!html.contains("No plugins installed"), "{html}");
+}
+
+/// Workspace settings is one form with one primary action, and the plugins
+/// are on their own page.
+#[tokio::test]
+async fn workspace_settings_is_one_form_without_the_plugins() {
+    let html = html(&mount(workspace_app, &Probe::new()));
+    assert_eq!(html.matches("btn-primary").count(), 1, "{html}");
+    assert_eq!(html.matches("class=\"card").count(), 1, "{html}");
+    assert!(html.contains("max-w-form"), "{html}");
+    assert!(!html.contains("Plugins"), "{html}");
 }
 
 #[tokio::test]
@@ -433,6 +481,7 @@ mod server_fns {
         Ok("Test workspace".into())
     }
 
+    #[derive(Clone)]
     pub struct PluginInfo {
         pub name: String,
         pub version: String,
@@ -440,7 +489,7 @@ mod server_fns {
     }
 
     pub async fn list_plugins() -> Result<Vec<PluginInfo>, ServerFnError> {
-        Ok(Vec::new())
+        Ok(consume_context::<Probe>().plugins)
     }
 
     pub async fn get_profile_options() -> Result<ProfileOptions, ServerFnError> {
