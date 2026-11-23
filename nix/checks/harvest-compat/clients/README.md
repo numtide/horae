@@ -7,7 +7,7 @@ never sent upstream (D-8).
 
 | Client | Language | Pin | Workflows | Status |
 | --- | --- | --- | --- | --- |
-| [becoded/go-harvest](https://github.com/becoded/go-harvest) | Go | `v0.0.0-20260118095129-1ac13afbeb71` (`go.sum`, `vendorHash`) | who am I, projects, time entries list and get, company, my project assignments; log, edit, start and end times, start (a second start stops the first), stop, restart, delete | runs; reads and writes with a personal access token and `Harvest-Account-Id` |
+| [becoded/go-harvest](https://github.com/becoded/go-harvest) | Go | `v0.0.0-20260118095129-1ac13afbeb71` (`go.sum`, `vendorHash`) | who am I, projects, time entries list and get, company, my project assignments; log, edit, start and end times, start (a second start stops the first), stop, restart, delete; sync of five lists by page and by link, then since an edit | runs; reads and writes with a personal access token and `Harvest-Account-Id` |
 
 Not yet added (research R-10; each is added with the step that first needs it, or dropped here
 with the reason):

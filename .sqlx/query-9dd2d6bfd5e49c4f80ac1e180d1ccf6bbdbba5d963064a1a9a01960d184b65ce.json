@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET name = 'Quick' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9dd2d6bfd5e49c4f80ac1e180d1ccf6bbdbba5d963064a1a9a01960d184b65ce"
+}

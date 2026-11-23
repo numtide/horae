@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH scoped AS MATERIALIZED (\n             SELECT te.id, te.spent_date FROM time_entries te\n             JOIN projects p ON p.id = te.project_id\n             CROSS JOIN LATERAL (SELECT\n               EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id\n                 AND m.manager_id = $8 AND m.managed_user_id = te.user_id) AS person,\n               EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id\n                 AND m.manager_id = $8 AND m.project_id = te.project_id) AS project) managed\n             WHERE te.org_id = $1\n               AND ($11 OR ($9 AND te.user_id = $8) OR ($10 AND (managed.person OR managed.project)))\n               AND ($2::uuid IS NULL OR te.user_id = $2)\n               AND ($3::uuid IS NULL OR te.project_id = $3)\n               AND ($4::date IS NULL OR te.spent_date >= $4::date)\n               AND ($5::date IS NULL OR te.spent_date <= $5::date)\n               AND ($6::bool IS NULL OR te.is_running = $6)\n               AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)\n               AND ($12::uuid IS NULL OR p.client_id = $12)\n               AND ($13::uuid IS NULL OR te.task_id = $13)\n               AND ($14::bool IS NULL OR (te.invoice_id IS NOT NULL) = $14)\n               AND ($15::text[] IS NULL OR te.state::text = ANY($15))\n               AND $16::text IS NULL\n               AND te.updated_at < $17\n           ), totals AS (\n             SELECT COUNT(*) total,\n               CASE WHEN $19::uuid IS NULL THEN $21\n                 WHEN $20 THEN GREATEST(COUNT(*) FILTER (WHERE (spent_date, id) > ($18, $19)) - $22, 0)\n                 ELSE COUNT(*) FILTER (WHERE (spent_date, id) >= ($18, $19)) END start,\n               CASE WHEN $19::uuid IS NOT NULL AND $20\n                 THEN LEAST(COUNT(*) FILTER (WHERE (spent_date, id) > ($18, $19)), $22)\n                 ELSE $22 END take\n             FROM scoped\n           )\n           SELECT total AS \"total!\", start AS \"start!\",\n             ARRAY(SELECT id FROM scoped ORDER BY spent_date DESC, id DESC\n                   LIMIT (SELECT take FROM totals) OFFSET (SELECT start FROM totals)) AS \"ids!\"\n           FROM totals",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "start!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "ids!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "TextArray",
+        "Text",
+        "Timestamptz",
+        "Date",
+        "Uuid",
+        "Bool",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "082fd5c07f7f7c287f85035a721e02860c9e5299028cf6dfe9a6532c560b4482"
+}
