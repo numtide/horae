@@ -4,12 +4,15 @@ Sync Impact Report
 - Bump rationale: MINOR. Principle IV's "Token-authenticated APIs" clause gains one bounded
   exception: the OAuth2 token and revocation endpoints may redeem codes and refresh tokens and
   revoke tokens without a session. No principle is removed or redefined. Approved by the
-  maintainer on 2026-11-22 (specs/024-oauth-pkce/constitution-amendment.md, applied verbatim).
+  maintainer on 2026-11-22, with the token being revoked added to the list of credentials on
+  2026-11-23 before 7.1.0 was published (specs/024-oauth-pkce/constitution-amendment.md,
+  applied verbatim).
 - Modified principles:
   - IV. Mutations Through Shared Operations: the last bullet of "Token-authenticated APIs" now
     lets the OAuth2 token and revocation endpoints call the shared OAuth operations with the
-    presented credential as their authority, and bounds what they may write. The rationale
-    gains one sentence.
+    presented credential as their authority (a code with its PKCE verifier, a refresh token, a
+    client's secret, or, for revocation only, the token being revoked, as RFC 7009 lets an app
+    without a secret do), and bounds what they may write. The rationale gains one sentence.
 - Added sections: none
 - Removed sections: none
 - Templates checked:
@@ -284,10 +287,11 @@ as a hash, and bound to one person in one organization.
   shared OAuth operations, without a session, to exchange an authorization code for tokens,
   exchange a refresh token for new tokens, and revoke a token, with the presented credential as
   their authority: a single-use code together with its PKCE verifier, a single-use refresh
-  token, or a client's secret. They MUST NOT create or widen an authorization (only a person's
-  approval through a server function does), MUST NOT issue a token with more scopes than that
-  approval, MUST NOT write anything but OAuth credential and authorization state and its audit
-  records, and MUST store every credential only as a hash.
+  token, a client's secret, or, for revocation only, the token being revoked. They MUST NOT
+  create or widen an authorization (only a person's approval through a server function does),
+  MUST NOT issue a token with more scopes than that approval, MUST NOT write anything but OAuth
+  credential and authorization state and its audit records, and MUST store every credential
+  only as a hash.
 
 Other additional surfaces (exports, health, plugin hosts) are permitted but MUST NOT mutate.
 
@@ -376,4 +380,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 7.1.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-22
+**Version**: 7.1.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-23
