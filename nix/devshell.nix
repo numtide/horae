@@ -31,9 +31,7 @@ pkgs.mkShell {
     migrate
     nil
     typst
-  ]
-  # `cargo kani -p horae-core`; Kani is packaged for Linux only.
-  ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux perSystem.self.kani;
+  ];
   shellHook = ''
     # Serves both local database options: the `process-compose up` stack and
     # the port forwarded by `nix run .#postgres`.
