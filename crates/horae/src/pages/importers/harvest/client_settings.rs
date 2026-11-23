@@ -150,14 +150,14 @@ pub(super) fn HarvestOAuthApp(
     let remove_current = current.clone();
 
     rsx! {
-        div { class: "flex flex-col gap-5",
+        div { class: "flex flex-col gap-5 max-w-form",
             div { class: "alert alert-warning mb-0",
                 p { class: "font-semibold", "One-time setup" }
                 p { class: "text-sm mt-1",
                     "Register Horae once as an OAuth2 app in Harvest, then connect your Harvest account from the importer."
                 }
             }
-            section { class: "card p-0 overflow-hidden max-w-form", aria_label: "Harvest OAuth2 app",
+            section { class: "card p-0 overflow-hidden", aria_label: "Harvest OAuth2 app",
                 div { class: "flex items-center gap-3 flex-wrap px-5 py-4 border-b",
                     span { class: "integration-logo harvest", "h" }
                     h2 { class: "card-title m-0", "Harvest OAuth2 app" }

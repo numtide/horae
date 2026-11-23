@@ -33,7 +33,7 @@ pub(super) fn BillingTable(report: ImportReport) -> Element {
         ImportMode::Commit => tr.harvest_billing_title(),
     };
     rsx! {
-        Card { title, id: "billing-title", class: "mt-6 flex flex-col gap-3",
+        Card { title, id: "billing-title", class: "mt-6 flex flex-col gap-4",
             if report.invoice_scan == Some(EntryScan::Full) && report.source == SourceKind::HarvestApi {
                 p { class: "text-sm text-secondary", {tr.harvest_billing_full_scan()} }
             }

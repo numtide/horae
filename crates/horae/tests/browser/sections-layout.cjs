@@ -130,6 +130,7 @@ const screens = [
     const name = (await form.getByLabel('Name', { exact: true }).boundingBox());
     const expiry = (await form.locator('#api-token-expiry').boundingBox());
     const create = (await form.getByRole('button', { name: 'Create token' }).boundingBox());
+    await expect(form.getByText('Name it after what will use it')).toBeVisible();
     for (const box of [expiry, create]) {
       assert.ok(Math.abs(box.y + box.height - (name.y + name.height)) <= 1, 'the row lines up on its controls');
     }

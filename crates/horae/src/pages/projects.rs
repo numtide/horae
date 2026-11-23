@@ -1784,7 +1784,7 @@ fn SavedProjectDetails(project: ProjectDetails) -> Element {
                     }
                 }
                 if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
-                    div { dt { class: "text-sm text-subtle", "Administrator notes" }
+                    div { class: "col-span-full", dt { class: "text-sm text-subtle", "Administrator notes" }
                         dd { class: "m-0",
                             for line in notes.lines() { p { class: "m-0", "{line}" } }
                         }

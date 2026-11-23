@@ -197,6 +197,7 @@ fn families() -> Vec<Family> {
                     "grid-cols-7",
                     "grid-template-columns: repeat(7, minmax(0, 1fr))",
                 ),
+                ("col-span-full", "grid-column: 1 / -1"),
             ],
         ),
         spacing_family(),

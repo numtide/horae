@@ -175,6 +175,7 @@ api-tokens-title = API tokens
 api-tokens-intro = A token lets a script or another app use { -brand } as you, with your access. Treat it like a password. The API is described in <link>its OpenAPI document</link>.
 api-tokens-list-label = Your tokens
 api-tokens-form-label = New token
+api-tokens-name-hint = Name it after what will use it, such as “Calendar sync”.
 api-tokens-empty = No tokens yet
 api-tokens-empty-hint = Create a token to let a script or another app use { -brand } on your behalf.
 api-tokens-revoke-title = Revoke “{ $name }”?

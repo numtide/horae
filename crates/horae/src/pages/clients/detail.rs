@@ -300,7 +300,7 @@ fn ClientInvoices(client_id: Uuid) -> Element {
     let ready = invoices.state()() == UseResourceState::Ready;
     let data = invoices.read();
     rsx! {
-        Card { title: "Invoices", id: "client-invoices-title", class: "min-w-0",
+        Card { title: "Invoices", id: "client-invoices-title", focusable: true, class: "min-w-0",
             if !ready && !matches!(&*data, Some(Err(_))) {
                 Loading { label: "Loading invoices…" }
             } else if let Some(Ok(rows)) = &*data {

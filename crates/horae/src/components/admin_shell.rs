@@ -18,10 +18,11 @@ enum Section {
 }
 
 impl Section {
-    /// The section page's own title, for the header of its no-access state.
+    /// The title of the no-access state. It has no subnav to give context, so
+    /// Settings takes its full name.
     fn title(self, tr: Tr) -> String {
         match self {
-            Section::Settings => tr.workspace_settings_title(),
+            Section::Settings => tr.workspace_settings_form_label(),
             Section::Plugins => tr.workspace_plugins_title(),
             Section::Audit => "Audit log".into(),
             Section::Importers => "Importers".into(),

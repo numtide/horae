@@ -2,13 +2,15 @@ use dioxus::prelude::*;
 
 /// One section of a screen: a `.card` panel with its title as an
 /// `h2.card-title`, which names the section. Without a title it is a plain
-/// panel. `id` goes on the title, so a link or a retry can focus it; `flush`
-/// drops the padding for a table or a list that draws its own rows; `class`
-/// adds layout utilities such as `max-w-form` or a margin.
+/// panel. `id` goes on the title and labels the section; `focusable` lets a
+/// retry move focus to that title; `flush` drops the padding for a table or a
+/// list that draws its own rows; `class` adds layout utilities such as
+/// `max-w-form` or a margin.
 #[component]
 pub fn Card(
     #[props(into, default)] title: Option<String>,
     #[props(into, default)] id: Option<String>,
+    #[props(default)] focusable: bool,
     #[props(default)] flush: bool,
     #[props(into, default)] class: String,
     children: Element,
@@ -26,7 +28,7 @@ pub fn Card(
     } else {
         "card-title"
     };
-    let tabindex = id.as_ref().map(|_| "-1");
+    let tabindex = focusable.then_some("-1");
     rsx! {
         section { class, aria_label: if id.is_none() { Some(title.clone()) } else { None },
             aria_labelledby: id.clone(),

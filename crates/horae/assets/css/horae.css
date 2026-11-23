@@ -807,6 +807,8 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0 0 var(--space-4);
   color: var(--color-text);
 }
+/* A card that spaces its children with a gap spaces its title the same way. */
+.card.flex-col > .card-title { margin-bottom: 0; }
 
 /* Buttons — control-lg is 44px tall (12px vertical padding over 14px/1.5 text).
    Brand fills brighten on hover with a soft glow; neutral controls lift a shade
@@ -957,6 +959,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .form-group { margin-bottom: var(--space-4); }
+/* A form laid out as one row (fields and their button, aligned on the controls). */
+.form-row .form-group { margin-bottom: 0; }
 .form-label { display: block; font-size: var(--font-size-sm); font-weight: 500; margin-bottom: var(--space-1); color: var(--color-text); }
 .form-input, .form-select, .form-textarea {
   width: 100%;

@@ -100,11 +100,10 @@ pub fn SettingsApiTokens() -> Element {
         }
         // Name, expiry and the button on one row, aligned on the controls.
         section { class: "card max-w-form mb-6", aria_label: tr.api_tokens_form_label(),
-            div { class: "flex flex-wrap items-end gap-3",
+            div { class: "form-row flex flex-wrap items-end gap-3",
                 div { class: "flex-1 min-w-0",
                     FormGroup { label: "Name", id: "api-token-name",
                         Input { id: "api-token-name", value: name(), disabled: creating(),
-                            placeholder: "What will use it, such as “Calendar sync”",
                             error_id: error().map(|_| "api-token-error".to_string()),
                             oninput: edit_name,
                         }
@@ -115,14 +114,15 @@ pub fn SettingsApiTokens() -> Element {
                         disabled: creating(), onchange: pick_expiry,
                     }
                 }
-                button { id: "api-token-create", r#type: "button", class: "btn btn-primary mb-4",
+                button { id: "api-token-create", r#type: "button", class: "btn btn-primary",
                     disabled: creating() || name.read().trim().is_empty(),
                     onclick: create,
                     if creating() { "Creating…" } else { "Create token" }
                 }
             }
+            p { class: "form-hint mb-0", {tr.api_tokens_name_hint()} }
             if let Some(message) = error() {
-                p { id: "api-token-error", class: "alert alert-danger mb-0", role: "alert", "{message}" }
+                p { id: "api-token-error", class: "alert alert-danger mt-4 mb-0", role: "alert", "{message}" }
             }
         }
         section { aria_label: tr.api_tokens_list_label(),
