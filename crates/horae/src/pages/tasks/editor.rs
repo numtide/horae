@@ -46,6 +46,7 @@ fn TaskForm(
     on_saved: EventHandler<String>,
     on_denied: EventHandler<()>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut name = use_signal(|| {
         selection
             .task
@@ -123,7 +124,7 @@ fn TaskForm(
                 p { class: "form-hint", "Changes to defaults apply when adding the task to projects; existing project settings stay unchanged." }
                 if let Some(currency) = &selection.rate_currency {
                     if let Some(task) = &selection.task {
-                        p { class: "text-sm text-secondary mt-3", "Current default: {rate_label(task.default_rate_cents, task.default_rate_currency.as_deref())}" }
+                        p { class: "text-sm text-secondary mt-3", "Current default: {rate_label(tr, task.default_rate_cents, task.default_rate_currency.as_deref())}" }
                         FormGroup { id: "task-rate-action", label: "Default hourly rate",
                             select { id: "task-rate-action", class: "form-select", disabled: busy(), value: rate_action(),
                                 onchange: move |event| rate_action.set(event.value()),

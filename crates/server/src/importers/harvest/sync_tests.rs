@@ -338,7 +338,8 @@ async fn parent_catalog_preserves_metadata_and_counts_each_entity_once(pool: PgP
         .fetch_one(&pool)
         .await
         .unwrap(),
-        Some(0)
+        None,
+        "Harvest's zero default rate is stored as no rate"
     );
     let stamp = sqlx::query_scalar!(r#"SELECT harvest_updated_at as "harvest_updated_at: DateTime<Utc>" FROM harvest_import_map WHERE org_id = $1 AND harvest_entity_type = 'client' AND harvest_import_id = 1"#, org).fetch_one(&pool).await.unwrap();
     assert_eq!(stamp, Some(day(1)));

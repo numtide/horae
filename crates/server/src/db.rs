@@ -432,4 +432,61 @@ mod tests {
         assert!(changed.task > before.task);
         assert!(changed.entry > before.entry);
     }
+
+    /// `zero_task_rates` clears a zero rate without a currency, the Harvest
+    /// importer's "no rate", and keeps every other rate.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn zero_task_rates_without_currency_become_no_rate(pool: sqlx::PgPool) {
+        let ids = crate::testing::seed_tenant(&pool).await;
+        let rates = [
+            ("Imported zero", Some(0), None),
+            ("Zero in EUR", Some(0), Some("EUR")),
+            ("Imported rate", Some(8000), None),
+            ("No rate", None, None),
+        ];
+        for (name, cents, currency) in rates {
+            sqlx::query!(
+                "INSERT INTO tasks (id, org_id, name, default_rate_cents, default_rate_currency)
+                 VALUES ($1, $2, $3, $4, $5)",
+                uuid::Uuid::now_v7(),
+                ids.org_id,
+                name,
+                cents,
+                currency,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let repair = super::MIGRATOR
+            .iter()
+            .find(|migration| migration.description == "zero task rates")
+            .expect("the zero_task_rates migration");
+        sqlx::raw_sql(&repair.sql).execute(&pool).await.unwrap();
+
+        let stored = sqlx::query!(
+            "SELECT name, default_rate_cents, default_rate_currency FROM tasks
+              WHERE org_id = $1 AND name <> 'Dev' ORDER BY id",
+            ids.org_id,
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            stored
+                .iter()
+                .map(|task| (
+                    task.name.as_str(),
+                    task.default_rate_cents,
+                    task.default_rate_currency.as_deref()
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("Imported zero", None, None),
+                ("Zero in EUR", Some(0), Some("EUR")),
+                ("Imported rate", Some(8000), None),
+                ("No rate", None, None),
+            ]
+        );
+    }
 }
