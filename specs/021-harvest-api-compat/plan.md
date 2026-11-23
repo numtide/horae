@@ -181,8 +181,9 @@ API's response shapes and exact decimals in `v2::compat` (`crates/harvest/src/v2
 moved there from the app's `harvest/types.rs` and `harvest/decimal_json.rs`), beside the
 importer's `v2` resource types; they share a type only where the schema is the same. Handlers and
 request id resolution are in `horae-harvest-api` (`crates/harvest-api/`), which reuses
-`horae-api` for token authentication, the rate limiter and the cursor key; the operations and
-everything else with sqlx are in `horae-server`.
+`horae-api` for token authentication and the rate limiter, and takes the cursor key
+(`horae_server::config::CursorKey`) from `horae-server`, where the operations and everything
+else with sqlx live.
 
 ## PR split
 

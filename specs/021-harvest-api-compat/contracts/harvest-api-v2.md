@@ -113,8 +113,12 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   per user assignment of that person whose project they can track now (the Timesheet's rule:
   active project, client and task). `id` is the user assignment's; `task_assignments` holds the
   task assignments the person may track, so a restricted task appears only for its members.
-  The lists take `cursor` and `updated_since` (on the user assignment) from step 5; step 4
-  refused both with 422.
+  The lists take `cursor` and `updated_since` from step 5; step 4 refused both with 422.
+- `updated_since` and the entry's `updated_at` are the user assignment's, as on Harvest, where
+  the project assignment is the user assignment object. A change to a nested task assignment
+  moves that task assignment's own `updated_at`, not the entry's; a client syncing task changes
+  reads `/task_assignments?updated_since=…`. A change to who may track a restricted task moves
+  neither, so a client that needs it re-reads the list.
 - The ids differ from the ones step 3 served (project and task ids). Clients that cached them
   get new ones once; the release notes say so.
 - **An administrator's projects without an assignment row are left out** (decided by the
@@ -124,12 +128,15 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   partly reverses the 2026-11-19 decision in step 3's row above, which listed every pair the
   Timesheet offers. With real assignment ids, keeping those pairs would need a table of
   administrator and project pairs kept by triggers: more schema for a case Harvest does not
-  have. The demo administrator and imported administrators have assignment rows.
+  have. The demo administrator has assignment rows. The Harvest importer creates none, so
+  imported people, the administrator included, would have empty lists; how they get rows is a
+  question open with the maintainer, and T042 waits for the answer.
 - User assignment fields: `id`; `project` (`id`, `name`, `code`); `user` (`id`, `name`);
   `is_active` true (Horae does not archive an assignment, so `is_active=false` lists nothing);
   `is_project_manager` from `project_management_assignments`; `use_default_rates` true when the
-  row has no rate; `hourly_rate` from the row's rate, shown only with `BillableRateReadAll`,
-  else `null`; `budget` in hours from `project_member_budgets` when the project budgets per
+  row has no rate; `hourly_rate` from the row's rate, shown with `BillableRateReadAll`, or with
+  `BillableRateReadManaged` on a project the caller manages (the project reads' rule), else
+  `null`; `budget` in hours from `project_member_budgets` when the project budgets per
   person, else `null`; `created_at`, `updated_at`.
 - Task assignment fields: `id`; `project`; `task` (`id`, `name`); `is_active` and `billable` from
   the row; `hourly_rate` from the row's rate under the same grant; `budget` from
@@ -138,7 +145,9 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 - Who reads them: the per-project and account-wide lists cover the projects the caller may read
   (`ProjectReadAll`, or the projects they manage). `/users/{id}/project_assignments` needs
   authority over that person (`PeopleReadAll`, or managing them); anyone reads their own through
-  `users/me`. A user filter naming someone the caller may not see lists nothing.
+  `users/me`. A person the caller may not see is 404, as `GET /users/{id}` answers, so the
+  status does not reveal who exists; a person they see but lack authority over is 403. A user
+  filter naming someone the caller may not see lists nothing.
 - Time entries gain `user_assignment` and `task_assignment` (`id` and the nested ids Harvest
   documents), `null` when the row does not exist (an administrator without an assignment, or a
   task removed from the project since).
@@ -149,7 +158,7 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   may not see is 404.
 - `GET /users/{id}/teammates`: the people that user manages (`person_management_assignments`),
   with `id`, `first_name`, `last_name` and `email`; the caller needs `PeopleReadAll` or to be
-  that user.
+  that user. A user the caller may not see is 404; one they see without that authority is 403.
 - Tags are not served. The public API v2 reference has no tags resource (checked 2026-11-22),
   so there is no documented shape to serve; FR-044 item 4 was amended to match on 2026-11-23.
 
@@ -180,24 +189,29 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   `estimate`, `retainer`, `recurring_invoice_id`, `client_key` `null` and `payment_options`
   empty, because Horae records none of them; `created_at`, `updated_at`.
 - Money uses the invoice's currency decimals through `Amount`, as everywhere in this API.
-- `line_items`, in invoice order:
+- `line_items`, Horae's lines in `id` order (the invoice detail's order; the table has no
+  position column) and imported lines by `position`:
   - Horae's time lines (one per time entry today): `kind` `Service`, `description`, `quantity`
     the line's minutes in hours (half up, two decimals), `unit_price` the rate, `amount`,
     `project` of the entry.
-  - Horae's fee lines: `quantity` 1, `unit_price` and `amount` the fee, `project` of the fee.
+  - Horae's fee lines: `kind` `Service`, the line's `description`, `quantity` 1, `unit_price`
+    and `amount` the fee, `project` of the fee.
   - On both, `taxed` is true when the invoice has a first tax and `taxed2` when it has a second,
     since Horae taxes the whole subtotal. `amount` is authoritative; `quantity × unit_price`
     may differ from it by rounding, as on Harvest.
   - Imported lines (`harvest_invoice_lines`): their stored kind, description, quantity, unit
     price, amount, taxed flags and project.
-- Harvest documents `period_start` and `period_end` as the start and end of the period during
-  which the invoice's time entries were added (checked 2026-11-22). Horae's own invoices serve
+- On Harvest, `period_start` and `period_end` bound the dates of the work an invoice bills
+  (checked 2026-11-22); imported invoices serve them as Harvest stored them. Horae's own invoices serve
   `null` for both for now (decided 2026-11-23): Horae stores no period, and deriving one from
   the lines' dates can come later.
 - Filters: `client_id`, `project_id` (invoices with a line for that project), `state` (one
   value, `draft`, `open`, `paid` or `closed`, as Harvest's filter takes one; checked
-  2026-11-22), `from` and `to` (on `issue_date`), `updated_since`. Keyed by id, newest
-  first.
+  2026-11-22), `from` and `to` (on `issue_date`), `updated_since`.
+- Order: newest `issue_date` first, keyed by `(issue_date, id)` as time entries are keyed by
+  `(spent_date, id)`. Keying by id alone would put every invoice of an import at the top, since
+  spec 025 creates them at import time. Harvest's own order is still to be confirmed against
+  the public reference (T062).
 - `updated_at` moves when the invoice row or any of its lines changes.
 - `GET /invoices/{id}/payments` is an empty list with the full envelope; Horae has no payment
   records yet. An unknown or void invoice is 404.
@@ -222,18 +236,21 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
   `client_id` and `client_name`), `total_hours` (rounded minutes), `billable_hours`,
   `currency`, `billable_amount` (`null` when the caller may not read a rate in the group, the
   report's own rule). Team rows add `is_contractor` false, `weekly_capacity` and `avatar_url`
-  `null`. `include_fixed_fee` is accepted and changes nothing: Horae prices no time on
-  fixed-fee projects. Who reads them: the report's grants (`TimeReadAll` or `TimeReadManaged`).
+  `null`. `include_fixed_fee` is accepted and, until its meaning on the time reports is checked
+  against the public reference (T062), changes nothing: Horae prices no time on fixed-fee
+  projects. If the reference says `false` leaves fixed-fee projects out, those rows are dropped
+  instead. Who reads them: the report's grants (`TimeReadAll` or `TimeReadManaged`).
 - `/reports/uninvoiced`: one row per project with billable, uninvoiced time in the range, using
   the eligibility of the Uninvoiced view (PR #453: billable, stopped, not invoiced, open or
   approved). Fields: `client_id`, `client_name`, `project_id`, `project_name`, `currency`,
   `total_hours` (all of the project's time in the range), `uninvoiced_hours`,
   `uninvoiced_expenses` 0, `uninvoiced_amount`. `include_fixed_fee` (default true, as on
-  Harvest) adds a fixed-fee project's uninvoiced fee to its `uninvoiced_amount` when the range
-  is on or after the project's start date, and 0 otherwise; the fee due is what the Uninvoiced
-  view counts for that project. With `include_fixed_fee=false` the amount is time only. Who
-  reads it: the invoice read and preparation grants, as the Uninvoiced
-  view.
+  Harvest) adds a fixed-fee project's uninvoiced fees to its `uninvoiced_amount` when `to` is
+  on or after the project's start date, and 0 otherwise. The fees counted are the ones the
+  Uninvoiced view counts as due, with due dates on or before the earlier of `to` and the
+  organization's today. With `include_fixed_fee=false` the amount is time only. Projects of
+  inactive clients are left out, as the Uninvoiced view leaves them out. Who reads it: the
+  invoice read and preparation grants, as the Uninvoiced view.
 - `/reports/project_budget`: one row per project with a budget, from
   `ops::projects::budget_progress`. Its only parameters are `page`, `per_page` and `is_active`. Fields: `project_id`,
   `project_name`, `client_id`, `client_name`, `is_active`, `budget_is_monthly` (monthly reset),
@@ -253,7 +270,10 @@ Planned, not implemented. Lists follow step 4: keyed by id newest first with `cu
 | project assignments, user and task assignments, `/users/{id}`, teammates | `catalog:read` |
 | invoices, invoice payments, `/reports/*` | none: OAuth tokens are refused with `insufficient_scope` (024 FR-063) |
 
-Personal access tokens and session reads are unaffected (024 FR-064).
+Personal access tokens and session reads are unaffected (024 FR-064). No scope covers rates
+(024 FR-063), so an OAuth token reads `hourly_rate: null` on user and task assignments whatever
+its owner's rate grants. Whether a time entry's `invoice` reference (`id`, `number`) is served
+under `time:read` is a question open with the maintainer.
 
 ## Write semantics (step 3, FR-030–FR-032)
 
