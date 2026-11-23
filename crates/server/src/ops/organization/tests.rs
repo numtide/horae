@@ -585,6 +585,29 @@ async fn the_workspace_zone_needs_company_write(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_settings_pages_need_company_write(pool: PgPool) {
+    for (who, allowed) in [
+        (Who::Profile(Administrator), true),
+        (Who::Grants(&[CompanyWrite]), true),
+        (Who::Profile(ExecutiveManager), false),
+        (Who::Profile(Member), false),
+        (Who::Grants(&[CompanyRead]), false),
+    ] {
+        let ids = fixture(&pool, who).await;
+        let read = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+            .await
+            .unwrap();
+        let result = require_settings(&read.actor);
+        let result = read.finish(result).await;
+        if allowed {
+            result.unwrap();
+        } else {
+            assert_forbidden(result, who);
+        }
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_administrator_of_another_organization_cannot_change_the_zone(pool: PgPool) {
     let ours = administrator(&pool).await;
     let theirs = administrator(&pool).await;

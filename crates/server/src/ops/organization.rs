@@ -2,8 +2,8 @@
 //! invoice defaults) and the workspace time zone.
 //!
 //! Branding needs `InvoiceWriteAll`, to read as well as to save: it is the
-//! invoice settings page, which has no read-only form. The time zone needs
-//! `CompanyWrite`.
+//! invoice settings page, which has no read-only form. The time zone, and
+//! reading the workspace settings pages (Plugins), need `CompanyWrite`.
 //!
 //! [`super::begin`] holds the organization row `FOR SHARE` for the whole
 //! transaction, so the row read here cannot change before the write. Two saves
@@ -166,6 +166,12 @@ fn branding_values(branding: &OrgBranding) -> [&Option<String>; 12] {
         &branding.invoice_notes,
         &branding.invoice_payment_terms,
     ]
+}
+
+/// Allows the workspace settings pages, Plugins included, to someone with
+/// `CompanyWrite`; the plugin list is read through this check.
+pub fn require_settings(actor: &Actor) -> Result<(), OpError> {
+    authorize(actor, Permission::CompanyWrite, COMPANY_REQUIRED)
 }
 
 /// Changes the time zone every person without their own follows.
