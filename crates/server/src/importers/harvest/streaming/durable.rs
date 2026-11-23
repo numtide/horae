@@ -309,7 +309,8 @@ fn fetch(
                 fetch_pages(&mut http, (access, account), &mut download, pages, |page| {
                     window.see(&page);
                     Rows::Invoices(page)
-                })?
+                })
+                .map_err(super::super::ApiImportError::on_invoices)?
             }
             Collection::TimeEntries => fetch_pages(
                 &mut http,

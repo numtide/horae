@@ -525,6 +525,13 @@ pub struct ImportReport {
     /// Imported invoices Harvest no longer lists, left as they are (FR-014).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub invoices_no_longer_listed: u64,
+    /// Imported invoices Harvest turned back into drafts, voided by this run.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub invoices_voided_drafts: u64,
+    /// Imported invoices Harvest deleted, removed because a new Harvest
+    /// invoice took their number.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub invoices_removed: u64,
     /// API runs only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invoice_scan: Option<EntryScan>,
@@ -565,6 +572,10 @@ struct ImportReportWire {
     #[serde(default)]
     invoices_no_longer_listed: u64,
     #[serde(default)]
+    invoices_voided_drafts: u64,
+    #[serde(default)]
+    invoices_removed: u64,
+    #[serde(default)]
     invoice_scan: Option<EntryScan>,
     error_archive: Option<ErrorArchive>,
 }
@@ -598,6 +609,8 @@ impl TryFrom<ImportReportWire> for ImportReport {
             omitted_link_conflicts: wire.omitted_link_conflicts,
             invoices_skipped_drafts: wire.invoices_skipped_drafts,
             invoices_no_longer_listed: wire.invoices_no_longer_listed,
+            invoices_voided_drafts: wire.invoices_voided_drafts,
+            invoices_removed: wire.invoices_removed,
             invoice_scan: wire.invoice_scan,
             error_archive: wire.error_archive,
         };
@@ -623,6 +636,8 @@ impl ImportReport {
             omitted_link_conflicts: 0,
             invoices_skipped_drafts: 0,
             invoices_no_longer_listed: 0,
+            invoices_voided_drafts: 0,
+            invoices_removed: 0,
             invoice_scan: None,
             error_archive: None,
         }

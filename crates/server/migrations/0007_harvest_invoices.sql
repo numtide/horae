@@ -73,3 +73,8 @@ CREATE TABLE harvest_invoice_lines (
 );
 
 CREATE INDEX harvest_invoice_lines_project_id_idx ON harvest_invoice_lines (project_id);
+
+-- A job stopped because the connected Harvest user cannot read invoices.
+ALTER TABLE horae_jobs DROP CONSTRAINT horae_jobs_error_kind_check,
+    ADD CONSTRAINT horae_jobs_error_kind_check CHECK (error_kind = ANY (ARRAY[
+        'reconnect_required', 'forbidden', 'invoices_forbidden', 'unavailable']));

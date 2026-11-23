@@ -524,6 +524,11 @@ async fn a_stopped_run_says_what_to_do_for_each_error_kind() {
             "Reconnect as another user",
         ),
         (
+            models::JobErrorKind::InvoicesForbidden,
+            "invoices, which the import needs",
+            "Reconnect as another user",
+        ),
+        (
             models::JobErrorKind::Unavailable,
             "respond after several tries",
             "Continue preview",
@@ -544,7 +549,10 @@ async fn a_stopped_run_says_what_to_do_for_each_error_kind() {
         assert!(!html.contains("raw provider text"), "{html}");
         // A stopped preview can always be replaced by a new one.
         assert!(html.contains("data-testid=\"new-preview\""), "{html}");
-        if kind == models::JobErrorKind::Forbidden {
+        if matches!(
+            kind,
+            models::JobErrorKind::Forbidden | models::JobErrorKind::InvoicesForbidden
+        ) {
             assert!(html.contains("Harvest account 1000001"), "{html}");
         }
     }

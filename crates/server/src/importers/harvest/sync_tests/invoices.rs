@@ -812,7 +812,7 @@ async fn invoice_errors_name_the_reason_and_leave_their_time_billed(pool: PgPool
     let mut precise = invoice(201, "2001", "open", &["10.005"], "10.005", "0");
     precise["line_items"][0]["unit_price"] = num("10.00");
     let mut currency = invoice(202, "2002", "open", &["10.00"], "10.00", "0");
-    currency["currency"] = json!("usd");
+    currency["currency"] = json!("XYZ");
     let mut client = invoice(203, "2003", "open", &["10.00"], "10.00", "0");
     client["client"] = json!({"id": 77});
     let mut long_subject = invoice(206, "2006", "open", &["10.00"], "10.00", "0");
@@ -898,12 +898,25 @@ async fn an_invoice_back_to_draft_reopens_its_time(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(report.summary.links.unlinked, 1);
+    assert_eq!(report.invoices_voided_drafts, 1);
+    assert_eq!(report.invoices_skipped_drafts, 1);
     let ten = billing(&pool, org)
         .await
         .into_iter()
         .find(|(id, ..)| *id == 10);
     assert_eq!(ten, Some((10, EntryState::Open, None, None)));
     assert!(provenance_current(&pool, org, 10).await);
+    assert_eq!(
+        invoice_status(&pool, org, "1001").await,
+        InvoiceStatus::Void
+    );
+    // The draft's version is kept, so only a later change in Harvest has
+    // the next run read every entry again.
+    let mut conn = pool.acquire().await.unwrap();
+    let voided = super::super::invoices::voided_versions(&mut conn, org)
+        .await
+        .unwrap();
+    assert_eq!(voided, [(100, day(5))]);
 
     // A full read of the same entries finds nothing left to do.
     let mut full = source.clone();
@@ -913,6 +926,8 @@ async fn an_invoice_back_to_draft_reopens_its_time(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(report.summary.links.unlinked, 0);
+    assert_eq!(report.invoices_voided_drafts, 0);
+    assert_eq!(report.invoices_skipped_drafts, 2);
     assert!(
         report
             .row_errors
@@ -921,6 +936,97 @@ async fn an_invoice_back_to_draft_reopens_its_time(pool: PgPool) {
         "{:?}",
         report.row_errors
     );
+    assert_eq!(
+        invoice_status(&pool, org, "1001").await,
+        InvoiceStatus::Void
+    );
+
+    // Issued again, it comes back as a changed invoice and bills its time.
+    let mut issued = source.clone();
+    issued.invoices[0].updated_at = day(8);
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &issued, day(9))
+        .await
+        .unwrap();
+    assert_eq!(report.summary.invoices.updated, 1);
+    assert_eq!(
+        invoice_status(&pool, org, "1001").await,
+        InvoiceStatus::Sent
+    );
+    let linked = billing(&pool, org).await;
+    assert!(linked.iter().any(|(id, state, number, _)| {
+        *id == 10 && *state == EntryState::Invoiced && number.as_deref() == Some("1001")
+    }));
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &issued, day(10))
+        .await
+        .unwrap();
+    assert_eq!(report.summary.invoices.updated, 0);
+    assert_eq!(report.summary.links.unlinked, 0);
+    assert_eq!(billing(&pool, org).await, linked);
+    assert_eq!(
+        invoice_status(&pool, org, "1001").await,
+        InvoiceStatus::Sent
+    );
+}
+
+async fn invoice_status(pool: &PgPool, org: Uuid, number: &str) -> InvoiceStatus {
+    sqlx::query_scalar!(
+        r#"SELECT status AS "status: InvoiceStatus" FROM invoices
+           WHERE org_id = $1 AND number = $2"#,
+        org,
+        number,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// An invoice deleted in Harvest whose number a new Harvest invoice takes:
+/// Horae's copy and its links give way to the new one (Q13).
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_deleted_invoice_gives_its_number_to_the_next(pool: PgPool) {
+    let org = setup(&pool).await;
+    let source = fixture();
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+
+    let mut next = source.clone();
+    next.invoices[0].id = 106;
+    next.invoices[0].updated_at = day(5);
+    next.time_entries = serde_json::from_value(json!([entry(10, 10, Some(106))])).unwrap();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(6))
+        .await
+        .unwrap();
+    assert_eq!(report.invoices_removed, 1);
+    assert_eq!(report.summary.invoices.created, 1);
+    assert!(
+        report
+            .row_errors
+            .iter()
+            .all(|error| !error.source_location.contains("1001")),
+        "{:?}",
+        report.row_errors
+    );
+    let holder = sqlx::query_scalar!(
+        "SELECT h.harvest_invoice_id FROM invoices i JOIN harvest_invoices h ON h.invoice_id = i.id
+         WHERE i.org_id = $1 AND i.number = '1001'",
+        org,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(holder, [106]);
+    let linked = billing(&pool, org).await;
+    assert!(linked.iter().any(|(id, state, number, _)| {
+        *id == 10 && *state == EntryState::Invoiced && number.as_deref() == Some("1001")
+    }));
+
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(7))
+        .await
+        .unwrap();
+    assert_eq!(report.invoices_removed, 0);
+    assert_eq!(report.summary.invoices.created, 0);
+    assert_eq!(billing(&pool, org).await, linked);
 }
 
 /// A CSV that bills an entry an API run imported keeps its provenance

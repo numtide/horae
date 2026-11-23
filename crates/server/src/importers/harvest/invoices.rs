@@ -91,9 +91,19 @@ pub(super) async fn apply_batch(
         let status = match invoice::map_state(&source.state) {
             Ok(Mapped::Skip) => {
                 cache.set_invoice(source.id, InvoiceSlot::Draft);
-                report.invoices_skipped_drafts += 1;
-                if let Some((id, ..)) = existing(tx, org_id, source.id).await? {
-                    report.summary.links.unlinked += reopen_time(tx, org_id, id).await?;
+                match existing(tx, org_id, source.id).await? {
+                    Some((id, status, version)) => {
+                        if status == InvoiceStatus::Void {
+                            report.invoices_skipped_drafts += 1;
+                        } else {
+                            report.summary.links.unlinked += reopen_time(tx, org_id, id).await?;
+                            report.invoices_voided_drafts += 1;
+                        }
+                        if status != InvoiceStatus::Void || version != source.updated_at {
+                            void_as_draft(tx, org_id, id, source.updated_at).await?;
+                        }
+                    }
+                    None => report.invoices_skipped_drafts += 1,
                 }
                 continue;
             }
@@ -109,10 +119,14 @@ pub(super) async fn apply_batch(
             }
         };
         let existing = existing(tx, org_id, source.id).await?;
-        match apply_one(tx, cache, org_id, source, status, existing).await {
-            Ok((outcome, slot)) => {
+        match apply_one(tx, cache, org_id, data, source, status, existing).await {
+            Ok((outcome, slot, freed)) => {
                 cache.set_invoice(source.id, slot);
                 report.record(EntityType::Invoice, &outcome);
+                if let Some(reopened) = freed {
+                    report.invoices_removed += 1;
+                    report.summary.links.unlinked += reopened;
+                }
             }
             Err(Failure::Database(error)) => return Err(error.into()),
             Err(Failure::Invoice { kind, reason }) => {
@@ -136,11 +150,79 @@ pub(super) async fn apply_batch(
     Ok(())
 }
 
+/// Voids an imported invoice that Harvest turned back into a draft (Q14) and
+/// keeps the draft's version, so the next run changes nothing more while the
+/// draft stands, and the invoice comes back as changed once Harvest issues it
+/// again (`voided_versions` then has the run read every entry).
+async fn void_as_draft(
+    tx: &mut Transaction<'_, Postgres>,
+    org_id: Uuid,
+    invoice_id: Uuid,
+    version: DateTime<Utc>,
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE invoices SET status = 'void'
+          WHERE id = $1 AND org_id = $2 AND source = 'harvest' AND status <> 'void'",
+        invoice_id,
+        org_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE harvest_invoices SET harvest_updated_at = $3
+          WHERE invoice_id = $1 AND org_id = $2",
+        invoice_id,
+        org_id,
+        version as DateTime<Utc>,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Removes an imported invoice that Harvest deleted, once a new Harvest
+/// invoice takes its number (Q13): Harvest suggests the highest number plus
+/// one, so deleting the latest invoice hands its number to the next. Its time
+/// reopens first; Harvest unbilled it too, and the entry phase links it again
+/// if the new invoice bills it. Returns the entries reopened.
+async fn remove_deleted(
+    tx: &mut Transaction<'_, Postgres>,
+    org_id: Uuid,
+    invoice_id: Uuid,
+) -> sqlx::Result<u64> {
+    let reopened = reopen_time(tx, org_id, invoice_id).await?;
+    // A submitted entry keeps its state; only the link has to go.
+    sqlx::query!(
+        "UPDATE time_entries SET invoice_id = NULL WHERE org_id = $1 AND invoice_id = $2",
+        org_id,
+        invoice_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query!(
+        "DELETE FROM harvest_import_map
+          WHERE org_id = $1 AND harvest_entity_type = 'invoice'::harvest_entity_type
+            AND horae_id = $2",
+        org_id,
+        invoice_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query!(
+        "DELETE FROM invoices WHERE id = $1 AND org_id = $2 AND source = 'harvest'",
+        invoice_id,
+        org_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(reopened)
+}
+
 /// Reopens the time of an imported invoice that Harvest turned back into a
-/// draft. Its entries' own versions probably do not move in Harvest, so an
-/// incremental run would never read them; Horae knows them by the invoice.
-/// Submitted entries are left alone, and provenance takes the new version of
-/// an entry not edited in Horae, as `apply::write_links` does.
+/// draft or deleted. A draft's entries' own versions probably do not move in
+/// Harvest, so an incremental run would never read them; Horae knows them by
+/// the invoice. Submitted entries are left alone, and provenance takes the new
+/// version of an entry not edited in Horae, as `apply::write_links` does.
 async fn reopen_time(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
@@ -290,14 +372,19 @@ fn check_texts(source: &ApiInvoice, lines: &[Line]) -> Result<(), Failure> {
     Ok(())
 }
 
+/// What `apply_one` did: the outcome, the run cache's slot, and, when it
+/// removed a deleted invoice to free the number, the entries that reopened.
+type Applied = (RowOutcome, InvoiceSlot, Option<u64>);
+
 async fn apply_one(
     tx: &mut Transaction<'_, Postgres>,
     cache: &RunCache,
     org_id: Uuid,
+    data: &HarvestData,
     source: &ApiInvoice,
     status: InvoiceStatus,
     existing: Existing,
-) -> Result<(RowOutcome, InvoiceSlot), Failure> {
+) -> Result<Applied, Failure> {
     // Harvest's own version unchanged: a status set in Horae since stands.
     if let Some((id, current, version)) = existing
         && version == source.updated_at
@@ -308,6 +395,7 @@ async fn apply_one(
                 id,
                 voided: current == InvoiceStatus::Void,
             },
+            None,
         ));
     }
     let client_id = cache
@@ -359,25 +447,36 @@ async fn apply_one(
     check_texts(source, &lines)?;
 
     let id = existing.map_or_else(Uuid::now_v7, |(id, _, _)| id);
-    let taken = sqlx::query_scalar!(
-        r#"SELECT source = 'harvest' AS "imported!" FROM invoices
-           WHERE org_id = $1 AND number = $2 AND id <> $3"#,
+    let taken = sqlx::query!(
+        r#"SELECT i.id, h.harvest_invoice_id AS "harvest_id?"
+           FROM invoices i LEFT JOIN harvest_invoices h ON h.invoice_id = i.id
+           WHERE i.org_id = $1 AND i.number = $2 AND i.id <> $3"#,
         org_id,
         source.number,
         id,
     )
     .fetch_optional(&mut **tx)
     .await?;
-    if let Some(imported) = taken {
-        let holder = if imported {
-            "Another invoice imported from Harvest"
-        } else {
-            "An invoice made in Horae"
-        };
-        return Err(Failure::new(
-            InvoiceErrorKind::NumberTaken,
-            format!("{holder} already uses number {}", source.number),
-        ));
+    let mut freed = None;
+    if let Some(holder) = taken {
+        let listed = |harvest_id| data.invoices.iter().any(|other| other.id == harvest_id);
+        match holder.harvest_id {
+            // Every run lists every invoice, so one missing was deleted in Harvest.
+            Some(harvest_id) if !listed(harvest_id) => {
+                freed = Some(remove_deleted(tx, org_id, holder.id).await?);
+            }
+            imported => {
+                let holder = if imported.is_some() {
+                    "Another invoice imported from Harvest"
+                } else {
+                    "An invoice made in Horae"
+                };
+                return Err(Failure::new(
+                    InvoiceErrorKind::NumberTaken,
+                    format!("{holder} already uses number {}", source.number),
+                ));
+            }
+        }
     }
 
     let due_on = source.due_date.unwrap_or(source.issue_date);
@@ -524,5 +623,6 @@ async fn apply_one(
             id,
             voided: status == InvoiceStatus::Void,
         },
+        freed,
     ))
 }

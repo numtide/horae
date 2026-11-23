@@ -105,7 +105,8 @@ pub(super) fn fetch(
             catalog.invoices.extend(page);
             Ok(())
         },
-    )?;
+    )
+    .map_err(super::ApiImportError::on_invoices)?;
     window.see(&catalog.invoices);
     let (scan, since) = window.scan();
     catalog.entry_scan = Some(scan);

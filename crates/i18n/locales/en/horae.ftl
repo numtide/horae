@@ -456,6 +456,8 @@ harvest-client-change-confirm = Save and disconnect
 
 ## Importers: runs
 
+harvest-run-invoices-forbidden = The Harvest user who connected Horae can't read invoices, which the import needs.
+harvest-run-invoices-forbidden-hint = Reconnect as a Harvest administrator, or ask one to let this user create and edit invoices.
 harvest-billing-title = Billed time
 harvest-billing-preview-title = Billed time it will mark
 harvest-billing-linked = Linked to an imported invoice
@@ -465,6 +467,8 @@ harvest-billing-without-invoice-hint = Harvest billed this time on an invoice th
 harvest-billing-conflicts = Already billed or submitted in Horae
 harvest-billing-drafts = Draft invoices left out: { $count }
 harvest-billing-no-longer-listed = Imported invoices Harvest no longer lists: { $count }
+harvest-billing-voided-drafts = Imported invoices Harvest turned back into drafts, now void: { $count }
+harvest-billing-removed = Imported invoices Harvest deleted, removed because a new invoice uses their number: { $count }
 harvest-billing-full-scan = Every time entry was read again, to match it with Harvest's invoices.
 harvest-billing-watermarks-held = Some records could not be imported, so the next run reads again everything since the last run without errors. Fix the errors below to let runs read only what changed.
 harvest-billing-conflict-billed = { $entry } is on Horae invoice { $number }

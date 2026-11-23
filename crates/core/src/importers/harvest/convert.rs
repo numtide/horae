@@ -46,9 +46,9 @@ pub enum MoneyError {
 /// stores, exactly: `-25.00` → -2500. Never rounds. A digit beyond the
 /// currency's own decimals, or beyond hundredths (which is all Horae stores
 /// for a three-decimal currency), is an error unless it is zero. A currency is
-/// known when it is three capital letters, the rule every money column checks.
+/// known when it is an ISO 4217 code.
 pub fn money_exact(amount: &str, currency: &str) -> Result<i64, MoneyError> {
-    if !(currency.len() == 3 && currency.bytes().all(|b| b.is_ascii_uppercase())) {
+    if !crate::money::is_iso_currency(currency) {
         return Err(MoneyError::UnknownCurrency(currency.to_owned()));
     }
     let text = amount.trim();
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn exact_money_refuses_unknown_currencies_and_bad_numbers() {
-        for currency in ["", "eur", "EURO", "E1R"] {
+        for currency in ["", "eur", "EURO", "E1R", "XYZ"] {
             assert_eq!(
                 money_exact("1", currency),
                 Err(MoneyError::UnknownCurrency(currency.into()))

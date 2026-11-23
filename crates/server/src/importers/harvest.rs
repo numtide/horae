@@ -189,6 +189,11 @@ pub enum ApiImportError {
         "Harvest refused access (HTTP 403) — reconnect Harvest as a user who can see all clients, projects, people and time entries"
     )]
     Forbidden,
+    /// A manager can read the rest of the account but not its invoices.
+    #[error(
+        "Harvest refused access to invoices (HTTP 403) — reconnect Harvest as an administrator, or as a manager who can create and edit invoices"
+    )]
+    InvoicesForbidden,
     /// Harvest timed out or answered with a server error; worth retrying.
     #[error("{0}")]
     Unavailable(String),
@@ -218,8 +223,21 @@ impl ApiImportError {
     pub(crate) fn is_permanent(error: &anyhow::Error) -> bool {
         matches!(
             error.downcast_ref::<Self>(),
-            Some(Self::NotConnected | Self::ReconnectRequired | Self::Forbidden)
+            Some(
+                Self::NotConnected
+                    | Self::ReconnectRequired
+                    | Self::Forbidden
+                    | Self::InvoicesForbidden
+            )
         )
+    }
+
+    /// A 403 while reading invoices names what the connection lacks.
+    pub(super) fn on_invoices(error: anyhow::Error) -> anyhow::Error {
+        match error.downcast_ref() {
+            Some(horae_harvest::Error::Forbidden) => Self::InvoicesForbidden.into(),
+            _ => error,
+        }
     }
 
     /// What a failed job attempt shows the administrator, if Harvest caused it.
@@ -228,6 +246,7 @@ impl ApiImportError {
         match error.downcast_ref::<Self>()? {
             Self::ReconnectRequired => Some(JobErrorKind::ReconnectRequired),
             Self::Forbidden => Some(JobErrorKind::Forbidden),
+            Self::InvoicesForbidden => Some(JobErrorKind::InvoicesForbidden),
             Self::Unavailable(_) => Some(JobErrorKind::Unavailable),
             Self::Busy | Self::NotConnected | Self::Other(_) => None,
         }

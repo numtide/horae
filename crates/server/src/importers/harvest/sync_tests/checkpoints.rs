@@ -531,16 +531,36 @@ async fn a_running_job_saves_the_catalog_total_once_downloaded(pool: PgPool) {
 async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgPool) {
     let org = setup(&pool).await;
     use crate::models::JobErrorKind;
-    for (status, outcome, message, kind) in [
+    for (path, status, outcome, message, kind) in [
         (
+            "/users",
             401,
             "failed",
             "reconnect Harvest",
             Some(JobErrorKind::ReconnectRequired),
         ),
-        (403, "failed", "HTTP 403", Some(JobErrorKind::Forbidden)),
-        (500, "queued", "HTTP 500", Some(JobErrorKind::Unavailable)),
-        (404, "queued", "HTTP 404", None),
+        (
+            "/users",
+            403,
+            "failed",
+            "HTTP 403",
+            Some(JobErrorKind::Forbidden),
+        ),
+        (
+            "/invoices",
+            403,
+            "failed",
+            "manager who can create and edit invoices",
+            Some(JobErrorKind::InvoicesForbidden),
+        ),
+        (
+            "/users",
+            500,
+            "queued",
+            "HTTP 500",
+            Some(JobErrorKind::Unavailable),
+        ),
+        ("/users", 404, "queued", "HTTP 404", None),
     ] {
         let id = jobs::enqueue(
             &pool,
@@ -549,13 +569,13 @@ async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgP
                 mode: ImportMode::Commit,
                 sync: SyncScope::Full,
             },
-            &format!("rejected-{status}"),
+            &format!("rejected-{status}{path}"),
             crate::config::JobPolicy { max_attempts: 5 },
         )
         .await
         .unwrap();
         let server = Server::start(move |url| {
-            if url.path().ends_with("/users") {
+            if url.path().ends_with(path) {
                 return Response {
                     status,
                     headers: vec![],

@@ -67,6 +67,16 @@ pub(super) fn BillingTable(report: ImportReport) -> Element {
                     {tr.harvest_billing_no_longer_listed(report.invoices_no_longer_listed as i64)}
                 }
             }
+            if report.invoices_voided_drafts > 0 {
+                p { class: "text-sm text-secondary",
+                    {tr.harvest_billing_voided_drafts(report.invoices_voided_drafts as i64)}
+                }
+            }
+            if report.invoices_removed > 0 {
+                p { class: "text-sm text-secondary",
+                    {tr.harvest_billing_removed(report.invoices_removed as i64)}
+                }
+            }
             if !report.link_conflicts.is_empty() {
                 ul { class: "text-sm",
                     for conflict in report.link_conflicts.iter() {
