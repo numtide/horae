@@ -8,8 +8,9 @@
 -- budgets call them once per time entry: no STRICT (Postgres inlines a STRICT
 -- SQL function only when it can prove the body is NULL for NULL input), a
 -- single expression, and each argument the callers pass as an expensive
--- expression (the rate cascade, `effective_minutes`) referenced once. Called
--- opaquely they made a 500,000-row sum about ten times slower.
+-- expression (the rate cascade, `effective_minutes`) referenced once; only
+-- the cheap currency argument is repeated. Called opaquely they made a
+-- 500,000-row sum several times slower.
 
 -- The step, in hundredths, of a currency's amounts: 100 for the ISO 4217
 -- zero-decimal codes of `ZERO_DECIMAL_CURRENCIES`, else 1. Trimmed and
@@ -25,15 +26,18 @@ CREATE FUNCTION public.currency_amount_step(currency text) RETURNS integer
   $$;
 
 -- rate × minutes ÷ 60 rounded once, half up, to the currency's step. `div`
--- truncates toward zero as Rust's integer division does; do not use floor.
+-- truncates toward zero as Rust's integer division does, and is exact: do not
+-- use floor, or numeric `/`, which rounds once the quotient passes 16 digits.
+-- For a step of 100, truncating the hundredths again to whole units equals
+-- dividing by 6000 at once, since truncating divisions compose. The currency
+-- is tested twice and the rate and minutes are used once each.
 -- A NULL rate or duration gives NULL, as the STRICT function it replaces did.
 CREATE FUNCTION public.line_amount_cents(rate_cents bigint, minutes integer, currency text)
     RETURNS bigint
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
-    SELECT (div(rate_cents::numeric * minutes + 30 * public.currency_amount_step(currency),
-                60 * public.currency_amount_step(currency))
-            * public.currency_amount_step(currency))::bigint
+    SELECT trunc(div(rate_cents::numeric * minutes + 30 * public.currency_amount_step(currency), 60),
+                 CASE public.currency_amount_step(currency) WHEN 100 THEN -2 ELSE 0 END)::bigint
   $$;
 
 -- `line_amount_cents(bigint, integer)` stays until a later migration: during a

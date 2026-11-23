@@ -2988,16 +2988,30 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
 #[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn line_amount_cents_is_inlined_with_the_arguments_callers_pass(pool: PgPool) {
+    // The call is `projects::reads::spend_rows`' verbatim, the hardest of the
+    // callers; each table it reads is a two-row VALUES, so nothing folds to a
+    // constant.
     let plan: Vec<String> = sqlx::query_scalar!(
         r#"EXPLAIN (VERBOSE, COSTS OFF)
            SELECT sum(line_amount_cents(
-             COALESCE(resolve_project_rate(v.mode, v.rate, NULL, v.rate, NULL, NULL), 0),
-             effective_minutes(v.minutes, v.frozen, v.inc::smallint, v.dir),
-             CASE WHEN v.frozen IS NULL THEN v.currency ELSE v.client_currency END))
-           FROM (VALUES ('task', 8050::bigint, 90, NULL::integer, 15::smallint,
-                         'up'::round_dir, 'JPY'::bpchar, 'EUR'::bpchar),
-                        ('legacy', 500, 30, 30, 0, 'nearest', 'EUR', 'JPY'))
-             AS v(mode, rate, minutes, frozen, inc, dir, currency, client_currency)"#
+                 COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                   THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                   CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                   CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+                 ) END, 0),
+                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir),
+                 CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END
+               ))
+           FROM (VALUES (NULL::uuid, NULL::text), ('00000000-0000-7000-8000-000000000001', 'task')) ps(project_id, rate_mode),
+                (VALUES ('time_and_materials'::project_type, 6000::bigint, 'JPY'::bpchar),
+                        ('fixed_fee', NULL, 'EUR')) p(project_type, rate_cents, currency),
+                (VALUES (8050::bigint), (NULL)) pt(rate_cents),
+                (VALUES (7000::bigint), (NULL)) a(rate_cents),
+                (VALUES (3000::bigint), (NULL)) u(billable_rate_cents),
+                (VALUES ('JPY'::bpchar, 5000::bigint), ('EUR', NULL)) c(currency, default_rate_cents),
+                (VALUES ('EUR'::bpchar, 15::smallint, 'up'::round_dir), ('JPY', 0::smallint, 'nearest'))
+                  o(default_currency, round_minutes, round_dir),
+                (VALUES (90, NULL::integer), (30, 30)) te(minutes, rounded_minutes)"#
     )
     .fetch_all(&pool)
     .await
