@@ -32,7 +32,7 @@ pub(super) fn RunList(before: Option<Uuid>, limit: i64, #[props(default)] paged:
                 }
             },
             Some(Ok(jobs)) => rsx! {
-                div { class: "mt-4", aria_busy: loading.to_string(),
+                div { class: "table-container mt-4", aria_busy: loading.to_string(),
                     HistoryTable { jobs: jobs.clone() }
                 }
                 if paged && jobs.len() as i64 == limit && let Some(last) = jobs.last() {

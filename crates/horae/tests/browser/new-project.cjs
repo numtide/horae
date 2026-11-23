@@ -151,8 +151,10 @@ const sql = query => require('node:child_process').execFileSync('psql',
     assert.match(await heading.evaluate(node => getComputedStyle(node).fontFamily), /Newsreader/);
     // The header has no eyebrow: the back link already names the section.
     await expect(screen.locator('header .uppercase')).toHaveCount(0);
+    // Section titles are card-title (Newsreader 18/500), as on every screen.
     for (const title of await screen.locator('section > div > h2').all()) {
-      await expect(title).toHaveCSS('font-size', '20px');
+      await expect(title).toHaveCSS('font-size', '18px');
+      await expect(title).toHaveCSS('font-weight', '500');
       await expect(title).toHaveCSS('margin-top', '0px');
       await expect(title).toHaveCSS('margin-bottom', '0px');
     }

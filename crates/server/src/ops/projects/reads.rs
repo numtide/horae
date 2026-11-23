@@ -364,7 +364,8 @@ pub(super) async fn spend_rows(
                    CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
                    CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
                  ) END, 0),
-                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
+                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir),
+                 COALESCE(invoice.currency, CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END)
                )) END) AS amount_cents
            FROM visible p
            JOIN time_entries te ON te.project_id=p.id AND te.org_id=p.org_id

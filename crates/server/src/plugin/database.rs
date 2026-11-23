@@ -82,7 +82,8 @@ pub(super) async fn validate_connection(connection: &mut sqlx::PgConnection) -> 
                 p.prosecdef OR (n.nspname NOT IN ('pg_catalog','information_schema')
                     AND p.oid NOT IN (
                         'public.harvest_norm(text)'::regprocedure,
-                        'public.line_amount_cents(bigint,integer)'::regprocedure,
+                        'public.currency_amount_step(text)'::regprocedure,
+                        'public.line_amount_cents(bigint,integer,text)'::regprocedure,
                         'public.set_updated_at()'::regprocedure,
                         'public.effective_minutes(integer,integer,smallint,public.round_dir)'::regprocedure
                     ))

@@ -132,7 +132,7 @@ pub(super) fn Tasks(
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-2", aria_labelledby: "np-tasks-heading",
             div { class: "flex flex-wrap items-baseline gap-3 py-4 px-project-panel border-b",
-                h2 { id: "np-tasks-heading", class: "text-xl font-semibold m-0", "Tasks" }
+                h2 { id: "np-tasks-heading", class: "card-title m-0", "Tasks" }
                 span { class: "text-xs text-subtle", "{form.read().tasks.len()} tasks" }
                 if billable_project && billable_access == ProjectFieldAccess::Editable {
                     div { class: "flex flex-wrap items-center gap-2 ml-auto",

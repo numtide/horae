@@ -149,7 +149,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     },
                     Step::Setup => rsx! {
                         div { class: "flex flex-col gap-4",
-                            h2 { class: "himp-title", "Set up the Harvest OAuth app" }
+                            h2 { class: "card-title m-0", "Set up the Harvest OAuth app" }
                             p { class: "text-sm text-secondary", "Set up the Harvest OAuth app before connecting, or import a CSV export." }
                             div { class: "flex gap-4 items-center flex-wrap",
                                 Link { to: Route::HarvestOAuth { focus: Default::default() }, class: "btn btn-primary", "data-testid": "setup-harvest-oauth", "Set up OAuth app" }
@@ -159,7 +159,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     },
                     Step::Connect { bound } => rsx! {
                         div { class: "flex flex-col gap-4",
-                            h2 { class: "himp-title",
+                            h2 { class: "card-title m-0",
                                 if *bound { "Reconnect your Harvest account" } else { "Connect your Harvest account" }
                             }
                             p { class: "text-sm text-secondary",
@@ -177,7 +177,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     },
                     Step::Ready => rsx! {
                         div { class: "flex flex-col gap-4",
-                            h2 { class: "himp-title", "See what Harvest would bring in" }
+                            h2 { class: "card-title m-0", "See what Harvest would bring in" }
                             p { class: "text-sm text-secondary",
                                 "The preview reads clients, projects, tasks, people and time entries, and lists anything that can't be imported. Nothing in Horae changes until you import."
                             }
@@ -197,7 +197,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     },
                     Step::Imported(last) => rsx! {
                         div { class: "flex flex-col gap-4",
-                            h2 { class: "himp-title", "Harvest is imported" }
+                            h2 { class: "card-title m-0", "Harvest is imported" }
                             p { class: "text-sm text-secondary",
                                 if let Some(job) = last { "{imported_line(job)} " }
                                 "To bring in what changed in Harvest since then, sync. Edits you made in Horae are kept."
@@ -218,21 +218,21 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     div { class: "alert alert-danger", role: "alert", "{message}" }
                 }
             }
-            section { class: "flex flex-col gap-3 mt-6", aria_labelledby: "history-title",
-                div { class: "flex items-center justify-between gap-3",
-                    h2 { id: "history-title", tabindex: "-1", class: "himp-title", "History" }
+            section { class: "card p-0 overflow-hidden mt-6", aria_labelledby: "history-title",
+                div { class: "flex items-center justify-between gap-3 px-6 py-4 border-b",
+                    h2 { id: "history-title", tabindex: "-1", class: "card-title m-0", "History" }
                     Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "all-runs", "All runs" }
                 }
                 match &*history.read() {
-                    None => rsx! { Loading { label: "Loading runs…" } },
+                    None => rsx! { Loading { label: "Loading runs…", class: "p-5" } },
                     Some(Err(_)) => rsx! {
                         ErrorState { title: "Could not load runs", body: LOAD_FAILED,
                             retry_id: "refresh-history", onretry: refresh_history,
-                            focus_on_recovery: "history-title",
+                            focus_on_recovery: "history-title", inset: true,
                         }
                     },
                     Some(Ok(jobs)) if jobs.is_empty() => rsx! {
-                        EmptyState { icon: "import", title: "No runs yet", body: "Start a preview to create one." }
+                        EmptyState { icon: "import", title: "No runs yet", body: "Start a preview to create one.", inset: true }
                     },
                     Some(Ok(jobs)) => rsx! { HistoryTable { jobs: jobs.clone() } },
                 }

@@ -157,11 +157,12 @@ pub async fn time(
              COALESCE(SUM(rounded_minutes) FILTER (WHERE billable), 0)::bigint
                as "billable_minutes!",
              CASE WHEN bool_and(rate_visible) THEN COALESCE(
-               SUM(COALESCE(frozen_amount_cents, line_amount_cents(billable_rate_cents, rounded_minutes)))
+               SUM(COALESCE(frozen_amount_cents,
+                 line_amount_cents(billable_rate_cents, rounded_minutes, currency)))
                  FILTER (WHERE billable),
                0)::bigint END as "billable_cents?",
              CASE WHEN bool_and(cost_rate_cents IS NOT NULL)
-               THEN SUM(line_amount_cents(cost_rate_cents, minutes))::bigint END as "cost_cents?",
+               THEN SUM(line_amount_cents(cost_rate_cents, minutes, cost_currency))::bigint END as "cost_cents?",
              currency as "currency!",
              cost_currency as "cost_currency!"
            FROM entry

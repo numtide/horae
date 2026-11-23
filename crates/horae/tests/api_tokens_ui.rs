@@ -194,14 +194,14 @@ async fn an_empty_list_says_so_and_create_waits_for_a_name() {
 async fn a_created_token_is_revealed_once_and_listed_by_its_prefix() {
     let probe = Probe::default();
     let mut dom = mount(&probe);
-    type_into(&mut dom, "api-token-name", "Calendar sync");
+    type_into(&mut dom, "api-token-name", "Backup script");
     click(&mut dom, "api-token-create");
 
     let creates = probe.creates.borrow().clone();
     let [(name, Some(expires_at))] = &creates[..] else {
         panic!("one create with the default expiry: {creates:?}");
     };
-    assert_eq!(name, "Calendar sync");
+    assert_eq!(name, "Backup script");
     let ninety_days = Utc::now() + Duration::days(90);
     assert!(
         (ninety_days - *expires_at).num_minutes().abs() < 5,
@@ -212,7 +212,7 @@ async fn a_created_token_is_revealed_once_and_listed_by_its_prefix() {
     assert!(html.contains(SECRET), "the secret is shown once: {html}");
     assert!(html.contains("will not show it again"), "{html}");
     assert!(html.contains("horae_pat_abcdefgh…"), "{html}");
-    assert!(html.contains("Calendar sync"), "{html}");
+    assert!(html.contains("Backup script"), "{html}");
     assert!(
         html.contains("value=\"\""),
         "the name field is cleared: {html}"
@@ -224,7 +224,7 @@ async fn a_created_token_is_revealed_once_and_listed_by_its_prefix() {
         !html.contains(SECRET),
         "the secret is gone after Done: {html}"
     );
-    assert!(html.contains("Calendar sync"), "{html}");
+    assert!(html.contains("Backup script"), "{html}");
 }
 
 #[tokio::test]

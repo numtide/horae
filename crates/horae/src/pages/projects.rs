@@ -1497,7 +1497,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                             body: if view.can_edit { "Edit the project to choose the tasks people track time against." } else { "A project manager chooses the tasks people track time against." },
                         }
                     }
-                    else { ul { for task in view.tasks { li { key: "{task.id}", "{task.name}" } } } }
+                    else { ul { class: "data-list", for task in view.tasks { li { key: "{task.id}", "{task.name}" } } } }
                 }
                 section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project team",
                     h2 { class: "card-title", "Team" }
@@ -1506,7 +1506,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                             body: if view.can_edit { "Edit the project to assign the people who track time on it." } else { "People assigned to this project that you can see appear here." },
                         }
                     }
-                    else { ul { for person in view.team { li { key: "{person.id}", "{person.name}" } } } }
+                    else { ul { class: "data-list", for person in view.team { li { key: "{person.id}", "{person.name}" } } } }
                 }
             } else {
                 ErrorState {
@@ -1777,16 +1777,18 @@ fn SavedProjectDetails(project: ProjectDetails) -> Element {
                         "{project.ends_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No end date\".into())}"
                     }
                 }
-            }
-            div { class: "mt-4",
-                h3 { class: "text-sm text-subtle m-0 mb-2", "Tags" }
-                if project.tags.is_empty() { p { class: "text-sm m-0", "No tags" } }
-                else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
-            }
-            if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
-                div { class: "mt-4",
-                    h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
-                    for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
+                div { dt { class: "text-sm text-subtle", "Tags" }
+                    dd { class: "m-0",
+                        if project.tags.is_empty() { "No tags" }
+                        else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
+                    }
+                }
+                if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
+                    div { class: "col-span-full", dt { class: "text-sm text-subtle", "Administrator notes" }
+                        dd { class: "m-0",
+                            for line in notes.lines() { p { class: "m-0", "{line}" } }
+                        }
+                    }
                 }
             }
         }

@@ -19,7 +19,7 @@ pub fn SettingsProfile() -> Element {
     let me = session.me.cloned();
     rsx! {
         PageHeader { title: tr.settings_profile_title() }
-        section { class: "card", aria_label: tr.settings_profile_title(),
+        section { class: "card max-w-form", aria_label: tr.settings_profile_title(),
             ProfileForm { key: "{me.id}", me, options }
         }
     }

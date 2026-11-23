@@ -85,23 +85,24 @@ pub fn SettingsApiTokens() -> Element {
             a { id: "api-openapi-link", href: "/api/v1/openapi.json", "{intro_link}" }
             "{intro_after}"
         }
-        section { class: "card", aria_label: tr.api_tokens_list_label(),
-            HarvestAccount {}
-            if let Some(token) = created() {
-                div { class: "alert alert-success mb-4", role: "status", id: "api-token-created",
-                    p { class: "font-semibold mb-2", "Token “{token.row.name}” created" }
-                    p { class: "text-sm mb-2", "Copy it now. Horae keeps no copy and will not show it again." }
-                    RevealedToken { token: token.token.clone() }
-                    div { class: "flex justify-end mt-2",
-                        button { id: "api-token-dismiss", r#type: "button", class: "btn btn-secondary btn-sm",
-                            onclick: move |_| created.set(None), "Done"
-                        }
+        HarvestAccount {}
+        if let Some(token) = created() {
+            div { class: "alert alert-success mb-4 max-w-form", role: "status", id: "api-token-created",
+                p { class: "font-semibold mb-2", "Token “{token.row.name}” created" }
+                p { class: "text-sm mb-2", "Copy it now. Horae keeps no copy and will not show it again." }
+                RevealedToken { token: token.token.clone() }
+                div { class: "flex justify-end mt-2",
+                    button { id: "api-token-dismiss", r#type: "button", class: "btn btn-secondary btn-sm",
+                        onclick: move |_| created.set(None), "Done"
                     }
                 }
             }
-            div { class: "flex flex-wrap items-end gap-3",
-                div { class: "flex-1",
-                    FormGroup { label: "Name", id: "api-token-name", hint: "What will use it, such as “Calendar sync”.",
+        }
+        // Name, expiry and the button on one row, aligned on the controls.
+        section { class: "card max-w-form mb-6", aria_label: tr.api_tokens_form_label(),
+            div { class: "form-row flex flex-wrap items-end gap-3",
+                div { class: "flex-1 min-w-0",
+                    FormGroup { label: "Name", id: "api-token-name",
                         Input { id: "api-token-name", value: name(), disabled: creating(),
                             error_id: error().map(|_| "api-token-error".to_string()),
                             oninput: edit_name,
@@ -113,29 +114,30 @@ pub fn SettingsApiTokens() -> Element {
                         disabled: creating(), onchange: pick_expiry,
                     }
                 }
-            }
-            if let Some(message) = error() {
-                p { id: "api-token-error", class: "alert alert-danger", role: "alert", "{message}" }
-            }
-            div { class: "flex justify-end mb-4",
                 button { id: "api-token-create", r#type: "button", class: "btn btn-primary",
                     disabled: creating() || name.read().trim().is_empty(),
                     onclick: create,
                     if creating() { "Creating…" } else { "Create token" }
                 }
             }
+            p { class: "form-hint mb-0", {tr.api_tokens_name_hint()} }
+            if let Some(message) = error() {
+                p { id: "api-token-error", class: "alert alert-danger mt-4 mb-0", role: "alert", "{message}" }
+            }
+        }
+        section { aria_label: tr.api_tokens_list_label(),
             if let Some(message) = revoke_error() {
                 p { class: "alert alert-danger", role: "alert", "{message}" }
             }
             match &*tokens.read() {
                 None => rsx! { Loading { label: "Loading your tokens…" } },
                 Some(Err(error)) => rsx! {
-                    LoadError { error: error.clone(), what: "your tokens", retry, inset: true,
+                    LoadError { error: error.clone(), what: "your tokens", retry,
                         pending: tokens.state()() != UseResourceState::Ready, focus_on_recovery: "api-tokens-title",
                     }
                 },
                 Some(Ok(rows)) if rows.is_empty() => rsx! {
-                    EmptyState { icon: "key", title: tr.api_tokens_empty(), inset: true,
+                    EmptyState { icon: "key", title: tr.api_tokens_empty(),
                         body: tr.api_tokens_empty_hint(),
                     }
                 },

@@ -2,10 +2,12 @@ use dioxus::prelude::*;
 
 mod api_tokens;
 pub(crate) mod permission_editor;
+mod plugins;
 pub(crate) mod rates;
 mod workspace;
 
 pub use api_tokens::AdminApiTokens;
+pub use plugins::WorkspacePlugins;
 pub use workspace::WorkspaceSettings;
 
 /// Retained requests remain recoverable without mounting a directory or selecting a person.

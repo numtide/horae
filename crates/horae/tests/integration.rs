@@ -1399,7 +1399,7 @@ async fn generate_invoice_totals_match(pool: PgPool) {
             e.user_rate_cents,
         )
         .unwrap_or(0);
-        let amount = horae_core::invoice::line_amount_cents(rate, e.minutes).unwrap();
+        let amount = horae_core::invoice::line_amount_cents(rate, e.minutes, "EUR").unwrap();
         total_cents += amount;
         line_data.push(LineData {
             id: Uuid::now_v7(),
@@ -2903,46 +2903,152 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
         // answer -167 for the first — so pin the sign convention anyway.
         (-10_000, 1, "a negative rate"),
         (10_000, -1, "negative minutes"),
+        (
+            -8_050,
+            90,
+            "a negative rate in a zero-decimal currency's half",
+        ),
+        // A zero-decimal currency rounds at half a unit (50 hundredths): land
+        // one hundredth either side of it and on it, through the rate and
+        // through the minutes, and the same around 1.50.
+        (2_999, 1, "49.98 hundredths, below the half unit"),
+        (3_000, 1, "exactly 50 hundredths"),
+        (3_001, 1, "50.02 hundredths, above the half unit"),
+        (49, 60, "one hundredth below the half unit"),
+        (50, 60, "exactly the half unit"),
+        (51, 60, "one hundredth above the half unit"),
+        (149, 60, "one hundredth below 1.50"),
+        (150, 60, "exactly 1.50"),
+        (151, 60, "one hundredth above 1.50"),
+        (8_050, 90, "80.50 for 90 minutes: 120.75"),
+        (500, 30, "5.00 for 30 minutes: 2.50"),
+        (15_062, 48, "120.496, rounded once"),
     ];
+    // Every code the Rust table lists, an unknown code, and the trimmed and
+    // case-sensitive matching both sides share.
+    let currencies = horae_core::money::ZERO_DECIMAL_CURRENCIES
+        .iter()
+        .chain(horae_core::money::THREE_DECIMAL_CURRENCIES)
+        .chain(&["EUR", "XYZ", " JPY", "jpy"]);
 
-    for &(rate_cents, minutes, why) in cases {
-        let from_sql: i64 = sqlx::query_scalar!(
-            r#"SELECT line_amount_cents($1, $2) as "amount!""#,
-            rate_cents,
-            minutes,
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        let from_rust = horae_core::invoice::line_amount_cents(rate_cents, minutes).unwrap();
-        assert_eq!(
-            from_sql, from_rust,
-            "line_amount_cents({rate_cents}, {minutes}) — {why}: SQL says {from_sql}, Rust says {from_rust}"
-        );
+    for currency in currencies {
+        for &(rate_cents, minutes, why) in cases {
+            let from_sql: i64 = sqlx::query_scalar!(
+                r#"SELECT line_amount_cents($1, $2, $3) as "amount!""#,
+                rate_cents,
+                minutes,
+                currency,
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            let from_rust =
+                horae_core::invoice::line_amount_cents(rate_cents, minutes, currency).unwrap();
+            assert_eq!(
+                from_sql, from_rust,
+                "line_amount_cents({rate_cents}, {minutes}, {currency:?}) — {why}: SQL says {from_sql}, Rust says {from_rust}"
+            );
+        }
     }
 
+    // The other direction: a code only SQL rounds to whole units would pass
+    // the loop above. Every uppercase three-letter code rounds 0.50 to a whole
+    // unit in SQL exactly when Rust lists it as zero-decimal.
+    let from_sql: Vec<String> = sqlx::query_scalar!(
+        r#"SELECT code AS "code!"
+           FROM (SELECT chr(a) || chr(b) || chr(c) AS code
+                 FROM generate_series(65, 90) a, generate_series(65, 90) b,
+                      generate_series(65, 90) c) codes
+           WHERE line_amount_cents(50, 60, code) = 100
+           ORDER BY code"#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let mut from_rust = horae_core::money::ZERO_DECIMAL_CURRENCIES.to_vec();
+    from_rust.sort_unstable();
+    assert_eq!(from_sql, from_rust, "zero-decimal codes differ");
+
     // The Rust signature takes plain integers rather than options, so the SQL
-    // twin is STRICT: an absent rate has no amount, not an amount of zero.
-    let no_rate: Option<i64> = sqlx::query_scalar!("SELECT line_amount_cents(NULL::bigint, 60)")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    // twin answers NULL for a NULL rate: an absent rate has no amount, not an
+    // amount of zero.
+    let no_rate: Option<i64> =
+        sqlx::query_scalar!("SELECT line_amount_cents(NULL::bigint, 60, 'EUR')")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(no_rate, None, "a NULL rate must produce no amount");
+}
+
+/// Reports, project figures and budgets call `line_amount_cents` once per
+/// time entry, with the rate cascade and `effective_minutes` as arguments.
+/// Postgres must inline it there: called as a function it made a sum over
+/// 500,000 rows about ten times slower. A STRICT declaration, or a body that
+/// repeats the rate or the minutes, stops the inlining.
+#[sqlx::test(migrations = "../server/migrations")]
+#[serial]
+async fn line_amount_cents_is_inlined_with_the_arguments_callers_pass(pool: PgPool) {
+    // The call is `projects::reads::spend_rows`' verbatim, the hardest of the
+    // callers; each table it reads is a two-row VALUES, so nothing folds to a
+    // constant.
+    let plan: Vec<String> = sqlx::query_scalar!(
+        r#"EXPLAIN (VERBOSE, COSTS OFF)
+           SELECT sum(line_amount_cents(
+                 COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                   THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                   CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                   CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+                 ) END, 0),
+                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir),
+                 COALESCE(invoice.currency, CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END)
+               ))
+           FROM (VALUES (NULL::uuid, NULL::text), ('00000000-0000-7000-8000-000000000001', 'task')) ps(project_id, rate_mode),
+                (VALUES ('time_and_materials'::project_type, 6000::bigint, 'JPY'::bpchar),
+                        ('fixed_fee', NULL, 'EUR')) p(project_type, rate_cents, currency),
+                (VALUES (8050::bigint), (NULL)) pt(rate_cents),
+                (VALUES (7000::bigint), (NULL)) a(rate_cents),
+                (VALUES (3000::bigint), (NULL)) u(billable_rate_cents),
+                (VALUES ('JPY'::bpchar, 5000::bigint), ('EUR', NULL)) c(currency, default_rate_cents),
+                (VALUES ('EUR'::bpchar, 15::smallint, 'up'::round_dir), ('JPY', 0::smallint, 'nearest'))
+                  o(default_currency, round_minutes, round_dir),
+                (VALUES (NULL::bpchar), ('KWD')) invoice(currency),
+                (VALUES (90, NULL::integer), (30, 30)) te(minutes, rounded_minutes)"#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .flatten()
+    .collect();
+    let plan = plan.join("\n");
+    for function in [
+        "line_amount_cents",
+        "currency_amount_step",
+        "effective_minutes",
+    ] {
+        assert!(
+            !plan.contains(function),
+            "{function} is not inlined:\n{plan}"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../server/migrations")]
 #[serial]
 async fn line_amount_cents_sql_and_rust_reject_final_overflow(pool: PgPool) {
-    for (rate, minutes) in [
-        (i64::MAX, 61),
-        (i64::MIN, 61),
-        (i64::MAX, i32::MAX),
-        (i64::MIN, i32::MIN),
+    for (rate, minutes, currency) in [
+        (i64::MAX, 61, "EUR"),
+        (i64::MIN, 61, "EUR"),
+        (i64::MAX, i32::MAX, "EUR"),
+        (i64::MIN, i32::MIN, "EUR"),
+        (i64::MAX, 61, "JPY"),
+        (i64::MIN, 61, "JPY"),
     ] {
         let error = sqlx::query_scalar!(
-            r#"SELECT line_amount_cents($1, $2) as "amount!""#,
+            r#"SELECT line_amount_cents($1, $2, $3) as "amount!""#,
             rate,
-            minutes
+            minutes,
+            currency
         )
         .fetch_one(&pool)
         .await
@@ -2951,7 +3057,7 @@ async fn line_amount_cents_sql_and_rust_reject_final_overflow(pool: PgPool) {
             error.as_database_error().unwrap().code().as_deref(),
             Some("22003")
         );
-        assert!(horae_core::invoice::line_amount_cents(rate, minutes).is_err());
+        assert!(horae_core::invoice::line_amount_cents(rate, minutes, currency).is_err());
     }
 }
 
@@ -3023,9 +3129,11 @@ async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
              SUM(te.minutes)::bigint as "spent_minutes!",
              COALESCE(SUM(line_amount_cents(
                  COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),
-                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
+                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir),
+                 p.currency
                )) FILTER (WHERE te.billable), 0)::bigint as "spent_cents!"
            FROM time_entries te
+           JOIN projects p ON p.id = te.project_id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
            JOIN users u ON u.id = te.user_id
@@ -3081,7 +3189,7 @@ async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
                 e.user_rate_cents,
             )
             .unwrap_or(0);
-            acc.1 += horae_core::invoice::line_amount_cents(rate, e.minutes).unwrap();
+            acc.1 += horae_core::invoice::line_amount_cents(rate, e.minutes, "EUR").unwrap();
         }
     }
     let mut from_rust: Vec<_> = folded.into_iter().collect();

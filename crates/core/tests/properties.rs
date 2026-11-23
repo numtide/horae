@@ -457,14 +457,44 @@ mod invoice {
             let (low, high) = (a.min(b), a.max(b));
             for minutes in [low, high] {
                 let exact = i128::from(rate) * i128::from(minutes);
-                match line_amount_cents(rate, minutes) {
+                match line_amount_cents(rate, minutes, "EUR") {
                     Ok(cents) => prop_assert!((-29..=30).contains(&(i128::from(cents) * 60 - exact))),
                     Err(_) => prop_assert!(exact >= 60 * i128::from(i64::MAX) + 30),
                 }
             }
-            if let (Ok(low), Ok(high)) = (line_amount_cents(rate, low), line_amount_cents(rate, high)) {
+            if let (Ok(low), Ok(high)) = (line_amount_cents(rate, low, "EUR"), line_amount_cents(rate, high, "EUR")) {
                 prop_assert!(low <= high);
             }
+        }
+
+        /// In any currency, a line is a multiple of the currency's step
+        /// (100 hundredths for a zero-decimal currency, else 1), within half
+        /// a step of the exact value (half up), and equal to the two-decimal
+        /// amount when the step is 1; so a sum of lines in one currency is a
+        /// multiple of its step too.
+        #[test]
+        fn line_amount_rounds_to_the_currency_step(
+            rate in prop_oneof![0..=i64::MAX, 0..=1_000_000_i64],
+            minutes in prop_oneof![0..=i32::MAX, 0..=10_000_i32],
+            currency in prop::sample::select(vec!["JPY", " KRW", "EUR", "KWD", "jpy", "XYZ"]),
+            lines in prop::collection::vec((0..=1_000_000_i64, 0..=10_000_i32), 0..8),
+        ) {
+            let step: i128 = if horae_core::money::currency_decimals(currency) == 0 { 100 } else { 1 };
+            if let Ok(cents) = line_amount_cents(rate, minutes, currency) {
+                let cents = i128::from(cents);
+                let exact = i128::from(rate) * i128::from(minutes);
+                prop_assert_eq!(cents % step, 0);
+                prop_assert!((-30 * step + 1..=30 * step).contains(&(cents * 60 - exact)));
+                if step == 1 {
+                    // The two-decimal formula this function replaced.
+                    prop_assert_eq!(cents, (exact + 30) / 60);
+                }
+            }
+            let sum: i128 = lines
+                .iter()
+                .map(|&(r, m)| i128::from(line_amount_cents(r, m, currency).unwrap()))
+                .sum();
+            prop_assert_eq!(sum % step, 0);
         }
     }
 }
