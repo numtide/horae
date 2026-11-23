@@ -104,8 +104,12 @@ impl EntryWithRates {
     }
 
     pub(super) fn amount(&self) -> Result<i64, OpError> {
-        horae_core::invoice::line_amount_cents(self.rate_cents.unwrap_or(0), self.minutes)
-            .map_err(|_| OpError::conflict("Invoice line amount exceeds the supported range."))
+        horae_core::invoice::line_amount_cents(
+            self.rate_cents.unwrap_or(0),
+            self.minutes,
+            &self.currency,
+        )
+        .map_err(|_| OpError::conflict("Invoice line amount exceeds the supported range."))
     }
 
     pub(super) fn description(&self) -> String {

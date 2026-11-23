@@ -116,16 +116,25 @@ fn invoice_amounts_add_up_for_every_subtotal() {
 }
 
 /// A line amount never panics for any `i64` rate and `i32` minutes, and for
-/// stored non-negative inputs it is rate × minutes / 60 rounded half up.
+/// stored non-negative inputs it is rate × minutes / 60 rounded half up to the
+/// currency's step: a hundredth for EUR, a whole unit (100) for JPY.
 #[kani::proof]
+// One more than the 16 codes `currency_decimals` searches.
+#[kani::unwind(17)]
 fn line_amount_is_half_up_for_every_input() {
     let (rate, minutes): (i64, i32) = (kani::any(), kani::any());
-    if let Ok(cents) = line_amount_cents(rate, minutes)
+    let (currency, step) = if kani::any() {
+        ("JPY", 100)
+    } else {
+        ("EUR", 1)
+    };
+    if let Ok(cents) = line_amount_cents(rate, minutes, currency)
         && rate >= 0
         && minutes >= 0
     {
         let error = i128::from(cents) * 60 - i128::from(rate) * i128::from(minutes);
-        assert!(-29 <= error && error <= 30);
+        assert!(i128::from(cents) % step == 0);
+        assert!(-30 * step < error && error <= 30 * step);
     }
 }
 

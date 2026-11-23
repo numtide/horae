@@ -140,17 +140,30 @@ pub fn resolve_rate(
         .or(user_rate_cents)
 }
 
-/// Compute line amount in minor units (cents).
+/// Compute a line amount in hundredths, rounded to the currency's precision.
 ///
-/// `rate_cents` is an hourly rate in cents; `minutes` is the duration.
-/// For the non-negative rates/durations stored by Horae, a half-cent rounds up.
-/// Signed inputs retain truncation toward zero, matching the SQL helper.
+/// `rate_cents` is an hourly rate in hundredths; `minutes` is the duration.
+/// The exact value `rate × minutes ÷ 60` is rounded once, half up, to a whole
+/// unit for a zero-decimal currency (a multiple of 100) and to a hundredth for
+/// every other currency, so a total that sums these amounts stays in the
+/// currency's precision. For the non-negative rates/durations stored by Horae,
+/// a half step rounds up. Signed inputs retain truncation toward zero,
+/// matching the SQL helper `line_amount_cents(bigint, integer, text)`.
 ///
 /// # Errors
 /// Returns an error if the final amount cannot fit in `i64`. The intermediate
 /// product of an `i64` rate and `i32` duration always fits in `i128`.
-pub fn line_amount_cents(rate_cents: i64, minutes: i32) -> Result<i64, std::num::TryFromIntError> {
-    ((i128::from(rate_cents) * i128::from(minutes) + 30) / 60).try_into()
+pub fn line_amount_cents(
+    rate_cents: i64,
+    minutes: i32,
+    currency: &str,
+) -> Result<i64, std::num::TryFromIntError> {
+    let step: i128 = if crate::money::currency_decimals(currency) == 0 {
+        100
+    } else {
+        1
+    };
+    ((i128::from(rate_cents) * i128::from(minutes) + 30 * step) / (60 * step) * step).try_into()
 }
 
 #[cfg(test)]
@@ -345,7 +358,7 @@ mod tests {
 
     #[test]
     fn line_amount_accepts_large_representable_amounts() {
-        assert_eq!(line_amount_cents(i64::MAX, 60).unwrap(), i64::MAX);
+        assert_eq!(line_amount_cents(i64::MAX, 60, "EUR").unwrap(), i64::MAX);
     }
 
     #[test]
@@ -371,47 +384,68 @@ mod tests {
     #[test]
     fn line_amount_exact_hour() {
         // $100/hr for 60 minutes = $100.00
-        assert_eq!(line_amount_cents(10000, 60).unwrap(), 10000);
+        assert_eq!(line_amount_cents(10000, 60, "EUR").unwrap(), 10000);
     }
 
     #[test]
     fn line_amount_half_hour() {
         // $100/hr for 30 minutes = $50.00
-        assert_eq!(line_amount_cents(10000, 30).unwrap(), 5000);
+        assert_eq!(line_amount_cents(10000, 30, "EUR").unwrap(), 5000);
     }
 
     #[test]
     fn line_amount_90_minutes() {
         // $100/hr for 90 minutes = $150.00
-        assert_eq!(line_amount_cents(10000, 90).unwrap(), 15000);
+        assert_eq!(line_amount_cents(10000, 90, "EUR").unwrap(), 15000);
     }
 
     #[test]
     fn line_amount_zero_minutes() {
-        assert_eq!(line_amount_cents(10000, 0).unwrap(), 0);
+        assert_eq!(line_amount_cents(10000, 0, "EUR").unwrap(), 0);
     }
 
     #[test]
     fn line_amount_zero_rate() {
-        assert_eq!(line_amount_cents(0, 60).unwrap(), 0);
+        assert_eq!(line_amount_cents(0, 60, "EUR").unwrap(), 0);
     }
 
     #[test]
     fn line_amount_odd_minutes() {
         // $120/hr (12000 cents) for 25 minutes = 12000 * 25 / 60 = 5000
-        assert_eq!(line_amount_cents(12000, 25).unwrap(), 5000);
+        assert_eq!(line_amount_cents(12000, 25, "EUR").unwrap(), 5000);
     }
 
     #[test]
     fn line_amount_rejects_unrepresentable_results() {
-        assert!(line_amount_cents(i64::MAX, 61).is_err());
-        assert!(line_amount_cents(i64::MIN, 61).is_err());
-        assert!(line_amount_cents(i64::MAX, i32::MAX).is_err());
+        assert!(line_amount_cents(i64::MAX, 61, "EUR").is_err());
+        assert!(line_amount_cents(i64::MIN, 61, "EUR").is_err());
+        assert!(line_amount_cents(i64::MAX, i32::MAX, "EUR").is_err());
+        assert!(line_amount_cents(i64::MAX, 61, "JPY").is_err());
     }
 
     #[test]
     fn line_amount_rounds_half_cents_up_not_to_even() {
-        assert_eq!(line_amount_cents(1, 30).unwrap(), 1);
-        assert_eq!(line_amount_cents(1, 150).unwrap(), 3);
+        assert_eq!(line_amount_cents(1, 30, "EUR").unwrap(), 1);
+        assert_eq!(line_amount_cents(1, 150, "EUR").unwrap(), 3);
+    }
+
+    #[test]
+    fn line_amount_rounds_a_zero_decimal_currency_to_whole_units() {
+        // 80.50 × 1.5 h = 120.75 → JPY 121; 5.00 × 0.5 h = 2.50 → JPY 3.
+        assert_eq!(line_amount_cents(8050, 90, "JPY").unwrap(), 12100);
+        assert_eq!(line_amount_cents(500, 30, "JPY").unwrap(), 300);
+    }
+
+    #[test]
+    fn line_amount_keeps_hundredths_for_two_and_three_decimal_currencies() {
+        assert_eq!(line_amount_cents(8050, 90, "EUR").unwrap(), 12075);
+        assert_eq!(line_amount_cents(8050, 90, "BHD").unwrap(), 12075);
+    }
+
+    #[test]
+    fn line_amount_rounds_once_from_the_exact_value() {
+        // 150.62 × 48 min = 120.496: straight to units gives 120, while
+        // rounding to 120.50 first would give 121.
+        assert_eq!(line_amount_cents(15062, 48, "JPY").unwrap(), 12000);
     }
 }

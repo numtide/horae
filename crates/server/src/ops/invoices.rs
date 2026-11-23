@@ -41,6 +41,8 @@ mod entries;
 mod fees;
 mod generate;
 pub mod preview;
+#[cfg(test)]
+mod rounding_tests;
 
 pub use generate::{Generation, generate};
 

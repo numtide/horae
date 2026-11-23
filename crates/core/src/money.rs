@@ -129,13 +129,29 @@ pub fn format_major_units(cents: i64, currency: &str) -> String {
     }
 }
 
-/// ISO 4217 minor-unit digits; every currency not listed has two.
-fn currency_decimals(currency: &str) -> u8 {
-    match currency.trim() {
-        "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => 3,
-        "BIF" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF" | "UGX"
-        | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
-        _ => 2,
+/// ISO 4217 currencies with no minor unit.
+pub const ZERO_DECIMAL_CURRENCIES: &[&str] = &[
+    "BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "VND", "VUV",
+    "XAF", "XOF", "XPF",
+];
+
+/// ISO 4217 currencies with three decimals.
+pub const THREE_DECIMAL_CURRENCIES: &[&str] = &["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"];
+
+/// ISO 4217 minor-unit digits; every currency not listed has two. The code is
+/// trimmed and matched case-sensitively.
+///
+/// This and the two lists above are the only table of currency decimals in
+/// Rust. Its SQL twin, `currency_amount_step(text)`, lists the same
+/// zero-decimal codes, and a parity test runs both over every listed code.
+pub fn currency_decimals(currency: &str) -> u8 {
+    let code = currency.trim();
+    if ZERO_DECIMAL_CURRENCIES.contains(&code) {
+        0
+    } else if THREE_DECIMAL_CURRENCIES.contains(&code) {
+        3
+    } else {
+        2
     }
 }
 
@@ -170,6 +186,20 @@ mod tests {
         assert_eq!(format_major_units(-100, "KRW"), "-1");
         assert_eq!(format_major_units(1_230, "BHD"), "12.300");
         assert_eq!(format_major_units(-5, "KWD"), "-0.050");
+    }
+
+    #[test]
+    fn currency_decimals_follow_iso_4217() {
+        assert_eq!(currency_decimals("JPY"), 0);
+        assert_eq!(currency_decimals(" JPY"), 0);
+        assert_eq!(currency_decimals("EUR"), 2);
+        assert_eq!(currency_decimals("KWD"), 3);
+    }
+
+    #[test]
+    fn currency_decimals_are_two_for_unknown_and_lowercase_codes() {
+        assert_eq!(currency_decimals("XYZ"), 2);
+        assert_eq!(currency_decimals("jpy"), 2);
     }
 
     #[test]

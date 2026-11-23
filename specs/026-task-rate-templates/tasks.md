@@ -24,18 +24,18 @@ ______________________________________________________________________
 
 ## Phase 1: Setup
 
-- [ ] T001 Check the next free migration number on master (0010 if PR 1's 0009 is the latest) and use it for `crates/server/migrations/NNNN_currency_line_amounts.sql` in every later Delivery 1 task
+- [x] T001 Check the next free migration number on master (0010 if PR 1's 0009 is the latest) and use it for `crates/server/migrations/NNNN_currency_line_amounts.sql` in every later Delivery 1 task
 
 ## Phase 2: Foundational (core rule and SQL twin)
 
-- [ ] T002 [P] Tests first in `crates/core/src/money.rs`: `currency_decimals` is 0 for JPY and " JPY", 2 for EUR, 3 for KWD, and 2 for an unknown code and for "jpy" (matching stays trimmed and case-sensitive, as today)
-- [ ] T003 [P] Tests first in `crates/core/src/invoice.rs`: `line_amount_cents(8050, 90, "JPY") == 12100`, `(500, 30, "JPY") == 300`, `(8050, 90, "EUR") == 12075`, `(8050, 90, "BHD") == 12075`, a JPY case whose exact value is 120.496 gives 12000 (single rounding), `i64::MAX` overflow is an error
-- [ ] T004 Make `currency_decimals` public in `crates/core/src/money.rs`, with a doc comment that it is the only list of currency decimals in Rust
-- [ ] T005 Change `line_amount_cents` in `crates/core/src/invoice.rs` to take the currency and use the step of research R1, with truncating integer division as today (not `floor`); keep the doc comment on signed inputs and the existing EUR tests passing unchanged
-- [ ] T006 [P] Properties in `crates/core/tests/properties.rs`: for any non-negative rate and minutes and any currency, the amount is a multiple of the step, within half a step of the exact value, and equals the old two-decimal formula when the step is 1; any sum of amounts in one currency is a multiple of its step; update the Kani harness `line_amount_is_half_up_for_every_input` in `crates/core/src/proofs.rs` for the step
-- [ ] T007 Write `crates/server/migrations/NNNN_currency_line_amounts.sql`: create `currency_amount_step(text)` (100 for the zero-decimal codes of `currency_decimals`, else 1, matching `btrim(currency)` case-sensitively as Rust does) and `line_amount_cents(bigint, integer, text)` (`IMMUTABLE STRICT PARALLEL SAFE`, data-model.md formula with `div`, not `floor`), drop `line_amount_cents(bigint, integer)`
-- [ ] T008 Extend the existing parity test `line_amount_cents_sql_matches_rust` in `crates/horae/tests/integration.rs`: every code `currency_decimals` lists, one unknown code, `' JPY'` and `'jpy'`, and amounts within one hundredth of every half; keep the existing negative cases; SQL equals Rust; update the other Rust callers in that file and in `crates/horae/src/server_fns/reports/tests.rs`
-- [ ] T009 [P] Allow the new SQL functions and remove the old signature in the plugin role allowlist in `crates/server/src/plugin/database.rs`, in the same PR as T007 (the list casts `'public.line_amount_cents(bigint,integer)'::regprocedure`, which fails at startup once the function is gone); run its existing role test and check that the server boots against the migrated database
+- [x] T002 [P] Tests first in `crates/core/src/money.rs`: `currency_decimals` is 0 for JPY and " JPY", 2 for EUR, 3 for KWD, and 2 for an unknown code and for "jpy" (matching stays trimmed and case-sensitive, as today)
+- [x] T003 [P] Tests first in `crates/core/src/invoice.rs`: `line_amount_cents(8050, 90, "JPY") == 12100`, `(500, 30, "JPY") == 300`, `(8050, 90, "EUR") == 12075`, `(8050, 90, "BHD") == 12075`, a JPY case whose exact value is 120.496 gives 12000 (single rounding), `i64::MAX` overflow is an error
+- [x] T004 Make `currency_decimals` public in `crates/core/src/money.rs`, with a doc comment that it is the only list of currency decimals in Rust
+- [x] T005 Change `line_amount_cents` in `crates/core/src/invoice.rs` to take the currency and use the step of research R1, with truncating integer division as today (not `floor`); keep the doc comment on signed inputs and the existing EUR tests passing unchanged
+- [x] T006 [P] Properties in `crates/core/tests/properties.rs`: for any non-negative rate and minutes and any currency, the amount is a multiple of the step, within half a step of the exact value, and equals the old two-decimal formula when the step is 1; any sum of amounts in one currency is a multiple of its step; update the Kani harness `line_amount_is_half_up_for_every_input` in `crates/core/src/proofs.rs` for the step
+- [x] T007 Write `crates/server/migrations/NNNN_currency_line_amounts.sql`: create `currency_amount_step(text)` (100 for the zero-decimal codes of `currency_decimals`, else 1, matching `btrim(currency)` case-sensitively as Rust does) and `line_amount_cents(bigint, integer, text)` (`IMMUTABLE STRICT PARALLEL SAFE`, data-model.md formula with `div`, not `floor`), drop `line_amount_cents(bigint, integer)`
+- [x] T008 Extend the existing parity test `line_amount_cents_sql_matches_rust` in `crates/horae/tests/integration.rs`: every code `currency_decimals` lists, one unknown code, `' JPY'` and `'jpy'`, and amounts within one hundredth of every half; keep the existing negative cases; SQL equals Rust; update the other Rust callers in that file and in `crates/horae/src/server_fns/reports/tests.rs`
+- [x] T009 [P] Allow the new SQL functions and remove the old signature in the plugin role allowlist in `crates/server/src/plugin/database.rs`, in the same PR as T007 (the list casts `'public.line_amount_cents(bigint,integer)'::regprocedure`, which fails at startup once the function is gone); run its existing role test and check that the server boots against the migrated database
 
 **Checkpoint**: the workspace does not compile until T011 to T014 use the new signatures.
 
@@ -45,16 +45,16 @@ ______________________________________________________________________
 
 **Independent test**: quickstart.md "Rounding".
 
-- [ ] T010 [P] [US3] Tests first: a JPY invoice preview and invoice with lines 12100 and 300 and subtotal 12400 in `crates/server/src/ops/invoices/` tests; for JPY, EUR and KWD invoices, the preview's and the generated invoice's `subtotal_cents` equal the sum of `line.amount_cents` (SC-003); the PDF from `render_invoice_pdf` in `crates/server/src/render.rs` shows "121.00", "3.00" and "124.00" with JPY, since the display keeps two decimals (SC-004); the time report (`ops::reports::time`, `billable_cents`) and its CSV export, the project figures and the amount budget for the same entries give 12100 and 300; an invoice stored before the change keeps its amounts
-- [ ] T011 [US3] Pass the invoice currency to `line_amount_cents` in `crates/server/src/ops/invoices/entries.rs` (`EntryWithRates::amount`)
-- [ ] T012 [P] [US3] Use the three-argument SQL function with the row's currency in `crates/server/src/ops/reports.rs` (billable with the report currency; cost with the cost currency)
-- [ ] T013 [P] [US3] Same in `crates/server/src/ops/projects/reads.rs`
-- [ ] T014 [P] [US3] Same in `crates/server/src/ops/projects/budgets.rs`
+- [x] T010 [P] [US3] Tests first: a JPY invoice preview and invoice with lines 12100 and 300 and subtotal 12400 in `crates/server/src/ops/invoices/` tests; for JPY, EUR and KWD invoices, the preview's and the generated invoice's `subtotal_cents` equal the sum of `line.amount_cents` (SC-003); the PDF from `render_invoice_pdf` in `crates/server/src/render.rs` shows "121.00", "3.00" and "124.00" with JPY, since the display keeps two decimals (SC-004); the time report (`ops::reports::time`, `billable_cents`) and its CSV export, the project figures and the amount budget for the same entries give 12100 and 300; an invoice stored before the change keeps its amounts
+- [x] T011 [US3] Pass the invoice currency to `line_amount_cents` in `crates/server/src/ops/invoices/entries.rs` (`EntryWithRates::amount`)
+- [x] T012 [P] [US3] Use the three-argument SQL function with the row's currency in `crates/server/src/ops/reports.rs` (billable with the report currency; cost with the cost currency)
+- [x] T013 [P] [US3] Same in `crates/server/src/ops/projects/reads.rs`
+- [x] T014 [P] [US3] Same in `crates/server/src/ops/projects/budgets.rs`
 
 ## Phase 4: Delivery 1 polish
 
 - [ ] T015 [US3] On a copy of a real database (`pg_dump` of a deployment, restored locally and `ANALYZE`d; ask the maintainer before taking the dump), record invoice totals, report totals and project figures before and after the migration; they must be equal apart from uninvoiced per-entry amounts in zero-decimal currencies (FR-011)
-- [ ] T016 Regenerate `.sqlx/` (touch command and `cargo sqlx prepare --workspace -- --features server --all-targets`), then build offline
+- [x] T016 Regenerate `.sqlx/` (touch command and `cargo sqlx prepare --workspace -- --features server --all-targets`), then build offline
 - [ ] T017 Run `cargo test -p horae-core`, `cargo kani -p horae-core`, the `horae-server` and `horae --features server` tests, and clippy for `horae-server`, `horae-api`, `horae-harvest-api` and `horae --features server`
 - [ ] T018 `nix fmt` and `nix flake check`; write the PR body, saying that uninvoiced amounts and amount-budget consumption in zero-decimal currencies now round to whole units (so a budget alert may cross its threshold on upgrade), that discounts, taxes, fees and typed lines are unchanged, and that stored invoices do not change
 
