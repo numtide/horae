@@ -217,20 +217,21 @@ async fn rows(pool: &PgPool, grant_id: Uuid) -> [i64; 4] {
 async fn cleanup_deletes_what_can_no_longer_be_used(pool: PgPool) {
     let admin = seed(&pool, BuiltInProfile::Administrator).await;
     let app_id = app(&pool, &admin).await;
-    let refresh_idle = std::time::Duration::from_secs(3600);
 
+    // A used refresh token stays while its grant lives, so its reuse is caught.
     let old_credentials = grant(&pool, &admin, app_id).await;
     age(&pool, old_credentials, "code", "25 hours").await;
     age(&pool, old_credentials, "access", "25 hours").await;
-    age(&pool, old_credentials, "refresh_used", "2 hours").await;
+    age(&pool, old_credentials, "refresh_used", "400 days").await;
+    age(&pool, old_credentials, "refresh_idle", "370 days").await;
 
     let recent_credentials = grant(&pool, &admin, app_id).await;
     age(&pool, recent_credentials, "code", "23 hours").await;
     age(&pool, recent_credentials, "access", "23 hours").await;
-    age(&pool, recent_credentials, "refresh_used", "30 minutes").await;
+    age(&pool, recent_credentials, "refresh_idle", "23 hours").await;
 
     let idle_refresh = grant(&pool, &admin, app_id).await;
-    age(&pool, idle_refresh, "refresh_idle", "2 hours").await;
+    age(&pool, idle_refresh, "refresh_idle", "25 hours").await;
 
     let revoked_long_ago = grant(&pool, &admin, app_id).await;
     age(&pool, revoked_long_ago, "revoked", "25 hours").await;
@@ -239,11 +240,9 @@ async fn cleanup_deletes_what_can_no_longer_be_used(pool: PgPool) {
     let expired_long_ago = grant(&pool, &admin, app_id).await;
     age(&pool, expired_long_ago, "expires", "25 hours").await;
 
-    crate::ops::oauth::delete_expired(&pool, refresh_idle)
-        .await
-        .unwrap();
+    crate::ops::oauth::delete_expired(&pool).await.unwrap();
 
-    assert_eq!(rows(&pool, old_credentials).await, [1, 0, 0, 0]);
+    assert_eq!(rows(&pool, old_credentials).await, [1, 0, 0, 1]);
     assert_eq!(rows(&pool, recent_credentials).await, [1, 1, 1, 1]);
     assert_eq!(rows(&pool, idle_refresh).await, [1, 1, 1, 0]);
     assert_eq!(rows(&pool, revoked_long_ago).await, [0, 0, 0, 0]);

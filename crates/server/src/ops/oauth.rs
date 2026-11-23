@@ -87,14 +87,12 @@ pub(crate) fn generate_client_id() -> String {
 /// - authorizations that ended (revoked or expired) over a day ago, with
 ///   every code and token issued under them;
 /// - codes and access tokens that expired over a day ago;
-/// - refresh tokens used or idle-expired more than `refresh_idle` ago. A used
-///   one is kept that long so presenting it again is still caught as reuse,
-///   by which time every token after it has expired too.
-pub async fn delete_expired(
-    pool: &sqlx::PgPool,
-    refresh_idle: std::time::Duration,
-) -> Result<u64, sqlx::Error> {
-    let refresh_idle_seconds = i64::try_from(refresh_idle.as_secs()).unwrap_or(i64::MAX);
+/// - refresh tokens never used that idle-expired over a day ago.
+///
+/// A used refresh token stays until its authorization ends: presenting it
+/// again must end the authorization however long after (FR-043), because
+/// each rotation restarts the idle expiry of the token that replaced it.
+pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64, sqlx::Error> {
     let grants = sqlx::query!(
         "DELETE FROM oauth_grants
          WHERE revoked_at < now() - interval '1 day' OR expires_at < now() - interval '1 day'"
@@ -110,9 +108,7 @@ pub async fn delete_expired(
             .await?;
     let refresh = sqlx::query!(
         "DELETE FROM oauth_refresh_tokens
-         WHERE used_at < now() - make_interval(secs => $1)
-            OR idle_expires_at < now() - make_interval(secs => $1)",
-        refresh_idle_seconds as f64,
+         WHERE used_at IS NULL AND idle_expires_at < now() - interval '1 day'"
     )
     .execute(pool)
     .await?;

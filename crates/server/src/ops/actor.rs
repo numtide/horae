@@ -238,6 +238,26 @@ impl Actor {
         Ok(())
     }
 
+    /// For a write whose own guard would let any unlocked OAuth actor
+    /// through: an OAuth caller needs `scope` in its token, whichever scope
+    /// the endpoint unlocked. Every other channel is unaffected.
+    pub fn require_scope(&self, scope: Scope) -> Result<(), OpError> {
+        match self.channel {
+            Channel::OAuth { scopes, .. } if !scopes.normalize().contains(scope) => {
+                Err(OpError::forbidden(SCOPE_REQUIRED))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Refuses an OAuth caller: no scope covers this write (FR-063).
+    pub fn refuse_oauth(&self) -> Result<(), OpError> {
+        match self.channel {
+            Channel::OAuth { .. } => Err(OpError::forbidden(SCOPE_REQUIRED)),
+            _ => Ok(()),
+        }
+    }
+
     /// Refuses anyone but a signed-in person: the guard for managing tokens,
     /// apps and authorizations, which only the web app does.
     pub fn require_session(&self) -> Result<(), OpError> {

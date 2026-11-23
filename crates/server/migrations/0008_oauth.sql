@@ -130,9 +130,9 @@ CREATE TABLE oauth_refresh_tokens (
 );
 
 CREATE INDEX oauth_refresh_tokens_grant_idx ON oauth_refresh_tokens (grant_id);
-CREATE INDEX oauth_refresh_tokens_idle_expires_idx ON oauth_refresh_tokens (idle_expires_at);
-CREATE INDEX oauth_refresh_tokens_used_idx ON oauth_refresh_tokens (used_at)
-    WHERE used_at IS NOT NULL;
+-- A used refresh token is kept until its grant ends, to catch its reuse.
+CREATE INDEX oauth_refresh_tokens_idle_expires_idx ON oauth_refresh_tokens (idle_expires_at)
+    WHERE used_at IS NULL;
 
 -- Every organization has exactly one built-in client for Horae's Android app,
 -- disabled until an administrator enables it (spec D-1). The trigger covers

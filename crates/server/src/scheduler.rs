@@ -25,9 +25,7 @@ pub fn spawn(state: &'static AppState) {
             {
                 tracing::warn!("budget scheduler tick failed");
             }
-            if let Err(e) =
-                crate::ops::oauth::delete_expired(&state.db, state.oauth.refresh_idle).await
-            {
+            if let Err(e) = crate::ops::oauth::delete_expired(&state.db).await {
                 tracing::warn!("OAuth cleanup tick failed: {e}");
             }
         }

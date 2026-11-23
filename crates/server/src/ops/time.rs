@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use chrono::{NaiveDate, Timelike, Utc};
 use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::oauth::Scope;
 use horae_core::types::EntryState;
 use uuid::Uuid;
 
@@ -296,6 +297,7 @@ pub async fn stop_timer(
 ) -> Result<Done<(TimeEntry, Option<String>)>, OpError> {
     // Stopping an own running timer remains possible after task access is revoked.
     begin_own_time_write(tx, actor).await?;
+    actor.require_scope(Scope::TimeWrite)?;
     let user_id = actor.id();
 
     // The row is locked before the day, as on every other write path, so

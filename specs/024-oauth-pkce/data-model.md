@@ -105,9 +105,11 @@ revocation is on the grant.
 | `idle_expires_at` | timestamptz | issue + 30 days (D-2); never after the grant's `expires_at` |
 | `used_at` | timestamptz NULL | set when exchanged; a token with `used_at` set that is presented again revokes the grant (R-8) |
 
-The scheduler deletes refresh tokens used or idle-expired longer ago than the idle expiry
-(`HORAE_OAUTH_REFRESH_IDLE`): by then every token after a used one has expired too, so reuse
-detection loses nothing. Indexes on `idle_expires_at` and on `used_at` where set.
+A used refresh token stays until its grant ends, and the grant cleanup deletes it with the grant:
+each rotation restarts the idle expiry of the token that replaced the used one, so a thief who
+rotated first could otherwise outlast it, and the real app presenting the used token after a long
+pause must still end the grant (FR-043). The scheduler deletes only refresh tokens never used that
+idle-expired over a day ago. Index on `idle_expires_at` where `used_at` is null.
 
 ## Session data (no table)
 

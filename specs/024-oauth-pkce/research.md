@@ -190,10 +190,16 @@ cite it. R-19 compares the design with Harvest's public OAuth documentation.
 
   - Denied by default: an OAuth actor loads with no authority, answering like an inactive person,
     until the adapter calls `Actor::unlock_scope` with its endpoint's scope, which fails unless
-    the token holds it. Operations whose only guard is "an active person" (profile, preferences,
-    and the like) therefore refuse OAuth callers unless an endpoint with a declared scope reaches
-    them. Managing personal tokens, apps and authorizations also requires `Channel::Session`
-    (`Actor::require_session`), so no token, personal or OAuth, can mint or revoke another.
+    the token holds it. Unlocking is all or nothing: once an endpoint unlocks any scope, an
+    operation whose only guard is "an active person", or a permission a scope's ceiling
+    includes, would let the actor through. Such writes refuse OAuth callers themselves:
+    `Actor::refuse_oauth` where no scope covers the write (`profile::update`,
+    `approvals::submit_week`, whose `TimeWriteOwn` is in the `time:write` ceiling), and
+    `Actor::require_scope` where one does (`time::stop_timer` needs `time:write`). Every other
+    write requires a permission outside every ceiling. Managing personal tokens, apps and
+    authorizations also requires `Channel::Session` (`Actor::require_session`), so no token,
+    personal or OAuth, can mint or revoke another. A new write guarded only by an active person
+    or a time permission must choose one of these guards.
 
 - **Rationale**: FR-063 asks that scopes only narrow. Intersection makes it true by construction:
   whatever an operation checks, it checks against a subset of the person's grants. Some reads need
