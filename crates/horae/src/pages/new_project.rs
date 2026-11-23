@@ -23,8 +23,6 @@ mod basics;
 mod billing;
 #[path = "new_project/catalog.rs"]
 mod catalog;
-#[path = "new_project/date_field.rs"]
-mod date_field;
 #[path = "new_project/draft.rs"]
 mod draft;
 #[path = "new_project/edit_return.rs"]

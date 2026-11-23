@@ -1,8 +1,10 @@
 use dioxus::prelude::*;
 use horae_core::money::{format_cents_plain, parse_cents};
 
+use super::super::money;
 use crate::components::controls::Checkbox;
 use crate::components::form::{FormGroup, Input};
+use crate::i18n::{Tr, use_tr};
 use crate::models::invoice::{
     InvoiceFeeBalance, InvoiceFeeSelection, InvoicePreparation, InvoiceSource,
 };
@@ -64,28 +66,24 @@ pub(super) fn refresh(previous: &[FeeInput], current: Vec<FeeInput>) -> Vec<FeeI
     refreshed
 }
 
-pub(super) fn parse(fees: &[FeeInput]) -> Result<Vec<InvoiceFeeSelection>, String> {
+pub(super) fn parse(tr: Tr, fees: &[FeeInput]) -> Result<Vec<InvoiceFeeSelection>, String> {
     fees.iter()
         .map(|fee| {
             if !fee.present {
-                return Err("Remove unavailable fee edits before reviewing the invoice.".into());
+                return Err(tr.invoices_fee_unavailable_edits());
             }
             if fee.description.trim().is_empty()
                 || fee.description.chars().count() > 1000
                 || fee.description.contains('\0')
             {
-                return Err("Fee descriptions must contain 1–1000 characters without NUL.".into());
+                return Err(tr.invoices_fee_description_invalid());
             }
-            let amount_cents = parse_cents(&fee.amount).map_err(|_| {
-                "Enter an exact fee amount with at most two decimal places.".to_owned()
-            })?;
+            let amount_cents =
+                parse_cents(&fee.amount).map_err(|_| tr.invoices_fee_amount_invalid())?;
             if amount_cents < 0
                 || (fee.selected && amount_cents == 0 && fee.balance.agreed_cents != 0)
             {
-                return Err(
-                    "Selected fee amounts must be positive; unselected amounts cannot be negative."
-                        .into(),
-                );
+                return Err(tr.invoices_fee_amount_selected());
             }
             Ok(InvoiceFeeSelection {
                 source: fee.source.clone(),
@@ -99,32 +97,36 @@ pub(super) fn parse(fees: &[FeeInput]) -> Result<Vec<InvoiceFeeSelection>, Strin
 
 #[component]
 pub(super) fn FeeFields(mut fees: Signal<Vec<FeeInput>>, disabled: bool) -> Element {
+    let tr = use_tr();
     rsx! {
-        fieldset { class: "border-0 p-0 m-0 min-w-0", disabled, aria_label: "Fees to invoice",
-            h4 { class: "text-sm font-semibold mb-4", "Fees to invoice" }
-            p { class: "text-sm text-muted mb-4", "Amounts and descriptions change this invoice only. Balances are from the last review and include drafts, before tax. Settled fees are not selected automatically. Refreshing preserves edits and leaves new fees unselected." }
+        fieldset { class: "border-0 p-0 m-0 min-w-0", disabled, aria_label: tr.invoices_fees_to_invoice(),
+            h4 { class: "text-sm font-semibold mb-4", {tr.invoices_fees_to_invoice()} }
+            p { class: "text-sm text-muted mb-4", {tr.invoices_fees_to_invoice_hint()} }
             for (index, fee) in fees.read().iter().enumerate() {
-                div { key: "{fee.source:?}:{fee.currency}", class: "card p-4 mb-4", role: "group", aria_label: "Fee: {fee.label} ({fee.currency})",
+                div { key: "{fee.source:?}:{fee.currency}", class: "card p-4 mb-4", role: "group",
+                    aria_label: tr.invoices_fee_group(fee.currency.clone(), fee.label.clone()),
                     if !fee.present {
-                        p { class: "alert alert-warning", role: "status", "This source is no longer available in this currency. Your edits are kept below; remove this row explicitly before reviewing." }
+                        p { class: "alert alert-warning", role: "status", {tr.invoices_fee_unavailable()} }
                         button { r#type: "button", class: "btn btn-secondary btn-sm mb-4", disabled,
-                            onclick: move |_| { fees.write().remove(index); }, "Remove unavailable fee edits"
+                            onclick: move |_| { fees.write().remove(index); }, {tr.invoices_fee_remove_unavailable()}
                         }
                     }
-                    Checkbox { label: "Include fee: {fee.label}", checked: fee.selected, disabled: disabled || !fee.present,
+                    Checkbox { label: tr.invoices_fee_include(fee.label.clone()), checked: fee.selected, disabled: disabled || !fee.present,
                         onclick: move |_| { let selected = fees.peek()[index].selected; fees.write()[index].selected = !selected; }
                     }
-                    FormGroup { label: "Fee description", id: "prepared-fee-description-{index}",
+                    FormGroup { label: tr.invoices_fee_description(), id: "prepared-fee-description-{index}",
                         Input { id: "prepared-fee-description-{index}", value: fee.description.clone(), oninput: move |event: FormEvent| fees.write()[index].description = event.value() }
                     }
-                    FormGroup { label: "Fee amount ({fee.currency})", id: "prepared-fee-amount-{index}",
+                    FormGroup { label: tr.invoices_fee_amount(fee.currency.clone()), id: "prepared-fee-amount-{index}",
                         Input { id: "prepared-fee-amount-{index}", class: "text-mono", value: fee.amount.clone(), oninput: move |event: FormEvent| fees.write()[index].amount = event.value() }
                     }
                     p { class: "text-sm text-muted wrap-anywhere",
-                        "Last review · Agreed: {fee.currency} " {format_cents_plain(fee.balance.agreed_cents)}
-                        " · Invoiced (including drafts): {fee.currency} " {format_cents_plain(fee.balance.invoiced_cents)}
-                        " · Remaining: {fee.currency} " {format_cents_plain(fee.balance.remaining_cents)}
-                        if fee.balance.remaining_cents < 0 { strong { " · Over-invoiced" } }
+                        {tr.invoices_fee_last_review(
+                            money(fee.balance.agreed_cents, &fee.currency),
+                            money(fee.balance.invoiced_cents, &fee.currency),
+                            money(fee.balance.remaining_cents, &fee.currency),
+                        )}
+                        if fee.balance.remaining_cents < 0 { strong { " " {tr.invoices_over_invoiced()} } }
                     }
                 }
             }
@@ -172,7 +174,7 @@ mod tests {
         assert!(refreshed[0].selected);
         assert_eq!(refreshed[0].balance.remaining_cents, -50);
         assert!(!refreshed[1].selected);
-        assert!(parse(&refreshed).is_err());
+        assert!(parse(Tr::default(), &refreshed).is_err());
     }
 
     #[test]
@@ -186,26 +188,36 @@ mod tests {
         assert_eq!(refreshed.len(), 2);
         assert_eq!(refreshed[0].currency, "EUR");
         assert_eq!(refreshed[0].amount, "9.99");
-        assert!(parse(&refreshed).unwrap_err().contains("unavailable"));
+        assert!(
+            parse(Tr::default(), &refreshed)
+                .unwrap_err()
+                .contains("unavailable")
+        );
         assert!(!refreshed[1].selected);
         let restored = refresh(&refreshed[..1], vec![old]);
-        assert_eq!(parse(&restored).unwrap()[0].amount_cents, 999);
-        assert!(parse(&refresh(&restored, Vec::new())).is_err());
+        assert_eq!(
+            parse(Tr::default(), &restored).unwrap()[0].amount_cents,
+            999
+        );
+        assert!(parse(Tr::default(), &refresh(&restored, Vec::new())).is_err());
     }
 
     #[test]
     fn fee_inputs_require_exact_amounts_and_an_explicit_positive_charge() {
         let mut fee = fee();
-        assert!(!parse(&[fee.clone()]).unwrap()[0].selected);
+        assert!(!parse(Tr::default(), &[fee.clone()]).unwrap()[0].selected);
         fee.selected = true;
-        assert!(parse(&[fee.clone()]).is_err());
+        assert!(parse(Tr::default(), &[fee.clone()]).is_err());
         for invalid in ["-1", "0.001", "NaN", "999999999999999999999999"] {
             fee.amount = invalid.into();
-            assert!(parse(&[fee.clone()]).is_err(), "{invalid}");
+            assert!(parse(Tr::default(), &[fee.clone()]).is_err(), "{invalid}");
         }
         fee.amount = "1.25".into();
-        assert_eq!(parse(&[fee.clone()]).unwrap()[0].amount_cents, 125);
+        assert_eq!(
+            parse(Tr::default(), &[fee.clone()]).unwrap()[0].amount_cents,
+            125
+        );
         fee.description = "  ".into();
-        assert!(parse(&[fee]).is_err());
+        assert!(parse(Tr::default(), &[fee]).is_err());
     }
 }

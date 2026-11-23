@@ -156,6 +156,9 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     // Settings and Sign out are always offered. Administration appears only when
     // an admin section is open, and lands on the first one (`landing`).
     const expectUserMenu = async landing => {
+      // The server renders the rail, so the button is on screen before it
+      // handles clicks; hydration gives it a `data-dioxus-id`.
+      await expect(page.locator('.sidebar-footer')).toHaveAttribute('data-dioxus-id', /\d+/);
       await page.locator('.sidebar-footer').click();
       await expect(userMenu.locator('.menu-item')).toHaveText(landing ? ['My settings', 'Administration', 'Sign out'] : ['My settings', 'Sign out']);
       if (!landing) {
@@ -208,7 +211,6 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     // Floor grants give no directory read and open no admin section: there
     // is no Administration entry.
     await expect(railTeam).toHaveCount(0);
-    // The server render only says "Loading…", so this waits for hydration too.
     await expect(page.locator('.adm-nav')).toHaveCount(0);
     await expectUserMenu(null);
     // The Administrator identity alone opens Importers, so Administration

@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{ErrorState, LOAD_FAILED, Loading, NoAccess};
+use crate::components::screen_state::{ErrorState, LOAD_FAILED, NoAccess};
+use crate::i18n::{Tr, use_tr};
 use crate::models::invoice::{InvoiceDefaults, InvoiceDraftSave, InvoiceGenerationRequest};
 use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
@@ -56,6 +57,8 @@ impl PendingInvoice {
 pub(super) struct RecoveryStorage {
     key: Signal<String>,
     loaded: Signal<bool>,
+    /// Its errors are shown on the page, so they come from the catalog.
+    tr: Tr,
 }
 
 impl RecoveryStorage {
@@ -63,10 +66,10 @@ impl RecoveryStorage {
         (self.loaded)()
     }
     pub(super) async fn store(self, request: &PendingInvoice) -> Result<(), String> {
-        let value = serde_json::to_string(request)
-            .map_err(|_| "Cannot encode invoice recovery data.".to_owned())?;
+        let value =
+            serde_json::to_string(request).map_err(|_| self.tr.invoices_recovery_encode())?;
         if value.len() > 524288 {
-            return Err("Invoice recovery data exceeds 512 KiB.".into());
+            return Err(self.tr.invoices_recovery_too_large());
         }
         self.write(Some(value)).await
     }
@@ -83,14 +86,15 @@ impl RecoveryStorage {
                 if (value === null) sessionStorage.removeItem(key);
                 else sessionStorage.setItem(key, value);
                 dioxus.send({Ok: null});
-            } catch (_) { dioxus.send({Err: 'Browser session storage is unavailable.'}); }
+            } catch (_) { dioxus.send({Err: null}); }
         "#,
         );
         eval.send((self.key.peek().clone(), value))
-            .map_err(|_| "Cannot access invoice recovery storage.".to_owned())?;
-        eval.recv::<Result<(), String>>()
+            .map_err(|_| self.tr.invoices_recovery_unavailable())?;
+        eval.recv::<Result<(), ()>>()
             .await
-            .map_err(|_| "Cannot acknowledge invoice recovery storage.".to_owned())?
+            .map_err(|_| self.tr.invoices_recovery_unavailable())?
+            .map_err(|()| self.tr.invoices_recovery_unavailable())
     }
 
     async fn load(self) -> Result<Option<PendingInvoice>, String> {
@@ -98,19 +102,24 @@ impl RecoveryStorage {
             r#"
             const key = await dioxus.recv();
             try { dioxus.send({Ok: sessionStorage.getItem(key)}); }
-            catch (_) { dioxus.send({Err: 'Browser session storage is unavailable.'}); }
+            catch (_) { dioxus.send({Err: null}); }
         "#,
         );
         eval.send(self.key.peek().clone())
-            .map_err(|_| "Cannot access invoice recovery storage.".to_owned())?;
+            .map_err(|_| self.tr.invoices_recovery_unavailable())?;
         let value = eval
-            .recv::<Result<Option<String>, String>>()
+            .recv::<Result<Option<String>, ()>>()
             .await
-            .map_err(|_| "Cannot read invoice recovery storage.".to_owned())??;
-        value.map(|value| {
-            if value.len() > 524288 { return Err("Invoice recovery data exceeds 512 KiB.".into()); }
-            serde_json::from_str(&value).map_err(|_| "Invoice recovery data is invalid. Keep this tab and check saved invoices before clearing browser data.".into())
-        }).transpose()
+            .map_err(|_| self.tr.invoices_recovery_unavailable())?
+            .map_err(|()| self.tr.invoices_recovery_unavailable())?;
+        value
+            .map(|value| {
+                if value.len() > 524288 {
+                    return Err(self.tr.invoices_recovery_too_large());
+                }
+                serde_json::from_str(&value).map_err(|_| self.tr.invoices_recovery_invalid())
+            })
+            .transpose()
     }
 }
 
@@ -128,12 +137,14 @@ fn reads_invoices(own: &OwnPermissions) -> bool {
 /// Check this tab's current user's unresolved mutation before exposing invoice actions.
 #[component]
 pub(super) fn RecoveryGate(children: Element) -> Element {
+    let tr = use_tr();
     let mut storage_key = use_signal(String::new);
     let mut pending = use_signal(|| None::<PendingInvoice>);
     let mut loaded = use_signal(|| false);
     let storage = use_context_provider(|| RecoveryStorage {
         key: storage_key,
         loaded,
+        tr,
     });
     let mut loading_error = use_signal(|| None::<String>);
     // The stored permissions hold no invoice access: a retry cannot help.
@@ -161,7 +172,7 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
                 let refused = !reads_invoices(&own);
                 denied.set(refused);
                 if refused {
-                    return Err("Invoices require access to all invoices.".to_owned());
+                    return Err(tr.invoices_access_required());
                 }
                 storage_key.set(format!(
                     "horae-invoice-request:v1:{}:{}",
@@ -183,8 +194,8 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     });
     if let Some(request) = pending() {
         return rsx! { div { class: "card p-5", "data-editor-kind": "invoice", "data-editor-state": if rejected() && !busy() { "clean" } else { "pending" },
-            PageHeader { title: "Recover invoice request" }
-            p { class: "mb-4", "A previous invoice request may have completed. Recover the exact submitted request before starting another. No new invoice is created by an acknowledged retry." }
+            PageHeader { title: tr.invoices_recover_title() }
+            p { class: "mb-4", {tr.invoices_recover_body()} }
             if let Some(message) = error() { div { class: "alert alert-danger", role: "alert", "{message}" } }
             button { class: "btn btn-primary", disabled: busy(),
                 onclick: move |_| {
@@ -195,7 +206,7 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
                         match request.submit().await {
                             Ok(id) => match storage.clear().await {
                                 Ok(()) => { release_navigation().await; pending.set(None); navigator.push(Route::InvoiceDetail { id }); }
-                                Err(message) => error.set(Some(format!("The invoice is saved, but recovery could not be cleared: {message}"))),
+                                Err(message) => error.set(Some(tr.invoices_recovery_not_cleared(message))),
                             },
                             Err(err) => {
                                 rejected.set(matches!(&err, ServerFnError::ServerError { code, .. } if (400..500).contains(code)));
@@ -204,17 +215,17 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
                         }
                         busy.set(false);
                     });
-                }, "Recover invoice request"
+                }, {tr.invoices_recover()}
             }
             if rejected() {
-                p { class: "text-sm text-muted mt-4", "The server rejected this request. Check the saved invoices before discarding this tab's recovery record; discarding it never deletes an invoice." }
+                p { class: "text-sm text-muted mt-4", {tr.invoices_recover_rejected()} }
                 button { class: "btn btn-secondary", disabled: busy(), onclick: move |_| {
                     busy.set(true);
                     spawn(async move {
                         match storage.clear().await { Ok(()) => pending.set(None), Err(message) => error.set(Some(message)) }
                         busy.set(false);
                     });
-                }, "Discard rejected recovery request" }
+                }, {tr.invoices_recover_discard()} }
             }
         } };
     }
@@ -222,23 +233,21 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
     // sitting above a list that would be refused beside it.
     if !loaded() && denied() {
         return rsx! {
-            PageHeader { title: "Invoices" }
+            PageHeader { title: tr.invoices_title() }
             NoAccess {}
         };
     }
     // A failed check leaves the page usable without invoice actions, as before.
+    // While it runs, the screen shows as it is and its actions wait, so nothing
+    // sits above the page header.
     rsx! {
-        if !loaded() {
-            if loading_error().is_some() {
-                ErrorState {
-                    title: "Could not open invoices",
-                    body: LOAD_FAILED,
-                    onretry: retry,
-                    retry_disabled: checking(),
-                    focus_on_recovery: "invoices-heading",
-                }
-            } else {
-                Loading { label: "Checking invoice recovery…" }
+        if !loaded() && loading_error().is_some() {
+            ErrorState {
+                title: tr.invoices_open_failed(),
+                body: LOAD_FAILED,
+                onretry: retry,
+                retry_disabled: checking(),
+                focus_on_recovery: "invoices-heading",
             }
         }
         {children}
