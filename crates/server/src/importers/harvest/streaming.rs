@@ -45,7 +45,7 @@ pub(super) fn fetch(
     mut http: ApiHttp,
     access: &str,
     account: &str,
-    (since, invoice_mark): (Option<DateTime<Utc>>, Option<DateTime<Utc>>),
+    mut window: super::api_source::EntryWindow,
     pages: &mpsc::Sender<Page>,
 ) -> anyhow::Result<()> {
     let mut catalog = HarvestData::default();
@@ -106,7 +106,8 @@ pub(super) fn fetch(
             Ok(())
         },
     )?;
-    let (scan, since) = super::api_source::entry_scan(since, invoice_mark);
+    window.see(&catalog.invoices);
+    let (scan, since) = window.scan();
     catalog.entry_scan = Some(scan);
     pages
         .blocking_send(Page::Catalog(catalog))
@@ -281,7 +282,7 @@ async fn apply(
         org_id,
         &report,
         (high_water, missing_timestamp),
-        &catalog.invoices,
+        super::api_source::invoice_mark(&catalog.invoices, captured_at),
         captured_at,
     )
     .await?;
@@ -296,7 +297,7 @@ async fn advance_watermarks(
     org_id: Uuid,
     report: &ImportReport,
     (high_water, missing_timestamp): (Option<DateTime<Utc>>, bool),
-    invoices: &[ApiInvoice],
+    invoice_mark: Option<DateTime<Utc>>,
     captured_at: DateTime<Utc>,
 ) -> anyhow::Result<()> {
     // Errors, entry or invoice (Q10), hold the watermarks back so the next
@@ -313,7 +314,7 @@ async fn advance_watermarks(
     {
         marks.push((EntityType::TimeEntry, mark));
     }
-    if let Some(mark) = super::api_source::invoice_mark(invoices, captured_at) {
+    if let Some(mark) = invoice_mark {
         marks.push((EntityType::Invoice, mark));
     }
     credentials::advance_watermark(&mut **tx, org_id, &marks).await

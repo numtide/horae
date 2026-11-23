@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT te.id, i.id AS invoice\n         FROM harvest_import_map m JOIN time_entries te ON te.id = m.horae_id,\n              invoices i\n         WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'\n           AND m.harvest_import_id = 17 AND i.org_id = $1 AND i.number = '1001'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "invoice",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "39e90e38632d67a1275d76d403712221efefa72f0ee497d8cc04e22d46327746"
+}

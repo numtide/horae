@@ -217,20 +217,35 @@ pub async fn fetch_imported(
     )))
 }
 
-/// An imported invoice's lines, in Harvest's order.
+/// An imported invoice's lines, in Harvest's order. Unit prices are padded to
+/// the places of the amounts beside them, never cut.
 pub async fn imported_lines(
     connection: &mut PgConnection,
     invoice_id: Uuid,
 ) -> Result<Vec<ImportedInvoiceLine>, sqlx::Error> {
-    sqlx::query_as!(
-        ImportedInvoiceLine,
-        r#"SELECT kind, description, quantity::text AS "quantity!", unit_price::text AS "unit_price!",
-                  amount_cents, taxed, taxed2, project_id
-           FROM harvest_invoice_lines WHERE invoice_id = $1 ORDER BY position"#,
+    let rows = sqlx::query!(
+        r#"SELECT l.kind, l.description, l.quantity::text AS "quantity!",
+                  l.unit_price::text AS "unit_price!", l.amount_cents, l.taxed, l.taxed2,
+                  l.project_id, i.currency
+           FROM harvest_invoice_lines AS l JOIN invoices AS i ON i.id = l.invoice_id
+           WHERE l.invoice_id = $1 ORDER BY l.position"#,
         invoice_id,
     )
     .fetch_all(connection)
-    .await
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| ImportedInvoiceLine {
+            unit_price: horae_core::money::pad_to_currency(&row.unit_price, &row.currency),
+            kind: row.kind,
+            description: row.description,
+            quantity: row.quantity,
+            amount_cents: row.amount_cents,
+            taxed: row.taxed,
+            taxed2: row.taxed2,
+            project_id: row.project_id,
+        })
+        .collect())
 }
 
 /// One invoice with its lines and client name.

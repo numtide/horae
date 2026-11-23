@@ -2,7 +2,7 @@
 
 use super::*;
 use horae_core::importers::harvest::types::{
-    EntryErrorKind, EntryScan, InvoiceErrorKind, LinkCounts,
+    EntryErrorKind, EntryScan, InvoiceErrorKind, LinkConflictKind, LinkCounts,
 };
 use horae_core::types::{EntryState, InvoiceStatus};
 
@@ -530,6 +530,7 @@ async fn entries_imported_before_invoices_are_linked_by_a_full_scan(pool: PgPool
         api_source::entry_scan(
             connection.watermark_for(EntityType::TimeEntry),
             connection.watermark_for(EntityType::Invoice),
+            false,
         ),
         (EntryScan::Full, None),
         "the first run with invoices reads every entry"
@@ -557,7 +558,7 @@ async fn entries_imported_before_invoices_are_linked_by_a_full_scan(pool: PgPool
     // Once invoices have imported, billing changes reach incremental runs
     // through each entry's own `updated_at` (T002).
     assert_eq!(
-        api_source::entry_scan(since, Some(day(3))),
+        api_source::entry_scan(since, Some(day(3)), false),
         (EntryScan::Incremental, since)
     );
 }
@@ -776,6 +777,32 @@ async fn reimports_follow_harvest_and_keep_what_horae_billed(pool: PgPool) {
             ("1007", InvoiceStatus::Sent, 2000),
         ]
     );
+
+    // When Harvest changes the voided 1002, its entry's version does not
+    // move, so the next run reads every entry and links 11 again.
+    let mut conn = pool.acquire().await.unwrap();
+    let voided = super::super::invoices::voided_versions(&mut conn, org)
+        .await
+        .unwrap();
+    let mut window = api_source::EntryWindow::new(Some(day(6)), Some(day(6)), voided);
+    window.see(&next.invoices);
+    assert_eq!(window.scan(), (EntryScan::Incremental, Some(day(6))));
+    let changed = next.invoices.iter_mut().find(|i| i.id == 101).unwrap();
+    changed.updated_at = day(7);
+    window.see(&next.invoices);
+    assert_eq!(window.scan(), (EntryScan::Full, None));
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(8))
+        .await
+        .unwrap();
+    let eleven = billing(&pool, org)
+        .await
+        .into_iter()
+        .find(|(id, ..)| *id == 11)
+        .map(|(_, state, number, _)| (state, number));
+    assert_eq!(
+        eleven,
+        Some((EntryState::Invoiced, Some("1002".to_owned())))
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -834,5 +861,179 @@ async fn invoice_errors_name_the_reason_and_leave_their_time_billed(pool: PgPool
             .await
             .iter()
             .all(|(_, state, number, _)| *state == EntryState::Invoiced && number.is_none())
+    );
+}
+
+/// Provenance of each Harvest entry agrees with the entry's version, so no
+/// later run reads it as edited in Horae.
+async fn provenance_current(pool: &PgPool, org: Uuid, harvest_id: i64) -> bool {
+    sqlx::query_scalar!(
+        r#"SELECT m.horae_updated_at = te.updated_at AS "current!"
+           FROM harvest_import_map m JOIN time_entries te ON te.id = m.horae_id
+           WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'
+             AND m.harvest_import_id = $2"#,
+        org,
+        harvest_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// An imported invoice Harvest turns back into a draft reopens its time even
+/// when the run does not read the entries (review M-C).
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_invoice_back_to_draft_reopens_its_time(pool: PgPool) {
+    let org = setup(&pool).await;
+    let source = fixture();
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+
+    let mut next = source.clone();
+    next.invoices[0].state = "draft".into();
+    next.invoices[0].updated_at = day(5);
+    next.time_entries.clear();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(6))
+        .await
+        .unwrap();
+    assert_eq!(report.summary.links.unlinked, 1);
+    let ten = billing(&pool, org)
+        .await
+        .into_iter()
+        .find(|(id, ..)| *id == 10);
+    assert_eq!(ten, Some((10, EntryState::Open, None, None)));
+    assert!(provenance_current(&pool, org, 10).await);
+
+    // A full read of the same entries finds nothing left to do.
+    let mut full = source.clone();
+    full.invoices[0].state = "draft".into();
+    full.invoices[0].updated_at = day(5);
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &full, day(7))
+        .await
+        .unwrap();
+    assert_eq!(report.summary.links.unlinked, 0);
+    assert!(
+        report
+            .row_errors
+            .iter()
+            .all(|error| !error.reason.contains("changed in Horae")),
+        "{:?}",
+        report.row_errors
+    );
+}
+
+/// A CSV that bills an entry an API run imported keeps its provenance
+/// current, so the next API run does not take the billing for a Horae edit
+/// (review M-B).
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_csv_billing_keeps_api_provenance_current(pool: PgPool) {
+    use super::super::csv_source::{csv_body, import_body};
+    let org = setup(&pool).await;
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &valid_data(), day(4))
+        .await
+        .unwrap();
+    let csv = "Date,Client,Project,Task,Hours,Email,Notes,Invoiced?\n\
+               2026-01-01,Client,Project,Task,1,known@example.com,,Yes\n";
+    let report = import_body(&pool, org, "USD", csv_body(csv), ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(report.error_count(), 0, "{report:?}");
+    assert_eq!(report.summary.links.billed_without_invoice, 1);
+    assert!(provenance_current(&pool, org, 10).await);
+}
+
+/// A link the page write skips, because the entry was submitted after its
+/// row was read, is reported as a conflict instead of counted (review L-B).
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_skipped_link_is_reported_not_counted(pool: PgPool) {
+    let org = setup(&pool).await;
+    let source = fixture();
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        "SELECT te.id, i.id AS invoice
+         FROM harvest_import_map m JOIN time_entries te ON te.id = m.horae_id,
+              invoices i
+         WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'
+           AND m.harvest_import_id = 17 AND i.org_id = $1 AND i.number = '1001'",
+        org,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE time_entries SET state = 'submitted' WHERE id = $1",
+        row.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut report = ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit);
+    report.summary.links.linked = 1;
+    let mut writes = vec![apply::LinkWrite::link(row.id, row.invoice, "entry 17")];
+    let mut conn = pool.acquire().await.unwrap();
+    apply::write_links(&mut conn, org, &mut writes, &mut report)
+        .await
+        .unwrap();
+    assert_eq!(report.summary.links.linked, 0);
+    assert_eq!(report.summary.links.conflicts, 1);
+    assert_eq!(
+        report.link_conflicts[0].kind,
+        LinkConflictKind::SubmittedInHorae
+    );
+}
+
+/// Harvest bills an entry edited in Horae and changes its hours in the same
+/// window: the entry is billed with Horae's fields and the row says Harvest's
+/// change was not applied (review L-A).
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_harvest_change_to_an_edited_billed_entry_is_reported(pool: PgPool) {
+    let org = setup(&pool).await;
+    let source = fixture();
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE time_entries te SET notes = 'edited in Horae'
+         FROM harvest_import_map m
+         WHERE m.horae_id = te.id AND m.harvest_import_id = 17 AND m.org_id = $1",
+        org,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut next = source.clone();
+    let seventeen = next.time_entries.iter_mut().find(|e| e.id == 17).unwrap();
+    seventeen.is_billed = true;
+    seventeen.invoice = serde_json::from_value(json!({"id": 100})).unwrap();
+    seventeen.hours = "2".parse().unwrap();
+    seventeen.updated_at = Some(day(5));
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &next, day(6))
+        .await
+        .unwrap();
+    let changed: Vec<_> = report
+        .row_errors
+        .iter()
+        .filter(|error| error.entry_kind == Some(EntryErrorKind::ChangedInHorae))
+        .collect();
+    assert_eq!(changed.len(), 1, "{:?}", report.row_errors);
+    assert_eq!(report.summary.links.linked, 1);
+    let row = sqlx::query!(
+        r#"SELECT te.minutes, te.state AS "state: EntryState", i.number AS "number?"
+           FROM harvest_import_map m JOIN time_entries te ON te.id = m.horae_id
+           LEFT JOIN invoices i ON i.id = te.invoice_id
+           WHERE m.org_id = $1 AND m.harvest_import_id = 17"#,
+        org,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (row.minutes, row.state, row.number.as_deref()),
+        (75, EntryState::Invoiced, Some("1001"))
     );
 }

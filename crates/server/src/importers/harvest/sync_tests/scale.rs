@@ -134,7 +134,8 @@ fn scale_server_with_invoices(records: u64, invalid_every: u64, invoices: u64) -
                             "notes": format!("scale entry {n}"),
                             "project": {"id": 2},
                             "task": {"id": 3},
-                            "user": {"id": if n % invalid_every == 0 { 5 } else { 4 }},
+                            // An interval of 0 makes every entry valid.
+                            "user": {"id": if invalid_every != 0 && n % invalid_every == 0 { 5 } else { 4 }},
                             "is_billed": billed,
                             "invoice": billed.then(|| json!({"id": 500_000 + invoice})),
                             "updated_at": day(3)
@@ -325,52 +326,88 @@ async fn measured_job(pool: &PgPool, org: Uuid, server: &Server, mode: ImportMod
     serde_json::from_value(complete.report.unwrap()).unwrap()
 }
 
-/// One SC-006 scenario: a first commit of 15,000 entries, with `invoices`
-/// invoices billing 7 entries each, in the test's own fresh database. Prints
-/// the run time; `api_15k_*` are run alternately and compared outside, since
-/// a shared machine slows single runs by a fifth or more.
+/// One import job, run as production runs it: enqueued, claimed under a
+/// lease, through the durable path with its per-page checkpoints.
+async fn timed_job(
+    pool: &PgPool,
+    org: Uuid,
+    server: &Server,
+    sync: SyncScope,
+) -> (f64, ImportReport) {
+    use crate::{config::JobPolicy, jobs};
+    jobs::enqueue(
+        pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::Commit,
+            sync,
+        },
+        &Uuid::now_v7().to_string(),
+        JobPolicy { max_attempts: 1 },
+    )
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+    let started = Instant::now();
+    let mut finished = None;
+    jobs::run_claimed(pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            &config(),
+            ImportMode::Commit,
+            sync,
+            ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        let stored = job_report(&report);
+        finished = Some(report);
+        stored
+    })
+    .await
+    .unwrap();
+    (started.elapsed().as_secs_f64(), finished.unwrap())
+}
+
+/// One SC-006 scenario on the job runner: a first commit of 15,000 entries,
+/// with `invoices` invoices billing 7 entries each, in the test's own fresh
+/// database, then an unchanged incremental re-run (the steady state). Prints
+/// both times; `job_15k_*` are run alternately and compared outside, since a
+/// shared machine slows single runs by a fifth or more.
 async fn scale_15k(pool: &PgPool, invoices: u64) {
     require_release();
     const ENTRIES: u64 = 15_000;
     let org = setup(pool).await;
-    let server = scale_server_with_invoices(ENTRIES, ENTRIES + 1, invoices);
-    let started = Instant::now();
-    let report = run_api_import_with_http(
-        pool,
-        org,
-        "USD",
-        &config(),
-        ImportMode::Commit,
-        SyncScope::Full,
-        ApiHttp::local(server.base.clone()),
-        None,
-    )
-    .await
-    .unwrap();
-    let seconds = started.elapsed().as_secs_f64();
-    eprintln!(
-        "SC-006 invoices={invoices} elapsed_s={seconds:.3} {}",
-        memory_status()
-    );
-    // Entry 0 belongs to the unlisted person, as in every scale fixture.
-    assert_eq!(report.error_count(), 1, "{:?}", report.row_errors);
-    assert_eq!(report.summary.time_entries.created, ENTRIES - 1);
+    let server = scale_server_with_invoices(ENTRIES, 0, invoices);
+    let (first, report) = timed_job(pool, org, &server, SyncScope::Full).await;
+    assert_eq!(report.error_count(), 0, "{:?}", report.row_errors);
+    assert_eq!(report.summary.time_entries.created, ENTRIES);
     assert_eq!(report.summary.invoices.created, invoices);
     assert_eq!(
         report.summary.links.linked,
-        (invoices * BILLED_PER_INVOICE).min(ENTRIES) - u64::from(invoices > 0)
+        (invoices * BILLED_PER_INVOICE).min(ENTRIES)
+    );
+    let (rerun, report) = timed_job(pool, org, &server, SyncScope::Incremental).await;
+    assert_eq!(report.summary.time_entries.skipped, ENTRIES);
+    assert_eq!(report.summary.invoices.skipped, invoices);
+    assert_eq!(report.summary.links, Default::default());
+    eprintln!(
+        "SC-006 invoices={invoices} first_s={first:.3} rerun_s={rerun:.3} {}",
+        memory_status()
     );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "invoice scale measurement (SC-006); run explicitly with --release --nocapture"]
-async fn api_15k_entries_without_invoices(pool: PgPool) {
+async fn job_15k_entries_without_invoices(pool: PgPool) {
     scale_15k(&pool, 0).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "invoice scale measurement (SC-006); run explicitly with --release --nocapture"]
-async fn api_15k_entries_with_2k_invoices(pool: PgPool) {
+async fn job_15k_entries_with_2k_invoices(pool: PgPool) {
     scale_15k(&pool, 2_000).await;
 }
 

@@ -9,8 +9,8 @@
 
 use horae_core::importers::harvest::link::{self, Billing, Current, LinkAction};
 use horae_core::importers::harvest::types::{
-    EntityType, EntryErrorKind, IdNotice, ImportMode, LinkConflict, PersonErrorKind, PersonOutcome,
-    ReportPerson, RowOutcome, SourceKind, SourceRow,
+    EntityType, EntryErrorKind, IdNotice, ImportMode, LinkConflict, LinkConflictKind,
+    PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome, SourceKind, SourceRow,
 };
 use horae_core::importers::harvest::{convert, keys};
 use horae_core::types::EntryState;
@@ -63,6 +63,34 @@ pub struct LinkWrite {
     harvest_id: Option<i64>,
     invoice: Option<Uuid>,
     billed: bool,
+    /// For the conflict reported when the write is skipped.
+    source_location: String,
+    harvest_invoice_id: Option<i64>,
+}
+
+impl LinkWrite {
+    #[cfg(test)]
+    pub fn link(entry: Uuid, invoice: Uuid, source_location: &str) -> Self {
+        Self {
+            entry,
+            harvest_id: None,
+            invoice: Some(invoice),
+            billed: true,
+            source_location: source_location.to_owned(),
+            harvest_invoice_id: None,
+        }
+    }
+
+    /// Take back the count `record_into` made for a write that did not happen.
+    fn uncount(&self, report: &mut ImportReport) {
+        let links = &mut report.summary.links;
+        let count = match (self.billed, self.invoice) {
+            (false, _) => &mut links.unlinked,
+            (true, Some(_)) => &mut links.linked,
+            (true, None) => &mut links.billed_without_invoice,
+        };
+        *count -= 1;
+    }
 }
 
 /// Writes a page's billing in one statement, after its entries: billed
@@ -72,11 +100,13 @@ pub struct LinkWrite {
 ///
 /// Writing entry by entry, inside each entry's savepoint, made a first import
 /// with 2,000 invoices most of two thirds slower (SC-006). An entry that was
-/// submitted, or put on a Horae invoice, since the row read it is left alone.
+/// submitted, or put on a Horae invoice, since the row read it is left alone,
+/// and the report lists it as a conflict instead of counting the change.
 pub async fn write_links(
     tx: &mut sqlx::PgConnection,
     org_id: Uuid,
     writes: &mut Vec<LinkWrite>,
+    report: &mut ImportReport,
 ) -> sqlx::Result<()> {
     if writes.is_empty() {
         return Ok(());
@@ -85,6 +115,13 @@ pub async fn write_links(
     let invoices: Vec<Option<Uuid>> = writes.iter().map(|write| write.invoice).collect();
     let billed: Vec<bool> = writes.iter().map(|write| write.billed).collect();
     let harvest_ids: Vec<i64> = writes.iter().filter_map(|write| write.harvest_id).collect();
+    // A CSV row has no Harvest id; its entry's provenance, when an API run
+    // imported it, is found by the entry instead.
+    let csv_entries: Vec<Uuid> = writes
+        .iter()
+        .filter(|write| write.harvest_id.is_none())
+        .map(|write| write.entry)
+        .collect();
     // Inside an import the tables have no statistics yet, so every index
     // looks like one row: each lookup names its whole key (`te.id = ANY`,
     // and provenance by its primary key) or the planner walks the
@@ -95,9 +132,9 @@ pub async fn write_links(
     // it changes (`updated_at` is the transaction's start, so an entry this
     // run created needs nothing) and only for an entry not edited in Horae,
     // whose edit must stay detectable (`edited?` in `apply_time_entry`).
-    sqlx::query!(
-        "WITH before AS (
-           SELECT id, updated_at, created_at FROM time_entries WHERE id = ANY($2)),
+    let skipped = sqlx::query!(
+        r#"WITH before AS (
+           SELECT id, updated_at, created_at, state, invoice_id FROM time_entries WHERE id = ANY($2)),
          written AS (
            UPDATE time_entries AS te
               SET invoice_id = w.invoice_id,
@@ -110,21 +147,50 @@ pub async fn write_links(
               AND te.state <> 'submitted'
               AND (te.invoice_id IS NULL OR EXISTS (
                 SELECT 1 FROM invoices AS i WHERE i.id = te.invoice_id AND i.source = 'harvest'))
-        RETURNING te.id, te.updated_at)
-         UPDATE harvest_import_map AS m SET horae_updated_at = written.updated_at
-           FROM written JOIN before ON before.id = written.id
-          WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
-            AND m.harvest_import_id = ANY($5) AND m.horae_id = written.id
-            AND m.horae_updated_at IS DISTINCT FROM written.updated_at
-            AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at)",
+        RETURNING te.id, te.updated_at),
+         by_harvest_id AS (
+           UPDATE harvest_import_map AS m SET horae_updated_at = written.updated_at
+             FROM written JOIN before ON before.id = written.id
+            WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+              AND m.harvest_import_id = ANY($5) AND m.horae_id = written.id
+              AND m.horae_updated_at IS DISTINCT FROM written.updated_at
+              AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at)),
+         by_entry AS (
+           UPDATE harvest_import_map AS m SET horae_updated_at = written.updated_at
+             FROM written JOIN before ON before.id = written.id
+            WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+              AND m.horae_id = ANY($6) AND m.horae_id = written.id
+              AND m.horae_updated_at IS DISTINCT FROM written.updated_at
+              AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at))
+         SELECT b.id AS "id!", b.state AS "state!: EntryState", i.number AS "number?"
+           FROM before AS b LEFT JOIN invoices AS i ON i.id = b.invoice_id
+          WHERE NOT EXISTS (SELECT 1 FROM written AS w WHERE w.id = b.id)"#,
         org_id,
         &entries,
         &invoices as &[Option<Uuid>],
         &billed,
         &harvest_ids,
+        &csv_entries,
     )
-    .execute(&mut *tx)
+    .fetch_all(&mut *tx)
     .await?;
+    for row in skipped {
+        let Some(write) = writes.iter().find(|write| write.entry == row.id) else {
+            continue;
+        };
+        write.uncount(report);
+        report.note_conflict(LinkConflict {
+            source_location: write.source_location.clone(),
+            harvest_time_entry_id: write.harvest_id,
+            harvest_invoice_id: write.harvest_invoice_id,
+            kind: if row.state == EntryState::Submitted {
+                LinkConflictKind::SubmittedInHorae
+            } else {
+                LinkConflictKind::BilledInHorae
+            },
+            horae_invoice_number: row.number,
+        });
+    }
     writes.clear();
     Ok(())
 }
@@ -432,6 +498,8 @@ async fn link_entry(
         harvest_id: row.harvest_time_entry_id,
         invoice: target,
         billed: action != LinkAction::Unlink,
+        source_location: row.source_location.clone(),
+        harvest_invoice_id: row.harvest_invoice_id,
     });
     let note = match action {
         LinkAction::Link(_) => LinkNote::Linked,
@@ -610,11 +678,38 @@ async fn apply_time_entry(
         // entry Harvest bills that is no longer open here, or was edited
         // here, keeps its fields; the link step bills it or reports the
         // conflict (FR-010). Harvest's version is not recorded as applied,
-        // since none of its fields were.
+        // since none of its fields were. When Harvest also changed a field,
+        // the row says so, as for an entry Harvest does not bill.
         if row.invoiced && (mapped.open != Some(true) || mapped.edited != Some(false)) {
+            let differs = sqlx::query_scalar!(
+                r#"SELECT project_id <> $2 OR task_id <> $3 OR user_id <> $4 OR spent_date <> $5
+                          OR minutes <> $6 OR COALESCE(notes, '') <> COALESCE($7, '') AS "differs!"
+                   FROM time_entries WHERE id = $1"#,
+                mapped.horae_id,
+                project_id,
+                task_id,
+                user_id,
+                row.spent_date as chrono::NaiveDate,
+                minutes,
+                notes,
+            )
+            .fetch_one(&mut **sp)
+            .await?;
+            let outcome = if differs {
+                RowOutcome::Errored {
+                    source_location: row.source_location.clone(),
+                    reason: "Harvest changed this entry while billing it, but it was changed or \
+                             approved in Horae; billed with Horae's fields, not updated from Harvest"
+                        .into(),
+                    person: None,
+                    entry_kind: Some(EntryErrorKind::ChangedInHorae),
+                }
+            } else {
+                RowOutcome::Skipped
+            };
             return Ok(EntryApplied {
                 current,
-                ..EntryApplied::new(RowOutcome::Skipped, None, Some(mapped.horae_id))
+                ..EntryApplied::new(outcome, None, Some(mapped.horae_id))
             });
         }
         let import_billed = matches!(
@@ -628,7 +723,9 @@ async fn apply_time_entry(
         if import_billed && mapped.edited != Some(false) {
             let changed = RowOutcome::Errored {
                 source_location: row.source_location.clone(),
-                reason: "entry was changed in Horae while Harvest billed it; reopened, not updated from Harvest".into(),
+                reason: "Harvest no longer bills this entry, which was changed in Horae while \
+                         billed; its billing follows Harvest, its fields stay as Horae has them"
+                    .into(),
                 person: None,
                 entry_kind: Some(EntryErrorKind::ChangedInHorae),
             };

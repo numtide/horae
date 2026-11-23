@@ -205,12 +205,18 @@ state of their entries.
 - A Horae-made invoice voided after the import: its entries reopen as today; imported links are
   unaffected.
 - An imported invoice voided in Horae: its entries reopen, and a later import does not link them to
-  it again while Harvest has not changed that invoice (FR-016).
+  it again while Harvest has not changed that invoice (FR-016). Once Harvest changes it, the next
+  run reads every time entry, whatever the scope, and links them again: their own `updated_at` did
+  not move, so an incremental read would miss them.
+- An imported invoice that Harvest turns back into a draft: its entries reopen in the invoice phase
+  of the next run, read or not, as for any time on a draft (Q1). The Horae invoice row is left as it
+  was, pending a decision on whether to void it.
 - A running timer that Harvest reports billed: not possible in Harvest; the timer rule (skip running
   entries) applies first anyway.
 - Two runs at once: prevented by the existing import lock.
 - An entry that was edited in Horae after the first import and that Harvest later bills: linked; the
-  link freezes it as a Horae invoice would.
+  link freezes it as a Horae invoice would. If Harvest also changed one of its fields, Horae's
+  fields stay and the row is reported as changed in Horae, as for an entry Harvest does not bill.
 
 ## Requirements *(mandatory)*
 

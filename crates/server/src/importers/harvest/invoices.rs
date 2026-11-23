@@ -92,6 +92,9 @@ pub(super) async fn apply_batch(
             Ok(Mapped::Skip) => {
                 cache.set_invoice(source.id, InvoiceSlot::Draft);
                 report.invoices_skipped_drafts += 1;
+                if let Some((id, ..)) = existing(tx, org_id, source.id).await? {
+                    report.summary.links.unlinked += reopen_time(tx, org_id, id).await?;
+                }
                 continue;
             }
             Ok(Mapped::Import(status)) => status,
@@ -131,6 +134,64 @@ pub(super) async fn apply_batch(
         report.invoices_no_longer_listed = no_longer_listed(tx, org_id, data).await?;
     }
     Ok(())
+}
+
+/// Reopens the time of an imported invoice that Harvest turned back into a
+/// draft. Its entries' own versions probably do not move in Harvest, so an
+/// incremental run would never read them; Horae knows them by the invoice.
+/// Submitted entries are left alone, and provenance takes the new version of
+/// an entry not edited in Horae, as `apply::write_links` does.
+async fn reopen_time(
+    tx: &mut Transaction<'_, Postgres>,
+    org_id: Uuid,
+    invoice_id: Uuid,
+) -> sqlx::Result<u64> {
+    let reopened = sqlx::query_scalar!(
+        r#"WITH before AS (
+             SELECT id, updated_at, created_at FROM time_entries
+              WHERE org_id = $1 AND invoice_id = $2 AND state <> 'submitted'),
+           written AS (
+             UPDATE time_entries AS te
+                SET invoice_id = NULL, state = 'open', rounded_minutes = NULL
+               FROM before WHERE te.id = before.id
+             RETURNING te.id, te.updated_at),
+           refreshed AS (
+             UPDATE harvest_import_map AS m SET horae_updated_at = written.updated_at
+               FROM written JOIN before ON before.id = written.id
+              WHERE m.org_id = $1 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+                AND m.horae_id = written.id
+                AND m.horae_updated_at IS DISTINCT FROM written.updated_at
+                AND before.updated_at IS NOT DISTINCT FROM COALESCE(m.horae_updated_at, before.created_at))
+           SELECT count(*) AS "count!" FROM written"#,
+        org_id,
+        invoice_id,
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(reopened.unsigned_abs())
+}
+
+/// The Harvest versions of imported invoices voided in Horae. A void reopens
+/// the time and stands until Harvest changes the invoice; when it does, the
+/// invoice comes back but its entries, whose own versions did not move, are
+/// read only by a full read (`api_source::entry_scan`).
+pub(super) async fn voided_versions(
+    conn: &mut PgConnection,
+    org_id: Uuid,
+) -> sqlx::Result<Vec<(i64, DateTime<Utc>)>> {
+    let rows = sqlx::query!(
+        r#"SELECT h.harvest_invoice_id,
+                  h.harvest_updated_at AS "harvest_updated_at: DateTime<Utc>"
+           FROM harvest_invoices h JOIN invoices i ON i.id = h.invoice_id AND i.org_id = h.org_id
+           WHERE h.org_id = $1 AND i.status = 'void'"#,
+        org_id,
+    )
+    .fetch_all(conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.harvest_invoice_id, row.harvest_updated_at))
+        .collect())
 }
 
 type Existing = Option<(Uuid, InvoiceStatus, DateTime<Utc>)>;

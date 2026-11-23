@@ -129,6 +129,22 @@ pub fn format_major_units(cents: i64, currency: &str) -> String {
     }
 }
 
+/// Pads a plain decimal with zeros to the places Horae shows amounts in for
+/// `currency` (its minor unit, at most two), so Harvest's `1.0` or `100`
+/// reads `1.00` and `100.00` beside the amounts. It never removes a digit:
+/// `95.2381` stays as written.
+pub fn pad_to_currency(decimal: &str, currency: &str) -> String {
+    let places = usize::from(currency_decimals(currency).min(2));
+    let written = decimal
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    if written >= places {
+        return decimal.to_owned();
+    }
+    let point = if written == 0 { "." } else { "" };
+    format!("{decimal}{point}{}", "0".repeat(places - written))
+}
+
 /// ISO 4217 minor-unit digits; every currency not listed has two.
 pub(crate) fn currency_decimals(currency: &str) -> u8 {
     match currency.trim() {
@@ -162,6 +178,17 @@ pub fn format_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unit_prices_pad_to_the_currency_without_losing_digits() {
+        assert_eq!(pad_to_currency("1.0", "USD"), "1.00");
+        assert_eq!(pad_to_currency("0", "USD"), "0.00");
+        assert_eq!(pad_to_currency("100", "EUR"), "100.00");
+        assert_eq!(pad_to_currency("95.2381", "USD"), "95.2381");
+        assert_eq!(pad_to_currency("80.50", "JPY"), "80.50");
+        assert_eq!(pad_to_currency("80", "JPY"), "80");
+        assert_eq!(pad_to_currency("1.5", "KWD"), "1.50");
+    }
 
     #[test]
     fn major_units_use_the_currencys_own_decimals() {

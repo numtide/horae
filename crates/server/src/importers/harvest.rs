@@ -145,7 +145,7 @@ async fn apply_rows<S: RowSource>(
                 .record_into(report),
         );
     }
-    apply::write_links(tx, org.org_id, &mut writes).await?;
+    apply::write_links(tx, org.org_id, &mut writes, report).await?;
 
     debug_assert!(report.reconciles());
     Ok(())
@@ -505,21 +505,21 @@ async fn run_api_import_with_http(
         .await
         .map_err(Into::into);
     }
+    let voided = match invoices::voided_versions(&mut connection, org_id).await {
+        Ok(voided) => voided,
+        Err(error) => {
+            release_import(connection).await?;
+            return Err(anyhow::Error::from(error).into());
+        }
+    };
+    let window = api_source::EntryWindow::new(since, invoice_mark, voided);
     streaming::run(
         connection,
         org_id,
         default_currency,
         mode,
         capture_started_at,
-        move |pages| {
-            streaming::fetch(
-                http,
-                &conn.access_token,
-                &conn.account_id,
-                (since, invoice_mark),
-                pages,
-            )
-        },
+        move |pages| streaming::fetch(http, &conn.access_token, &conn.account_id, window, pages),
         lease,
     )
     .await

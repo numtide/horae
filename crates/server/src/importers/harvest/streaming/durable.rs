@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use super::super::api_source::http::{ApiHttp, PageCursor};
 use super::super::api_source::{
-    ApiClient, ApiInvoice, ApiProject, ApiSource, ApiTask, ApiTimeEntry, ApiUser, HarvestData,
-    RowLookup,
+    ApiClient, ApiInvoice, ApiProject, ApiSource, ApiTask, ApiTimeEntry, ApiUser, EntryWindow,
+    HarvestData, RowLookup, invoice_mark,
 };
 use super::super::report::ImportReport;
 use super::super::resolve::{OrgDefaults, RunCache, preview::forget_lost_people};
@@ -93,9 +93,25 @@ pub(super) struct Checkpoint {
     missing_timestamp: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     preview: Option<ApiPreview>,
+    /// The invoice watermark this run stores, kept once the invoices are
+    /// applied and dropped from `catalog`.
+    #[serde(default)]
+    applied_invoice_mark: Option<DateTime<Utc>>,
 }
 
 impl Checkpoint {
+    /// Once the last invoice is applied, entries need only the run cache's
+    /// invoice slots. Every page saves the checkpoint, so keeping 2,000
+    /// invoices and their lines in it made a job a fifth slower (SC-006).
+    fn drop_applied_invoices(&mut self) {
+        if self.parent_offset < self.parent_count() || self.catalog.invoices.is_empty() {
+            return;
+        }
+        self.applied_invoice_mark = invoice_mark(&self.catalog.invoices, self.request.captured_at);
+        self.parent_offset -= self.catalog.invoices.len();
+        self.catalog.invoices = Vec::new();
+    }
+
     fn parent_count(&self) -> usize {
         self.catalog.clients.len()
             + self.catalog.projects.len()
@@ -213,6 +229,7 @@ pub(in crate::importers::harvest) async fn run(
                 high_water: None,
                 missing_timestamp: false,
                 preview: (mode == ImportMode::DryRun).then(ApiPreview::default),
+                applied_invoice_mark: None,
             })
         }
     }
@@ -226,7 +243,20 @@ pub(in crate::importers::harvest) async fn run(
     };
     let download = checkpoint.download.clone();
     let account = checkpoint.request.account_id.clone();
-    let window = (checkpoint.request.since, checkpoint.request.invoice_mark);
+    let voided = match super::super::invoices::voided_versions(&mut connection, org_id).await {
+        Ok(voided) => voided,
+        Err(error) => {
+            super::super::release_import(connection).await?;
+            return Err(error.into());
+        }
+    };
+    let mut window = EntryWindow::new(
+        checkpoint.request.since,
+        checkpoint.request.invoice_mark,
+        voided,
+    );
+    // A resumed run has already received some invoice pages.
+    window.see(&checkpoint.catalog.invoices);
     super::run_inner(
         connection,
         org_id,
@@ -241,7 +271,7 @@ fn fetch(
     mut http: ApiHttp,
     access: &str,
     account: &str,
-    (since, invoice_mark): (Option<DateTime<Utc>>, Option<DateTime<Utc>>),
+    mut window: EntryWindow,
     mut download: Download,
     pages: &mpsc::Sender<Page>,
 ) -> anyhow::Result<()> {
@@ -275,13 +305,12 @@ fn fetch(
                 pages,
                 Rows::Users,
             )?,
-            Collection::Invoices => fetch_pages(
-                &mut http,
-                (access, account),
-                &mut download,
-                pages,
-                Rows::Invoices,
-            )?,
+            Collection::Invoices => {
+                fetch_pages(&mut http, (access, account), &mut download, pages, |page| {
+                    window.see(&page);
+                    Rows::Invoices(page)
+                })?
+            }
             Collection::TimeEntries => fetch_pages(
                 &mut http,
                 (access, account),
@@ -294,7 +323,7 @@ fn fetch(
             return Ok(());
         };
         if collection == Collection::TimeEntries {
-            let (scan, since) = super::super::api_source::entry_scan(since, invoice_mark);
+            let (scan, since) = window.scan();
             download = Download {
                 collection,
                 page: http.cursor(collection.name(), since)?,
@@ -399,6 +428,7 @@ pub(super) async fn apply(
         )
         .await?;
         checkpoint.parent_offset = end;
+        checkpoint.drop_applied_invoices();
         finish_simulation(
             &mut checkpoint.preview,
             &checkpoint.cache,
@@ -483,7 +513,9 @@ pub(super) async fn apply(
         org_id,
         &checkpoint.report,
         (checkpoint.high_water, checkpoint.missing_timestamp),
-        &checkpoint.catalog.invoices,
+        checkpoint
+            .applied_invoice_mark
+            .or_else(|| invoice_mark(&checkpoint.catalog.invoices, checkpoint.request.captured_at)),
         checkpoint.request.captured_at,
     )
     .await?;

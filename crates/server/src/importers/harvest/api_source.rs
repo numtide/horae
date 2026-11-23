@@ -82,13 +82,57 @@ pub(super) fn decimal(n: &serde_json::Number) -> String {
 /// After that, billing and unbilling an entry move its `updated_at` in
 /// Harvest (checked against the test account, spec 025 T002), so an
 /// incremental read sees them.
+///
+/// `revived` covers the one change on the invoice side that leaves its entries
+/// untouched: an invoice voided in Horae (which reopened its time) that
+/// Harvest has changed since. The run brings it back, and only a full read
+/// links its entries again.
 pub(super) fn entry_scan(
     since: Option<DateTime<Utc>>,
     invoice_mark: Option<DateTime<Utc>>,
+    revived: bool,
 ) -> (EntryScan, Option<DateTime<Utc>>) {
     match (since, invoice_mark) {
-        (Some(since), Some(_)) => (EntryScan::Incremental, Some(since)),
+        (Some(since), Some(_)) if !revived => (EntryScan::Incremental, Some(since)),
         _ => (EntryScan::Full, None),
+    }
+}
+
+/// What the fetch needs to choose the entry read once invoices are listed.
+#[derive(Debug, Clone)]
+pub(super) struct EntryWindow {
+    since: Option<DateTime<Utc>>,
+    invoice_mark: Option<DateTime<Utc>>,
+    /// Harvest versions of the imported invoices voided in Horae.
+    voided: HashMap<i64, DateTime<Utc>>,
+    revived: bool,
+}
+
+impl EntryWindow {
+    pub fn new(
+        since: Option<DateTime<Utc>>,
+        invoice_mark: Option<DateTime<Utc>>,
+        voided: Vec<(i64, DateTime<Utc>)>,
+    ) -> Self {
+        Self {
+            since,
+            invoice_mark,
+            voided: voided.into_iter().collect(),
+            revived: false,
+        }
+    }
+
+    /// Note the invoices of one listed page.
+    pub fn see(&mut self, invoices: &[ApiInvoice]) {
+        self.revived |= invoices.iter().any(|invoice| {
+            self.voided
+                .get(&invoice.id)
+                .is_some_and(|version| invoice.updated_at > *version)
+        });
+    }
+
+    pub fn scan(&self) -> (EntryScan, Option<DateTime<Utc>>) {
+        entry_scan(self.since, self.invoice_mark, self.revived)
     }
 }
 

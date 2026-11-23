@@ -125,7 +125,8 @@ impl ImportedInvoice {
 
     /// The stored amounts in display order, with Harvest's rates as written:
     /// subtotal, any discount and taxes, total, then paid and due once part
-    /// of the total was paid. Labels are in English, as for
+    /// of the total was paid. A written off or void invoice has nothing
+    /// due, as its detail shows. Labels are in English, as for
     /// [`Invoice::breakdown`].
     pub fn breakdown(&self, invoice: &Invoice) -> Vec<(String, i64)> {
         let labelled = |name: &str, rate: &Option<String>| match rate {
@@ -149,7 +150,9 @@ impl ImportedInvoice {
         let paid = self.paid_cents(invoice.total_cents);
         if paid != 0 {
             rows.push(("Paid".to_owned(), -paid));
-            rows.push(("Due".to_owned(), self.due_cents));
+            if !matches!(invoice.status, InvoiceStatus::Closed | InvoiceStatus::Void) {
+                rows.push(("Due".to_owned(), self.due_cents));
+            }
         }
         rows
     }
@@ -163,8 +166,9 @@ pub struct ImportedInvoiceLine {
     pub description: String,
     /// Exact decimal text, for display.
     pub quantity: String,
-    /// Exact decimal text as Harvest wrote it (`95.2381`), for display only:
-    /// it may have more decimals than the currency, and nothing sums it.
+    /// Exact decimal text as Harvest wrote it (`95.2381`), padded with zeros
+    /// to the currency's places (`1.0` reads `1.00`), for display only: it
+    /// may have more decimals than the currency, and nothing sums it.
     pub unit_price: String,
     pub amount_cents: i64,
     pub taxed: bool,
@@ -575,6 +579,12 @@ mod tests {
                 ("Paid".to_owned(), -68_875),
                 ("Due".to_owned(), 40_000),
             ]
+        );
+        taxed.status = InvoiceStatus::Closed;
+        assert_eq!(
+            imported.breakdown(&taxed).last(),
+            Some(&("Paid".to_owned(), -68_875)),
+            "a written off invoice shows nothing due"
         );
         let json = serde_json::to_value(&item).unwrap();
         assert_eq!(json["imported"]["tax1_rate"], "8.875");
