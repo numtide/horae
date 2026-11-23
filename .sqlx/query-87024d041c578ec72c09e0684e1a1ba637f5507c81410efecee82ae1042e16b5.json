@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "EXPLAIN (VERBOSE, COSTS OFF)\n           SELECT sum(line_amount_cents(\n             COALESCE(resolve_project_rate(v.mode, v.rate, NULL, v.rate, NULL, NULL), 0),\n             effective_minutes(v.minutes, v.frozen, v.inc::smallint, v.dir),\n             CASE WHEN v.frozen IS NULL THEN v.currency ELSE v.client_currency END))\n           FROM (VALUES ('task', 8050::bigint, 90, NULL::integer, 15::smallint,\n                         'up'::round_dir, 'JPY'::bpchar, 'EUR'::bpchar),\n                        ('legacy', 500, 30, 30, 0, 'nearest', 'EUR', 'JPY'))\n             AS v(mode, rate, minutes, frozen, inc, dir, currency, client_currency)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "QUERY PLAN",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "87024d041c578ec72c09e0684e1a1ba637f5507c81410efecee82ae1042e16b5"
+}

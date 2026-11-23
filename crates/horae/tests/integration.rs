@@ -2951,14 +2951,71 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
         }
     }
 
+    // The other direction: a code only SQL rounds to whole units would pass
+    // the loop above. Every uppercase three-letter code rounds 0.50 to a whole
+    // unit in SQL exactly when Rust lists it as zero-decimal.
+    let from_sql: Vec<String> = sqlx::query_scalar!(
+        r#"SELECT code AS "code!"
+           FROM (SELECT chr(a) || chr(b) || chr(c) AS code
+                 FROM generate_series(65, 90) a, generate_series(65, 90) b,
+                      generate_series(65, 90) c) codes
+           WHERE line_amount_cents(50, 60, code) = 100
+           ORDER BY code"#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let mut from_rust = horae_core::money::ZERO_DECIMAL_CURRENCIES.to_vec();
+    from_rust.sort_unstable();
+    assert_eq!(from_sql, from_rust, "zero-decimal codes differ");
+
     // The Rust signature takes plain integers rather than options, so the SQL
-    // twin is STRICT: an absent rate has no amount, not an amount of zero.
+    // twin answers NULL for a NULL rate: an absent rate has no amount, not an
+    // amount of zero.
     let no_rate: Option<i64> =
         sqlx::query_scalar!("SELECT line_amount_cents(NULL::bigint, 60, 'EUR')")
             .fetch_one(&pool)
             .await
             .unwrap();
     assert_eq!(no_rate, None, "a NULL rate must produce no amount");
+}
+
+/// Reports, project figures and budgets call `line_amount_cents` once per
+/// time entry, with the rate cascade and `effective_minutes` as arguments.
+/// Postgres must inline it there: called as a function it made a sum over
+/// 500,000 rows about ten times slower. A STRICT declaration, or a body that
+/// repeats the rate or the minutes, stops the inlining.
+#[sqlx::test(migrations = "../server/migrations")]
+#[serial]
+async fn line_amount_cents_is_inlined_with_the_arguments_callers_pass(pool: PgPool) {
+    let plan: Vec<String> = sqlx::query_scalar!(
+        r#"EXPLAIN (VERBOSE, COSTS OFF)
+           SELECT sum(line_amount_cents(
+             COALESCE(resolve_project_rate(v.mode, v.rate, NULL, v.rate, NULL, NULL), 0),
+             effective_minutes(v.minutes, v.frozen, v.inc::smallint, v.dir),
+             CASE WHEN v.frozen IS NULL THEN v.currency ELSE v.client_currency END))
+           FROM (VALUES ('task', 8050::bigint, 90, NULL::integer, 15::smallint,
+                         'up'::round_dir, 'JPY'::bpchar, 'EUR'::bpchar),
+                        ('legacy', 500, 30, 30, 0, 'nearest', 'EUR', 'JPY'))
+             AS v(mode, rate, minutes, frozen, inc, dir, currency, client_currency)"#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .flatten()
+    .collect();
+    let plan = plan.join("\n");
+    for function in [
+        "line_amount_cents",
+        "currency_amount_step",
+        "effective_minutes",
+    ] {
+        assert!(
+            !plan.contains(function),
+            "{function} is not inlined:\n{plan}"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../server/migrations")]

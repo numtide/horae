@@ -486,7 +486,8 @@ mod invoice {
                 prop_assert_eq!(cents % step, 0);
                 prop_assert!((-30 * step + 1..=30 * step).contains(&(cents * 60 - exact)));
                 if step == 1 {
-                    prop_assert_eq!(Ok(cents as i64), line_amount_cents(rate, minutes, "EUR"));
+                    // The two-decimal formula this function replaced.
+                    prop_assert_eq!(cents, (exact + 30) / 60);
                 }
             }
             let sum: i128 = lines

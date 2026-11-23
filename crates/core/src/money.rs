@@ -143,7 +143,8 @@ pub const THREE_DECIMAL_CURRENCIES: &[&str] = &["BHD", "IQD", "JOD", "KWD", "LYD
 ///
 /// This and the two lists above are the only table of currency decimals in
 /// Rust. Its SQL twin, `currency_amount_step(text)`, lists the same
-/// zero-decimal codes, and a parity test runs both over every listed code.
+/// zero-decimal codes; a parity test checks that each list holds exactly the
+/// other's zero-decimal codes.
 pub fn currency_decimals(currency: &str) -> u8 {
     let code = currency.trim();
     if ZERO_DECIMAL_CURRENCIES.contains(&code) {
