@@ -25,7 +25,8 @@ async fn visible_tasks(
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
              SELECT t.id,t.harvest_id,t.name,t.active,t.billable_default,
-                    CASE WHEN $7 THEN t.default_rate_cents END default_rate_cents,
+                    -- Harvest serves 0 for a task without a default rate; absent means hidden.
+                    CASE WHEN $7 THEN COALESCE(t.default_rate_cents, 0) END default_rate_cents,
                     t.default_rate_currency
              FROM tasks t
              WHERE t.org_id=$1 AND $6
