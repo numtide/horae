@@ -100,44 +100,41 @@ specs/021-harvest-api-compat/
 
 ### Source Code
 
+Steps 1–3 were written against `crates/horae/src/harvest/`; since the crate split the API is its
+own crate. Paths as of step 5:
+
 ```text
 crates/core/src/time_entry_timer.rs               # restart eligibility, start-stops-running rule
-crates/horae/migrations/0058_api_account_id.sql   # 0056 is time zones (#353), 0057 Common tasks
-crates/horae/migrations/0059_harvest_import_id.sql  # harvest_import_map.harvest_id renamed
-crates/horae/migrations/0060_harvest_ids.sql        # harvest_id columns, sequences, trigger, lookup indexes
-crates/horae/migrations/0061_harvest_ids_backfill.sql
-crates/horae/migrations/0062_harvest_ids_check.sql  # then 0063: NOT NULL and unique indexes
-crates/horae/migrations/0063_harvest_ids_not_null.sql
-crates/horae/migrations/<next>_api_tokens.sql     # step 2
-crates/horae/migrations/<next>_catalogue_updated_at.sql   # step 4
-crates/harvest/src/v2/compat.rs                # horae-harvest: response shapes, Hours and Amount as exact JSON numbers
-crates/horae/src/harvest.rs                       # was harvest/mod.rs (R-12); router and aliases
-crates/horae/src/harvest/
+crates/server/migrations/0001_baseline.sql        # squash of the old 0001–0065, steps 1–3 included
+crates/server/migrations/0002_catalogue_updated_at.sql, 0003_updated_at_on_change.sql   # step 4
+crates/server/migrations/0004_api_tokens.sql      # step 2 (spec 022)
+crates/server/migrations/0006_updated_at_at_write.sql   # step 4 (#454)
+crates/server/migrations/<n>_harvest_id_kinds.sql, <n+1>_harvest_ids_step5.sql   # step 5
+crates/server/src/ops/                            # shared reads and writes the handlers call
+crates/server/src/importers/harvest/ids.rs        # harvest_id kinds and lookup
+crates/harvest/src/v2/compat.rs                   # horae-harvest: response shapes, Hours and Amount as exact JSON numbers
+crates/api/src/rate_limit.rs                      # horae-api: the per-token limiter both APIs share
+crates/harvest-api/src/                           # horae-harvest-api: router, mounted by HORAE_HARVEST_API
+├── lib.rs               # router, aliases, users and time-entry reads
 ├── auth.rs              # extractor: bearer, query, account id, cookie for reads
-├── token_auth.rs        # token lookup, last-used stamp
-├── ids.rs               # integer id → record lookup (harvest_id columns)
+├── ids.rs               # request id (number or UUID) → record
 ├── errors.rs            # Harvest error bodies and status mapping
-├── rate_limit.rs        # per-token windows in AppState
-├── api_tests.rs         # router tests per step, beside pagination_tests.rs
-├── pagination.rs        # page and cursor envelopes, absolute links
-├── time_entry_writes.rs # step 3
-├── company.rs, assignments.rs           # step 3
-├── reports.rs, invoices.rs, users.rs    # step 5
-└── catalogue_writes.rs  # step 6
-crates/horae/src/server_fns/api_tokens.rs         # contracts/api-tokens.md
-crates/horae/src/server_fns/time_entries/commands.rs   # apply → pub(crate); RestartTimer; D-6
-crates/horae/src/models/scoped_time.rs            # TimesheetCommand::RestartTimer
-crates/horae/src/importers/harvest/…              # insert the Harvest id as harvest_id when free (OQ-2)
-crates/horae/src/pages/settings/api_tokens.rs     # token section of personal settings
-crates/horae/tests/fixtures/harvest_reference/    # scrubbed recordings (R-11) or hand-written shapes
+├── pagination.rs        # step 4: window, signed cursor, horizon, envelope
+├── absent.rs            # step 4: empty lists for kinds Horae lacks
+├── client_reads.rs, project_reads.rs, task_reads.rs, user_access.rs
+├── company.rs, project_assignments.rs, time_entry_writes.rs   # step 3
+├── assignments.rs, users.rs, invoices.rs, reports.rs  # step 5
+├── catalogue_writes.rs  # step 6
+├── api_tests.rs, api_tests/   # router tests, one file per area
+└── pagination_tests.rs, pagination_tests/
 nix/checks/harvest-compat.nix                     # the suite (R-10)
-nix/checks/harvest-compat/{clients,patches}/      # pinned clients and local base-URL patches
+nix/checks/harvest-compat/clients/go-harvest/     # the pinned client's workflows
 scripts/harvest-record.sh                         # GET-only recorder for the test account (R-11)
 ```
 
-**Structure Decision**: extend the existing `harvest` module, converted to the `foo.rs` + `foo/`
-layout in step 1 because the feature rewrites most of it. Integration tests get their own
-`harvest_api` test target beside the existing ones in `crates/horae/tests/`.
+**Structure Decision**: the API is the `horae-harvest-api` crate, a library with Axum and no
+Dioxus, beside `horae-api`. Its router tests live in the crate (`api_tests/`,
+`pagination_tests/`) and need only PostgreSQL.
 
 ## Layering
 
@@ -148,11 +145,13 @@ follows these rules:
 1. **Handlers hold no business logic.** A `/harvest/v2` handler translates input (integer id →
    UUID, hours → minutes, decimal → cents), calls a shared operation in the
    `*_record(tx, actor, input)` style the server functions already use, and translates the
-   output. An operation the API needs and that exists only inside a server function is extracted
-   first; the server function then calls it. The rule binds every write from step 3 on and every
-   read added from step 5 on. Step 1's reads predate it: `harvest.rs` still scopes users and time
-   entries itself (`scoped_user_filter`, the manager and member split). That is recorded debt, to
-   move into a shared read operation when step 5 touches those reads.
+   output. Operations live in `horae-server` (`crates/server/src/ops/`, `fn(tx, actor, input)`);
+   one the API needs and that does not exist yet is added there first. The rule binds every write
+   from step 3 on and every read added from step 5 on. Step 1's reads predate it:
+   `crates/harvest-api/src/lib.rs` still scopes users and time entries itself
+   (`scoped_user_filter`, `user_access.rs`, the manager and member split). That is recorded debt;
+   step 5 moves the users part into an operation when it adds `GET /users/{id}` (task T043), and
+   the time-entry part stays until a step touches those reads.
 1. **One `Actor` for every entry point.** A session, a token and later `/api/v1` all produce the
    same `horae_core::permissions::Actor` (person, organization, active), loaded by the
    authorization service from a membership in one organization; its permissions are checked
@@ -180,8 +179,11 @@ lands, an account is a `users` row and has exactly one membership.
 **Crates.** Database-free Harvest pieces live in `horae-harvest` (`crates/harvest`): the compat
 API's response shapes and exact decimals in `v2::compat` (`crates/harvest/src/v2/compat.rs`,
 moved there from the app's `harvest/types.rs` and `harvest/decimal_json.rs`), beside the
-importer's `v2` resource types; they share a type only where the schema is the same. Handlers, id resolution
-(`harvest/ids.rs`), reads and anything with sqlx stay in the app crate.
+importer's `v2` resource types; they share a type only where the schema is the same. Handlers and
+request id resolution are in `horae-harvest-api` (`crates/harvest-api/`), which reuses
+`horae-api` for token authentication and the rate limiter, and takes the cursor key
+(`horae_server::config::CursorKey`) from `horae-server`, where the operations and everything
+else with sqlx live.
 
 ## PR split
 
