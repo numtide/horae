@@ -1,8 +1,14 @@
 //! Kani proofs over whole input types: no panic or overflow, and exact
 //! arithmetic, for every value rather than a sample. Built only by `cargo kani`
 //! (the `kani` cfg), so normal builds and tests never see them.
+//!
+//! The string parsers (`duration::parse`, `time_of_day::parse`) have no proof
+//! here: through `trim`, lowercasing and `str::parse`, `time_of_day` ran out
+//! of 8 GB at three bytes and `duration` (a 60-step `i128` loop) ran past five
+//! minutes at three. The proptest properties `parse_never_panics` and
+//! `parse_stays_inside_the_day` in `tests/properties.rs` cover them instead.
 
-use crate::invoice::{invoice_amounts, line_amount_cents};
+use crate::invoice::{InvoiceAmountError, invoice_amounts, line_amount_cents};
 use crate::project::Percentage;
 use crate::types::RoundDir;
 
@@ -18,13 +24,6 @@ fn any_percentage() -> Percentage {
     let basis_points: u16 = kani::any();
     kani::assume(basis_points <= 10_000);
     Percentage::try_from(basis_points).unwrap()
-}
-
-/// A string of at most `N` arbitrary bytes, when they are valid UTF-8.
-fn any_str<const N: usize>(bytes: &[u8; N]) -> Option<&str> {
-    let len: usize = kani::any();
-    kani::assume(len <= N);
-    core::str::from_utf8(&bytes[..len]).ok()
 }
 
 /// Rounding any `u32` never wraps: it lands on a multiple of the increment, on
@@ -67,28 +66,66 @@ fn rounding_lands_on_the_named_side_for_every_u32() {
     }
 }
 
-/// For every non-negative subtotal and valid percentages, invoice amounts
-/// never panic, the discount stays within the subtotal and the total is
-/// exactly the discounted subtotal plus both taxes.
+/// For every non-negative subtotal and any three percentages, invoice amounts
+/// never panic and fail only with `Overflow`.
 #[kani::proof]
-fn invoice_amounts_add_up_for_every_subtotal() {
+fn invoice_amounts_never_panic_for_every_subtotal() {
     let subtotal: i64 = kani::any();
     kani::assume(subtotal >= 0);
-    if let Ok(a) = invoice_amounts(
+    if let Err(e) = invoice_amounts(
         subtotal,
         any_percentage(),
         any_percentage(),
         any_percentage(),
     ) {
-        assert!(0 <= a.discount_cents && a.discount_cents <= subtotal);
-        assert!(a.tax1_cents >= 0 && a.tax2_cents >= 0);
-        assert!(
-            i128::from(a.total_cents)
-                == i128::from(subtotal) - i128::from(a.discount_cents)
-                    + i128::from(a.tax1_cents)
-                    + i128::from(a.tax2_cents)
-        );
+        assert!(e == InvoiceAmountError::Overflow);
     }
+}
+
+/// For every non-negative amount and any two tax rates, both taxes are
+/// non-negative and the total is exactly the amount plus them; the only
+/// failure is a total past `i64::MAX`, never a wrap. With the discount zero
+/// the amount is the taxable amount, which the next proof keeps non-negative.
+#[kani::proof]
+fn invoice_taxes_are_non_negative_and_add_up_for_every_amount() {
+    let taxable: i64 = kani::any();
+    kani::assume(taxable >= 0);
+    match invoice_amounts(
+        taxable,
+        Percentage::ZERO,
+        any_percentage(),
+        any_percentage(),
+    ) {
+        Ok(a) => {
+            assert!(a.discount_cents == 0 && a.tax1_cents >= 0 && a.tax2_cents >= 0);
+            assert!(
+                i128::from(a.total_cents)
+                    == i128::from(taxable) + i128::from(a.tax1_cents) + i128::from(a.tax2_cents)
+            );
+        }
+        Err(e) => assert!(e == InvoiceAmountError::Overflow),
+    }
+}
+
+/// For every subtotal up to 2^28 cents (2.68 million in a two-decimal
+/// currency) and any discount, the discount stays within the subtotal and
+/// leaves a non-negative taxable amount. `discount ≤ subtotal` needs CBMC to
+/// bound a symbolic 128-bit quotient: 2^32 took two minutes and `i64` did not
+/// finish in ten. The proptest properties cover the whole range and the
+/// half-up rounding of every component.
+#[kani::proof]
+fn invoice_discount_stays_within_the_subtotal() {
+    let subtotal: i64 = kani::any();
+    kani::assume(0 <= subtotal && subtotal <= 1 << 28);
+    let a = invoice_amounts(
+        subtotal,
+        any_percentage(),
+        Percentage::ZERO,
+        Percentage::ZERO,
+    )
+    .unwrap();
+    assert!(0 <= a.discount_cents && a.discount_cents <= subtotal);
+    assert!(a.total_cents == subtotal - a.discount_cents);
 }
 
 /// A line amount never panics for any `i64` rate and `i32` minutes, and for
@@ -123,26 +160,4 @@ fn snap_never_overflows() {
     let step = crate::time_of_day::SNAP_STEP;
     let snapped = crate::time_of_day::snap(kani::any(), step);
     assert!(snapped >= 0 && snapped % i32::from(step) == 0);
-}
-
-/// Parsing any short string as a time of day never panics and stays in the day.
-#[kani::proof]
-#[kani::unwind(9)]
-fn time_of_day_parse_never_panics() {
-    let bytes: [u8; 7] = kani::any();
-    if let Some(input) = any_str(&bytes)
-        && let Some(minute) = crate::time_of_day::parse(input)
-    {
-        assert!(minute < crate::time_of_day::DAY_MINUTES);
-    }
-}
-
-/// Parsing any short string as a duration never panics.
-#[kani::proof]
-#[kani::unwind(62)]
-fn duration_parse_never_panics() {
-    let bytes: [u8; 4] = kani::any();
-    if let Some(input) = any_str(&bytes) {
-        let _ = crate::duration::parse(input);
-    }
 }

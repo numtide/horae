@@ -341,3 +341,6 @@ mod tests;
 
 #[cfg(test)]
 mod properties;
+
+#[cfg(kani)]
+mod proofs;
