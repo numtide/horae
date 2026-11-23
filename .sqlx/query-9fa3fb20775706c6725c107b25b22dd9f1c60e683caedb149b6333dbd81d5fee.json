@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_grants SET expires_at = now() - $2::text::interval WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9fa3fb20775706c6725c107b25b22dd9f1c60e683caedb149b6333dbd81d5fee"
+}

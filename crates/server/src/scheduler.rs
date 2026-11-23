@@ -1,4 +1,5 @@
-//! Periodic detection of forgotten timers and configured budget alerts.
+//! Periodic detection of forgotten timers and configured budget alerts, and
+//! the removal of expired OAuth codes and access tokens.
 //!
 //! Unlike every other plugin event, `timer_running_too_long` is time-based:
 //! nothing mutates when a timer simply keeps running, so it is found by polling
@@ -23,6 +24,9 @@ pub fn spawn(state: &'static AppState) {
                 .is_err()
             {
                 tracing::warn!("budget scheduler tick failed");
+            }
+            if let Err(e) = crate::ops::oauth::delete_expired(&state.db).await {
+                tracing::warn!("OAuth cleanup tick failed: {e}");
             }
         }
     });

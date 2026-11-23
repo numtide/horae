@@ -78,6 +78,7 @@ pub async fn update(
     if !actor.is_active() {
         return Err(OpError::forbidden("Account is not active"));
     }
+    actor.refuse_oauth()?;
     let name = name.trim();
     if !crate::models::user::profile_name_is_valid(name) {
         return Err(OpError::invalid(

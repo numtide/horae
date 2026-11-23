@@ -32,6 +32,11 @@ pub struct AppConfig {
     /// secret, so it is never serialized.
     #[serde(skip)]
     pub api: ApiConfig,
+    /// `HORAE_PUBLIC_URL`; the OAuth authorization server runs only with it.
+    pub public_url: Option<PublicUrl>,
+    /// OAuth credential lifetimes and the token endpoint's limit.
+    #[serde(skip)]
+    pub oauth: OAuthConfig,
 }
 
 /// Settings of Horae's token-authenticated APIs (spec 022).
@@ -153,14 +158,154 @@ impl RateLimit {
         })
     }
 
-    fn from_env() -> anyhow::Result<Self> {
-        match std::env::var("HORAE_API_RATE_LIMIT") {
-            Ok(value) => Self::parse(&value).with_context(|| {
-                format!("HORAE_API_RATE_LIMIT must be <requests>/<seconds>, not {value:?}")
-            }),
-            Err(std::env::VarError::NotPresent) => Ok(Self::default()),
-            Err(error) => Err(error).context("invalid HORAE_API_RATE_LIMIT"),
+    fn from_env(key: &str, default: Self) -> anyhow::Result<Self> {
+        match std::env::var(key) {
+            Ok(value) => Self::parse(&value)
+                .with_context(|| format!("{key} must be <requests>/<seconds>, not {value:?}")),
+            Err(std::env::VarError::NotPresent) => Ok(default),
+            Err(error) => Err(error).with_context(|| format!("invalid {key}")),
         }
+    }
+}
+
+/// `HORAE_PUBLIC_URL`: the address people and apps reach Horae at, and the
+/// OAuth issuer (spec 024). Without it the authorization server is off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicUrl(String);
+
+impl PublicUrl {
+    /// An absolute `https` URL, or `http` to a loopback host, with no trailing
+    /// slash, query, fragment or user information, written in its canonical
+    /// form: it is the issuer, which clients compare exactly (RFC 8414 §3.3).
+    pub fn parse(value: &str) -> anyhow::Result<Self> {
+        // The URL parser drops tabs and newlines and trims spaces.
+        anyhow::ensure!(
+            !value.chars().any(|c| c.is_whitespace() || c.is_control()),
+            "spaces and control characters are not allowed"
+        );
+        let url = url::Url::parse(value).context("not an absolute URL")?;
+        let host = url.host_str().context("no host")?;
+        match url.scheme() {
+            "https" => {}
+            "http" if is_loopback_host(host) => {}
+            "http" => anyhow::bail!("http is allowed only for a loopback host"),
+            scheme => anyhow::bail!("{scheme} is not https"),
+        }
+        anyhow::ensure!(
+            url.username().is_empty() && url.password().is_none(),
+            "a user name or password is not allowed"
+        );
+        anyhow::ensure!(
+            url.query().is_none() && url.fragment().is_none(),
+            "a query or fragment is not allowed"
+        );
+        // The parser always gives a bare host the path `/`, which the issuer omits.
+        let canonical = match url.path() {
+            "/" => url.as_str().trim_end_matches('/'),
+            _ => url.as_str(),
+        };
+        anyhow::ensure!(value == canonical, "write it as {canonical}");
+        anyhow::ensure!(!value.ends_with('/'), "remove the trailing slash");
+        Ok(Self(value.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    fn from_env() -> anyhow::Result<Option<Self>> {
+        non_empty("HORAE_PUBLIC_URL")
+            .map(|value| {
+                Self::parse(&value).with_context(|| format!("invalid HORAE_PUBLIC_URL {value:?}"))
+            })
+            .transpose()
+    }
+}
+
+/// Lifetimes of OAuth credentials and the token endpoint's limit (spec 024
+/// D-2, contracts/configuration.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OAuthConfig {
+    pub access_ttl: std::time::Duration,
+    /// A refresh token unused this long expires.
+    pub refresh_idle: std::time::Duration,
+    /// No refresh token outlives its authorization's approval by more.
+    pub refresh_max: std::time::Duration,
+    /// Requests per client to the token endpoint.
+    pub token_rate_limit: RateLimit,
+}
+
+const HOUR: u64 = 3600;
+const DAY: u64 = 24 * HOUR;
+
+impl Default for OAuthConfig {
+    fn default() -> Self {
+        Self {
+            access_ttl: std::time::Duration::from_secs(HOUR),
+            refresh_idle: std::time::Duration::from_secs(30 * DAY),
+            refresh_max: std::time::Duration::from_secs(365 * DAY),
+            token_rate_limit: RateLimit {
+                requests: 30,
+                window: std::time::Duration::from_secs(60),
+            },
+        }
+    }
+}
+
+impl OAuthConfig {
+    /// Refuses lifetimes outside sane bounds: access 60 s to 1 day, refresh
+    /// idle 1 hour to 1 year, and the maximum between the idle value and 10
+    /// years.
+    pub fn validate(self) -> anyhow::Result<Self> {
+        let seconds = |duration: std::time::Duration| duration.as_secs();
+        anyhow::ensure!(
+            (60..=DAY).contains(&seconds(self.access_ttl)),
+            "HORAE_OAUTH_ACCESS_TTL must be between 60 and {DAY} seconds"
+        );
+        anyhow::ensure!(
+            (HOUR..=365 * DAY).contains(&seconds(self.refresh_idle)),
+            "HORAE_OAUTH_REFRESH_IDLE must be between {HOUR} and {} seconds",
+            365 * DAY
+        );
+        anyhow::ensure!(
+            self.refresh_max >= self.refresh_idle,
+            "HORAE_OAUTH_REFRESH_MAX must be at least HORAE_OAUTH_REFRESH_IDLE"
+        );
+        // Bounded so adding it to a timestamp can never overflow.
+        anyhow::ensure!(
+            seconds(self.refresh_max) <= 10 * 365 * DAY,
+            "HORAE_OAUTH_REFRESH_MAX must be at most {} seconds (10 years)",
+            10 * 365 * DAY
+        );
+        Ok(self)
+    }
+
+    fn from_env() -> anyhow::Result<Self> {
+        let default = Self::default();
+        Self {
+            access_ttl: seconds_from_env("HORAE_OAUTH_ACCESS_TTL", default.access_ttl)?,
+            refresh_idle: seconds_from_env("HORAE_OAUTH_REFRESH_IDLE", default.refresh_idle)?,
+            refresh_max: seconds_from_env("HORAE_OAUTH_REFRESH_MAX", default.refresh_max)?,
+            token_rate_limit: RateLimit::from_env(
+                "HORAE_OAUTH_TOKEN_RATE_LIMIT",
+                default.token_rate_limit,
+            )?,
+        }
+        .validate()
+    }
+}
+
+fn seconds_from_env(
+    key: &str,
+    default: std::time::Duration,
+) -> anyhow::Result<std::time::Duration> {
+    match std::env::var(key) {
+        Ok(value) => value
+            .parse()
+            .map(std::time::Duration::from_secs)
+            .with_context(|| format!("{key} must be a number of seconds, not {value:?}")),
+        Err(std::env::VarError::NotPresent) => Ok(default),
+        Err(error) => Err(error).with_context(|| format!("invalid {key}")),
     }
 }
 
@@ -415,8 +560,10 @@ impl AppConfig {
             )?,
             api: ApiConfig {
                 cursor_key: CursorKey::from_env()?,
-                rate_limit: RateLimit::from_env()?,
+                rate_limit: RateLimit::from_env("HORAE_API_RATE_LIMIT", RateLimit::default())?,
             },
+            public_url: PublicUrl::from_env()?,
+            oauth: OAuthConfig::from_env()?,
         })
     }
 }
@@ -546,6 +693,39 @@ mod tests {
     use super::check_dev_login_bind;
 
     mod environment;
+
+    #[test]
+    fn the_public_url_is_kept_only_in_its_canonical_form() {
+        use super::PublicUrl;
+        for value in [
+            "https://horae.example.test",
+            "https://horae.example.test:8443/horae",
+            "http://127.0.0.1:8080",
+            "http://[::1]:8080",
+        ] {
+            assert_eq!(PublicUrl::parse(value).unwrap().as_str(), value);
+        }
+        for (value, canonical) in [
+            ("HTTPS://Horae.Example.test", "https://horae.example.test"),
+            (
+                "https://horae.example.test:443",
+                "https://horae.example.test",
+            ),
+            (
+                "https://horae.example.test/a/../b",
+                "https://horae.example.test/b",
+            ),
+        ] {
+            let error = PublicUrl::parse(value).unwrap_err().to_string();
+            assert_eq!(error, format!("write it as {canonical}"), "{value}");
+        }
+        for value in [
+            "https://horae.exam\tple.test",
+            " https://horae.example.test",
+        ] {
+            assert!(PublicUrl::parse(value).is_err(), "{value:?}");
+        }
+    }
 
     #[test]
     fn harvest_secrets_stay_out_of_debug_and_serialized_configuration() {

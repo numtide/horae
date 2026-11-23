@@ -515,6 +515,28 @@ async fn a_profile_save_leaves_colleagues_alone(pool: PgPool) {
     assert_eq!(profile(&pool, other).await, ("Private person".into(), None));
 }
 
+/// No scope covers the profile, so even a token holding every scope,
+/// unlocked, cannot rename the person or change their time zone.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_token_with_every_scope_cannot_save(pool: PgPool) {
+    use horae_core::permissions::oauth::{Scope, ScopeSet};
+    let ids = fixture(&pool).await;
+    let all = ScopeSet::of(&Scope::ALL);
+    let caller = Caller::oauth(ids.org_id, ids.user_id, Uuid::now_v7(), Uuid::now_v7(), all);
+    let mut write = begin(&pool, caller).await.unwrap();
+    write.actor.unlock_scope(Scope::CatalogRead).unwrap();
+    assert!(write.actor.is_active());
+    let result = update(
+        &mut write.tx,
+        &write.actor,
+        "Renamed",
+        Some("Europe/Madrid"),
+    )
+    .await
+    .map(drop);
+    assert!(matches!(result, Err(OpError::Forbidden(_))), "{result:?}");
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deactivated_person_cannot_save(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;

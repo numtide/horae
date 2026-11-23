@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_clients SET secret_sha256 = $2, secret_prefix = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ca064b887dfa22dd096fa733bbf98859e50e81b1e7e019596ae992976bfe965"
+}

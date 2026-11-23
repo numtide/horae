@@ -10,15 +10,17 @@ use crate::testing::{SeedIds, add_person, seed};
 
 #[test]
 fn a_secret_is_the_prefix_and_32_random_bytes_in_base64url() {
-    let secret = Secret::generate();
+    use base64::Engine;
+    let secret = Secret::generate(PREFIX);
     let encoded = secret.expose().strip_prefix(PREFIX).unwrap();
-    assert_eq!(URL_SAFE_NO_PAD.decode(encoded).unwrap().len(), 32);
-    assert_ne!(secret.expose(), Secret::generate().expose());
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded);
+    assert_eq!(decoded.unwrap().len(), 32);
+    assert_ne!(secret.expose(), Secret::generate(PREFIX).expose());
 }
 
 #[test]
 fn the_display_prefix_is_the_first_eight_characters_after_the_prefix() {
-    let secret = Secret::generate();
+    let secret = Secret::generate(PREFIX);
     assert_eq!(
         secret.display_prefix(),
         &secret.expose()[PREFIX.len()..PREFIX.len() + 8]
@@ -40,7 +42,7 @@ fn the_digest_is_sha256_of_the_whole_token() {
 
 #[test]
 fn debug_shows_only_the_display_prefix() {
-    let secret = Secret::generate();
+    let secret = Secret::generate(PREFIX);
     let debug = format!("{secret:?}");
     assert_eq!(debug, format!("{PREFIX}{}…", secret.display_prefix()));
     assert!(!debug.contains(&secret.expose()[PREFIX.len() + 8..]));
@@ -169,7 +171,7 @@ async fn a_valid_token_authenticates_as_its_owner(pool: PgPool) {
 async fn unknown_and_malformed_tokens_are_refused(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     let (secret, _) = create_as(&pool, &ids, "script", None).await.unwrap();
-    let unknown = Secret::generate();
+    let unknown = Secret::generate(PREFIX);
     let without_prefix = &secret.expose()[PREFIX.len()..];
     for token in [unknown.expose(), without_prefix, "", "horae_pat_"] {
         assert!(
@@ -404,4 +406,33 @@ async fn every_active_person_reads_the_harvest_account_id(pool: PgPool) {
     let result = harvest_account_id(&mut read.tx, &read.actor).await;
     let refused = read.finish(result).await;
     assert!(matches!(refused, Err(OpError::Forbidden(_))), "{refused:?}");
+}
+
+/// Tokens are managed in the web app only: no personal or OAuth token, even
+/// an OAuth token with every scope, lists, mints or revokes one.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn no_token_manages_personal_tokens(pool: PgPool) {
+    use horae_core::permissions::oauth::{Scope, ScopeSet};
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let (_, row) = create_as(&pool, &ids, "script", None).await.unwrap();
+    let all = ScopeSet::of(&Scope::ALL);
+    for caller in [
+        Caller::token(ids.org_id, ids.user_id, row.id),
+        Caller::oauth(ids.org_id, ids.user_id, Uuid::now_v7(), Uuid::now_v7(), all),
+    ] {
+        let mut write = begin(&pool, caller).await.unwrap();
+        write.actor.unlock_scope(Scope::TimeWrite).unwrap();
+        let refused = |result: Result<_, OpError>| {
+            assert!(matches!(result, Err(OpError::Forbidden(_))), "{caller:?}");
+        };
+        refused(list_own(&mut write.tx, &write.actor).await.map(drop));
+        refused(list_org(&mut write.tx, &write.actor).await.map(drop));
+        refused(
+            create(&mut write.tx, &write.actor, "minted", None)
+                .await
+                .map(drop),
+        );
+        refused(revoke(&mut write.tx, &write.actor, row.id).await.map(drop));
+    }
+    assert_eq!(list_own_as(&pool, &ids).await.len(), 1);
 }
