@@ -178,8 +178,9 @@ Status:
 | `Toast`, `ToastContainer` | `toast.rs` | Feedback | in use (3 pages, each with its own container); one container in `AppLayout` and the new look in PR-9 |
 | `NoTrackingHint` | `no_tracking.rs` | Feedback | in use (Timesheet, `TimerWidget`) |
 | `EmptyState`, `ErrorState`, `LoadError`, `Loading`, `Skeleton` | `screen_state.rs` | Feedback | in use (`Skeleton` in the Invoices screens, People and the audit log) |
-| `Modal`, `ModalHeader`, `ModalBody`, `ModalActions` | `modal.rs` | Overlays | in use (9 dialogs) |
-| `ConfirmDialog` | `confirm_dialog.rs` | Overlays | in use (9) |
+| `Modal`, `ModalHeader`, `ModalBody`, `ModalActions` | `modal.rs` | Overlays | in use (10 dialogs) |
+| `ConfirmDialog` | `confirm_dialog.rs` | Overlays | in use (10) |
+| `LeaveDialog` | `leave_dialog.rs` | Overlays | in use (`App`: the editor navigation guard) |
 | `ExportDialog` | — | Overlays | planned in the Tasks PR |
 | `use_session`, `use_week_start` | `session.rs` | Helpers | in use |
 | `use_running_timer` | `timer_widget.rs` | Helpers | in use |
@@ -358,7 +359,7 @@ Every dialog is built on the shared `Modal`, with fixed slots (header, body, foo
 
 **`ConfirmDialog`** is the one shape for confirming a destructive, irreversible or otherwise significant action, after `ConfirmDialog.dc.html`: an icon tile (red for danger, green for a neutral confirm such as archiving), a serif title, a short body that says what will happen, then the buttons. For the most serious actions (deleting a workspace, for instance) it can require typing a confirmation word before the confirm button enables. Its props follow the prototype: title, body, confirm label, tone (danger or neutral), busy, confirm and dismiss handlers, and the optional confirmation word. The Danger tone opens with Cancel focused, so a stray Enter cannot destroy anything; the Neutral tone focuses its first control.
 
-**No native dialogs.** Every confirmation is a `ConfirmDialog`: never the browser's `confirm`, `alert` or `prompt`, and never a confirmation built by hand in a page or panel (an alert with buttons, a checkbox that unlocks a button). One exception remains: the editor navigation guard (`assets/js/project-edit-navigation.js`) asks natively when the browser's history would leave an editor with unsaved changes, because it must decide synchronously. Moving it to `ConfirmDialog` (block the navigation, ask, replay it on confirm) is its own change, tracked in the inventory.
+**No native dialogs.** Every confirmation is a `ConfirmDialog`: never the browser's `confirm`, `alert` or `prompt`, and never a confirmation built by hand in a page or panel (an alert with buttons, a checkbox that unlocks a button). This covers the editor navigation guard (`assets/js/project-edit-navigation.js`). When a link, Back or Forward would leave an editor with unsaved changes, it holds the navigation and `LeaveDialog` (`leave_dialog.rs`, mounted once in `App`) asks whether to discard them, then repeats the navigation on confirm. While a save is still unresolved, the dialog says why the page must wait and offers no way out. A browser may suppress its own dialogs and answer "stay" without showing anything, which would block navigation silently. Only leaving the document (reload, closing the tab, a full-page link) still uses the browser's `beforeunload` prompt, which a page cannot replace.
 
 **Footer order and alignment.** The primary action comes first, on the left, then a second action when the dialog has one ("Delete…" in the time entry, "Back to editing" in the permission editor), then Cancel. The buttons stretch to share the footer's width, and with large text each takes its own line. This follows `ConfirmDialog.dc.html` and most prototype screens; the kit's *Modal*, which puts the primary action on the right, is overridden. Pages never draw the footer: `Modal` draws it from its `primary`, `secondary` and `cancel` props (or `ModalActions`), so the order cannot drift. One order everywhere means the next step is always in the same place.
 

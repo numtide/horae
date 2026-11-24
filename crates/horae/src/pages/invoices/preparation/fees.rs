@@ -9,7 +9,7 @@ use crate::models::invoice::{
     InvoiceFeeBalance, InvoiceFeeSelection, InvoicePreparation, InvoiceSource,
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(super) struct FeeInput {
     present: bool,
     source: InvoiceSource,
