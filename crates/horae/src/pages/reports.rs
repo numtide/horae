@@ -436,8 +436,10 @@ fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> E
                                         }
                                     }
                                 }
-                                tr { class: "report-total-row",
-                                    td { "Total" }
+                            }
+                            tfoot {
+                                tr { class: "font-semibold",
+                                    th { scope: "row", "Total" }
                                     td { class: "text-mono text-right", "{hours(grand_total)}" }
                                     td { class: "text-mono text-right", "{hours(grand_rounded)}" }
                                     td { class: "text-mono text-right", "{hours(grand_billable)}" }

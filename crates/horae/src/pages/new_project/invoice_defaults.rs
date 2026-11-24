@@ -63,7 +63,7 @@ pub(super) fn InvoiceDefaults(
                 if custom_terms() {
                     div { class: "mt-3",
                         FormGroup { label: "Days until payment is due", id: "np-terms-days", hint: "From 0 to 365 days after the invoice date.",
-                            Input { id: "np-terms-days", error_id: error_id(ProjectFormField::PaymentTerms), class: "w-24 max-w-full font-mono text-right", value: form.read().invoice_defaults.terms_days.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.terms_days = event.value(); } }
+                            Input { id: "np-terms-days", error_id: error_id(ProjectFormField::PaymentTerms), class: "w-24 max-w-full text-mono text-right", value: form.read().invoice_defaults.terms_days.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.terms_days = event.value(); } }
                         }
                     }
                 }
@@ -72,7 +72,7 @@ pub(super) fn InvoiceDefaults(
                 }
             }
             FormRow { label: "PO number", id: "np-po-number", hint: "Optional",
-                Input { id: "np-po-number", error_id: error_id(ProjectFormField::PurchaseOrder), class: "w-60 max-w-full font-mono", value: form.read().invoice_defaults.po_number.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.po_number = event.value(); } }
+                Input { id: "np-po-number", error_id: error_id(ProjectFormField::PurchaseOrder), class: "w-60 max-w-full text-mono", value: form.read().invoice_defaults.po_number.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.po_number = event.value(); } }
                 if let Some(message) = error_for(&[ProjectFormField::PurchaseOrder]) {
                     p { id: "np-invoice-field-error", class: "text-sm text-danger", "{message}" }
                 }
@@ -80,7 +80,7 @@ pub(super) fn InvoiceDefaults(
             FormRow { label: "Tax (%)", id: "np-tax", hint: "Optional · up to two decimal places",
                 div { class: "flex flex-wrap items-center gap-3",
                     div { class: "flex items-center gap-2",
-                        Input { id: "np-tax", error_id: error_id(ProjectFormField::Tax), class: "w-24 font-mono text-right", value: form.read().invoice_defaults.tax.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.tax = event.value(); } }
+                        Input { id: "np-tax", error_id: error_id(ProjectFormField::Tax), class: "w-24 text-mono text-right", value: form.read().invoice_defaults.tax.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.tax = event.value(); } }
                         span { class: "text-sm text-subtle", "%" }
                     }
                     if let Some(tax) = form.read().invoice_defaults.second_tax.clone() {
@@ -90,7 +90,7 @@ pub(super) fn InvoiceDefaults(
                                 oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); if let Some(tax) = &mut form.write().invoice_defaults.second_tax { tax.name = event.value(); } }
                             }
                             div { class: "flex items-center gap-2",
-                                Input { id: "np-second-tax", error_id: error_id(ProjectFormField::SecondTax), label: "Second tax (%)", class: "w-24 font-mono text-right", value: tax.percentage,
+                                Input { id: "np-second-tax", error_id: error_id(ProjectFormField::SecondTax), label: "Second tax (%)", class: "w-24 text-mono text-right", value: tax.percentage,
                                     oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); if let Some(tax) = &mut form.write().invoice_defaults.second_tax { tax.percentage = event.value(); } }
                                 }
                                 span { class: "text-sm text-subtle", "%" }
@@ -109,7 +109,7 @@ pub(super) fn InvoiceDefaults(
             }
             FormRow { label: "Discount (%)", id: "np-discount", hint: "Optional",
                 div { class: "flex items-center gap-2",
-                    Input { id: "np-discount", error_id: error_id(ProjectFormField::Discount), class: "w-24 font-mono text-right", value: form.read().invoice_defaults.discount.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.discount = event.value(); } }
+                    Input { id: "np-discount", error_id: error_id(ProjectFormField::Discount), class: "w-24 text-mono text-right", value: form.read().invoice_defaults.discount.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); form.write().invoice_defaults.discount = event.value(); } }
                     span { class: "text-sm text-subtle", "%" }
                 }
                 p { class: "form-hint", "Discount is applied before tax. Both taxes use the discounted subtotal without compounding." }

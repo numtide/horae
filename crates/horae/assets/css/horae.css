@@ -40,6 +40,8 @@
   --color-bg-overlay: #2E2A22;   /* hover-raise over a raised surface */
   --color-menu: #201D17;         /* dropdown / popover surface (deeper than overlay) */
   --color-row-hover: #1C1A15;    /* table / ledger row hover (sinks, not lifts) */
+  --color-row-stripe: #201D17;   /* every other row of a striped table */
+  --color-row-selected: #1F2A24; /* a selected table row; replaces the stripe */
   --color-scrim: rgba(8, 7, 5, 0.68);   /* dimmed backdrop behind modals */
 
   /* Text — warm neutrals */
@@ -153,7 +155,6 @@
   --width-tag-entry: 8.75rem;
   --width-form-select: 20rem;
   --width-client-editor: 35rem;
-  --width-client-name: 16.25rem;
   --width-name-column: 12rem;
   --width-ts-day: 4.75rem;
   --width-ts-remove: 2.75rem;
@@ -224,6 +225,8 @@
   --color-bg-overlay: #E7E0D2;
   --color-menu: #FFFFFF;         /* popover lifts off the paper */
   --color-row-hover: #E9E3D6;    /* distinct from bg-tertiary, or table hover vanishes */
+  --color-row-stripe: #F3EFE6;
+  --color-row-selected: #E2ECE6;
   --color-scrim: rgba(34, 32, 27, 0.35);
 
   /* Text — warm ink */
@@ -1037,7 +1040,6 @@ h1, h2, h3, h4, h5, h6 {
 .report-tab.active {
   color: var(--color-text-strong); font-weight: 600; border-bottom-color: var(--color-primary);
 }
-.report-total-row td { font-weight: 600; border-top: 2px solid var(--color-border); }
 table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 thead th {
   padding: var(--space-3) var(--space-5);
@@ -1059,13 +1061,62 @@ tbody td, tbody th {
 }
 tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
 /* Totals inside a table line up with its rows, set off by one rule. */
-tfoot td, tfoot th { padding: var(--space-2) var(--space-5); color: var(--color-text); }
+tfoot td, tfoot th { padding: var(--space-2) var(--space-5); color: var(--color-text); text-align: left; }
 tfoot tr:first-child td, tfoot tr:first-child th { padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
 tfoot tr:last-child td, tfoot tr:last-child th { padding-bottom: var(--space-4); }
 tbody tr:hover { background: var(--color-row-hover); }
 /* A row that opens a record: its first link stretches over the whole row. */
 tr.row-link { position: relative; }
 tr.row-link a::after { content: ""; position: absolute; inset: 0; }
+
+/* DataTable variants (components/table.rs). */
+/* The card is the frame; one rule under its title block. */
+.table-flush { border-width: 1px 0 0; border-radius: 0; }
+.table-compact thead th { padding: var(--space-2-5) var(--space-4); }
+.table-compact :is(tbody, tfoot) :is(td, th) { padding: var(--space-2-5) var(--space-4); }
+.table-striped tbody :is(td, th) { border-bottom: 0; }
+.table-striped tbody tr:nth-child(even) { background: var(--color-row-stripe); }
+.table-striped tbody tr:hover { background: var(--color-row-hover); }
+/* Selection wins over the stripe and the hover. */
+.table-container tbody tr.selected { background: var(--color-row-selected); }
+/* The scroller holds the rows so the header can stick to its top. */
+.table-sticky { max-height: 70dvh; overflow-y: auto; }
+.table-sticky thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--color-bg); box-shadow: inset 0 -1px var(--color-border); border-bottom: 0;
+}
+.table-flush.table-sticky thead th { background: var(--color-bg-secondary); }
+.table-container[aria-busy="true"] :is(tbody, tfoot) { opacity: 0.55; transition: opacity 0.2s ease; }
+/* Loading, empty, no match and error: rows that are not records. */
+tbody tr:is(.table-state, .table-skeleton):hover { background: none; }
+tbody tr.table-state td { padding: 0; }
+.table-skeleton .skeleton-bar { width: 60%; }
+.table-skeleton td:first-child .skeleton-bar { width: 80%; }
+/* First column: the record's name in bold, an optional line under it. */
+.name-cell-name { display: block; font-weight: 600; color: var(--color-text-strong); }
+.name-cell-secondary { display: block; margin-top: var(--space-1); font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+/* Keep names readable inside scrolling tables; never widen the page itself. */
+.name-table :is(th, td):first-child { min-width: var(--width-name-column); }
+
+/* A row's actions: the 32px «⋮» trigger of Menu { icon }. */
+.menu-kebab {
+  width: 32px; height: 32px; padding: 0; justify-content: center;
+  color: var(--color-text-secondary);
+}
+.menu-kebab svg { width: 16px; height: 16px; }
+.menu-kebab[aria-busy="true"] { opacity: 0.6; cursor: progress; }
+
+/* Actions for the selected rows, floating on the menu surface. */
+.bulk-bar {
+  position: fixed; left: 50%; bottom: var(--space-8); z-index: 30; transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
+  max-width: calc(100vw - 2 * var(--space-4));
+  padding: var(--space-2-5) var(--space-3) var(--space-2-5) var(--space-5);
+  background: var(--color-menu); border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-menu);
+}
+.bulk-bar-count { font-weight: 600; color: var(--color-text-strong); }
+.bulk-bar-rule { width: 1px; height: 20px; background: var(--color-border); }
 
 /* Badges */
 .badge {
@@ -1587,6 +1638,9 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 .gallery-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); }
 .gallery-field { min-width: 220px; }
 .gallery-navcol { max-width: 240px; }
+.gallery-label { margin: var(--space-6) 0 var(--space-3); font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+.gallery-bulk { display: flex; justify-content: center; margin-top: var(--space-4); }
+.gallery-bulk .bulk-bar { position: static; transform: none; }
 
 /* ── Timesheet ─────────────────────────────────────────────────────────────
    The week grid: a project column + 7 day columns + total + a delete column.
@@ -2039,7 +2093,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
    utilities in the markup; only what utilities can't express lives here. */
 .himp-page { overflow-wrap: anywhere; }
 /* Tables scroll inside their card; breaking inside a word ("Clien ts") would not help. */
-.himp-page .table :is(th, td) { overflow-wrap: normal; }
+.himp-page table :is(th, td) { overflow-wrap: normal; }
 .himp-page .btn { white-space: normal; max-width: 100%; }
 .himp-page .banner { flex-wrap: wrap; }
 .himp-history[aria-pressed="true"] {
@@ -2131,9 +2185,6 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 }
 .imp-icon-csv { color: var(--color-text-secondary); }
 .imp-icon-muted { color: var(--color-text-muted); }
-/* Keep names readable inside scrolling tables; never widen the page itself. */
-.client-table :is(th, td):first-child { min-width: var(--width-client-name); }
-.name-table :is(th, td):first-child { min-width: var(--width-name-column); }
 .client-search::placeholder { color: var(--color-text-secondary); }
 /* SearchField: the magnifier sits inside the input's left padding. */
 .search-field { position: relative; }

@@ -101,6 +101,9 @@ page-failed-hint = Reload the page. If it keeps failing, sign in again.
 page-session-ended = Session ended
 page-sign-in-again = Sign in again
 confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
+bulk-bar-label = Actions for the selected rows
+bulk-bar-selected = { $count } selected
+bulk-bar-clear = Clear
 
 ## Settings
 
@@ -180,6 +183,8 @@ workspace-save-failed = Could not save the settings. Try again.
 workspace-plugins-title = Plugins
 workspace-plugins-intro = What the plugins installed on this server add to { -brand }.
 workspace-plugins-table-label = Installed plugins
+workspace-plugins-loading = Loading plugins…
+workspace-plugins-what = plugins
 workspace-plugins-column-name = Name
 workspace-plugins-column-version = Version
 workspace-plugins-column-status = Status
@@ -377,6 +382,7 @@ invoices-defaults-conflict = These projects have different invoice values. Use o
 invoices-use-defaults-from = Use the values of { $project }
 invoices-values = Invoice values
 invoices-preview = Preview
+invoices-lines-label = Invoice lines
 invoices-preview-loading = Loading the preview…
 invoices-preview-updating = Updating the preview…
 invoices-preview-dates = { $count ->
@@ -558,7 +564,6 @@ people-column-person = Person
 people-column-hours = Hours
 people-column-billable-share = Billable %
 people-actions = Actions
-people-actions-for = Actions for { $name }
 people-archived = Archived
 people-hours-unavailable-label = Hours not available
 people-billable-unavailable-label = Billable hours not available

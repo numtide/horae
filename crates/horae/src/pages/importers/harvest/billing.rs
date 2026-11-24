@@ -41,7 +41,7 @@ pub(super) fn BillingTable(report: ImportReport) -> Element {
                 p { class: "alert alert-warning text-sm", role: "status", {tr.harvest_billing_watermarks_held()} }
             }
             div { class: "overflow-x-auto",
-                table { class: "table",
+                table {
                     tbody {
                         for (index, (label, value, hint)) in rows.into_iter().enumerate() {
                             tr { key: "{index}",
