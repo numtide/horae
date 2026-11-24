@@ -220,7 +220,7 @@ fn a_bad_rate_limit_refuses_to_start() {
 fn oauth_settings_use_the_documented_variables() {
     for public_url in [
         "https://horae.example.test",
-        "https://example.test/horae",
+        "https://example.test:8443",
         "http://127.0.0.1:8080",
         "http://[::1]:8080",
     ] {
@@ -248,6 +248,7 @@ fn bad_oauth_settings_refuse_to_start() {
         ("HORAE_PUBLIC_URL", "https://horae.example.test?x=1"),
         ("HORAE_PUBLIC_URL", "https://horae.example.test#x"),
         ("HORAE_PUBLIC_URL", "https://user@horae.example.test"),
+        ("HORAE_PUBLIC_URL", "https://horae.example.test/horae"),
         ("HORAE_OAUTH_ACCESS_TTL", "59"),
         ("HORAE_OAUTH_ACCESS_TTL", "86401"),
         ("HORAE_OAUTH_ACCESS_TTL", "an hour"),

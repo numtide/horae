@@ -39,8 +39,9 @@ pub struct OAuthState {
     /// `HORAE_PUBLIC_URL`, the issuer.
     pub issuer: Arc<str>,
     pub config: OAuthConfig,
-    /// The token and revocation endpoints' limit, per client id (FR-081).
-    pub limiter: Arc<RateLimiter<String>>,
+    /// The token and revocation endpoints' limit, per client id (FR-081);
+    /// `None` is every id that names no app.
+    pub limiter: Arc<RateLimiter<Option<String>>>,
 }
 
 impl OAuthState {
@@ -76,7 +77,9 @@ pub fn router(state: Option<OAuthState>) -> Router {
 
 /// Middleware for the whole server: responses under `/oauth/` cannot be
 /// framed (clickjacking of the approval page, FR-024) and send no referrer,
-/// so a code or a request id never leaves in a `Referer`.
+/// so a code or a request id never leaves in a `Referer`. One that set no
+/// caching, such as the sign-in redirect, is not stored either. Layer it
+/// outside the login guard so the guard's redirects get the headers too.
 pub async fn security_headers(request: Request, next: Next) -> Response {
     let oauth = request.uri().path().starts_with("/oauth/");
     let mut response = next.run(request).await;
@@ -91,6 +94,9 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
             header::REFERRER_POLICY,
             HeaderValue::from_static("no-referrer"),
         );
+        if !headers.contains_key(header::CACHE_CONTROL) {
+            no_store(&mut response);
+        }
     }
     response
 }

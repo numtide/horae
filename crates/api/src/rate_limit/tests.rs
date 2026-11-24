@@ -32,6 +32,21 @@ fn a_token_gets_its_requests_per_window_then_waits_for_the_window_to_end() {
     );
 }
 
+/// Past the cap a new key waits for a window to end; tracked keys go on.
+#[test]
+fn no_more_keys_than_the_cap_are_tracked() {
+    let limiter = limiter(10, 15).with_max_keys(2);
+    let (first, second, third) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    let start = Instant::now();
+    assert_eq!(limiter.check(first, start), Ok(()));
+    assert_eq!(limiter.check(second, start), Ok(()));
+    assert_eq!(limiter.check(third, start), Err(Duration::from_secs(15)));
+    assert_eq!(limiter.check(first, start), Ok(()));
+    // Once the windows end, they are pruned and the new key fits.
+    let later = start + Duration::from_secs(15);
+    assert_eq!(limiter.check(third, later), Ok(()));
+}
+
 #[test]
 fn the_window_resets_when_it_ends() {
     let limiter = limiter(1, 15);

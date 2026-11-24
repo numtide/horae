@@ -14,7 +14,7 @@ Query parameters (RFC 6749 §4.1.1, RFC 7636 §4.3):
 | `response_type` | yes | `code` |
 | `client_id` | yes | an enabled client of the organization |
 | `redirect_uri` | yes | matches a registered URI (exact, or loopback with any port) |
-| `code_challenge` | yes, for public and confidential clients (D-7) | 43–128 characters base64url |
+| `code_challenge` | yes, for public and confidential clients (D-7) | 43 characters base64url, the length of every S256 challenge |
 | `code_challenge_method` | yes | `S256` |
 | `state` | recommended | echoed unchanged, at most 1,024 characters |
 | `scope` | no | space-separated; defaults to the client's scopes |

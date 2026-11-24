@@ -199,11 +199,16 @@ impl PublicUrl {
             url.query().is_none() && url.fragment().is_none(),
             "a query or fragment is not allowed"
         );
+        // The OAuth endpoints and the RFC 8414 metadata are served at the
+        // root, so an issuer with a path would advertise addresses Horae
+        // does not answer.
+        anyhow::ensure!(
+            url.path() == "/",
+            "serve Horae at the root of its host: remove the path {}",
+            url.path()
+        );
         // The parser always gives a bare host the path `/`, which the issuer omits.
-        let canonical = match url.path() {
-            "/" => url.as_str().trim_end_matches('/'),
-            _ => url.as_str(),
-        };
+        let canonical = url.as_str().trim_end_matches('/');
         anyhow::ensure!(value == canonical, "write it as {canonical}");
         anyhow::ensure!(!value.ends_with('/'), "remove the trailing slash");
         Ok(Self(value.to_owned()))
@@ -699,7 +704,7 @@ mod tests {
         use super::PublicUrl;
         for value in [
             "https://horae.example.test",
-            "https://horae.example.test:8443/horae",
+            "https://horae.example.test:8443",
             "http://127.0.0.1:8080",
             "http://[::1]:8080",
         ] {
@@ -711,13 +716,20 @@ mod tests {
                 "https://horae.example.test:443",
                 "https://horae.example.test",
             ),
-            (
-                "https://horae.example.test/a/../b",
-                "https://horae.example.test/b",
-            ),
         ] {
             let error = PublicUrl::parse(value).unwrap_err().to_string();
             assert_eq!(error, format!("write it as {canonical}"), "{value}");
+        }
+        for (value, path) in [
+            ("https://horae.example.test/horae", "/horae"),
+            ("https://horae.example.test/a/../b", "/b"),
+        ] {
+            let error = PublicUrl::parse(value).unwrap_err().to_string();
+            assert_eq!(
+                error,
+                format!("serve Horae at the root of its host: remove the path {path}"),
+                "{value}"
+            );
         }
         for value in [
             "https://horae.exam\tple.test",

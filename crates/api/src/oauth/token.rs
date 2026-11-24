@@ -13,7 +13,7 @@ use super::client_auth::{self, error, no_cache, unsupported_grant_type};
 use crate::ops::oauth::tokens::{self, TokenError};
 
 pub async fn token(State(state): State<OAuthState>, headers: HeaderMap, body: Bytes) -> Response {
-    let (form, client, basic) = match client_auth::read(&state, &headers, &body) {
+    let (form, client, basic) = match client_auth::read(&state, &headers, &body).await {
         Ok(read) => read,
         Err(refusal) => return refusal.into_response(),
     };

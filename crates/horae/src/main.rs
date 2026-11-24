@@ -328,16 +328,9 @@ fn main() -> anyhow::Result<()> {
                         }),
                     }))
                     // One limiter for both APIs, so a token's requests count together.
-                    .merge(horae_harvest_api::mount(cfg.harvest_api, v1.clone()))
-                    // Redirect signed-out page loads to /auth/login. Layered inside
-                    // the session layer so the session is populated.
-                    .layer(axum::middleware::map_response(private_pages))
-                    // The approval page and the OAuth endpoints cannot be framed.
-                    .layer(axum::middleware::from_fn(
-                        horae_api::oauth::security_headers,
-                    ))
-                    .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))
-                    .layer(session_layer);
+                    .merge(horae_harvest_api::mount(cfg.harvest_api, v1.clone()));
+                // Layered inside the session layer so the session is populated.
+                let router = page_layers(router).layer(session_layer);
                 // Compression wraps everything, sessions included.
                 let router = with_compression(router);
 
@@ -402,6 +395,19 @@ async fn shutdown_signal() {
         _ = interrupt => {},
         _ = terminate => {},
     }
+}
+
+/// What every page and route answers with, inside the session layer: pages
+/// are never cached, signed-out page loads go to /auth/login, and answers
+/// under /oauth/, the guard's redirects included, cannot be framed.
+#[cfg(feature = "server")]
+fn page_layers(router: axum::Router) -> axum::Router {
+    router
+        .layer(axum::middleware::map_response(private_pages))
+        .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))
+        .layer(axum::middleware::from_fn(
+            horae_api::oauth::security_headers,
+        ))
 }
 
 /// Response compression for the whole server; see [`compression_layer`] and
@@ -490,6 +496,55 @@ async fn private_pages(mut response: axum::response::Response) -> axum::response
         headers.append(VARY, COOKIE.into());
     }
     response
+}
+
+#[cfg(all(test, feature = "server"))]
+mod page_layer_tests {
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode, header};
+    use axum::response::Html;
+    use axum::routing::get;
+    use tower::ServiceExt;
+    use tower_sessions::{MemoryStore, SessionManagerLayer};
+
+    /// The server's layers over the OAuth router (off, so it needs no
+    /// database) and a stand-in for the approval page.
+    fn app() -> Router {
+        let routes = Router::new()
+            .route("/oauth/consent", get(|| async { Html("approval page") }))
+            .merge(horae_api::oauth::router(None));
+        super::page_layers(routes).layer(SessionManagerLayer::new(MemoryStore::default()))
+    }
+
+    /// The guard's redirect of a signed-out /oauth/ page carries the
+    /// contract's headers, as every other /oauth/ answer does.
+    #[tokio::test]
+    async fn signed_out_oauth_pages_redirect_with_the_oauth_headers() {
+        for uri in ["/oauth/consent?request=abc", "/oauth/authorize?client_id=x"] {
+            let request = Request::get(uri)
+                .header(header::ACCEPT, "text/html")
+                .body(Body::empty())
+                .unwrap();
+            let response = app().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::SEE_OTHER, "{uri}");
+            assert_eq!(response.headers()[header::LOCATION], "/auth/login");
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            assert_eq!(response.headers()[header::X_FRAME_OPTIONS], "DENY");
+            assert_eq!(
+                response.headers()[header::CONTENT_SECURITY_POLICY],
+                "frame-ancestors 'none'"
+            );
+            assert_eq!(response.headers()[header::REFERRER_POLICY], "no-referrer");
+        }
+    }
+
+    #[tokio::test]
+    async fn other_paths_get_no_oauth_headers() {
+        let request = Request::get("/health").body(Body::empty()).unwrap();
+        let response = app().oneshot(request).await.unwrap();
+        assert!(response.headers().get(header::X_FRAME_OPTIONS).is_none());
+    }
 }
 
 #[cfg(all(test, feature = "server"))]

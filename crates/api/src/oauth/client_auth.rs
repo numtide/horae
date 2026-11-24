@@ -43,9 +43,14 @@ impl IntoResponse for Refusal {
     }
 }
 
+/// Longer than any client id Horae issues (`horae_app_` and 22 characters,
+/// or the built-in `horae-android`), so a longer one names no app.
+const MAX_CLIENT_ID: usize = 64;
+
 /// Parses the body, authenticates nothing yet but names the client, and
-/// counts the request against that client's limit.
-pub(super) fn read(
+/// counts the request against that client's limit. Every id that names no
+/// app shares one window, so made-up ids cannot add keys to the limiter.
+pub(super) async fn read(
     state: &OAuthState,
     headers: &HeaderMap,
     body: &[u8],
@@ -112,13 +117,22 @@ pub(super) fn read(
             secret: form.get("client_secret").map(str::to_owned),
         },
     };
-    if let Err(wait) = state
-        .limiter
-        .check(client.client_id.clone(), Instant::now())
-    {
+    let basic_tried = basic.is_some();
+    if client.client_id.len() > MAX_CLIENT_ID {
+        return Err(Refusal::from(error(TokenError::InvalidClient, basic_tried)));
+    }
+    let known = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM oauth_clients WHERE client_id = $1) AS "known!""#,
+        client.client_id,
+    )
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|storage| Refusal::from(error(TokenError::from(storage), basic_tried)))?;
+    let key = known.then(|| client.client_id.clone());
+    if let Err(wait) = state.limiter.check(key, Instant::now()) {
         return Err(Refusal::from(too_many_requests(wait)));
     }
-    Ok((form, client, basic.is_some()))
+    Ok((form, client, basic_tried))
 }
 
 /// `Basic base64(urlencode(id) ":" urlencode(secret))` (RFC 6749 §2.3.1).

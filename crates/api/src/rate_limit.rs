@@ -19,12 +19,16 @@ use crate::problem::Problem;
 
 /// Forget finished windows once this many tokens are tracked.
 const PRUNE_AT: usize = 1024;
+/// Never track more keys than this: past it, a new key waits for a window to
+/// finish, so no stream of distinct keys can grow the map without bound.
+const MAX_KEYS: usize = 65_536;
 
 /// Counts requests per key: a token id for the APIs, a client id for the
 /// OAuth token endpoint.
 #[derive(Debug)]
 pub struct RateLimiter<K = Uuid> {
     limit: RateLimit,
+    max_keys: usize,
     windows: Mutex<HashMap<K, Window>>,
 }
 
@@ -38,8 +42,14 @@ impl<K: Eq + std::hash::Hash> RateLimiter<K> {
     pub fn new(limit: RateLimit) -> Self {
         Self {
             limit,
+            max_keys: MAX_KEYS,
             windows: Mutex::default(),
         }
+    }
+
+    /// The same limiter tracking at most `max_keys` keys at once.
+    pub fn with_max_keys(self, max_keys: usize) -> Self {
+        Self { max_keys, ..self }
     }
 
     /// Counts one request of `token`. Over the limit, the answer is how long
@@ -54,8 +64,13 @@ impl<K: Eq + std::hash::Hash> RateLimiter<K> {
             started: now,
             requests: 0,
         };
-        if windows.len() >= PRUNE_AT && !windows.contains_key(&token) {
-            windows.retain(|_, window| now.duration_since(window.started) < self.limit.window);
+        if !windows.contains_key(&token) {
+            if windows.len() >= PRUNE_AT.min(self.max_keys) {
+                windows.retain(|_, window| now.duration_since(window.started) < self.limit.window);
+            }
+            if windows.len() >= self.max_keys {
+                return Err(self.limit.window);
+            }
         }
         let window = windows.entry(token).or_insert(fresh);
         if now.duration_since(window.started) >= self.limit.window {
