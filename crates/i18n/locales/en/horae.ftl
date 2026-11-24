@@ -62,6 +62,28 @@ session-refresh-failed = Could not update your session
 session-refresh-failed-hint = The page keeps what it showed before.
 session-try-again = Try again
 
+## Leaving an editor
+
+leave-discard-title = { $kind ->
+    [client] Discard unsaved client changes?
+    [permissions] Discard unsaved permission changes?
+    [invoice] Discard unsaved invoice changes?
+    [timesheet] Discard unsaved timesheet changes?
+   *[project] Discard unsaved project changes?
+}
+leave-discard-body = Your changes on this page are not saved. Leaving the page discards them.
+leave-discard = Discard changes
+leave-keep-editing = Keep editing
+leave-pending-title = Wait before leaving
+leave-pending-body = { $kind ->
+    [client] A client save is pending. Wait for it to finish before leaving.
+    [permissions] A permission request is unresolved. Wait for it to finish, or retry the same request before leaving.
+    [invoice] An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.
+    [timesheet] A timesheet change is still saving. Wait for it to finish before leaving.
+   *[project] A project save is unresolved. Wait for it to finish, or retry the request before leaving.
+}
+leave-pending-stay = Stay on this page
+
 ## Components
 
 period-nav-previous-week = Previous week

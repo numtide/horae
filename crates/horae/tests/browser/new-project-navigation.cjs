@@ -30,15 +30,23 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(status).not.toHaveText('Saving draft…');
     const count = sql('SELECT count(*) FROM projects');
 
-    const blocked = async (action, name, type = 'alert') => {
+    // Leaving the document asks natively; navigation inside the app says why it waits.
+    const blocked = async (action, name, type = 'pending') => {
       const historyLength = await page.evaluate(() => history.length);
-      const nextDialog = page.waitForEvent('dialog', { timeout: 5000 });
-      const navigation = action();
-      const dialog = await nextDialog;
-      assert.equal(dialog.type(), type);
-      if (type === 'beforeunload') await dialog.dismiss();
-      else await dialog.accept();
-      await navigation;
+      if (type === 'beforeunload') {
+        const nextDialog = page.waitForEvent('dialog', { timeout: 5000 });
+        const navigation = action();
+        const dialog = await nextDialog;
+        assert.equal(dialog.type(), type);
+        await dialog.dismiss();
+        await navigation;
+      } else {
+        await action();
+        const held = page.getByRole('dialog', { name: 'Wait before leaving', exact: true });
+        await expect(held).toContainText('A project save is unresolved.');
+        await held.getByRole('button', { name: 'Stay on this page', exact: true }).click();
+        await expect(held).toBeHidden();
+      }
       await expect(page).toHaveURL(`${base}/projects/new`);
       await expect(editor.locator('#np-name')).toHaveValue(name);
       assert.equal(await page.evaluate(() => history.length), historyLength, 'Rejected navigation must not add history entries');

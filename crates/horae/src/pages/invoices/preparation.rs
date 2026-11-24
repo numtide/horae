@@ -308,6 +308,17 @@ fn Prepare(sources: Sources) -> Element {
     let mut error = use_signal(|| None::<String>);
     let mut generation = use_signal(|| None::<(InvoiceRequest, InvoiceGenerationRequest)>);
     let mut confirm = use_signal(|| false);
+    // Leaving asks only once the person changed something: the period, the
+    // projects, or a value the preview filled in while nothing had changed.
+    // Peeks: every render already reads these signals.
+    let chosen = move || {
+        let period = (from.peek().clone(), to.peek().clone());
+        (*preset.peek(), period, selected.peek().clone())
+    };
+    let values = move || (fields.peek().clone(), fees.peek().clone());
+    let opened = use_signal(chosen);
+    let mut filled = use_signal(values);
+    let untouched = move || *opened.peek() == chosen() && *filled.peek() == values();
 
     // All ticked is the same as no selection, which lets the server resolve
     // values from the projects that bill something.
@@ -394,6 +405,7 @@ fn Prepare(sources: Sources) -> Element {
             match result {
                 Ok(estimate) => {
                     preview_error.set(None);
+                    let was_untouched = untouched();
                     if request.fees.is_none() {
                         fees.set(fees::from_review(&estimate));
                     }
@@ -417,6 +429,9 @@ fn Prepare(sources: Sources) -> Element {
                             request
                         }
                     };
+                    if was_untouched {
+                        filled.set(values());
+                    }
                     started.set(true);
                     preview.set(Some((reviewed, estimate)));
                 }
@@ -646,7 +661,7 @@ fn Prepare(sources: Sources) -> Element {
     let (warning_before, warning_link, warning_after) = split_tag(&warning, "link");
 
     rsx! {
-        div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if started() { "dirty" } else { "clean" },
+        div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if untouched() { "clean" } else { "dirty" },
         if let Some(template) = &sources.template {
             p { class: "text-secondary mb-5", role: "status", {tr.invoices_duplicating(template.source_number.clone())} }
         }

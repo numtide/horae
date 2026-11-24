@@ -9,11 +9,6 @@ use std::path::{Path, PathBuf};
 /// The one file allowed to write the dialog markup.
 const MODAL: &str = "src/components/modal.rs";
 
-/// The editor navigation guard decides synchronously whether a history change
-/// may happen, so it still uses native dialogs. Moving it to `ConfirmDialog`
-/// (block, ask, replay) is its own change (`design/IMPLEMENTATION-GAPS.md`).
-const NATIVE_DIALOG_EXCEPTION: &str = "assets/js/project-edit-navigation.js";
-
 fn sources(dir: &Path, found: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
@@ -78,7 +73,7 @@ fn only_modal_writes_dialogs_and_nothing_uses_native_ones() {
                     || code.contains(" dialog {")
                     // Popovers that pick a value (SelectField, DateField) are dialogs too.
                     || (code.contains("role: \"dialog\"") && !code.contains("popover")));
-            let native = relative != NATIVE_DIALOG_EXCEPTION && native_dialog(code);
+            let native = native_dialog(code);
             if hand_made || native {
                 offences.push(format!("{relative}:{}: {}", number + 1, code));
             }

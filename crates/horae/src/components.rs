@@ -15,6 +15,7 @@ pub mod filter_bar;
 pub mod form;
 pub mod icons;
 pub mod layout;
+pub mod leave_dialog;
 pub mod logo;
 pub mod menu;
 pub mod modal;

@@ -30,6 +30,7 @@ pub fn App() -> Element {
         }
         ThemeInit {}
         document::Script { src: asset!("/assets/js/project-edit-navigation.js") }
+        crate::components::leave_dialog::LeaveDialog {}
         // The session only (`AppLayout`): its first read failing, or the session
         // ending. A screen's own failure stops at the boundary around the
         // `Outlet`, so the rail stays.

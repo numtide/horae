@@ -96,16 +96,26 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page).toHaveURL(`${base}/invoices/new/client/${acme}`);
     await choosePeriod('2026-09-01', '2026-09-30');
-    const rejectNavigation = async (action, type = 'confirm') => {
+    // Leaving the document asks natively; navigation inside the app asks in
+    // the app, to discard unsaved changes or to wait for a pending request.
+    const rejectNavigation = async (action, type = 'dirty') => {
       const url = page.url();
       const length = await page.evaluate(() => history.length);
-      const nextDialog = page.waitForEvent('dialog', { timeout: 5000 });
-      const navigation = action();
-      const dialog = await nextDialog;
-      if (dialog.type() === 'alert') await dialog.accept();
-      else await dialog.dismiss();
-      assert.equal(dialog.type(), type);
-      await navigation;
+      if (type === 'beforeunload') {
+        const nextDialog = page.waitForEvent('dialog', { timeout: 5000 });
+        const navigation = action();
+        const dialog = await nextDialog;
+        assert.equal(dialog.type(), type);
+        await dialog.dismiss();
+        await navigation;
+      } else {
+        await action();
+        const [held, stay] = type === 'pending'
+          ? [page.getByRole('dialog', { name: 'Wait before leaving', exact: true }), 'Stay on this page']
+          : [page.getByRole('dialog', { name: 'Discard unsaved invoice changes?', exact: true }), 'Keep editing'];
+        await held.getByRole('button', { name: stay, exact: true }).click();
+        await expect(held).toBeHidden();
+      }
       await expect(page).toHaveURL(url);
       assert.equal(await page.evaluate(() => history.length), length);
     };
@@ -240,7 +250,7 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await expect(page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
     await expect(page.getByLabel('PO number', { exact: true })).toBeDisabled();
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore + 1);
-    await rejectNavigation(() => page.evaluate(() => history.back()), 'alert');
+    await rejectNavigation(() => page.evaluate(() => history.back()), 'pending');
     await rejectNavigation(() => page.evaluate(() => location.reload()), 'beforeunload');
     page.once('dialog', dialog => dialog.accept());
     await page.reload();
@@ -318,9 +328,11 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await expect(charges.locator('tbody')).toContainText('Invoiced (including drafts): EUR 112.50');
     await expect(charges.locator('tbody')).toContainText('Available: EUR 12.50');
     await expect(charges.locator('tbody')).toContainText('Proposed net before tax: EUR 12.50');
-    // Leaving a started invoice asks before discarding it.
-    page.once('dialog', dialog => dialog.accept());
+    // Leaving a changed invoice asks before discarding it.
+    const discardInvoice = page.getByRole('dialog', { name: 'Discard unsaved invoice changes?', exact: true })
+      .getByRole('button', { name: 'Discard changes', exact: true });
     await page.getByRole('link', { name: 'Back to Invoices', exact: true }).click();
+    await discardInvoice.click();
     // The list's filters are its query, so an unfiltered list ends in `?`.
     await expect(page).toHaveURL(/\/invoices\??$/);
     await readsFinished();
@@ -360,10 +372,10 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await expect(feeAmount).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Discard changes', exact: true })).toBeDisabled();
     const committedRevision = sql(`SELECT edit_revision FROM invoices WHERE id='${result.invoice.id}'`);
-    await rejectNavigation(() => page.locator('a.nav-item[href="/clients"]').click(), 'alert');
+    await rejectNavigation(() => page.locator('a.nav-item[href="/clients"]').click(), 'pending');
     // The editor was opened from the invoice inside the app, so going back is
     // an in-app navigation, blocked like the sidebar link.
-    await rejectNavigation(() => page.evaluate(() => history.back()), 'alert');
+    await rejectNavigation(() => page.evaluate(() => history.back()), 'pending');
     await rejectNavigation(() => page.evaluate(() => location.reload()), 'beforeunload');
     page.once('dialog', dialog => dialog.accept());
     await page.reload();
@@ -506,8 +518,8 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await expect(dialog).toContainText('excess EUR 12.00');
     await dialog.getByRole('button', { name: 'Cancel over-invoicing', exact: true }).click();
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore + 3);
-    page.once('dialog', dialog => dialog.accept());
     await page.locator('a.nav-item[href="/clients"]').click();
+    await discardInvoice.click();
     await expect(page).toHaveURL(`${base}/clients`);
     await page.evaluate(() => {
       window.originalInvoiceGetItem = Storage.prototype.getItem;

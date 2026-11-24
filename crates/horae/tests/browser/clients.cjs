@@ -38,12 +38,10 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await expect(dialog.getByRole('alert')).toContainText('1–200 characters');
     await expect(dialog.getByRole('alert')).toBeFocused();
     await field('Client name').fill(name);
-    const dirtyNavigation = page.waitForEvent('dialog');
-    const navigation = page.evaluate(() => history.pushState(null, '', '/projects'));
-    const warning = await dirtyNavigation;
-    assert.equal(warning.message(), 'Discard unsaved client changes?');
-    await warning.dismiss();
-    await navigation;
+    await page.evaluate(() => history.pushState(null, '', '/projects'));
+    const warning = page.getByRole('dialog', { name: 'Discard unsaved client changes?', exact: true });
+    await warning.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(warning).toBeHidden();
     await expect(page).toHaveURL(`${base}/clients`);
     await expect(field('Client name')).toHaveValue(name);
     await field('Default rate').fill('0');
@@ -123,12 +121,11 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
       await page.mouse.click(4, 4);
       await expect(dialog).toBeVisible();
       assert.equal(requests, 1, 'pending submission is not duplicated');
-      const pendingNavigation = page.waitForEvent('dialog');
-      const navigation = page.evaluate(() => history.pushState(null, '', '/projects'));
-      const warning = await pendingNavigation;
-      assert.equal(warning.message(), 'A client save is pending. Wait for it to finish before leaving.');
-      await warning.accept();
-      await navigation;
+      await page.evaluate(() => history.pushState(null, '', '/projects'));
+      const warning = page.getByRole('dialog', { name: 'Wait before leaving', exact: true });
+      await expect(warning).toContainText('A client save is pending. Wait for it to finish before leaving.');
+      await warning.getByRole('button', { name: 'Stay on this page', exact: true }).click();
+      await expect(warning).toBeHidden();
       await expect(page).toHaveURL(`${base}/clients`);
       await expect(field('Client name')).toHaveValue(uncertainName);
     } finally { release(); }

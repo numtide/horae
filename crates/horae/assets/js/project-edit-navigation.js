@@ -8,39 +8,55 @@
   const push = history.pushState.bind(history);
   const replace = history.replaceState.bind(history);
   let current = position(history.state) ?? 0;
+  // Undoing a rejected back or forward: its popstates stay away from the router.
   let restoring = false;
+  // The person chose to leave: the next navigation goes through.
+  let leaving = false;
+  // Repeats the navigation the open dialog asks about.
+  let retry = null;
   replace(tagged(history.state, current), '');
 
+  const editor = () => document.querySelector('[data-editor-state], [data-project-edit-state]');
   const state = () => {
-    const editor = document.querySelector('[data-editor-state], [data-project-edit-state]');
-    return editor?.hasAttribute('data-editor-leaving') || editor?.hasAttribute('data-project-edit-leaving')
-      ? 'clean' : editor?.dataset.editorState ?? editor?.dataset.projectEditState;
+    const found = editor();
+    return found?.hasAttribute('data-editor-leaving') || found?.hasAttribute('data-project-edit-leaving')
+      ? 'clean' : found?.dataset.editorState ?? found?.dataset.projectEditState;
   };
-  const canLeave = () => {
-    const invoice = document.querySelector('[data-editor-kind="invoice"]');
-    const client = document.querySelector('[data-editor-kind="client"]');
-    const timesheet = document.querySelector('[data-editor-kind="timesheet"]');
-    const permissions = document.querySelector('[data-editor-kind="permissions"]');
-    if (state() === 'pending') {
-      alert(client ? 'A client save is pending. Wait for it to finish before leaving.'
-        : permissions ? 'A permission request is unresolved. Wait for it to finish, or retry the same request before leaving.'
-        : invoice ? 'An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.'
-        : timesheet ? 'A timesheet change is still saving. Wait for it to finish before leaving.'
-        : 'A project save is unresolved. Wait for it to finish, or retry the request before leaving.');
+  // Holds a navigation away from unsaved or unresolved work. The app's
+  // `LeaveDialog` says why, and for unsaved changes offers to leave anyway,
+  // which calls `horaeLeave`. A native confirm would do, but a browser may
+  // suppress it and answer "stay" without showing anything.
+  const held = then => {
+    if (leaving) {
+      leaving = false;
       return false;
     }
-    return state() !== 'dirty' || confirm(client ? 'Discard unsaved client changes?' : permissions ? 'Discard unsaved permission changes?' : invoice ? 'Discard unsaved invoice changes?' : timesheet ? 'Discard unsaved timesheet changes?' : 'Discard unsaved project changes?');
+    const now = state();
+    if (now !== 'dirty' && now !== 'pending') return false;
+    retry = now === 'dirty' ? then : null;
+    const kind = editor()?.dataset.editorKind ?? 'project';
+    dispatchEvent(new CustomEvent('horae-navigation-held', { detail: { state: now, kind } }));
+    return true;
   };
+  globalThis.horaeLeave = () => {
+    const then = retry;
+    retry = null;
+    if (!then) return;
+    leaving = true;
+    then();
+  };
+  // A navigation repeated here bypasses the router, so tell it as the browser would.
+  const routed = () => dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
 
   history.pushState = (data, title, url) => {
-    if (restoring || !canLeave()) return;
+    if (held(() => { history.pushState([0, 0], title, url); routed(); })) return;
     push(tagged(data, current + 1), title, url);
     current++;
   };
   history.replaceState = (data, title, url) => {
     // Dioxus also replaces state merely to record the current scroll position.
     if (url != null && new URL(url, location.href).href !== location.href
-      && (restoring || !canLeave())) return;
+      && held(() => { history.replaceState([0, 0], title, url); routed(); })) return;
     replace(tagged(data, current), title, url);
   };
   addEventListener('popstate', event => {
@@ -57,7 +73,7 @@
       replace(tagged(event.state, current), '');
       return;
     }
-    if (destination !== current && !canLeave()) {
+    if (destination !== current && held(() => history.go(destination - current))) {
       // Do not let the router unmount the editor while restoring the rejected URL.
       event.stopImmediatePropagation();
       restoring = true;
