@@ -1,7 +1,9 @@
 //! Scopes only narrow (FR-063): for every person's selection and every scope
-//! set, the narrowed grants are a subset of the person's, stay closed under
-//! prerequisites, and hold nothing but time-entry reads and writes and catalog
-//! reads.
+//! set, the narrowed grants stay closed under prerequisites, hold nothing but
+//! time-entry reads and writes and catalog reads, and never shrink as scopes
+//! are added. That they are a subset of the person's grants is
+//! `BTreeSet::intersection` by definition; the `ops::actor` tests in
+//! `horae-server` check the narrowed actor itself.
 
 use proptest::prelude::*;
 
@@ -39,12 +41,6 @@ fn within_every_scope(permission: Permission) -> bool {
 }
 
 proptest! {
-    #[test]
-    fn narrowed_grants_are_a_subset_of_the_persons(grants in selection(), scopes in scopes()) {
-        let narrowed = grants.intersection(&scopes.ceiling());
-        prop_assert!(narrowed.iter().all(|permission| grants.contains(permission)));
-    }
-
     #[test]
     fn narrowed_grants_stay_closed_under_prerequisites(grants in selection(), scopes in scopes()) {
         let narrowed = grants.intersection(&scopes.ceiling());

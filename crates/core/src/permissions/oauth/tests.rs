@@ -3,6 +3,19 @@ use crate::permissions::catalog::Permission;
 
 // ── Scopes ───────────────────────────────────────────────────────────────────
 
+/// The proofs, the properties and the parser reach scopes only through
+/// `Scope::ALL`, so a variant left out of it would pass them all unchecked.
+/// A new variant stops this match compiling until it is added here and there.
+#[test]
+fn all_lists_every_scope() {
+    for scope in [Scope::TimeRead, Scope::TimeWrite, Scope::CatalogRead] {
+        match scope {
+            Scope::TimeRead | Scope::TimeWrite | Scope::CatalogRead => {}
+        }
+        assert!(Scope::ALL.contains(&scope), "{scope:?}");
+    }
+}
+
 #[test]
 fn scope_names_round_trip() {
     for scope in Scope::ALL {
