@@ -8,11 +8,43 @@ Read at start-up in `crates/server/src/config.rs`, like the other `HORAE_*` sett
 | Access token lifetime | `HORAE_OAUTH_ACCESS_TTL` (seconds) | `services.horae.oauth.accessTokenTtl` | `3600` |
 | Refresh token idle expiry | `HORAE_OAUTH_REFRESH_IDLE` (seconds) | `services.horae.oauth.refreshIdle` | `2592000` (30 days, D-2) |
 | Refresh absolute limit | `HORAE_OAUTH_REFRESH_MAX` (seconds) | `services.horae.oauth.refreshMax` | `31536000` (1 year, D-2) |
-| Token endpoint limit | `HORAE_OAUTH_TOKEN_RATE_LIMIT` (`<requests>/<seconds>`) | `services.horae.oauth.tokenRateLimit` | `30/60` |
 
-A malformed value refuses to start, as for `HORAE_API_RATE_LIMIT`. Lifetimes outside sane bounds
-(access 60 s to 1 day; refresh idle 1 hour to 1 year; maximum at least the idle value and at
-most 10 years, so adding it to a timestamp cannot overflow) refuse to start too.
+A malformed value refuses to start. Lifetimes outside sane bounds (access 60 s to 1 day; refresh
+idle 1 hour to 1 year; maximum at least the idle value and at most 10 years, so adding it to a
+timestamp cannot overflow) refuse to start too.
+
+## Limiting the token endpoint at the proxy
+
+Horae has no rate limit on `/oauth/token` and `/oauth/revoke` (FR-081, research R-14). Limit them
+per client address in the reverse proxy. With nginx:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=horae_oauth:10m rate=30r/m;
+
+location ~ ^/oauth/(token|revoke)$ {
+    limit_req zone=horae_oauth burst=10 nodelay;
+    limit_req_status 429;
+    proxy_pass http://127.0.0.1:8080;
+}
+```
+
+With Caddy, which needs the `caddy-ratelimit` plugin:
+
+```caddy
+horae.example.com {
+    rate_limit {
+        zone horae_oauth {
+            match {
+                path /oauth/token /oauth/revoke
+            }
+            key {remote_host}
+            events 30
+            window 1m
+        }
+    }
+    reverse_proxy 127.0.0.1:8080
+}
+```
 
 Under `DEV_LOGIN=1`, the dev stack's `process-compose.yaml` sets `HORAE_PUBLIC_URL` to
 `http://127.0.0.1:8080`, so the flow can be tried locally.

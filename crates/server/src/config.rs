@@ -227,8 +227,7 @@ impl PublicUrl {
     }
 }
 
-/// Lifetimes of OAuth credentials and the token endpoint's limit (spec 024
-/// D-2, contracts/configuration.md).
+/// Lifetimes of OAuth credentials (spec 024 D-2, contracts/configuration.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OAuthConfig {
     pub access_ttl: std::time::Duration,
@@ -236,8 +235,6 @@ pub struct OAuthConfig {
     pub refresh_idle: std::time::Duration,
     /// No refresh token outlives its authorization's approval by more.
     pub refresh_max: std::time::Duration,
-    /// Requests per client to the token endpoint.
-    pub token_rate_limit: RateLimit,
 }
 
 const HOUR: u64 = 3600;
@@ -249,10 +246,6 @@ impl Default for OAuthConfig {
             access_ttl: std::time::Duration::from_secs(HOUR),
             refresh_idle: std::time::Duration::from_secs(30 * DAY),
             refresh_max: std::time::Duration::from_secs(365 * DAY),
-            token_rate_limit: RateLimit {
-                requests: 30,
-                window: std::time::Duration::from_secs(60),
-            },
         }
     }
 }
@@ -291,10 +284,6 @@ impl OAuthConfig {
             access_ttl: seconds_from_env("HORAE_OAUTH_ACCESS_TTL", default.access_ttl)?,
             refresh_idle: seconds_from_env("HORAE_OAUTH_REFRESH_IDLE", default.refresh_idle)?,
             refresh_max: seconds_from_env("HORAE_OAUTH_REFRESH_MAX", default.refresh_max)?,
-            token_rate_limit: RateLimit::from_env(
-                "HORAE_OAUTH_TOKEN_RATE_LIMIT",
-                default.token_rate_limit,
-            )?,
         }
         .validate()
     }

@@ -18,7 +18,6 @@ use axum::routing::{any, get, post};
 use sqlx::PgPool;
 
 use crate::config::{OAuthConfig, PublicUrl};
-use crate::rate_limit::RateLimiter;
 
 pub mod authorize;
 mod client_auth;
@@ -39,9 +38,6 @@ pub struct OAuthState {
     /// `HORAE_PUBLIC_URL`, the issuer.
     pub issuer: Arc<str>,
     pub config: OAuthConfig,
-    /// The token and revocation endpoints' limit, per client id (FR-081);
-    /// `None` is every id that names no app.
-    pub limiter: Arc<RateLimiter<Option<String>>>,
 }
 
 impl OAuthState {
@@ -50,7 +46,6 @@ impl OAuthState {
             pool,
             issuer: issuer.as_str().into(),
             config,
-            limiter: Arc::new(RateLimiter::new(config.token_rate_limit)),
         }
     }
 }

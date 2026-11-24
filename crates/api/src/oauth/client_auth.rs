@@ -1,8 +1,7 @@
 //! What the token and revocation endpoints share: the form body, client
-//! authentication (HTTP Basic or the body, research R-12), the per-client
-//! limit, and RFC 6749 §5.2 error bodies.
-
-use std::time::Instant;
+//! authentication (HTTP Basic or the body, research R-12) and RFC 6749 §5.2
+//! error bodies. Horae does not limit the rate here; the reverse proxy does
+//! (research R-14).
 
 use axum::Json;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -11,9 +10,8 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde_json::json;
 
-use super::{OAuthState, no_store, pairs};
+use super::{no_store, pairs};
 use crate::ops::oauth::tokens::{ClientAuth, TokenError};
-use crate::rate_limit::retry_after_seconds;
 
 /// A form body whose parameters each appear once.
 pub(super) struct Form(Vec<(String, String)>);
@@ -47,14 +45,8 @@ impl IntoResponse for Refusal {
 /// or the built-in `horae-android`), so a longer one names no app.
 const MAX_CLIENT_ID: usize = 64;
 
-/// Parses the body, authenticates nothing yet but names the client, and
-/// counts the request against that client's limit. Every id that names no
-/// app shares one window, so made-up ids cannot add keys to the limiter.
-pub(super) async fn read(
-    state: &OAuthState,
-    headers: &HeaderMap,
-    body: &[u8],
-) -> Result<(Form, ClientAuth, bool), Refusal> {
+/// Parses the body and names the client; it authenticates nothing yet.
+pub(super) fn read(headers: &HeaderMap, body: &[u8]) -> Result<(Form, ClientAuth, bool), Refusal> {
     let form_type = headers
         .get(header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
@@ -120,17 +112,6 @@ pub(super) async fn read(
     let basic_tried = basic.is_some();
     if client.client_id.len() > MAX_CLIENT_ID {
         return Err(Refusal::from(error(TokenError::InvalidClient, basic_tried)));
-    }
-    let known = sqlx::query_scalar!(
-        r#"SELECT EXISTS (SELECT 1 FROM oauth_clients WHERE client_id = $1) AS "known!""#,
-        client.client_id,
-    )
-    .fetch_one(&state.pool)
-    .await
-    .map_err(|storage| Refusal::from(error(TokenError::from(storage), basic_tried)))?;
-    let key = known.then(|| client.client_id.clone());
-    if let Err(wait) = state.limiter.check(key, Instant::now()) {
-        return Err(Refusal::from(too_many_requests(wait)));
     }
     Ok((form, client, basic_tried))
 }
@@ -218,21 +199,4 @@ pub(super) fn no_cache(response: &mut Response) {
     response
         .headers_mut()
         .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-}
-
-fn too_many_requests(wait: std::time::Duration) -> Response {
-    let mut response = (
-        StatusCode::TOO_MANY_REQUESTS,
-        Json(json!({
-            "error": "invalid_request",
-            "error_description": "Too many requests",
-        })),
-    )
-        .into_response();
-    response.headers_mut().insert(
-        header::RETRY_AFTER,
-        HeaderValue::from(retry_after_seconds(wait)),
-    );
-    no_cache(&mut response);
-    response
 }

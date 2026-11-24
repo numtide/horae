@@ -279,7 +279,7 @@ cite it. R-19 compares the design with Harvest's public OAuth documentation.
 | Refresh token theft | rotation, reuse ends the grant, idle and absolute expiry | FR-043, FR-044 | |
 | Access token theft | 1 hour lifetime, header only (no query, D-5), revocation immediate | FR-040, FR-070, FR-071 | query parameter refused |
 | Token leakage through logs | secrets never logged; `Debug` prints prefixes; `Cache-Control: no-store` | FR-046, FR-051 | |
-| Brute force at the token endpoint | 256-bit secrets; per-client rate limit | FR-050, FR-081 | |
+| Brute force at the token endpoint | 256-bit secrets; volume limited at the reverse proxy | FR-050, FR-081 | |
 | Database theft | only digests stored | FR-050 | |
 | Privilege escalation through scopes | intersection with the person's grants; no administrator identity | FR-063 | proptest and per-scope endpoint tests |
 | Implicit or password grant downgrade | not offered | FR-020, FR-040 | |
@@ -313,10 +313,18 @@ person, which is the mitigation.
 
 - **Decision**: the limiter (`horae_api::rate_limit`) is keyed by a `Uuid`. For OAuth callers the
   key is the `grant_id`, so rotating access tokens does not reset the window (FR-080). The token
-  and revocation endpoints get their own limiter instance keyed by client id, default 30 requests
-  per minute (`HORAE_OAUTH_TOKEN_RATE_LIMIT`), so a busy app does not starve its own API calls.
-- **Alternatives**: per IP (people behind one NAT share it; the client id is what an attacker must
-  name anyway).
+  and revocation endpoints have no limit in Horae (FR-081). Operators limit their volume at the
+  reverse proxy, as with Dex, Ory Hydra and Keycloak; `contracts/configuration.md` has nginx and
+  Caddy examples. A `client_id` longer than 64 bytes is refused as `invalid_client` as plain input
+  validation.
+- **Rationale**: codes, verifiers, refresh tokens and secrets each carry 256 random bits, so a
+  limit adds nothing against guessing. A limit keyed by client id lets anyone who knows a public
+  app's id (it ships in the app) lock out every user of that app; keyed by IP it punishes people
+  behind one NAT; either way an in-memory map needs bounds against made-up keys. The proxy
+  already sees the client address and can be tuned per deployment.
+- **Alternatives**: a limiter keyed by client id (the first version of PR C: lets anyone lock out
+  a public app); keyed by IP (people behind one NAT share it, and behind a proxy Horae must trust
+  forwarding headers).
 
 ### R-15 Audit records
 

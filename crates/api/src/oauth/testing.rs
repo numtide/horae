@@ -14,7 +14,7 @@ use tower::ServiceExt;
 use tower_sessions::{MemoryStore, Session};
 
 use super::OAuthState;
-use crate::config::{OAuthConfig, PublicUrl, RateLimit};
+use crate::config::{OAuthConfig, PublicUrl};
 use crate::ops::oauth::testing::{App, ISSUER, public_app};
 use crate::testing::{SeedIds, seed};
 
@@ -29,23 +29,14 @@ pub struct Harness {
 
 impl Harness {
     pub async fn new(pool: &PgPool) -> Self {
-        Self::with_limit(pool, 1000).await
-    }
-
-    /// [`Harness::new`] allowing `requests` per client per minute at the
-    /// token and revocation endpoints.
-    pub async fn with_limit(pool: &PgPool, requests: u32) -> Self {
         let ids = seed(pool, BuiltInProfile::Administrator).await;
         let app = public_app(pool, &ids).await;
         let session = Session::new(None, Arc::new(MemoryStore::default()), None);
-        let config = OAuthConfig {
-            token_rate_limit: RateLimit {
-                requests,
-                window: std::time::Duration::from_secs(60),
-            },
-            ..OAuthConfig::default()
-        };
-        let state = OAuthState::new(pool.clone(), &PublicUrl::parse(ISSUER).unwrap(), config);
+        let state = OAuthState::new(
+            pool.clone(),
+            &PublicUrl::parse(ISSUER).unwrap(),
+            OAuthConfig::default(),
+        );
         let router = super::router(Some(state)).layer(Extension(session.clone()));
         Self {
             ids,

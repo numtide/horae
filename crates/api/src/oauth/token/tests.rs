@@ -1,6 +1,5 @@
 //! `POST /oauth/token` with `grant_type=authorization_code` (FR-030 to
-//! FR-042), client authentication (research R-12) and the per-client limit
-//! (FR-081).
+//! FR-042) and client authentication (research R-12).
 
 use axum::http::{StatusCode, header};
 use horae_core::permissions::oauth::{ClientKind, Scope, ScopeSet};
@@ -410,21 +409,19 @@ async fn malformed_requests_are_invalid(pool: PgPool) {
     assert_error(&json, StatusCode::BAD_REQUEST, "invalid_request");
 }
 
-/// A client id longer than any Horae issues is refused before the limiter
-/// sees it, so it neither counts nor adds a key.
+/// A client id longer than any Horae issues names no app, in the body or
+/// in Basic.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn an_over_long_client_id_is_refused_before_counting(pool: PgPool) {
-    let h = Harness::with_limit(&pool, 1).await;
+async fn an_over_long_client_id_is_an_invalid_client(pool: PgPool) {
+    let h = Harness::new(&pool).await;
     let long = "x".repeat(65);
     let form = [
         ("grant_type", "refresh_token"),
         ("client_id", long.as_str()),
         ("refresh_token", "horae_ort_guess"),
     ];
-    for _ in 0..3 {
-        let answer = h.post("/oauth/token", &form).await;
-        assert_error(&answer, StatusCode::UNAUTHORIZED, "invalid_client");
-    }
+    let body = h.post("/oauth/token", &form).await;
+    assert_error(&body, StatusCode::UNAUTHORIZED, "invalid_client");
     let basic = h
         .send(form_request(
             "/oauth/token",
@@ -433,93 +430,4 @@ async fn an_over_long_client_id_is_refused_before_counting(pool: PgPool) {
         ))
         .await;
     assert_error(&basic, StatusCode::UNAUTHORIZED, "invalid_client");
-    // The unknown-client window was never used: one request still fits.
-    let unknown = h
-        .post(
-            "/oauth/token",
-            &[
-                ("grant_type", "refresh_token"),
-                ("client_id", "horae_app_unknown"),
-                ("refresh_token", "x"),
-            ],
-        )
-        .await;
-    assert_error(&unknown, StatusCode::UNAUTHORIZED, "invalid_client");
-}
-
-/// Ids that name no app share one window, so made-up ids cannot each get
-/// their own; a registered app keeps its own window.
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn ids_that_name_no_app_share_one_window(pool: PgPool) {
-    let h = Harness::with_limit(&pool, 2).await;
-    let guess = |id: &'static str| {
-        [
-            ("grant_type", "refresh_token"),
-            ("client_id", id),
-            ("refresh_token", "x"),
-        ]
-    };
-    assert_eq!(
-        h.post("/oauth/token", &guess("horae_app_a")).await.status,
-        StatusCode::UNAUTHORIZED
-    );
-    assert_eq!(
-        h.post("/oauth/token", &guess("horae_app_b")).await.status,
-        StatusCode::UNAUTHORIZED
-    );
-    assert_eq!(
-        h.post("/oauth/token", &guess("horae_app_c")).await.status,
-        StatusCode::TOO_MANY_REQUESTS
-    );
-    let own = [
-        ("grant_type", "refresh_token"),
-        ("client_id", h.app.client_id.as_str()),
-        ("refresh_token", "horae_ort_guess"),
-    ];
-    assert_error(
-        &h.post("/oauth/token", &own).await,
-        StatusCode::BAD_REQUEST,
-        "invalid_grant",
-    );
-}
-
-/// FR-081: the 31st request in a window is refused; another client is not.
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn the_token_endpoint_is_limited_per_client(pool: PgPool) {
-    let h = Harness::with_limit(&pool, 30).await;
-    let form = [
-        ("grant_type", "refresh_token"),
-        ("client_id", h.app.client_id.as_str()),
-        ("refresh_token", "horae_ort_guess"),
-    ];
-    for _ in 0..30 {
-        assert_eq!(
-            h.post("/oauth/token", &form).await.status,
-            StatusCode::BAD_REQUEST
-        );
-    }
-    let refused = h.post("/oauth/token", &form).await;
-    assert_eq!(refused.status, StatusCode::TOO_MANY_REQUESTS);
-    assert!(refused.header(header::RETRY_AFTER).is_some());
-    assert_eq!(
-        refused.json(),
-        serde_json::json!({"error": "invalid_request", "error_description": "Too many requests"})
-    );
-    // The revocation endpoint counts against the same window.
-    let revoke = h
-        .post(
-            "/oauth/revoke",
-            &[("client_id", h.app.client_id.as_str()), ("token", "x")],
-        )
-        .await;
-    assert_eq!(revoke.status, StatusCode::TOO_MANY_REQUESTS);
-    let other = [
-        ("grant_type", "refresh_token"),
-        ("client_id", "horae-android"),
-        ("refresh_token", "horae_ort_guess"),
-    ];
-    assert_ne!(
-        h.post("/oauth/token", &other).await.status,
-        StatusCode::TOO_MANY_REQUESTS
-    );
 }

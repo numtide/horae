@@ -1,5 +1,5 @@
 //! `POST /oauth/token`: the `authorization_code` and `refresh_token` grants
-//! (RFC 6749 §4.1.3 and §6), limited per client (FR-081).
+//! (RFC 6749 §4.1.3 and §6).
 
 use axum::Json;
 use axum::body::Bytes;
@@ -13,7 +13,7 @@ use super::client_auth::{self, error, no_cache, unsupported_grant_type};
 use crate::ops::oauth::tokens::{self, TokenError};
 
 pub async fn token(State(state): State<OAuthState>, headers: HeaderMap, body: Bytes) -> Response {
-    let (form, client, basic) = match client_auth::read(&state, &headers, &body).await {
+    let (form, client, basic) = match client_auth::read(&headers, &body) {
         Ok(read) => read,
         Err(refusal) => return refusal.into_response(),
     };
