@@ -153,7 +153,7 @@ pub async fn callback(session: Session, Query(params): Query<CallbackParams>) ->
     };
 
     match resolve_and_login(state, &session, &identity, &policy).await {
-        Ok(true) => Redirect::to("/"),
+        Ok(true) => Redirect::to(&super::take_return_to(&session).await),
         Ok(false) => Redirect::to("/auth/login"),
         Err(e) => {
             tracing::error!("OIDC user resolution failed: {e}");

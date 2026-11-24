@@ -282,6 +282,7 @@ fn main() -> anyhow::Result<()> {
                         .with_job_policy(cfg.job_policy)
                         .with_mail(cfg.mail.clone())
                         .with_oauth(cfg.oauth)
+                        .with_public_url(cfg.public_url.clone())
                         .with_version(version::current()),
                 )
                 .await;
@@ -322,12 +323,19 @@ fn main() -> anyhow::Result<()> {
                             apple_touch_icon: asset!("/assets/apple-touch-icon.png").to_string(),
                         },
                         v1: v1.clone(),
+                        oauth: cfg.public_url.as_ref().map(|issuer| {
+                            horae_api::oauth::OAuthState::new(pool.clone(), issuer, cfg.oauth)
+                        }),
                     }))
                     // One limiter for both APIs, so a token's requests count together.
                     .merge(horae_harvest_api::mount(cfg.harvest_api, v1.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated.
                     .layer(axum::middleware::map_response(private_pages))
+                    // The approval page and the OAuth endpoints cannot be framed.
+                    .layer(axum::middleware::from_fn(
+                        horae_api::oauth::security_headers,
+                    ))
                     .layer(axum::middleware::from_fn(horae_api::login_redirect_guard))
                     .layer(session_layer);
                 // Compression wraps everything, sessions included.

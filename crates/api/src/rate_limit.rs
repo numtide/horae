@@ -20,10 +20,12 @@ use crate::problem::Problem;
 /// Forget finished windows once this many tokens are tracked.
 const PRUNE_AT: usize = 1024;
 
+/// Counts requests per key: a token id for the APIs, a client id for the
+/// OAuth token endpoint.
 #[derive(Debug)]
-pub struct RateLimiter {
+pub struct RateLimiter<K = Uuid> {
     limit: RateLimit,
-    windows: Mutex<HashMap<Uuid, Window>>,
+    windows: Mutex<HashMap<K, Window>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -32,7 +34,7 @@ struct Window {
     requests: u32,
 }
 
-impl RateLimiter {
+impl<K: Eq + std::hash::Hash> RateLimiter<K> {
     pub fn new(limit: RateLimit) -> Self {
         Self {
             limit,
@@ -42,7 +44,7 @@ impl RateLimiter {
 
     /// Counts one request of `token`. Over the limit, the answer is how long
     /// until its window ends.
-    pub fn check(&self, token: Uuid, now: Instant) -> Result<(), Duration> {
+    pub fn check(&self, token: K, now: Instant) -> Result<(), Duration> {
         // A panic elsewhere while counting leaves the counts usable.
         let mut windows = self
             .windows

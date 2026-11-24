@@ -20,8 +20,11 @@ pub struct AppState {
     pub harvest_api: bool,
     /// The running server's version label, set by the binary at startup.
     pub version: String,
-    /// OAuth credential lifetimes, for the scheduler's cleanup.
+    /// OAuth credential lifetimes, for the scheduler's cleanup and approvals.
     pub oauth: crate::config::OAuthConfig,
+    /// `HORAE_PUBLIC_URL`, the OAuth issuer; `None` while the authorization
+    /// server is off.
+    pub public_url: Option<crate::config::PublicUrl>,
 }
 
 impl AppState {
@@ -36,11 +39,17 @@ impl AppState {
             harvest_api: false,
             version: String::new(),
             oauth: crate::config::OAuthConfig::default(),
+            public_url: None,
         }
     }
 
     pub fn with_oauth(mut self, oauth: crate::config::OAuthConfig) -> Self {
         self.oauth = oauth;
+        self
+    }
+
+    pub fn with_public_url(mut self, public_url: Option<crate::config::PublicUrl>) -> Self {
+        self.public_url = public_url;
         self
     }
 
@@ -119,6 +128,7 @@ pub async fn global_state() -> &'static AppState {
                 .with_job_policy(cfg.job_policy)
                 .with_mail(cfg.mail)
                 .with_oauth(cfg.oauth)
+                .with_public_url(cfg.public_url)
         })
         .await
 }

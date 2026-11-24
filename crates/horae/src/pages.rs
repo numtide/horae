@@ -10,6 +10,7 @@ pub mod gallery;
 pub mod importers;
 pub mod invoices;
 pub mod new_project;
+pub mod oauth_consent;
 pub mod people;
 pub mod permission_audit;
 pub mod projects;

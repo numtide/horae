@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.id, r.scopes, r.used_at IS NOT NULL AS \"used!\",\n                  r.idle_expires_at > now() AS \"live!\", g.id AS grant_id, g.org_id,\n                  g.client_id AS app_id,\n                  g.revoked_at IS NULL AND g.expires_at > now() AND u.active AS \"active!\"\n           FROM oauth_refresh_tokens r\n           JOIN oauth_grants g ON g.id = r.grant_id\n           JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id\n           WHERE r.token_sha256 = $1\n           FOR UPDATE OF r",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 2,
+        "name": "used!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "live!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "app_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "156bb9439418cab5ac7e6eb28aa9443773b385a7d7f4c13de7eaf6b71efb69ab"
+}

@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oauth_grants (id, org_id, client_id, user_id, scopes, expires_at)\n         VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "TextArray",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c7390d3b63e2a8bf999811ceb5a9f6c6bf29c025b5644e68a15e2026fcd223c"
+}

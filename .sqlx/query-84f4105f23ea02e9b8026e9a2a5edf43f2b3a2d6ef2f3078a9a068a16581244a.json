@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.name, c.built_in, u.name AS person_name, o.name AS organization_name\n         FROM oauth_clients c\n         JOIN users u ON u.org_id = c.org_id AND u.id = $3\n         JOIN organizations o ON o.id = c.org_id\n         WHERE c.id = $1 AND c.org_id = $2 AND c.enabled",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "built_in",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "person_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "organization_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "84f4105f23ea02e9b8026e9a2a5edf43f2b3a2d6ef2f3078a9a068a16581244a"
+}

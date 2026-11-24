@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT bool_and(r.idle_expires_at <= g.expires_at) AS \"capped!\"\n           FROM oauth_refresh_tokens r JOIN oauth_grants g ON g.id = r.grant_id\n           WHERE g.id = $1 AND r.used_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "capped!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7b50534740c02ad7bb9913fd6c3889d4985cad7aa2c4b9bd59eec9565fe10062"
+}

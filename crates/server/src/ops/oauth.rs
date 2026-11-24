@@ -14,8 +14,10 @@ use chacha20poly1305::aead::rand_core::RngCore;
 use sha2::{Digest, Sha256};
 
 mod audit;
+pub mod authorize;
 pub mod clients;
 pub mod grants;
+pub mod tokens;
 
 /// An OAuth access token (research R-5).
 pub const ACCESS_TOKEN_PREFIX: &str = "horae_oat_";
@@ -74,6 +76,12 @@ pub(crate) fn digest(credential: &str) -> Vec<u8> {
     Sha256::digest(credential.as_bytes()).to_vec()
 }
 
+/// 128 random bits in base64url: the id of a pending authorization request,
+/// which binds the approval page to the session that started it.
+pub fn request_id() -> String {
+    random_base64url::<CLIENT_ID_BYTES>()
+}
+
 /// A new registered app's client id.
 pub(crate) fn generate_client_id() -> String {
     format!(
@@ -124,8 +132,8 @@ fn random_base64url<const N: usize>() -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
-#[cfg(test)]
-mod testing;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;
 
 #[cfg(test)]
 mod tests;

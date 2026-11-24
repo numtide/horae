@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.id, g.user_id, g.scopes, c.redirect_uri, c.code_challenge,\n                  c.code_sha256, c.expires_at <= now() + interval '60 seconds' AS \"short!\"\n           FROM oauth_grants g JOIN oauth_codes c ON c.grant_id = g.id\n           WHERE g.client_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "redirect_uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "code_challenge",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "code_sha256",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 6,
+        "name": "short!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "e4b5754611eff674a79593ab0a2b543a4cde7d94cea510db1e462834f70716d3"
+}

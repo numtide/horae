@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_clients SET enabled = false, scopes = '{time:read,time:write,catalog:read}'\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3839a590a275b139851f88fc86bc10b95c630120d659b0214d6ac4b5d70352ed"
+}
