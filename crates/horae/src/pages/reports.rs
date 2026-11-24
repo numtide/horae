@@ -384,6 +384,7 @@ impl FinancialFilters {
 
 #[component]
 fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut summary = use_resource(move || {
         let (f, t, cl, pr, us, tag) = filters.read();
         let g = group_by.read().clone();
@@ -409,16 +410,16 @@ fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> E
                 let grand_bill_amount = money_totals(rows, |r| r.billable_cents, |r| &r.currency);
                 let grand_cost_amount = money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency);
                 rsx! {
-                    DataTable {
-                        table { class: "name-table",
+                    DataTable { label: tr.reports_time_label(),
+                        table { class: "name-table", aria_label: tr.reports_time_label(),
                             thead {
                                 tr {
-                                    th { "Group" }
-                                    th { class: "text-right", "Total hours" }
-                                    th { class: "text-right", "Rounded" }
-                                    th { class: "text-right", "Billable hrs" }
-                                    th { class: "text-right", "Billable amount" }
-                                    th { class: "text-right", "Cost" }
+                                    th { scope: "col", "Group" }
+                                    th { scope: "col", class: "text-right", "Total hours" }
+                                    th { scope: "col", class: "text-right", "Rounded" }
+                                    th { scope: "col", class: "text-right", "Billable hrs" }
+                                    th { scope: "col", class: "text-right", "Billable amount" }
+                                    th { scope: "col", class: "text-right", "Cost" }
                                 }
                             }
                             tbody {
@@ -461,6 +462,7 @@ fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> E
 
 #[component]
 fn FinancialDetailedReport(filters: FinancialFilters) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut detailed = use_resource(move || {
         let (f, t, cl, pr, us, tag) = filters.read();
         async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
@@ -479,18 +481,18 @@ fn FinancialDetailedReport(filters: FinancialFilters) -> Element {
                     };
                 }
                 rsx! {
-                    DataTable {
-                        table {
+                    DataTable { label: tr.reports_detailed_label(),
+                        table { aria_label: tr.reports_detailed_label(),
                             thead {
                                 tr {
-                                    th { "Date" }
-                                    th { "Project" }
-                                    th { "Task" }
-                                    th { "Teammate" }
-                                    th { class: "text-right", "Hours" }
-                                    th { class: "text-right", "Rounded" }
-                                    th { class: "text-center", "Billable" }
-                                    th { "Notes" }
+                                    th { scope: "col", "Date" }
+                                    th { scope: "col", "Project" }
+                                    th { scope: "col", "Task" }
+                                    th { scope: "col", "Teammate" }
+                                    th { scope: "col", class: "text-right", "Hours" }
+                                    th { scope: "col", class: "text-right", "Rounded" }
+                                    th { scope: "col", class: "text-center", "Billable" }
+                                    th { scope: "col", "Notes" }
                                 }
                             }
                             tbody {

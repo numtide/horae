@@ -40,7 +40,8 @@
   --color-bg-overlay: #2E2A22;   /* hover-raise over a raised surface */
   --color-menu: #201D17;         /* dropdown / popover surface (deeper than overlay) */
   --color-row-hover: #1C1A15;    /* table / ledger row hover (sinks, not lifts) */
-  --color-row-stripe: #201D17;   /* every other row of a striped table */
+  --color-row-stripe: #17150F;   /* every other row of a striped table */
+  --color-row-hover-striped: #23201A; /* hover on a striped table: clear of both bands */
   --color-row-selected: #1F2A24; /* a selected table row; replaces the stripe */
   --color-scrim: rgba(8, 7, 5, 0.68);   /* dimmed backdrop behind modals */
 
@@ -226,6 +227,7 @@
   --color-menu: #FFFFFF;         /* popover lifts off the paper */
   --color-row-hover: #E9E3D6;    /* distinct from bg-tertiary, or table hover vanishes */
   --color-row-stripe: #F3EFE6;
+  --color-row-hover-striped: #E9E3D6;
   --color-row-selected: #E2ECE6;
   --color-scrim: rgba(34, 32, 27, 0.35);
 
@@ -1076,7 +1078,7 @@ tr.row-link a::after { content: ""; position: absolute; inset: 0; }
 .table-compact :is(tbody, tfoot) :is(td, th) { padding: var(--space-2-5) var(--space-4); }
 .table-striped tbody :is(td, th) { border-bottom: 0; }
 .table-striped tbody tr:nth-child(even) { background: var(--color-row-stripe); }
-.table-striped tbody tr:hover { background: var(--color-row-hover); }
+.table-striped tbody tr:hover { background: var(--color-row-hover-striped); }
 /* Selection wins over the stripe and the hover. */
 .table-container tbody tr.selected { background: var(--color-row-selected); }
 /* The scroller holds the rows so the header can stick to its top. */

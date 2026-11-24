@@ -676,6 +676,9 @@ audit-clear-filters = Clear filters
 
 ## Reports
 
+reports-time-label = Time report
+reports-detailed-label = Detailed time report
+
 ## New project
 
 ## Approvals

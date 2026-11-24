@@ -37,6 +37,10 @@ pub fn Menu(
     } else {
         "menu menu-popover"
     };
+    debug_assert!(
+        !icon || aria_label.is_some(),
+        "an icon trigger needs aria_label"
+    );
     let trigger = if icon {
         "btn btn-secondary menu-kebab"
     } else {

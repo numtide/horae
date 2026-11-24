@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use dioxus::prelude::*;
 
 /// The frame of every table (`DESIGN.md`, *Data Tables*): a bordered scroller
@@ -7,8 +5,8 @@ use dioxus::prelude::*;
 /// variants, so screens never style a table frame of their own.
 #[component]
 pub fn DataTable(
-    /// Names the scroller, which becomes a focusable region while the table is
-    /// wider or taller than it, so a keyboard can scroll it.
+    /// Names the scroller and makes it a focusable region, so a keyboard can
+    /// scroll a table that is wider or taller than its frame.
     #[props(into)]
     label: Option<String>,
     /// Inside a card that is already the frame: only a rule under its title.
@@ -28,24 +26,6 @@ pub fn DataTable(
     busy: bool,
     children: Element,
 ) -> Element {
-    let mut scrolls = use_signal(|| false);
-    let mut scroller = use_signal(|| None::<Rc<MountedData>>);
-    let measure = move || async move {
-        let Some(element) = scroller.peek().clone() else {
-            return;
-        };
-        let (Ok(content), Ok(frame)) = (
-            element.get_scroll_size().await,
-            element.get_client_rect().await,
-        ) else {
-            return;
-        };
-        // Subpixel rounding can leave a 1px difference with nothing to scroll.
-        let wider = content.width > frame.width() + 1.0 || content.height > frame.height() + 1.0;
-        if *scrolls.peek() != wider {
-            scrolls.set(wider);
-        }
-    };
     let mut class = String::from("table-container");
     for (on, name) in [
         (flush, " table-flush"),
@@ -57,21 +37,14 @@ pub fn DataTable(
             class.push_str(name);
         }
     }
-    let region = scrolls() && label.is_some();
+    let region = label.is_some();
     rsx! {
         div {
             class,
             role: region.then_some("region"),
-            aria_label: if region { label } else { None },
+            aria_label: label,
             tabindex: region.then_some("0"),
             aria_busy: busy.then_some("true"),
-            onmounted: move |e| {
-                scroller.set(Some(e.data()));
-                spawn(measure());
-            },
-            onresize: move |_| {
-                spawn(measure());
-            },
             {children}
         }
     }
@@ -140,7 +113,7 @@ pub fn BulkBar(
 ) -> Element {
     let tr = crate::i18n::use_tr();
     rsx! {
-        div { class: "bulk-bar", role: "toolbar", aria_label: tr.bulk_bar_label(),
+        div { class: "bulk-bar", role: "group", aria_label: tr.bulk_bar_label(),
             span { class: "bulk-bar-count", role: "status", {tr.bulk_bar_selected(count)} }
             span { class: "bulk-bar-rule", aria_hidden: "true" }
             {children}

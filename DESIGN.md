@@ -241,7 +241,7 @@ Status:
 
 #### Data display
 
-- `DataTable` (`table.rs`) wraps a `table` in `.table-container` (border and panel radius). Put every data table in it. Props: `label` (names the scroller, which becomes a focusable region while the table is wider or taller than it), `flush`, `compact`, `striped`, `sticky_header`, `busy`, `children`. `TableSkeleton` (`columns`, `label`, `rows`) and `TableMessage` (`columns`, `children`) are rows for its `tbody`, and `NameCell` (`secondary`, `children`) is its first column. See [Data Tables](#data-tables-srccomponentstablers).
+- `DataTable` (`table.rs`) wraps a `table` in `.table-container` (border and panel radius). Put every data table in it. Props: `label` (names the scroller and makes it a focusable region), `flush`, `compact`, `striped`, `sticky_header`, `busy`, `children`. `TableSkeleton` (`columns`, `label`, `rows`) and `TableMessage` (`columns`, `children`) are rows for its `tbody`, and `NameCell` (`secondary`, `children`) is its first column. See [Data Tables](#data-tables-srccomponentstablers).
 - `Badge` (`badge.rs`) is the status pill with a dot. Show every status with it, never as plain text. Props: `variant` (`success`, `warning`, `danger`, `info`, `neutral` or `pine`; the class is `badge-{variant}`), `children`. The small size (`badge-sm`) has no prop yet, which is why screens write some badges by hand. See [Status Badges](#status-badges-srccomponentsbadgers).
 - `Card` (`card.rs`) is one section of a screen: a `section.card` whose optional title is an `h2.card-title` that names it (by `aria-labelledby` when `id` is given, or by `aria-label`). `focusable` makes the title a focus target, for a retry that moves focus there. `flush` drops the padding for a table or list that draws its own rows. Props: `title`, `id`, `focusable`, `flush`, `class` (layout utilities such as `max-w-form`), `children`.
 - `MetricCard` (`card.rs`) is one figure: an uppercase label, a mono value and an optional delta (`direction` is `up`, `down` or empty). Props: `label`, `value`, `delta`, `direction`.
@@ -317,12 +317,12 @@ Every table is a `DataTable`, and its props are the only variants; a screen neve
 
 The variants:
 
-- **Striped** (`striped`): every other row on `--color-row-stripe`, with no rules. Only for row-by-row lists with few columns, where ruled rows read as one grey block: Clients, Tasks, People and Approvals. Tables of figures and totals (Reports, Invoices, Projects) stay ruled. A selected row (`tr.selected`) takes `--color-row-selected`, which replaces the stripe.
+- **Striped** (`striped`): every other row on `--color-row-stripe`, with no rules. Hover takes `--color-row-hover-striped`, which stands out from both bands. Only for row-by-row lists with few columns, where ruled rows read as one grey block: Clients, Tasks, People and Approvals. Tables of figures and totals (Reports, Invoices, Projects) stay ruled. A selected row (`tr.selected`) takes `--color-row-selected`, which replaces the stripe.
 - **Compact** (`compact`): 10px × 16px cells, for dense data that people scan: the detailed reports, the importer's errors and invoice lines.
 - **Sticky header** (`sticky_header`): for a list that can scroll past one screen. The scroller takes a maximum height of 70% of the viewport and the header stays at its top.
 - **Flush** (`flush`): inside a card that is already the frame. The table keeps only a rule under the card's title block, and "Load more" or "Show all" sits in the card under it. Never a bordered table inside a bordered card, and never a bare table with no frame at all.
 - **Busy** (`busy`): a reload keeps the rows, dimmed, with `aria-busy` on the frame.
-- **Label** (`label`): names the scroller. While the table is wider than its frame, the scroller is a focusable region with that name, so a keyboard can scroll it.
+- **Label** (`label`): names the scroller and makes it a focusable region (`role=region`, `tabindex=0`), so a keyboard can scroll a table wider or taller than its frame. Every table that can scroll gets one; the financial reports, People, Plugins, Your access and the invoice lines have one so far.
 
 States live inside the frame, under the real header, so the page does not jump: `TableSkeleton` rows while the table loads for the first time, and one `TableMessage` row spanning every column, holding an inset `EmptyState`, `ErrorState` or `LoadError`, for empty, no match and error. The full-page `EmptyState` is only for a screen whose whole purpose is the list and that has never had a record (Plugins with none installed). *Pending code:* only Plugins puts its states in the frame so far.
 
@@ -466,7 +466,7 @@ Everything is driven by CSS custom properties in `:root` (`assets/css/horae.css`
 never hardcode a colour, spacing, or radius in a rule; reference the token so the
 palette stays themeable and consistent. Notable token groups:
 
-- Colour: `--color-{bg,bg-secondary,bg-tertiary,bg-overlay,menu,row-hover,row-stripe,row-selected}`, `--color-{text-strong,text,text-secondary,text-subtle,text-muted,label}`, `--color-primary*`, `--color-accent*`, and semantic `--color-{success,warning,danger,info}` with `-bg` / `-fg` / `-line` tints.
+- Colour: `--color-{bg,bg-secondary,bg-tertiary,bg-overlay,menu,row-hover,row-stripe,row-hover-striped,row-selected}`, `--color-{text-strong,text,text-secondary,text-subtle,text-muted,label}`, `--color-primary*`, `--color-accent*`, and semantic `--color-{success,warning,danger,info}` with `-bg` / `-fg` / `-line` tints.
 - Foreground-on-fill: `--color-on-{primary,accent,pine}` (text over a solid control).
 - Calendar events: `--color-cal-{event,today}-{bg,border,ink,fg,meta}` for the Timesheet calendar's blocks (pine on most days, brass on today), defined for both themes. Ink is the project name, fg the time and task, meta the client.
 - Chrome: `--color-border`, `--color-border-input`, `--color-border-strong`, `--color-border-danger`, `--color-border-danger-hover`, `--ring` / `--ring-soft` (focus glows).
