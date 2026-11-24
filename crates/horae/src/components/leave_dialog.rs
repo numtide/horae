@@ -18,14 +18,27 @@ struct Held {
 pub fn LeaveDialog() -> Element {
     let tr = crate::i18n::use_tr();
     let mut held = use_signal(|| None::<Held>);
+    // Cancelling the event tells the guard it was heard. Should this loop end,
+    // the listener goes too, and the guard lets navigation through rather than
+    // hold it with nobody to say why. A navigation that went ahead after all
+    // sends no detail, and closes the dialog.
     use_future(move || async move {
         let mut events = document::eval(
-            "addEventListener('horae-navigation-held', event => dioxus.send(event.detail));
+            "globalThis.horaeHeld = event => { dioxus.send(event.detail); event.preventDefault(); };
+             globalThis.horaeMoved = () => dioxus.send(null);
+             addEventListener('horae-navigation-held', horaeHeld);
+             addEventListener('horae-navigation-moved', horaeMoved);
              await new Promise(() => {});",
         );
-        while let Ok(next) = events.recv::<Held>().await {
-            held.set(Some(next));
+        while let Ok(next) = events.recv::<Option<Held>>().await {
+            if next.is_some() || held.peek().is_some() {
+                held.set(next);
+            }
         }
+        document::eval(
+            "removeEventListener('horae-navigation-held', globalThis.horaeHeld);
+             removeEventListener('horae-navigation-moved', globalThis.horaeMoved);",
+        );
     });
     let stay = use_callback(move |()| held.set(None));
     let leave = use_callback(move |()| {

@@ -10,6 +10,10 @@
   let current = position(history.state) ?? 0;
   // Undoing a rejected back or forward: its popstates stay away from the router.
   let restoring = false;
+  // History changes asked for while undoing, run once the undo lands. Run
+  // earlier, a push would drop the entry the undo is heading for, and the
+  // undo would never land.
+  const deferred = [];
   // The person chose to leave: the next navigation goes through.
   let leaving = false;
   // Repeats the navigation the open dialog asks about.
@@ -33,10 +37,17 @@
     }
     const now = state();
     if (now !== 'dirty' && now !== 'pending') return false;
-    retry = now === 'dirty' ? then : null;
     const kind = editor()?.dataset.editorKind ?? 'project';
-    dispatchEvent(new CustomEvent('horae-navigation-held', { detail: { state: now, kind } }));
-    return true;
+    // The dialog cancels the event to say it heard it. If nothing did, holding
+    // the navigation would block it without a word, so let it through.
+    const heard = !dispatchEvent(new CustomEvent('horae-navigation-held', { detail: { state: now, kind }, cancelable: true }));
+    retry = heard && now === 'dirty' ? then : null;
+    return heard;
+  };
+  // Dioxus scrolls to the top after a push or replace it thinks happened.
+  const keepScroll = () => {
+    const [x, y] = [scrollX, scrollY];
+    queueMicrotask(() => scrollTo(x, y));
   };
   globalThis.horaeLeave = () => {
     const then = retry;
@@ -47,24 +58,53 @@
   };
   // A navigation repeated here bypasses the router, so tell it as the browser would.
   const routed = () => dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+  // A navigation went ahead after all (the app moved on once a save ended):
+  // a dialog still asking about the page it left closes.
+  const moved = () => dispatchEvent(new CustomEvent('horae-navigation-moved'));
 
   history.pushState = (data, title, url) => {
-    if (held(() => { history.pushState([0, 0], title, url); routed(); })) return;
-    push(tagged(data, current + 1), title, url);
-    current++;
+    const again = () => {
+      const at = current;
+      history.pushState([0, 0], title, url);
+      if (current !== at) routed();
+    };
+    if (restoring) {
+      deferred.push(again);
+      keepScroll();
+    } else if (held(again)) {
+      keepScroll();
+    } else {
+      push(tagged(data, current + 1), title, url);
+      current++;
+      moved();
+    }
   };
   history.replaceState = (data, title, url) => {
     // Dioxus also replaces state merely to record the current scroll position.
-    if (url != null && new URL(url, location.href).href !== location.href
-      && held(() => { history.replaceState([0, 0], title, url); routed(); })) return;
-    replace(tagged(data, current), title, url);
+    const moves = url != null && new URL(url, location.href).href !== location.href;
+    const again = () => {
+      const at = location.href;
+      history.replaceState(moves ? [0, 0] : data, title, url);
+      if (location.href !== at) routed();
+    };
+    if (restoring) {
+      deferred.push(again);
+      if (moves) keepScroll();
+    } else if (moves && held(again)) {
+      keepScroll();
+    } else {
+      replace(tagged(data, current), title, url);
+      if (moves) moved();
+    }
   };
   addEventListener('popstate', event => {
     const destination = position(event.state);
     if (restoring) {
       event.stopImmediatePropagation();
-      if (destination === current) restoring = false;
-      else if (destination != null) history.go(current - destination);
+      if (destination === current) {
+        restoring = false;
+        for (const run of deferred.splice(0)) run();
+      } else if (destination != null) history.go(current - destination);
       return;
     }
     if (destination == null) {
@@ -79,6 +119,7 @@
       restoring = true;
       history.go(current - destination);
     } else {
+      if (destination !== current) moved();
       current = destination;
     }
   }, true);

@@ -591,7 +591,8 @@ fn Prepare(sources: Sources) -> Element {
                 ids.push(id);
                 ids.sort();
             }
-            selected.set(Some(ids));
+            // Ticking every project again is the selection the screen opened with.
+            selected.set((ids.len() < all.len()).then_some(ids));
         })
     };
     let refresh_fees = use_callback(move |_: MouseEvent| {
