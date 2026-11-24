@@ -40,8 +40,8 @@
   --color-bg-overlay: #2E2A22;   /* hover-raise over a raised surface */
   --color-menu: #201D17;         /* dropdown / popover surface (deeper than overlay) */
   --color-row-hover: #1C1A15;    /* table / ledger row hover (sinks, not lifts) */
-  --color-row-stripe: #17150F;   /* every other row of a striped table */
-  --color-row-hover-striped: #23201A; /* hover on a striped table: clear of both bands */
+  --color-row-stripe: #201D17;   /* every other row of a striped table */
+  --color-row-hover-striped: #2A261E; /* hover on a striped table: clear of both bands */
   --color-row-selected: #1F2A24; /* a selected table row; replaces the stripe */
   --color-scrim: rgba(8, 7, 5, 0.68);   /* dimmed backdrop behind modals */
 
