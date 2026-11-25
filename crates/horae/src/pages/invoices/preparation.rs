@@ -651,10 +651,7 @@ fn Prepare(sources: Sources) -> Element {
         (Ok(start), Ok(end)) => tr.invoices_period_range(date(start), date(end)),
         _ => preset().label(tr),
     };
-    let currency = estimate
-        .as_ref()
-        .map(|review| review.currency.clone())
-        .unwrap_or_default();
+    let currency = currency(estimate.as_ref());
     let awaiting = estimate
         .as_ref()
         .map_or(0, |review| review.awaiting_approval_minutes);

@@ -118,13 +118,14 @@ pub(super) fn InvoiceListContent(filter: InvoiceFilter) -> Element {
     let prepares = prepares_invoices(session);
     let mut invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
     // Only someone who may prepare invoices may see unbilled work priced.
-    let mut uninvoiced = use_resource(move || async move {
+    // Reactive, so permissions that arrive with a session refresh fetch it.
+    let mut uninvoiced = use_resource(use_reactive!(|prepares| async move {
         if prepares {
             server_fns::list_uninvoiced_clients().await.map(Some)
         } else {
             Ok(None)
         }
-    });
+    }));
     let retry_invoices = use_callback(move |()| invoices.restart());
     let retry_uninvoiced = use_callback(move |()| uninvoiced.restart());
     let shown = filter.clone();
@@ -357,8 +358,10 @@ fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter, retry: Callback<()>)
                         StatusOption { key: "{status:?}", value: Some(status), current: filter.status, onpick: pick_status }
                     }
                 }
+                // Its options come from the list, so it waits for the list.
                 Combobox { options: clients, value: filter.client.map(|client| client.to_string()).unwrap_or_default(),
-                    placeholder: tr.invoices_client_any(), all_label: tr.invoices_client_any(),
+                    placeholder: if read.is_none() { tr.invoices_clients_loading() } else { tr.invoices_client_any() },
+                    all_label: tr.invoices_client_any(), disabled: read.is_none(),
                     trigger_class: "text-sm px-4", onselect: pick_client }
                 Menu { id: "invoices-period-filter", label: period_label(tr, filter.period), trigger_class: "text-sm px-4",
                     PeriodOption { value: None, current: filter.period, onpick: pick_period }
@@ -472,7 +475,7 @@ fn add_amounts<'a>(
 ) -> Option<Vec<CurrencyAmount>> {
     let mut sums = std::collections::BTreeMap::<&str, i64>::new();
     for amount in lists.flatten() {
-        let sum = sums.entry(amount.currency.as_str()).or_default();
+        let sum = sums.entry(amount.currency.trim()).or_default();
         *sum = sum.checked_add(amount.cents)?;
     }
     Some(
@@ -504,7 +507,9 @@ fn UninvoicedTable(uninvoiced: Uninvoiced, can_prepare: bool, retry: Callback<()
         Some(Ok(Some(clients))) => clients,
         _ => &[],
     };
-    let minutes: i64 = clients.iter().map(|client| client.unbilled_minutes).sum();
+    let minutes = clients
+        .iter()
+        .try_fold(0i64, |sum, client| sum.checked_add(client.unbilled_minutes));
     let time = add_amounts(clients.iter().map(|client| client.time.as_slice()));
     let fees = add_amounts(clients.iter().map(|client| client.fees.as_slice()));
     rsx! {
@@ -519,7 +524,8 @@ fn UninvoicedTable(uninvoiced: Uninvoiced, can_prepare: bool, retry: Callback<()
                 } }
                 tbody {
                     match &*read {
-                        None => rsx! { TableSkeleton { columns: 5, rows: 4, label: tr.invoices_uninvoiced_loading() } },
+                        // `Ok(None)`: not fetched yet for someone who may prepare.
+                        None | Some(Ok(None)) => rsx! { TableSkeleton { columns: 5, rows: 4, label: tr.invoices_uninvoiced_loading() } },
                         Some(Err(error)) => rsx! {
                             TableMessage { columns: 5,
                                 LoadError { error: error.clone(), what: tr.invoices_uninvoiced_what(), retry, pending, inset: true }
@@ -541,7 +547,7 @@ fn UninvoicedTable(uninvoiced: Uninvoiced, can_prepare: bool, retry: Callback<()
                 if !clients.is_empty() {
                     tfoot { tr {
                         th { scope: "row", {tr.invoices_total()} }
-                        td { class: "text-mono text-right", {horae_core::duration::format_hhmm(minutes)} }
+                        td { class: "text-mono text-right", {minutes.map_or_else(|| "—".into(), horae_core::duration::format_hhmm)} }
                         td { class: "text-mono text-right", {amounts_or_dash(time.as_deref())} }
                         td { class: "text-mono text-right", {amounts_or_dash(fees.as_deref())} }
                         td {}
