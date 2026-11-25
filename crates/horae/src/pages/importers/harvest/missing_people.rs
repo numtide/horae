@@ -119,7 +119,7 @@ pub(super) fn MissingPeople(
                 }
             }
             div { class: "overflow-x-auto border-t",
-                table { class: "table",
+                table {
                     thead {
                         tr {
                             th { class: "whitespace-nowrap", "Person" }

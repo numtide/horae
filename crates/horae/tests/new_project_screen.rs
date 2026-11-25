@@ -1394,13 +1394,13 @@ fn textarea_and_selector_error_links_are_opt_in_and_preserve_controls() {
 fn compact_input_adds_utilities_and_accessible_name_without_losing_native_state() {
     let mut dom = VirtualDom::new(|| {
         rsx! {
-            form::Input { id: "compact-field", class: "w-24 font-mono text-right", label: "Tax (%)", value: "1.50", disabled: true }
+            form::Input { id: "compact-field", class: "w-24 text-mono text-right", label: "Tax (%)", value: "1.50", disabled: true }
         }
     });
     dom.rebuild_in_place();
     let html = dioxus::ssr::render(&dom);
     for attribute in [
-        "class=\"form-input w-24 font-mono text-right\"",
+        "class=\"form-input w-24 text-mono text-right\"",
         "aria-label=\"Tax (%)\"",
         "value=\"1.50\"",
         "disabled",

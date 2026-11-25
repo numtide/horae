@@ -229,7 +229,7 @@ pub(crate) fn TokenTable(
             p { {tr.api_tokens_revoke_body()} }
         }
         div { class: "table-container overflow-x-auto",
-            table { class: "table",
+            table {
                 thead {
                     tr {
                         if show_owner { th { scope: "col", "Owner" } }

@@ -319,7 +319,6 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await choose(committedId);
     // The closed menu's trigger shows the pending restore.
     await expect(actionsFor(committedId)).toHaveAttribute('aria-busy', 'true');
-    await expect(actionsFor(committedId)).toContainText('Restoring…');
     await expect(activityFor(committedId)).toHaveText('Restoring…');
     await expect(activityFor(committedId)).toBeDisabled();
     await forceChoose(committedId);

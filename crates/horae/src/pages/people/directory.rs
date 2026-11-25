@@ -10,7 +10,7 @@ use crate::components::avatar::{Avatar, initials};
 use crate::components::badge::Badge;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::filter_bar::{FilterBar, SearchField};
-use crate::components::menu::{Menu, MenuDivider, MenuItem};
+use crate::components::menu::{Menu, MenuDivider, MenuItem, RowActions};
 use crate::components::page_header::PageHeader;
 use crate::components::period_nav::PeriodNav;
 use crate::components::screen_state::{EmptyState, LoadError, Skeleton};
@@ -370,7 +370,7 @@ fn Listing(
             }
         } else {
             div { class: "ppl-content", aria_busy: stale,
-                DataTable {
+                DataTable { label: tr.people_title(), striped: true,
                     table { class: "name-table",
                         thead { tr {
                             th { scope: "col", {tr.people_column_person()} }
@@ -543,8 +543,7 @@ fn PersonRow(
             if actions {
                 td { class: "text-right",
                     if menu {
-                        Menu { id: "person-actions-{id}", label: tr.people_actions(),
-                            aria_label: tr.people_actions_for(&person.name), align_right: true,
+                        RowActions { id: "person-actions-{id}", name: person.name.clone(),
                             if timesheet {
                                 MenuItem { id: "person-timesheet-{id}", onclick: view_timesheet, {tr.people_view_timesheet()} }
                             }

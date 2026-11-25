@@ -135,7 +135,7 @@ pub(super) fn Billing(
                         p { id: "np-rate-mode", class: "text-sm font-semibold m-0", "Existing rate hierarchy" }
                         p { class: "form-hint", "Task override, then person override, then project rate, then profile rate. Empty inherits; zero is an explicit rate." }
                         label { class: "block text-sm mb-2", r#for: "np-project-rate", "Project hourly rate ({currency_label})" }
-                        Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), placeholder: "Inherit", oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
+                        Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), class: "w-30 max-w-full text-mono text-right", value: form.read().project_rate.clone(), placeholder: "Inherit", oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
                         if let Some(message) = error_for(ProjectFormField::ProjectRate) { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
                     }
                 } else if project_type == ProjectType::TimeAndMaterials {
@@ -160,8 +160,8 @@ pub(super) fn Billing(
                                     }
                                     if mode == RateMode::Project && form.read().rate_mode == mode {
                                         div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
-                                            span { class: "font-mono text-sm text-subtle", "{currency_label}" }
-                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", disabled: !options.read().can_edit_billable_settings, class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
+                                            span { class: "text-mono text-sm text-subtle", "{currency_label}" }
+                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", disabled: !options.read().can_edit_billable_settings, class: "w-30 max-w-full text-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
                                             span { class: "text-xs text-subtle whitespace-nowrap", "/ h" }
                                         }
                                     }
@@ -264,8 +264,8 @@ fn Budget(
                 }
                 if matches!(mode, BudgetMode::TotalHours | BudgetMode::TotalFees) {
                     div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
-                        if mode == BudgetMode::TotalFees { span { class: "font-mono text-sm text-subtle", "{currency}" } }
-                        Input { id: "np-budget-value", error_id: error_id(ProjectFormField::BudgetValue), label: amount_label, class: "w-40 max-w-full font-mono text-right", value: form.read().budget_value.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Budget); form.write().budget_value = event.value(); } }
+                        if mode == BudgetMode::TotalFees { span { class: "text-mono text-sm text-subtle", "{currency}" } }
+                        Input { id: "np-budget-value", error_id: error_id(ProjectFormField::BudgetValue), label: amount_label, class: "w-40 max-w-full text-mono text-right", value: form.read().budget_value.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Budget); form.write().budget_value = event.value(); } }
                         span { class: "text-xs text-subtle", if mode == BudgetMode::TotalFees { "total" } else { "hours" } }
                     }
                 }
@@ -286,7 +286,7 @@ fn Budget(
                         }
                         if form.read().budget_alert {
                             div { class: "flex items-center gap-2",
-                                Input { id: "np-alert-threshold", error_id: error_id(ProjectFormField::BudgetAlertAt), label: "Budget email threshold (%)", class: "w-16 font-mono text-right", disabled: !email_available, value: form.read().budget_alert_at.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Budget); form.write().budget_alert_at = event.value(); } }
+                                Input { id: "np-alert-threshold", error_id: error_id(ProjectFormField::BudgetAlertAt), label: "Budget email threshold (%)", class: "w-16 text-mono text-right", disabled: !email_available, value: form.read().budget_alert_at.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Budget); form.write().budget_alert_at = event.value(); } }
                                 span { class: "text-sm text-subtle", "%" }
                             }
                         }
@@ -349,14 +349,14 @@ fn FeeSchedule(
                             aria_describedby: error_id(ProjectFormField::Milestones),
                             onclick: move |_| { on_edit.call(ProtectedProjectField::Fees); form.write().milestones.push(MilestoneInput { id: Uuid::now_v7(), name: String::new(), due_on: String::new(), amount: String::new() }); }, "Add milestone"
                         }
-                        span { class: "text-xs text-subtle", "Total " span { class: "font-mono text-default", if let Some(total) = total { "{currency} {format_cents_plain(total)}" } else { "Enter valid amounts" } } }
+                        span { class: "text-xs text-subtle", "Total " span { class: "text-mono text-default", if let Some(total) = total { "{currency} {format_cents_plain(total)}" } else { "Enter valid amounts" } } }
                     }
                 }
             } else {
                 div { class: "flex flex-wrap items-center gap-2 mt-4",
                     div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
-                        span { class: "font-mono text-sm text-subtle", "{currency}" }
-                        Input { id: "np-fee-amount", error_id: error_id(ProjectFormField::FeeAmount), label: "Fee ({currency})", class: "w-50 max-w-full font-mono text-right", value: form.read().fee_amount.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Fees); form.write().fee_amount = event.value(); } }
+                        span { class: "text-mono text-sm text-subtle", "{currency}" }
+                        Input { id: "np-fee-amount", error_id: error_id(ProjectFormField::FeeAmount), label: "Fee ({currency})", class: "w-50 max-w-full text-mono text-right", value: form.read().fee_amount.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Fees); form.write().fee_amount = event.value(); } }
                     }
                     if mode == FeeMode::Monthly {
                         label { class: "text-xs text-subtle", r#for: "np-monthly-day", "per month, available to invoice on" }
@@ -402,8 +402,8 @@ fn Milestone(
     rsx! {
         div { class: "np-milestone-row grid items-center gap-3 px-3 py-2.5 border-b border-light", role: "group", aria_label: if item.name.is_empty() { "New milestone".into() } else { format!("Milestone {}", item.name) }, oninput: move |_| on_edit.call(ProtectedProjectField::Fees),
             Input { id: "np-milestone-name-{id}", error_id: error_id(ProjectFormField::MilestoneName(id)), label: "Milestone name", placeholder: "Milestone", class: "min-w-0 px-2.5 py-2", value: item.name.clone(), oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.name = event.value(); } } }
-            Input { id: "np-milestone-date-{id}", error_id: error_id(ProjectFormField::MilestoneDate(id)), label: "Due date", class: "min-w-0 px-2.5 py-2 font-mono", kind: "date", value: item.due_on, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.due_on = event.value(); } } }
-            Input { id: "np-milestone-amount-{id}", error_id: error_id(ProjectFormField::MilestoneAmount(id)), label: "Amount ({currency})", placeholder: "0.00", class: "min-w-0 px-2.5 py-2 font-mono text-right", value: item.amount, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.amount = event.value(); } } }
+            Input { id: "np-milestone-date-{id}", error_id: error_id(ProjectFormField::MilestoneDate(id)), label: "Due date", class: "min-w-0 px-2.5 py-2 text-mono", kind: "date", value: item.due_on, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.due_on = event.value(); } } }
+            Input { id: "np-milestone-amount-{id}", error_id: error_id(ProjectFormField::MilestoneAmount(id)), label: "Amount ({currency})", placeholder: "0.00", class: "min-w-0 px-2.5 py-2 text-mono text-right", value: item.amount, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.amount = event.value(); } } }
             button { class: "btn btn-ghost p-0 size-10 text-label", r#type: "button", aria_label: if item.name.is_empty() { "Remove milestone".into() } else { format!("Remove milestone {}", item.name) }, onclick: move |_| {
                 on_edit.call(ProtectedProjectField::Fees);
                 form.write().milestones.retain(|item| item.id != id);

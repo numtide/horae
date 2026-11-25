@@ -11,7 +11,7 @@ use crate::route::Route;
 pub(super) fn HistoryTable(jobs: Vec<JobStatus>) -> Element {
     rsx! {
         div { class: "overflow-x-auto",
-            table { class: "table",
+            table {
                 thead {
                     tr {
                         th { scope: "col", "When" }

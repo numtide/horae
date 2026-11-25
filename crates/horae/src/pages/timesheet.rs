@@ -1651,7 +1651,7 @@ fn EntryFields(
                 oninput: move |e| notes.set(e.value()),
             }
             input {
-                class: "form-input flex-none w-30 text-right font-mono text-xl",
+                class: "form-input flex-none w-30 text-right text-mono text-xl",
                 "aria-label": "Duration",
                 placeholder: "0:00",
                 value: "{duration}",

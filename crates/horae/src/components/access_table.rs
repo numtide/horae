@@ -216,12 +216,16 @@ pub fn changed_rows(before: &[Permission], after: &[Permission]) -> Vec<(Area, [
 }
 
 /// The table itself. Moved cells read "before → after", tinted by whether the
-/// access widened or narrowed.
+/// access widened or narrowed. `flush` inside a panel that is already the frame.
 #[component]
-pub fn AccessTable(label: String, rows: Vec<(Area, [AccessCell; 3])>) -> Element {
+pub fn AccessTable(
+    label: String,
+    rows: Vec<(Area, [AccessCell; 3])>,
+    #[props(default)] flush: bool,
+) -> Element {
     let tr = crate::i18n::use_tr();
     rsx! {
-        DataTable {
+        DataTable { label: label.clone(), flush,
             table { aria_label: label,
                 thead { tr {
                     th { scope: "col", {tr.settings_access_column_area()} }

@@ -34,7 +34,8 @@ if (output) fs.mkdirSync(output, { recursive: true });
       const heading = root.querySelector('h1, h2');
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       for (const cell of root.querySelectorAll('table tbody tr > td:first-child')) {
-        if (cell.getBoundingClientRect().width < 16.25 * rem - 1) problems.push('Identity column is narrower than the handoff minimum');
+        // .name-table's minimum, shared by every table with a name column.
+        if (cell.getBoundingClientRect().width < 12 * rem - 1) problems.push('Identity column is narrower than the name-table minimum');
       }
       const search = root.querySelector('input[type="search"]');
       if (search && innerWidth >= 1440 && rem === 16) {
