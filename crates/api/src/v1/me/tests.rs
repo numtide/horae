@@ -62,7 +62,13 @@ async fn me_is_the_tokens_owner_organization_and_token(pool: PgPool) {
             "organization": { "id": ids.org_id, "name": "Test Org" },
             "administrator": false,
             "profile": "Member",
-            "token": { "id": token_id, "name": "calendar sync", "expires_at": null },
+            "token": {
+                "id": token_id,
+                "name": "calendar sync",
+                "expires_at": null,
+                "kind": "personal",
+                "oauth": null,
+            },
         })
     );
 }

@@ -274,6 +274,7 @@ fn assert_no_authority(actor: &Actor) {
     assert!(actor.permissions().is_none());
     assert!(!actor.identity().active);
     assert!(!actor.administrator());
+    assert!(!actor.may_track_own_time());
     assert!(
         Permission::ALL
             .iter()
@@ -307,6 +308,13 @@ async fn an_oauth_actor_has_no_authority_until_a_scope_is_unlocked(pool: PgPool)
                 "{profile:?} {scopes:?}"
             );
             assert!(!actor.administrator(), "{profile:?} {scopes:?}");
+            // The one fact kept from before narrowing, for reads only.
+            assert_eq!(
+                actor.may_track_own_time(),
+                stored.contains(Permission::TimeWriteOwn)
+                    || stored.contains(Permission::TimeWriteAll),
+                "{profile:?} {scopes:?}"
+            );
             assert!(actor.require_administrator().is_err());
             assert!(actor.require_session().is_err());
             assert!(!actor.permissions().unwrap().is_administrator);
@@ -331,6 +339,31 @@ async fn a_scope_the_token_lacks_does_not_unlock_it(pool: PgPool) {
     let mut actor = load_oauth(&pool, ids.org_id, ids.user_id, write).await;
     actor.unlock_scope(Scope::TimeRead).unwrap();
     assert!(actor.has(Permission::TimeReadAll));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_caller_unlocked_for_a_held_scope_loads_with_authority(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let caller = Caller::oauth(
+        ids.org_id,
+        ids.user_id,
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        ScopeSet::of(&[Scope::TimeWrite]),
+    );
+    assert!(caller.unlock(Scope::CatalogRead).is_none());
+    let unlocked = caller.unlock(Scope::TimeRead).unwrap();
+    let mut tx: Tx = pool.begin().await.unwrap();
+    let actor = Actor::load(&mut tx, unlocked).await.unwrap();
+    assert!(actor.is_active());
+    assert!(actor.has(Permission::TimeWriteOwn));
+    assert!(!actor.has(Permission::ProjectReadManaged));
+
+    let session = Caller::session(ids.org_id, ids.user_id);
+    assert_eq!(
+        session.unlock(Scope::CatalogRead).unwrap().channel,
+        Channel::Session
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

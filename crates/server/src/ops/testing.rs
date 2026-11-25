@@ -156,6 +156,22 @@ pub async fn add_person(pool: &PgPool, org_id: Uuid, profile: BuiltInProfile) ->
     id
 }
 
+/// Removes `grant` from the seeded person's stored grants as they are, even
+/// one of the Member floor, leaving a state the actor must refuse.
+pub async fn drop_grant(pool: &PgPool, ids: &SeedIds, grant: Permission) {
+    let name = serde_json::to_value(grant).unwrap();
+    sqlx::query!(
+        "UPDATE person_permission_states SET grants = array_remove(grants, $3)
+         WHERE org_id = $1 AND user_id = $2",
+        ids.org_id,
+        ids.user_id,
+        name.as_str().unwrap(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// Replaces the seeded person's permission state with exactly `grants` (with
 /// their prerequisites and the Member floor).
 pub async fn provision(pool: &PgPool, ids: &SeedIds, grants: &[Permission], administrator: bool) {

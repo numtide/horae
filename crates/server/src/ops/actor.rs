@@ -29,6 +29,10 @@ pub enum Channel {
         grant_id: uuid::Uuid,
         token_id: uuid::Uuid,
         scopes: ScopeSet,
+        /// The scope the endpoint declares, which the adapter checked the
+        /// token holds ([`Caller::unlock`](super::Caller::unlock)): the actor
+        /// loads already unlocked, with the grants of all the token's scopes.
+        unlocked: Option<Scope>,
     },
     /// The server's operator at its terminal: no person, and no grants. Each
     /// operation that accepts it says what it may do.
@@ -48,6 +52,10 @@ pub struct Actor {
     /// An OAuth actor's narrowed state, held back until
     /// [`Actor::unlock_scope`] moves it into `permissions`.
     locked: Option<PersonPermissions>,
+    /// Whether the stored grants, before any narrowing, let the person
+    /// track their own time. Read only through
+    /// [`Actor::may_track_own_time`].
+    tracks_own_time: bool,
 }
 
 const STATE_UNAVAILABLE: &str = "Permission state is unavailable";
@@ -99,6 +107,7 @@ impl Actor {
             channel: caller.channel,
             permissions: None,
             locked: None,
+            tracks_own_time: false,
         };
         let organization = match lock {
             Lock::Share => {
@@ -157,13 +166,21 @@ impl Actor {
                 }
             })?
             .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
-        if let Channel::OAuth { scopes, .. } = caller.channel {
+        actor.tracks_own_time = state.grants.contains(Permission::TimeWriteOwn)
+            || state.grants.contains(Permission::TimeWriteAll);
+        if let Channel::OAuth {
+            scopes, unlocked, ..
+        } = caller.channel
+        {
             // Scopes only narrow: whatever an operation checks, it checks
             // against a subset of the person's grants, and no scope covers
             // administration.
             state.grants = state.grants.intersection(&scopes.ceiling());
             state.is_administrator = false;
             actor.locked = Some(state);
+            if let Some(scope) = unlocked {
+                actor.unlock_scope(scope)?;
+            }
             return Ok(actor);
         }
         actor.identity.active = true;
@@ -222,8 +239,10 @@ impl Actor {
 
     /// Gives an OAuth actor its narrowed authority for a request whose
     /// endpoint declares `scope`, if the token holds it (`time:write`
-    /// includes `time:read`). Until then the actor answers like an inactive
-    /// person. Every other channel is unaffected.
+    /// includes `time:read`). The authority is the person's grants within
+    /// the ceiling of all the token's scopes, not only `scope`'s. Until then
+    /// the actor answers like an inactive person. Every other channel is
+    /// unaffected.
     pub fn unlock_scope(&mut self, scope: Scope) -> Result<(), OpError> {
         let Channel::OAuth { scopes, .. } = self.channel else {
             return Ok(());
@@ -266,6 +285,15 @@ impl Actor {
         } else {
             Err(OpError::forbidden(SESSION_REQUIRED))
         }
+    }
+
+    /// Whether the person may track their own time, from their stored
+    /// grants before an OAuth token's scopes narrowed them. Only the reads of
+    /// what the person may track ask this, so an app with `catalog:read` sees
+    /// the projects and tasks they track on (FR-060); every write checks the
+    /// narrowed grants. `false` for an actor with no authority.
+    pub fn may_track_own_time(&self) -> bool {
+        self.is_active() && self.tracks_own_time
     }
 
     /// Whether the actor's stored state grants `permission`.

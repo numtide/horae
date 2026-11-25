@@ -267,6 +267,74 @@ async fn an_oauth_token_stops_a_timer_only_with_time_write(pool: PgPool) {
     assert!(!stopped.is_running);
 }
 
+/// An Administrator tracks on every project, but an OAuth token never carries
+/// that identity: through one, only assigned projects are trackable.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_administrators_oauth_token_tracks_only_assigned_projects(pool: PgPool) {
+    use horae_core::permissions::oauth::ScopeSet;
+    let ids = trackable(&pool, BuiltInProfile::Administrator).await;
+    sqlx::query!("DELETE FROM assignments WHERE user_id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let options = async |caller: Caller| {
+        let mut read = ops::begin_read(&pool, caller).await.unwrap();
+        let context = TimesheetWriteContext {
+            expected_requester: read.actor.requester(),
+            subject_id: ids.user_id,
+        };
+        let result = tracking(&mut read.tx, &read.actor, &context).await;
+        read.finish(result).await.unwrap()
+    };
+
+    let session = options(Caller::session(ids.org_id, ids.user_id)).await;
+    assert_eq!(session.len(), 1);
+    let oauth = Caller::oauth(
+        ids.org_id,
+        ids.user_id,
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        ScopeSet::of(&Scope::ALL),
+    );
+    assert!(
+        options(oauth.unlock(Scope::CatalogRead).unwrap())
+            .await
+            .is_empty()
+    );
+}
+
+/// `catalog:read` lists what the person may track (FR-060) though it carries
+/// no time write. `TimeWriteOwn` is in the Member floor, so a state without
+/// it is invalid, and the actor refuses to load rather than list anything.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_token_without_time_write_lists_what_the_person_may_track(pool: PgPool) {
+    use horae_core::permissions::oauth::ScopeSet;
+    let ids = trackable(&pool, BuiltInProfile::Member).await;
+    let caller = Caller::oauth(
+        ids.org_id,
+        ids.user_id,
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        ScopeSet::of(&[Scope::CatalogRead]),
+    )
+    .unlock(Scope::CatalogRead)
+    .unwrap();
+    let mut read = ops::begin_read(&pool, caller).await.unwrap();
+    let context = TimesheetWriteContext {
+        expected_requester: read.actor.requester(),
+        subject_id: ids.user_id,
+    };
+    let result = tracking(&mut read.tx, &read.actor, &context).await;
+    assert_eq!(read.finish(result).await.unwrap().len(), 1);
+
+    crate::ops::testing::drop_grant(&pool, &ids, Permission::TimeWriteOwn).await;
+    let refused = ops::begin_read(&pool, caller).await.err();
+    assert!(
+        matches!(refused, Some(OpError::Forbidden(_))),
+        "{refused:?}"
+    );
+}
+
 /// A start while a timer runs stops it first, as its stop would (021 D-6),
 /// and announces the stop before the new timer.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

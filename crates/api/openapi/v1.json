@@ -88,6 +88,7 @@
         "description": "Who the token acts as, and in which organization.",
         "properties": {
           "administrator": {
+            "description": "Whether the token acts as an administrator; never for an app's token.",
             "type": "boolean"
           },
           "organization": {
@@ -127,7 +128,7 @@
             "type": "object"
           },
           "profile": {
-            "description": "The person's profile or permission template; `null` for individually\nchosen permissions.",
+            "description": "The person's profile or permission template; `null` for individually\nchosen permissions. For an app's token it is still the person's,\nthough the token is limited to its scopes.",
             "type": [
               "string",
               "null"
@@ -143,16 +144,54 @@
                 ]
               },
               "id": {
+                "description": "The personal access token, or the OAuth access token.",
                 "format": "uuid",
                 "type": "string"
               },
+              "kind": {
+                "$ref": "#/components/schemas/TokenKind"
+              },
               "name": {
+                "description": "The personal access token's name, or the app's name.",
                 "type": "string"
+              },
+              "oauth": {
+                "description": "The app and its granted scopes; `null` for a personal access token.",
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "properties": {
+                      "app_name": {
+                        "type": "string"
+                      },
+                      "client_id": {
+                        "description": "The app's public client id.",
+                        "type": "string"
+                      },
+                      "scopes": {
+                        "items": {
+                          "$ref": "#/components/schemas/OAuthScope"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "client_id",
+                      "app_name",
+                      "scopes"
+                    ],
+                    "type": "object"
+                  }
+                ]
               }
             },
             "required": [
               "id",
-              "name"
+              "name",
+              "kind",
+              "oauth"
             ],
             "type": "object"
           }
@@ -273,6 +312,15 @@
           "task_id"
         ],
         "type": "object"
+      },
+      "OAuthScope": {
+        "description": "A scope an app may be granted (spec 024 FR-060).",
+        "enum": [
+          "time:read",
+          "time:write",
+          "catalog:read"
+        ],
+        "type": "string"
       },
       "Page_Client": {
         "description": "One page of a list, in `id` order. `next_cursor` is `null` on the last\npage.",
@@ -1059,6 +1107,13 @@
         },
         "type": "object"
       },
+      "TokenKind": {
+        "enum": [
+          "personal",
+          "oauth"
+        ],
+        "type": "string"
+      },
       "Trackable": {
         "description": "A project and task the person may track time on.",
         "properties": {
@@ -1092,6 +1147,22 @@
       }
     },
     "securitySchemes": {
+      "oauth2": {
+        "description": "An app's OAuth access token (horae_oat_…), from the authorization code flow with PKCE. It acts as the person who approved the app, limited to its scopes.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "/oauth/authorize",
+            "refreshUrl": "/oauth/token",
+            "scopes": {
+              "catalog:read": "Read the projects, tasks, clients and people the person may see, and the projects and tasks they may track time on.",
+              "time:read": "Read time entries the person may see.",
+              "time:write": "Create, edit, delete and run timers on time entries the person may change. Includes time:read."
+            },
+            "tokenUrl": "/oauth/token"
+          }
+        },
+        "type": "oauth2"
+      },
       "token": {
         "description": "A personal access token (horae_pat_…) created in personal settings.",
         "scheme": "bearer",
@@ -1172,6 +1243,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "The clients the owner may see, in `id` order.",
         "tags": [
           "catalogue"
@@ -1208,6 +1289,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "One client the owner may see, active or archived.",
         "tags": [
           "catalogue"
@@ -1232,6 +1323,14 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": []
+          }
+        ],
         "summary": "The token's owner, their organization and the token.",
         "tags": [
           "identity"
@@ -1259,6 +1358,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:read"
+            ]
+          }
+        ],
         "summary": "The owner's running timer.",
         "tags": [
           "identity"
@@ -1295,6 +1404,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "The project and task pairs a person may track time on today: the owner,\nor a person the owner may write time for.",
         "tags": [
           "identity"
@@ -1383,6 +1502,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "The people the owner may see, in `id` order.",
         "tags": [
           "catalogue"
@@ -1419,6 +1548,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "One person the owner may see. An archived person needs permission to\nview everyone.",
         "tags": [
           "catalogue"
@@ -1497,6 +1636,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "The projects the owner may see, in `id` order.",
         "tags": [
           "catalogue"
@@ -1533,6 +1682,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "One project the owner may see, active or archived.",
         "tags": [
           "catalogue"
@@ -1611,6 +1770,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "The tasks the owner may see, in `id` order.",
         "tags": [
           "catalogue"
@@ -1647,6 +1816,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "catalog:read"
+            ]
+          }
+        ],
         "summary": "One task the owner may see, active or archived.",
         "tags": [
           "catalogue"
@@ -1769,6 +1948,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:read"
+            ]
+          }
+        ],
         "summary": "Every entry the owner may read, own, managed or all by their scope.",
         "tags": [
           "time entries"
@@ -1809,6 +1998,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:write"
+            ]
+          }
+        ],
         "summary": "Records time with a duration, as the Timesheet's create does.",
         "tags": [
           "time entries"
@@ -1838,6 +2037,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:write"
+            ]
+          }
+        ],
         "summary": "Deletes an entry.",
         "tags": [
           "time entries"
@@ -1872,6 +2081,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:read"
+            ]
+          }
+        ],
         "summary": "One entry the owner may read.",
         "tags": [
           "time entries"
@@ -1916,6 +2135,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:write"
+            ]
+          }
+        ],
         "summary": "Changes the given fields of an entry; the rest keep their values.",
         "tags": [
           "time entries"
@@ -1952,6 +2181,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:write"
+            ]
+          }
+        ],
         "summary": "Runs a stopped entry of today again, keeping its minutes; a running timer\nis stopped first. Another day's entry cannot restart (409).",
         "tags": [
           "timers"
@@ -1988,6 +2227,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:write"
+            ]
+          }
+        ],
         "summary": "Stops the entry's running timer.",
         "tags": [
           "timers"
@@ -2030,6 +2279,16 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "security": [
+          {
+            "token": []
+          },
+          {
+            "oauth2": [
+              "time:write"
+            ]
+          }
+        ],
         "summary": "Starts a timer on the person's today. A timer already running for them is\nstopped first, as in the web app.",
         "tags": [
           "timers"

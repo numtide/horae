@@ -4,6 +4,7 @@
 //! shapes cannot reach the API unnoticed.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use horae_core::permissions::oauth::Scope;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -13,6 +14,7 @@ use crate::models::scoped_time::TimesheetTrackingOption;
 use crate::models::time_entry::TimeEntry as StoredEntry;
 use crate::ops::api_tokens::TokenIdentity;
 use crate::ops::clients::ClientRecord;
+use crate::ops::oauth::tokens::OAuthIdentity;
 use crate::ops::people::PersonRecord;
 use crate::ops::projects::reads::ProjectRecord;
 use crate::ops::projects::task_catalog::TaskRecord;
@@ -41,9 +43,11 @@ pub struct Me {
     pub person: MePerson,
     #[schema(inline)]
     pub organization: MeOrganization,
+    /// Whether the token acts as an administrator; never for an app's token.
     pub administrator: bool,
     /// The person's profile or permission template; `null` for individually
-    /// chosen permissions.
+    /// chosen permissions. For an app's token it is still the person's,
+    /// though the token is limited to its scopes.
     pub profile: Option<String>,
     #[schema(inline)]
     pub token: MeToken,
@@ -64,12 +68,83 @@ pub struct MeOrganization {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct MeToken {
+    /// The personal access token, or the OAuth access token.
     pub id: Uuid,
+    /// The personal access token's name, or the app's name.
     pub name: String,
     pub expires_at: Option<DateTime<Utc>>,
+    pub kind: TokenKind,
+    /// The app and its granted scopes; `null` for a personal access token.
+    #[schema(inline, required = true)]
+    pub oauth: Option<MeOAuth>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TokenKind {
+    Personal,
+    #[serde(rename = "oauth")]
+    OAuth,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct MeOAuth {
+    /// The app's public client id.
+    pub client_id: String,
+    pub app_name: String,
+    pub scopes: Vec<OAuthScope>,
+}
+
+/// A scope an app may be granted (spec 024 FR-060).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub enum OAuthScope {
+    #[serde(rename = "time:read")]
+    TimeRead,
+    #[serde(rename = "time:write")]
+    TimeWrite,
+    #[serde(rename = "catalog:read")]
+    CatalogRead,
+}
+
+impl From<Scope> for OAuthScope {
+    fn from(scope: Scope) -> Self {
+        match scope {
+            Scope::TimeRead => Self::TimeRead,
+            Scope::TimeWrite => Self::TimeWrite,
+            Scope::CatalogRead => Self::CatalogRead,
+        }
+    }
 }
 
 impl Me {
+    /// Who an app's OAuth access token acts as.
+    pub fn from_oauth(org_id: Uuid, identity: OAuthIdentity, permissions: OwnPermissions) -> Self {
+        Self {
+            person: MePerson {
+                id: identity.person_id,
+                name: identity.person_name,
+                email: identity.person_email,
+            },
+            organization: MeOrganization {
+                id: org_id,
+                name: identity.organization_name,
+            },
+            administrator: permissions.is_administrator,
+            profile: permissions.profile,
+            token: MeToken {
+                id: identity.token_id,
+                name: identity.app_name.clone(),
+                expires_at: Some(identity.expires_at),
+                kind: TokenKind::OAuth,
+                oauth: Some(MeOAuth {
+                    client_id: identity.client_id,
+                    app_name: identity.app_name,
+                    scopes: identity.scopes.iter().map(OAuthScope::from).collect(),
+                }),
+            },
+        }
+    }
+
     pub fn new(org_id: Uuid, identity: TokenIdentity, permissions: OwnPermissions) -> Self {
         let token = identity.token;
         Self {
@@ -88,6 +163,8 @@ impl Me {
                 id: token.id,
                 name: token.name,
                 expires_at: token.expires_at,
+                kind: TokenKind::Personal,
+                oauth: None,
             },
         }
     }

@@ -14,7 +14,7 @@ use uuid::Uuid;
 use super::ProblemResponse;
 use super::types::{Me, Page, TimeEntry, Trackable};
 use crate::models::scoped_time::TimesheetWriteContext;
-use crate::ops::{self, Actor, Caller, OpError, Tx};
+use crate::ops::{self, Actor, Caller, Channel, OpError, Tx};
 use crate::problem::{ApiQuery, Problem};
 
 /// The token's owner, their organization and the token.
@@ -22,6 +22,7 @@ use crate::problem::{ApiQuery, Problem};
     get,
     path = "/me",
     operation_id = "getMe",
+    security(("token" = []), ("oauth2" = [])),
     tag = "identity",
     responses(
         (status = 200, description = "The token's owner", body = Me),
@@ -33,24 +34,20 @@ pub async fn me(
     Extension(caller): Extension<Caller>,
 ) -> Result<Json<Me>, Problem> {
     let mut read = ops::begin_read(&pool, caller).await?;
-    let result = identity(&mut read.tx, &read.actor).await;
-    let (identity, permissions) = read.finish(result).await?;
-    Ok(Json(Me::new(caller.org_id, identity, permissions)))
+    let result = me_of(&mut read.tx, &read.actor).await;
+    Ok(Json(read.finish(result).await?))
 }
 
-async fn identity(
-    tx: &mut Tx,
-    actor: &Actor,
-) -> Result<
-    (
-        ops::api_tokens::TokenIdentity,
-        crate::models::own_permissions::OwnPermissions,
-    ),
-    OpError,
-> {
+async fn me_of(tx: &mut Tx, actor: &Actor) -> Result<Me, OpError> {
+    let org_id = actor.org_id();
+    if let Channel::OAuth { .. } = actor.channel() {
+        let identity = ops::oauth::tokens::identity(tx, actor).await?;
+        let permissions = ops::profile::permissions(tx, actor).await?;
+        return Ok(Me::from_oauth(org_id, identity, permissions));
+    }
     let identity = ops::api_tokens::identity(tx, actor).await?;
     let permissions = ops::profile::permissions(tx, actor).await?;
-    Ok((identity, permissions))
+    Ok(Me::new(org_id, identity, permissions))
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -66,6 +63,7 @@ pub struct TrackableQuery {
     get,
     path = "/me/trackable",
     operation_id = "listTrackable",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "identity",
     params(TrackableQuery),
     responses(
@@ -96,6 +94,7 @@ pub async fn trackable(
     get,
     path = "/me/timer",
     operation_id = "getRunningTimer",
+    security(("token" = []), ("oauth2" = ["time:read"])),
     tag = "identity",
     responses(
         (status = 200, description = "The running timer", body = TimeEntry),

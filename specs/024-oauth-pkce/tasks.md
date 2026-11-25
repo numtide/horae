@@ -142,16 +142,16 @@ ______________________________________________________________________
 
 **Independent test**: quickstart step 4 for `/api/v1`; the contract check passes.
 
-- [ ] T053 [US1] Dispatch on the prefix in `ApiCaller` (`crates/api/src/token.rs`): `horae_pat_` to `ops::api_tokens::authenticate`, `horae_oat_` to `ops::oauth::tokens::authenticate`
-- [ ] T054 [US1] Add the `oauth2` security scheme (authorization code flow, relative URLs, the three scopes) and the `{"oauth2": [scope]}` alternative to each operation's `security` in `crates/api/src/v1.rs` and the handler modules under `crates/api/src/v1/`, per `contracts/api-changes.md`
-- [ ] T055 [US1] Build the scope map from the generated document at start-up and add the route layer that answers 403 `insufficient_scope` with `WWW-Authenticate` for OAuth callers (research R-7), and `WWW-Authenticate: Bearer error="invalid_token"` on 401, in `crates/api/src/v1.rs` and `crates/api/src/problem.rs`. The same layer calls `Actor::unlock_scope` with the route's scope: an OAuth actor has no authority until it does (PR B)
-- [ ] T055a [US1] Stop reading the stored Administrator flag outside the actor where an OAuth caller can reach it: `ops::time::choices` ("may track on every project") and the Harvest API's `is_admin` queries in `crates/harvest-api/src/lib.rs` take `Actor::administrator()` instead, with a test that an Administrator's OAuth token sees neither (PR B review L9)
-- [ ] T056 [US1] Test that every token route declares an `oauth2` requirement or is on the allow-list, in `crates/api/src/v1/tests.rs`
-- [ ] T057 [US1] Add `kind` and `oauth` to `MeToken` in `crates/api/src/v1/types.rs` and fill them in `crates/api/src/v1/me.rs` (a read in `ops::oauth::tokens` for the app name and scopes); `ops::api_tokens::identity` answers not found for any channel but `Token`, so `/me` needs an OAuth arm (FR-061)
-- [ ] T058 [US2] Key the limiter by `grant_id` for `Channel::OAuth` in `crates/api/src/rate_limit.rs`, with a test that rotating access tokens does not reset the window
-- [ ] T059 [P] [US1] Per-scope tests over every v1 operation for a member, a manager and an administrator (SC-003), with responses validated against the schema, plus a personal access token on the same routes keeping the person's full authority (FR-064), in `crates/api/src/v1/oauth_tests.rs`
-- [ ] T060 [US1] Refresh `crates/api/openapi/v1.json` with `UPDATE_OPENAPI=1 cargo test -p horae-api openapi`; run the `api-compat` check and, if oasdiff flags the added security alternative, record the decision in research R-18 before touching `v1.baseline.json`
-- [ ] T061 Checkpoint: `nix flake check` passes; PR E opened
+- [X] T053 [US1] Dispatch on the prefix in `ApiCaller` (`crates/api/src/token.rs`): `horae_pat_` to `ops::api_tokens::authenticate`, `horae_oat_` to `ops::oauth::tokens::authenticate`
+- [X] T054 [US1] Add the `oauth2` security scheme (authorization code flow, relative URLs, the three scopes) and the `{"oauth2": [scope]}` alternative to each operation's `security` in `crates/api/src/v1.rs` and the handler modules under `crates/api/src/v1/`, per `contracts/api-changes.md`
+- [X] T055 [US1] Build the scope map from the generated document at start-up and add the route layer that answers 403 `insufficient_scope` with `WWW-Authenticate` for OAuth callers (research R-7), and `WWW-Authenticate: Bearer error="invalid_token"` on 401, in `crates/api/src/v1.rs` and `crates/api/src/problem.rs`. The same layer calls `Actor::unlock_scope` with the route's scope: an OAuth actor has no authority until it does (PR B)
+- [X] T055a [US1] Stop reading the stored Administrator flag outside the actor where an OAuth caller can reach it: `ops::time::choices` ("may track on every project") and the Harvest API's `is_admin` queries in `crates/harvest-api/src/lib.rs` take `Actor::administrator()` instead, with a test that an Administrator's OAuth token sees neither (PR B review L9)
+- [X] T056 [US1] Test that every token route declares an `oauth2` requirement or is on the allow-list, in `crates/api/src/v1/tests.rs`
+- [X] T057 [US1] Add `kind` and `oauth` to `MeToken` in `crates/api/src/v1/types.rs` and fill them in `crates/api/src/v1/me.rs` (a read in `ops::oauth::tokens` for the app name and scopes); `ops::api_tokens::identity` answers not found for any channel but `Token`, so `/me` needs an OAuth arm (FR-061)
+- [X] T058 [US2] Key the limiter by `grant_id` for `Channel::OAuth` in `crates/api/src/rate_limit.rs`, with a test that rotating access tokens does not reset the window
+- [X] T059 [P] [US1] Per-scope tests over every v1 operation for a member, a manager and an administrator (SC-003), with responses validated against the schema, plus a personal access token on the same routes keeping the person's full authority (FR-064), in `crates/api/src/v1/oauth_tests.rs`
+- [X] T060 [US1] Refresh `crates/api/openapi/v1.json` with `UPDATE_OPENAPI=1 cargo test -p horae-api openapi`; run the `api-compat` check and, if oasdiff flags the added security alternative, record the decision in research R-18 before touching `v1.baseline.json`
+- [X] T061 Checkpoint: `nix flake check` passes; PR E opened
 
 ______________________________________________________________________
 
