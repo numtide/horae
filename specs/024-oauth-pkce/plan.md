@@ -125,7 +125,7 @@ crates/server/src/ops/oauth/tokens.rs         # exchange_code, refresh, revoke_t
 crates/server/src/ops/oauth/grants.rs         # list_own, list_for_client, revoke
 crates/server/src/ops/oauth/audit.rs          # audit_log writes
 crates/server/src/ops/actor.rs                # Channel::OAuth, narrowed grants
-crates/server/src/config.rs                   # public URL, lifetimes, token endpoint limit
+crates/server/src/config.rs                   # public URL, lifetimes
 crates/api/src/oauth.rs                       # router: authorize, token, revoke, metadata
 crates/api/src/oauth/{authorize,token,revoke,metadata}.rs
 crates/api/src/token.rs                       # bearer: personal or OAuth token
@@ -154,7 +154,7 @@ pages and server functions in `horae`. New modules use the `foo.rs` + `foo/` lay
 | --- | --- | --- | --- |
 | A | Constitution amendment (text approved by the maintainer in D-3, applied verbatim) | | |
 | B | Core and storage: `horae-core` scopes, ceiling, redirect and PKCE rules; migration; `ops::oauth` clients and grants operations; `Channel::OAuth` and the narrowed actor; audit writes; configuration | | US3 (ops) |
-| C | Authorization server: `/oauth/authorize`, `return_to`, approval page and its server functions, `/oauth/token`, `/oauth/revoke`, metadata, frame headers, token endpoint limiter | A, B | US1, US2 |
+| C | Authorization server: `/oauth/authorize`, `return_to`, approval page and its server functions, `/oauth/token`, `/oauth/revoke`, metadata, frame headers | A, B | US1, US2 |
 | D | Administration: apps list, register, edit, secret, enable/disable, delete; per-app authorizations with revoke; built-in Android client | B | US3, US4 (admin) |
 | E | `/api/v1`: OAuth bearer, scope map from the document, `insufficient_scope`, `Me` addition, rate limit per grant, OpenAPI security scheme and snapshot | B (C for end-to-end tests) | US1, US2 |
 | F | My settings "Connected apps" page; Harvest API OAuth tokens with scopes | B, E | US4, US5 |

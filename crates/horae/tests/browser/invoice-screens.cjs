@@ -52,15 +52,20 @@ sql(`BEGIN;
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
 
-    // Loading: a skeleton under a live header, never a blank screen.
+    // Loading: skeleton rows under the table's own header, never a blank screen.
     let release;
     const held = new Promise(resolve => { release = resolve; });
     await page.route('**/api/list_invoices*', async route => { await held; await route.continue(); }, { times: 1 });
     await page.goto(`${base}/invoices`);
     await expect(header.getByRole('link', { name: 'New invoice', exact: true })).toBeVisible();
-    await expect(page.locator('.skeleton').getByRole('status')).toHaveText('Loading invoices…');
+    const invoiceTable = page.getByRole('region', { name: 'Invoices', exact: true });
+    await expect(invoiceTable.getByRole('columnheader', { name: 'Number', exact: true })).toBeVisible();
+    await expect(invoiceTable.locator('.table-skeleton').getByRole('status')).toHaveText('Loading invoices…');
     release();
-    await expect(page.locator('.skeleton')).toHaveCount(0);
+    await expect(page.locator('.table-skeleton')).toHaveCount(0);
+    // A long list keeps its header in view; invoices are ruled, not striped.
+    await expect(invoiceTable).toHaveClass(/table-sticky/);
+    await expect(invoiceTable).not.toHaveClass(/table-striped/);
 
     // Filters: search, status (Overdue is computed), period, then no match.
     const search = page.getByRole('searchbox', { name: 'Search by number or client', exact: true });
@@ -72,6 +77,8 @@ sql(`BEGIN;
     await expect(rows.first()).toContainText('SCREENS-2');
     await expect(rows.first().locator('.badge')).toHaveText('Overdue');
     await expect(rows.first().locator('td.text-danger')).toHaveText('31 Jan 2026');
+    // Dates are in the secondary colour; only an overdue due date is red.
+    await expect(rows.first().locator('td.text-secondary')).toHaveText('1 Jan 2026');
     // The filters are the URL: a reload, or a shared link, shows the same list.
     await expect(page).toHaveURL(/\/invoices\?status=overdue&q=SCREENS$/);
     await page.reload();
@@ -94,7 +101,9 @@ sql(`BEGIN;
     await page.getByRole('menuitem', { name: 'Last year', exact: true }).click();
     await expect(rows).toHaveCount(2);
     await search.fill('SCREENS-404');
-    await expect(page.getByRole('heading', { name: 'No invoices match these filters', exact: true })).toBeVisible();
+    // No match: one row spanning the columns, under the header that stays.
+    await expect(invoiceTable.locator('tr.table-state').getByRole('heading', { name: 'No invoices match these filters', exact: true })).toBeVisible();
+    await expect(invoiceTable.getByRole('columnheader', { name: 'Number', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
     await expect(search).toHaveValue('');
     await expect(page.locator('#invoices-period-filter-trigger')).toContainText('Any time');
@@ -117,18 +126,31 @@ sql(`BEGIN;
     await expect(header.locator('.btn-primary')).toHaveCount(0);
     console.log('PASS: rows open the invoice and the Primary is Mark as sent, Mark as paid or none by status');
 
-    // Uninvoiced: the client's unbilled time, with its own New invoice.
+    // Uninvoiced: the client's unbilled time; the row opens its New invoice.
     await page.goto(`${base}/invoices`);
     await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Uninvoiced', exact: true }).click();
     await expect(page).toHaveURL(/\/invoices\?tab=uninvoiced$/);
-    await expect(page.getByRole('columnheader', { name: 'Unbilled time', exact: true })).toBeVisible();
-    const unbilled = page.getByRole('row').filter({ hasText: clientName });
+    const uninvoicedTable = page.getByRole('region', { name: 'Uninvoiced', exact: true });
+    await expect(uninvoicedTable.getByRole('columnheader', { name: 'Unbilled time', exact: true })).toBeVisible();
+    const unbilled = uninvoicedTable.locator('tbody tr').filter({ hasText: clientName });
     await expect(unbilled).toContainText('2:00');
     await expect(unbilled).toContainText('EUR 200.00');
-    // Its last invoice that is not void: the draft, issued last.
-    await expect(unbilled.getByRole('link', { name: 'SCREENS-1', exact: true })).toBeVisible();
-    await unbilled.getByRole('link', { name: `New invoice for ${clientName}`, exact: true }).click();
+    await expect(unbilled).toHaveClass(/row-link/);
+    // No loose button: the client's name is the row's one link to a new invoice.
+    await expect(uninvoicedTable.locator('.btn')).toHaveCount(0);
+    // The footer adds up every client, per currency.
+    const total = uninvoicedTable.locator('tfoot tr');
+    await expect(total.getByRole('rowheader', { name: 'Total', exact: true })).toBeVisible();
+    await expect(total).toContainText('EUR');
+    // Its last invoice that is not void: the draft, issued last. Its own link
+    // sits above the row's and opens that invoice.
+    const lastInvoice = unbilled.getByRole('link', { name: 'SCREENS-1', exact: true });
+    await lastInvoice.click();
+    await expect(page).toHaveURL(`${base}/invoices/${draft}`);
+    await page.goBack();
+    await expect(unbilled.getByRole('link', { name: `New invoice for ${clientName}`, exact: true })).toBeVisible();
+    await unbilled.getByRole('cell').nth(1).click({ force: true });
     await expect(page).toHaveURL(`${base}/invoices/new/client/${client}`);
 
     // Step 2 starts the day after the last invoice, never at the open start.

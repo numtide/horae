@@ -14,7 +14,7 @@ Query parameters (RFC 6749 §4.1.1, RFC 7636 §4.3):
 | `response_type` | yes | `code` |
 | `client_id` | yes | an enabled client of the organization |
 | `redirect_uri` | yes | matches a registered URI (exact, or loopback with any port) |
-| `code_challenge` | yes, for public and confidential clients (D-7) | 43–128 characters base64url |
+| `code_challenge` | yes, for public and confidential clients (D-7) | 43 characters base64url, the length of every S256 challenge |
 | `code_challenge_method` | yes | `S256` |
 | `state` | recommended | echoed unchanged, at most 1,024 characters |
 | `scope` | no | space-separated; defaults to the client's scopes |
@@ -85,11 +85,13 @@ Headers: `Cache-Control: no-store`, `Pragma: no-cache`.
 | Case | Status | `error` |
 | --- | --- | --- |
 | Malformed body, missing parameter, verifier of the wrong shape | 400 | `invalid_request` |
-| Unknown client, bad secret, public client sending a secret, confidential client without one | 401 (with `WWW-Authenticate: Basic` when Basic was tried) | `invalid_client` |
+| Unknown client (including a `client_id` over 64 bytes), bad secret, public client sending a secret, confidential client without one | 401 (with `WWW-Authenticate: Basic` when Basic was tried) | `invalid_client` |
 | Code or refresh token unknown, expired, used, of another client; wrong `redirect_uri`; PKCE mismatch | 400 | `invalid_grant` |
 | Grant type other than the two | 400 | `unsupported_grant_type` |
 | Refresh asks for scopes outside the token's | 400 | `invalid_scope` |
-| Over the per-client limit | 429 + `Retry-After` | `slow_down` is not used; body `{"error":"invalid_request","error_description":"Too many requests"}` |
+
+Horae does not limit the rate of this endpoint or `/oauth/revoke`; the reverse proxy does
+(FR-081, `contracts/configuration.md`).
 
 A reused code or refresh token answers `invalid_grant` and revokes the grant (FR-031, FR-043).
 `error_description` never contains a credential.

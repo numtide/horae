@@ -29,6 +29,8 @@ environment:
   - "PGDATABASE=horae"
   - "DATABASE_URL=postgres://horae@127.0.0.1:5432/horae"
   - "DEV_LOGIN=1"
+  # The OAuth issuer, so apps can authorize against the local stack (spec 024).
+  - "HORAE_PUBLIC_URL=http://127.0.0.1:8080"
 
 processes:
   postgres:

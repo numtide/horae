@@ -13,7 +13,10 @@ pub(crate) enum Action {
     ClientDisabled,
     ClientDeleted,
     ClientSecretReplaced,
+    GrantApproved,
     GrantRevoked,
+    RefreshReused,
+    CodeReused,
 }
 
 impl Action {
@@ -25,13 +28,18 @@ impl Action {
             Self::ClientDisabled => "client_disabled",
             Self::ClientDeleted => "client_deleted",
             Self::ClientSecretReplaced => "client_secret_replaced",
+            Self::GrantApproved => "grant_approved",
             Self::GrantRevoked => "grant_revoked",
+            Self::RefreshReused => "refresh_reused",
+            Self::CodeReused => "code_reused",
         }
     }
 
     const fn entity_type(self) -> &'static str {
         match self {
-            Self::GrantRevoked => "oauth_grant",
+            Self::GrantApproved | Self::GrantRevoked | Self::RefreshReused | Self::CodeReused => {
+                "oauth_grant"
+            }
             _ => "oauth_client",
         }
     }
@@ -44,12 +52,26 @@ pub(crate) async fn record(
     entity_id: Uuid,
     data: serde_json::Value,
 ) -> Result<(), OpError> {
+    let person = actor.is_active().then(|| actor.id());
+    record_for(tx, actor.org_id(), person, action, entity_id, data).await
+}
+
+/// [`record`] for what an app or Horae did at the token or revocation
+/// endpoint, where no person acts.
+pub(crate) async fn record_for(
+    tx: &mut Tx,
+    org_id: Uuid,
+    person: Option<Uuid>,
+    action: Action,
+    entity_id: Uuid,
+    data: serde_json::Value,
+) -> Result<(), OpError> {
     sqlx::query!(
         "INSERT INTO audit_log (id, org_id, actor_user_id, action, entity_type, entity_id, data)
          VALUES ($1, $2, $3, $4, $5, $6, $7)",
         Uuid::now_v7(),
-        actor.org_id(),
-        actor.is_active().then(|| actor.id()),
+        org_id,
+        person,
         action.as_str(),
         action.entity_type(),
         entity_id,

@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.id, g.org_id, g.user_id, g.scopes, c.name AS app_name, c.client_id\n           FROM oauth_grants g\n           JOIN oauth_clients c ON c.id = g.client_id\n           WHERE g.client_id = ANY($2) AND g.revoked_at IS NULL\n             AND g.id IN (SELECT grant_id FROM oauth_access_tokens WHERE token_sha256 = $1\n                          UNION ALL\n                          SELECT grant_id FROM oauth_refresh_tokens WHERE token_sha256 = $1)\n           FOR UPDATE OF g",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "app_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "client_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ec49ce266d49ec4b8f3d4668cfa458b1d353078fce7c58cdfa2c80bb538ec387"
+}

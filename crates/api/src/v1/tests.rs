@@ -121,6 +121,7 @@ fn whole_router(pool: &PgPool) -> axum::Router {
             apple_touch_icon: String::new(),
         },
         v1: super::V1State::new(pool.clone(), &Default::default()),
+        oauth: None,
     })
 }
 

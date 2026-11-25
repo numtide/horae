@@ -220,7 +220,7 @@ fn a_bad_rate_limit_refuses_to_start() {
 fn oauth_settings_use_the_documented_variables() {
     for public_url in [
         "https://horae.example.test",
-        "https://example.test/horae",
+        "https://example.test:8443",
         "http://127.0.0.1:8080",
         "http://[::1]:8080",
     ] {
@@ -231,7 +231,6 @@ fn oauth_settings_use_the_documented_variables() {
                 ("HORAE_OAUTH_ACCESS_TTL", "600"),
                 ("HORAE_OAUTH_REFRESH_IDLE", "7200"),
                 ("HORAE_OAUTH_REFRESH_MAX", "7200"),
-                ("HORAE_OAUTH_TOKEN_RATE_LIMIT", "5/10"),
             ],
         );
     }
@@ -248,6 +247,7 @@ fn bad_oauth_settings_refuse_to_start() {
         ("HORAE_PUBLIC_URL", "https://horae.example.test?x=1"),
         ("HORAE_PUBLIC_URL", "https://horae.example.test#x"),
         ("HORAE_PUBLIC_URL", "https://user@horae.example.test"),
+        ("HORAE_PUBLIC_URL", "https://horae.example.test/horae"),
         ("HORAE_OAUTH_ACCESS_TTL", "59"),
         ("HORAE_OAUTH_ACCESS_TTL", "86401"),
         ("HORAE_OAUTH_ACCESS_TTL", "an hour"),
@@ -256,8 +256,6 @@ fn bad_oauth_settings_refuse_to_start() {
         ("HORAE_OAUTH_REFRESH_MAX", "3600"),
         ("HORAE_OAUTH_REFRESH_MAX", "315360001"),
         ("HORAE_OAUTH_REFRESH_MAX", "18446744073709551615"),
-        ("HORAE_OAUTH_TOKEN_RATE_LIMIT", "30"),
-        ("HORAE_OAUTH_TOKEN_RATE_LIMIT", "0/60"),
     ] {
         probe(
             "invalid-api",
@@ -317,8 +315,6 @@ fn environment_probe() {
             assert_eq!(config.oauth.access_ttl.as_secs(), 3600);
             assert_eq!(config.oauth.refresh_idle.as_secs(), 2_592_000);
             assert_eq!(config.oauth.refresh_max.as_secs(), 31_536_000);
-            assert_eq!(config.oauth.token_rate_limit.requests, 30);
-            assert_eq!(config.oauth.token_rate_limit.window.as_secs(), 60);
         }
         "oauth" => {
             let public_url = config.public_url.as_ref().unwrap();
@@ -329,8 +325,6 @@ fn environment_probe() {
             assert_eq!(config.oauth.access_ttl.as_secs(), 600);
             assert_eq!(config.oauth.refresh_idle.as_secs(), 7200);
             assert_eq!(config.oauth.refresh_max.as_secs(), 7200);
-            assert_eq!(config.oauth.token_rate_limit.requests, 5);
-            assert_eq!(config.oauth.token_rate_limit.window.as_secs(), 10);
         }
         "api-key-11" | "api-key-22" => {
             let byte = if mode == "api-key-11" { 0x11 } else { 0x22 };

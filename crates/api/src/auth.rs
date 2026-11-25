@@ -50,12 +50,16 @@ pub fn router(dev_login: bool, assets: LoginAssets) -> Router {
 /// Redirect unauthenticated page navigations to the login screen.
 ///
 /// Only plain page loads are guarded: `GET` requests that accept HTML and fall
-/// outside the public paths (`/auth/*`, `/api/*`, `/harvest/*`, `/v2/*`, `/health`,
-/// `/favicon.ico`).
+/// outside the public paths (`/auth/*`, `/api/*`, `/harvest/*`, `/v2/*`,
+/// `/.well-known/*`, `/health`, `/favicon.ico`).
 /// Assets, server-function calls, and the Harvest API pass through untouched, and
 /// excluding `/auth/*` keeps the login page reachable (no redirect loop). Data is
 /// already protected by the server functions' own 401s; this only fixes the UX so
 /// a signed-out visitor lands on login instead of a dead, empty app shell.
+///
+/// A signed-out load under `/oauth/` is remembered as the session's
+/// `return_to`, so sign-in comes back to the app's authorization request
+/// (spec 024 FR-023). Every other page still lands on `/` after sign-in.
 ///
 /// Must be layered *inside* the session layer so the session is populated.
 pub async fn login_redirect_guard(session: Session, request: Request, next: Next) -> Response {
@@ -64,6 +68,7 @@ pub async fn login_redirect_guard(session: Session, request: Request, next: Next
         || path.starts_with("/api/")
         || path.starts_with("/harvest/")
         || path.starts_with("/v2/")
+        || path.starts_with("/.well-known/")
         || path == "/health"
         || path == "/favicon.ico";
     let is_page = request.method() == Method::GET
@@ -74,10 +79,53 @@ pub async fn login_redirect_guard(session: Session, request: Request, next: Next
             .is_some_and(|accept| accept.contains("text/html"));
 
     if is_page && !public && session::get_session_user_id(&session).await.is_none() {
+        let target = request.uri().path_and_query().map(|target| target.as_str());
+        if let Some(target) = target.and_then(safe_return_to)
+            && let Err(error) = session.insert(RETURN_TO_KEY, target).await
+        {
+            tracing::warn!(%error, "Could not remember where sign-in returns to");
+        }
         return Redirect::to("/auth/login").into_response();
     }
     next.run(request).await
 }
+
+/// Where sign-in sends the person back to, set only for `/oauth/` pages.
+pub const RETURN_TO_KEY: &str = "return_to";
+
+/// `value` if it is a path on this host under `/oauth/`: no scheme, no
+/// `//`, no dot segments, plain or percent-encoded, and no backslash or
+/// control character, so it can never redirect elsewhere (research R-3).
+pub fn safe_return_to(value: &str) -> Option<&str> {
+    let path = value.split('?').next().unwrap_or_default();
+    let lower = path.to_ascii_lowercase();
+    let safe = path.starts_with("/oauth/")
+        && !path.contains("//")
+        && !path
+            .split('/')
+            .any(|segment| segment == "." || segment == "..")
+        && !["%2e", "%2f", "%5c"]
+            .iter()
+            .any(|encoded| lower.contains(encoded))
+        && !value
+            .chars()
+            .any(|c| c == '\\' || c.is_whitespace() || c.is_control());
+    safe.then_some(value)
+}
+
+/// The page to land on after a successful sign-in: the remembered `/oauth/`
+/// page, checked again, else `/`. The value is used once.
+pub async fn take_return_to(session: &Session) -> String {
+    let stored: Option<String> = session.remove(RETURN_TO_KEY).await.ok().flatten();
+    stored
+        .as_deref()
+        .and_then(safe_return_to)
+        .unwrap_or("/")
+        .to_owned()
+}
+
+#[cfg(test)]
+mod tests;
 
 /// Create and migrate the Postgres-backed session store, then return a
 /// `SessionManagerLayer` ready to be applied to the Axum router. `secure` marks
