@@ -60,6 +60,10 @@ pub fn Checkbox(
     #[props(default)] hint_id: Option<String>,
     #[props(default)] mixed: bool,
     #[props(default)] compact: bool,
+    /// Names a compact checkbox after another element, such as its row's
+    /// name cell, so the name is not written twice; `label` is then unused.
+    #[props(default)]
+    labelledby: Option<String>,
     #[props(default)] disabled: bool,
     #[props(default)] onclick: EventHandler<MouseEvent>,
 ) -> Element {
@@ -76,7 +80,8 @@ pub fn Checkbox(
             id: if !id.is_empty() { "{id}" },
             aria_invalid: error_id.as_ref().map(|_| "true"),
             aria_describedby: (!described_by.is_empty()).then_some(described_by),
-            aria_label: label.clone(),
+            aria_label: labelledby.is_none().then(|| label.clone()),
+            aria_labelledby: labelledby,
             "aria-checked": if mixed { "mixed" } else if checked { "true" } else { "false" },
             disabled,
             onclick: move |e| onclick.call(e),

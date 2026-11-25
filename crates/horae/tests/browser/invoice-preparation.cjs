@@ -139,11 +139,35 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     }
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore);
     assert.equal(Number(sql('SELECT count(*) FROM project_fee_occurrences')), feesBefore);
+    // Every project ticked: the Projects total adds up the rows, time and fees.
+    const projectTable = page.getByRole('region', { name: 'Projects', exact: true }).getByRole('table');
+    const projectsTotal = projectTable.locator('tfoot tr');
+    const cents = text => text === '—' ? 0 : Number(text.replace(/[^0-9]/g, ''));
+    const minutes = text => {
+      if (text === '—') return 0;
+      const [hours, mins] = text.split(':').map(Number);
+      return hours * 60 + mins;
+    };
+    const projectRows = await projectTable.locator('tbody tr').all();
+    const rowFees = await Promise.all(projectRows.map(async row => cents(await row.locator('td').last().innerText())));
+    const rowTime = await Promise.all(projectRows.map(async row => minutes(await row.locator('td').nth(-2).innerText())));
+    assert.ok(rowFees.filter(fee => fee > 0).length >= 2, `two projects with fees: ${rowFees}`);
+    assert.equal(cents(await projectsTotal.locator('td').last().innerText()), rowFees.reduce((a, b) => a + b, 0));
+    assert.equal(minutes(await projectsTotal.locator('td').nth(-2).innerText()), rowTime.reduce((a, b) => a + b, 0));
     await projectBox('All projects').click();
     await expect(page.getByText('Select at least one project.')).toBeVisible();
     await expect(generate).toBeDisabled();
+    // Nothing ticked: the total is empty, not zero.
+    await expect(projectsTotal.getByRole('rowheader', { name: 'Total', exact: true })).toBeVisible();
+    await expect(projectsTotal.locator('td').last()).toHaveText('—');
     await projectBox(project.name).click();
     await expect(generate).toBeEnabled();
+    // The row's checkbox takes its name from the project cell, not a copy of it.
+    await expect(projectBox(project.name)).not.toHaveAttribute('aria-label');
+    // One project ticked: the total is that project's fees.
+    const projectRow = projectTable.locator('tbody tr').filter({ has: page.getByRole('checkbox', { name: project.name, exact: true }) });
+    await expect(projectRow.locator('td').last()).toHaveText(/^EUR /);
+    await expect(projectsTotal.locator('td').last()).toHaveText(await projectRow.locator('td').last().innerText());
     // A failed preview keeps the form and offers to try again.
     await page.route('**/api/prepare_invoice*', route => route.abort());
     await page.getByLabel('PO number', { exact: true }).fill('Fee review retry');
