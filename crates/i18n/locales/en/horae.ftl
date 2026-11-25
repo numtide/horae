@@ -576,6 +576,10 @@ harvest-client-change-confirm = Save and disconnect
 harvest-run-invoices-forbidden = The Harvest user who connected Horae can't read invoices, which the import needs.
 harvest-run-invoices-forbidden-hint = Reconnect as a Harvest administrator, or ask one to let this user create and edit invoices.
 harvest-history-ready = Ready to import
+harvest-history-imported = Imported
+harvest-history-replaced = Replaced by a newer run
+# The link that opens a run: its date as shown, what the run was and its status.
+harvest-history-open = { $date }: { $run }, { $status }
 harvest-runs-more-failed = Could not load more runs. Try again.
 harvest-billing-title = Billed time
 harvest-billing-preview-title = Billed time it will mark

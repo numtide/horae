@@ -15,9 +15,10 @@ pub(super) fn RunList(limit: i64) -> Element {
         server_fns::list_harvest_import_jobs(None, Some(limit)).await
     }));
     let retry = use_callback(move |_| runs.restart());
-    // The pages "Load more" appended, and whether the last one was full.
+    // The pages "Load more" appended, and whether the last one read was full.
+    // `None` until the first click; after it, an empty page ends the list too.
     let mut older = use_signal(Vec::<JobStatus>::new);
-    let mut older_full = use_signal(|| true);
+    let mut older_full = use_signal(|| None::<bool>);
     let mut loading_more = use_signal(|| false);
     let mut more_failed = use_signal(|| false);
     let load_more = use_callback(move |last: Uuid| {
@@ -29,8 +30,18 @@ pub(super) fn RunList(limit: i64) -> Element {
         spawn(async move {
             match server_fns::list_harvest_import_jobs(Some(last), Some(limit)).await {
                 Ok(page) => {
-                    older_full.set(page.len() as i64 == limit);
+                    let full = page.len() as i64 == limit;
+                    // The button goes away with focus on it: move focus to the
+                    // first new run, or to the last one when none came back.
+                    let target = page.first().map_or(last, |job| job.id);
+                    older_full.set(Some(full));
                     older.write().extend(page);
+                    if !full {
+                        let target = serde_json::json!(format!("run-{target}"));
+                        document::eval(&format!(
+                            "requestAnimationFrame(() => document.querySelector(`[data-testid=\"${{{target}}}\"]`)?.focus());"
+                        ));
+                    }
                 }
                 Err(_) => more_failed.set(true),
             }
@@ -51,7 +62,7 @@ pub(super) fn RunList(limit: i64) -> Element {
             },
             Some(Ok(jobs)) => {
                 let older = older.read();
-                let full = if older.is_empty() { jobs.len() as i64 == limit } else { older_full() };
+                let full = older_full().unwrap_or(jobs.len() as i64 == limit);
                 let last = older.last().or(jobs.last()).map(|job| job.id);
                 let shown: Vec<JobStatus> = jobs.iter().chain(older.iter()).cloned().collect();
                 rsx! {

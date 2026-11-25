@@ -32,8 +32,15 @@ pub(super) fn HistoryTable(
                     for job in jobs.iter() {
                         tr { key: "{job.id}", class: "row-link",
                             td { class: "text-mono whitespace-nowrap",
-                                Link { to: Route::HarvestRun { id: job.id }, class: "text-secondary", "data-testid": "run-{job.id}",
-                                    time { datetime: job.created_at.to_rfc3339(), {job.created_at.format("%d %b %Y, %H:%M UTC").to_string()} }
+                                {
+                                    let date = job.created_at.format("%d %b %Y, %H:%M UTC").to_string();
+                                    // The row's one link: named by more than its date.
+                                    let name = tr.harvest_history_open(date.clone(), presentation::run_label(job), status(tr, job).1);
+                                    rsx! {
+                                        Link { to: Route::HarvestRun { id: job.id }, class: "text-secondary", "data-testid": "run-{job.id}", aria_label: name,
+                                            time { datetime: job.created_at.to_rfc3339(), "{date}" }
+                                        }
+                                    }
                                 }
                             }
                             td { class: "whitespace-nowrap",
@@ -88,8 +95,8 @@ fn status(tr: Tr, job: &JobStatus) -> (String, String) {
     let (variant, text) = match job.commit_availability {
         // Its row is the way to review and import it.
         CommitAvailability::Available => ("info", tr.harvest_history_ready()),
-        CommitAvailability::Committed => ("success", "Imported".into()),
-        CommitAvailability::NewerImport => ("neutral", "Replaced by a newer run".into()),
+        CommitAvailability::Committed => ("success", tr.harvest_history_imported()),
+        CommitAvailability::NewerImport => ("neutral", tr.harvest_history_replaced()),
         _ => {
             let variant = match job.status.as_str() {
                 "succeeded" => "success",

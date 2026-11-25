@@ -1352,6 +1352,26 @@ async fn run_history_loads_more_runs_under_the_newest_ones() {
 }
 
 #[tokio::test]
+async fn load_more_goes_away_when_the_next_page_is_empty() {
+    // Exactly one full page: the button shows, and the empty page after it ends the list.
+    let probe = Probe::default();
+    probe
+        .history
+        .borrow_mut()
+        .extend((1..=20).map(|id| job(id, "succeeded")));
+    let mut ui = Ui::at(&probe, "/admin/importers/harvest/runs");
+    assert!(ui.html().contains("load-more-runs"));
+    ui.click("load-more-runs");
+    let html = ui.html();
+    assert!(!html.contains("load-more-runs"), "{html}");
+    assert!(html.contains(&run_path(1)), "{html}");
+    assert_eq!(
+        &*probe.history_cursors.borrow(),
+        &[None, Some(Uuid::from_u128(20))]
+    );
+}
+
+#[tokio::test]
 async fn a_history_failure_can_be_tried_again() {
     let probe = Probe::default();
     *probe.history_error.borrow_mut() = Some("History unavailable".into());

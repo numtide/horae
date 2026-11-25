@@ -134,7 +134,8 @@ const screens = [
     for (const box of [expiry, create]) {
       assert.ok(Math.abs(box.y + box.height - (name.y + name.height)) <= 1, 'the row lines up on its controls');
     }
-    const list = page.getByRole('region', { name: 'Your tokens', exact: true }).locator(':is(.table-container, .empty-state)').first();
+    const list = page.getByRole('region', { name: 'Your tokens', exact: true });
+    await expect(list).toHaveClass(/table-container/);
     assert.ok(Math.abs(await width(list) - await width(main)) <= 1, 'the token list is full width');
 
     // Workspace and invoice settings draw their forms at the same limit.

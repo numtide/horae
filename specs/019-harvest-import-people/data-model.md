@@ -73,4 +73,5 @@ Invariants:
   each sample keeps its own row's reason.
 - `NewPerson` { email, name }
 - `Activation` = `Deactivated | Active`
-- `RunsCursor` = the `before=` query of the run history, absent for the newest page.
+- The run history pages by cursor in `list_harvest_import_jobs(before, limit)`; the Runs page
+  starts at the newest runs and "Load more" appends the next page in place.

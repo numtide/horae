@@ -218,7 +218,8 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                 }
             }
             section { class: "card p-0 overflow-hidden mt-6", aria_labelledby: "history-title",
-                div { class: "flex items-center justify-between gap-3 px-6 py-4",
+                // The flush table draws its own rule under the header; the other states need one.
+                div { class: if matches!(&*history.read(), Some(Ok(jobs)) if !jobs.is_empty()) { "flex items-center justify-between gap-3 px-6 py-4" } else { "flex items-center justify-between gap-3 px-6 py-4 border-b" },
                     h2 { id: "history-title", tabindex: "-1", class: "card-title m-0", "History" }
                     Link { to: Route::HarvestRuns {}, class: "text-sm", "data-testid": "all-runs", "All runs" }
                 }

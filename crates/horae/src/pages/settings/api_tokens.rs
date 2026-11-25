@@ -127,7 +127,8 @@ pub fn SettingsApiTokens() -> Element {
                 p { id: "api-token-error", class: "alert alert-danger mt-4 mb-0", role: "alert", "{message}" }
             }
         }
-        section { aria_label: tr.api_tokens_list_label(),
+        // The table names itself "Your tokens".
+        section {
             if let Some(message) = revoke_error() {
                 p { class: "alert alert-danger", role: "alert", "{message}" }
             }
@@ -242,8 +243,8 @@ pub(crate) fn TokenTable(
             on_confirm: revoke, on_dismiss: keep,
             p { {tr.api_tokens_revoke_body()} }
         }
-        // My settings already names the section around the table.
-        DataTable { label: show_owner.then(|| tr.api_tokens_admin_list_label()),
+        // Labelled, the scroller is a region a keyboard can scroll.
+        DataTable { label: if show_owner { tr.api_tokens_admin_list_label() } else { tr.api_tokens_list_label() },
             busy: pending && tokens.read().is_some(),
             table {
                 thead {
