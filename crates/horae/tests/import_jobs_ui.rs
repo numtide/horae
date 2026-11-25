@@ -77,9 +77,14 @@ pub mod button;
 pub mod card;
 #[path = "../src/components/confirm_dialog.rs"]
 pub mod confirm_dialog;
+#[allow(dead_code)]
+#[path = "../src/components/table.rs"]
+pub mod table;
 
 mod components {
-    pub use crate::{back_link, card, confirm_dialog, icons, menu, page_header, screen_state};
+    pub use crate::{
+        back_link, card, confirm_dialog, icons, menu, page_header, screen_state, table,
+    };
 }
 
 /// The importer routes, as the app declares them.
@@ -1324,7 +1329,7 @@ async fn the_overview_shows_the_latest_five_runs() {
 }
 
 #[tokio::test]
-async fn run_history_pages_back_and_returns_to_the_newest_runs() {
+async fn run_history_loads_more_runs_under_the_newest_ones() {
     let probe = Probe::default();
     probe
         .history
@@ -1332,14 +1337,15 @@ async fn run_history_pages_back_and_returns_to_the_newest_runs() {
         .extend((1..=24).map(|id| job(id, "succeeded")));
     let mut ui = Ui::at(&probe, "/admin/importers/harvest/runs");
     assert!(!ui.html().contains(&run_path(24)));
-    ui.click("older-history");
-    assert!(ui.html().contains(&run_path(24)), "{}", ui.html());
-    assert!(!ui.html().contains(&run_path(1)));
-    ui.click("newer-history");
-    assert!(ui.html().contains(&run_path(1)));
+    ui.click("load-more-runs");
+    let html = ui.html();
+    assert!(html.contains(&run_path(1)), "{html}");
+    assert!(html.contains(&run_path(24)), "{html}");
+    // The second page was short, so there is nothing more to load.
+    assert!(!html.contains("load-more-runs"), "{html}");
     assert_eq!(
         &*probe.history_cursors.borrow(),
-        &[None, Some(Uuid::from_u128(20)), None]
+        &[None, Some(Uuid::from_u128(20))]
     );
 }
 

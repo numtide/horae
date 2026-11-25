@@ -50,6 +50,7 @@ action-edit = Edit
 action-archive = Archive
 action-restore = Restore
 action-restoring = Restoring…
+action-load-more = Load more
 
 ## Common words
 
@@ -207,6 +208,46 @@ api-tokens-empty = No tokens yet
 api-tokens-empty-hint = Create a token to let a script or another app use { -brand } on your behalf.
 api-tokens-revoke-title = Revoke “{ $name }”?
 api-tokens-revoke-body = Anything that uses this token loses access at once. A revoked token cannot be restored.
+api-tokens-revoke = Revoke
+api-tokens-revoke-action = Revoke…
+api-tokens-revoke-failed = Could not revoke the token. Try again.
+api-tokens-loading = Loading your tokens…
+api-tokens-what = your tokens
+api-tokens-created = Token “{ $name }” created
+api-tokens-created-hint = Copy it now. { -brand } keeps no copy and will not show it again.
+api-tokens-done = Done
+api-tokens-name = Name
+api-tokens-expires = Expires
+api-tokens-create = Create token
+api-tokens-creating = Creating…
+api-tokens-create-failed = Could not create the token. Try again.
+api-tokens-expiry-days = { $days ->
+    [one] { $days } day
+   *[other] { $days } days
+}
+api-tokens-expiry-year = 1 year
+api-tokens-expiry-never = No expiry
+api-tokens-harvest-account = Clients of the Harvest API v2 work with these tokens at /harvest/v2. When they ask for an account ID, use <id>{ $id }</id>.
+api-tokens-secret-label = New token
+api-tokens-copy = Copy
+api-tokens-copy-label = Copy token
+api-tokens-copied = Copied
+api-tokens-copied-label = Token copied
+api-tokens-column-name = Name
+api-tokens-column-owner = Owner
+api-tokens-column-created = Created
+api-tokens-column-expires = Expires
+api-tokens-column-last-used = Last used
+api-tokens-column-status = Status
+api-tokens-never = Never
+api-tokens-status-active = Active
+api-tokens-status-expired = Expired
+api-tokens-status-revoked = Revoked
+api-tokens-admin-list-label = Workspace tokens
+api-tokens-admin-intro = Every token people in this workspace have created. Revoking one stops it working at once; its owner can create another.
+api-tokens-admin-loading = Loading tokens…
+api-tokens-admin-what = the tokens
+api-tokens-admin-empty-hint = Tokens people create in My settings appear here, where you can revoke them.
 
 ## Tasks
 
@@ -505,6 +546,8 @@ harvest-client-change-confirm = Save and disconnect
 
 harvest-run-invoices-forbidden = The Harvest user who connected Horae can't read invoices, which the import needs.
 harvest-run-invoices-forbidden-hint = Reconnect as a Harvest administrator, or ask one to let this user create and edit invoices.
+harvest-history-ready = Ready to import
+harvest-runs-more-failed = Could not load more runs. Try again.
 harvest-billing-title = Billed time
 harvest-billing-preview-title = Billed time it will mark
 harvest-billing-linked = Linked to an imported invoice
@@ -614,7 +657,6 @@ audit-time-zone = Times in your time zone ({ $zone }).
 audit-loading = Loading permission changes…
 audit-list-label = Permission changes
 audit-failed = Could not load permission changes
-audit-load-more = Load more
 audit-kind-all = All changes
 audit-kind-person = Person
 audit-kind-profile = Profile

@@ -219,7 +219,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                 }
             }
             section { class: "card p-0 overflow-hidden mt-6", aria_labelledby: "history-title",
-                div { class: "flex items-center justify-between gap-3 px-6 py-4 border-b",
+                div { class: "flex items-center justify-between gap-3 px-6 py-4",
                     h2 { id: "history-title", tabindex: "-1", class: "card-title m-0", "History" }
                     Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "all-runs", "All runs" }
                 }
@@ -234,7 +234,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     Some(Ok(jobs)) if jobs.is_empty() => rsx! {
                         EmptyState { icon: "import", title: "No runs yet", body: "Start a preview to create one.", inset: true }
                     },
-                    Some(Ok(jobs)) => rsx! { HistoryTable { jobs: jobs.clone() } },
+                    Some(Ok(jobs)) => rsx! { HistoryTable { jobs: jobs.clone(), flush: true } },
                 }
             }
         }

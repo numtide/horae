@@ -153,7 +153,7 @@ pub(super) fn MissingPersonRow(
                     div { class: "text-xs text-faint", "{presentation::person_fix(person.kind)}" }
                 }
             }
-            td { class: "text-mono whitespace-nowrap", "{person.entries}" }
+            td { class: "text-right text-mono whitespace-nowrap", "{person.entries}" }
         }
     }
 }

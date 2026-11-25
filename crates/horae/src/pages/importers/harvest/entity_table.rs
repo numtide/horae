@@ -3,6 +3,7 @@ use horae_core::importers::harvest::types::{EntityType, ImportMode, ImportReport
 
 use super::{entity_label, presentation};
 use crate::components::card::Card;
+use crate::components::table::DataTable;
 
 /// Per entity, what a run creates, updates, finds already in Horae and skips.
 #[component]
@@ -14,7 +15,7 @@ pub(super) fn EntityTable(report: ImportReport, partial: bool) -> Element {
     };
     rsx! {
         Card { title, id: "entities-title", flush: true, class: "mt-6",
-            div { class: "overflow-x-auto border-t",
+            DataTable { flush: true, compact: true,
                 table {
                     thead {
                         tr {
@@ -31,7 +32,7 @@ pub(super) fn EntityTable(report: ImportReport, partial: bool) -> Element {
                                 let counts = report.summary.counts(entity);
                                 rsx! {
                                     tr { key: "{entity.as_str()}",
-                                        td { "{entity_label(entity)}" }
+                                        th { scope: "row", class: "font-normal", "{entity_label(entity)}" }
                                         td { class: "text-right text-mono", "{presentation::count(counts.created)}" }
                                         td { class: "text-right text-mono", "{presentation::count(counts.updated)}" }
                                         td { class: "text-right text-mono text-secondary", "{presentation::count(counts.skipped)}" }

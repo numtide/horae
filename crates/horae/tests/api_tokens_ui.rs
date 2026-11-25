@@ -14,6 +14,8 @@ use dioxus_html::{SerializedFormData, SerializedHtmlEventConverter, SerializedMo
 use futures_util::FutureExt;
 use uuid::Uuid;
 
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[path = "../src/components/button.rs"]
 pub mod button;
 #[path = "../src/components/confirm_dialog.rs"]
@@ -26,6 +28,8 @@ pub mod form;
 mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
+#[path = "../src/components/menu.rs"]
+pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 #[path = "../src/components/page_header.rs"]
@@ -33,8 +37,11 @@ pub mod page_header;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
+#[allow(dead_code)]
+#[path = "../src/components/table.rs"]
+pub mod table;
 mod components {
-    pub use super::{confirm_dialog, form, icons, page_header, screen_state};
+    pub use super::{badge, confirm_dialog, form, icons, menu, page_header, screen_state, table};
 }
 mod models {
     pub use horae_types::api_tokens;

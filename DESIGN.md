@@ -169,7 +169,7 @@ Status:
 | `Radio` | `controls.rs` | Forms | kept, not yet used (0 calls, 6 native radios in New Project) |
 | `Toggle` | `controls.rs` | Forms | kept, not yet used (0 calls) |
 | `Segmented` | `controls.rs` | Forms | underused (2 calls, 5 hand-written groups) |
-| `DataTable` | `table.rs` | Data display | in use (13; Clients, Client detail, Tasks, Projects, API tokens and the Harvest importer still frame their tables by hand) |
+| `DataTable` | `table.rs` | Data display | in use (21; Clients, Client detail, Tasks and Projects still frame their tables by hand) |
 | `TableSkeleton`, `TableMessage` | `table.rs` | Data display | in use (Plugins) |
 | `NameCell` | `table.rs` | Data display | in use (Client detail) |
 | `Badge` | `badge.rs` | Data display | in use (15; 14 hand-written `badge` spans) |
@@ -328,7 +328,7 @@ States live inside the frame, under the real header, so the page does not jump: 
 
 A record's actions (edit, archive, permissions, rates…) go in one «⋮» menu per row (`RowActions`), a 32px icon button in the last column, the same way on every table, rather than as loose buttons that wrap at narrow widths. One exception: Approvals keeps "Approve" and "Reopen" inline in each row, as Secondary `btn-sm` buttons, because approving row by row is the screen's job and a menu would add a click to every approval. The menu shows only the actions the viewer may take on that row; when none remain, the row has no menu. Its trigger is named after the record ("Actions for Acme Corp"), and while an action chosen from it is still running the trigger is `aria-busy` and dimmed, since the closed menu cannot say so. Actions on several selected rows go in the `BulkBar`, never in the page header. Inline row buttons are named after their row the same way ("Approve Ana's week", "Edit Acme Website Redesign, Design"). A row whose only action is opening its record has no menu and no "View" button: the record's link covers the whole row (`tr.row-link`), as Invoices does. See [Layout](#layout) for column widths and mobile behaviour.
 
-**Catalogues load whole; histories load more.** Clients, Projects, Tasks and People load every record at once and narrow it with the `FilterBar` and its search, so finding a record never means paging through 25 at a time. Only histories (the audit log, Harvest import runs, the detailed report) page, with a single "Load more" at the end of the list that appears only when there is more. Never Previous/Next, and never a pager under an empty state or an error. Today Tasks pages by 25 with Previous/Next, and Harvest runs use an "Older runs" link. *Pending code:* the Tasks PR for Tasks, and PR-C for Harvest runs and the scoped detailed report.
+**Catalogues load whole; histories load more.** Clients, Projects, Tasks and People load every record at once and narrow it with the `FilterBar` and its search, so finding a record never means paging through 25 at a time. Only histories (the audit log, Harvest import runs, the detailed report) page, with a single "Load more" at the end of the list that appears only when there is more. Never Previous/Next, and never a pager under an empty state or an error. Today Tasks pages by 25 with Previous/Next. *Pending code:* the Tasks PR for Tasks, and PR-C for the scoped detailed report.
 
 ### Forms (`src/components/form.rs`)
 
