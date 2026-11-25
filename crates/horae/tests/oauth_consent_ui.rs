@@ -225,8 +225,14 @@ async fn an_expired_request_offers_no_action() {
     assert!(html.contains("Nothing was shared"), "{html}");
     assert!(!html.contains("consent-allow"), "{html}");
     assert!(!html.contains("consent-deny"), "{html}");
-    // Who is signed in comes with the request, so an expired one names no one.
+    // Who is signed in comes with the request, so an expired one names no
+    // one, but signing out is still offered.
     assert!(!html.contains("Signed in as"), "{html}");
+    assert!(html.contains("Not you? Sign out"), "{html}");
+    assert!(
+        html.contains(r#"name="return_to" value="/oauth/consent?request=req-123""#),
+        "{html}"
+    );
 }
 
 #[tokio::test]

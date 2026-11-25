@@ -165,14 +165,15 @@ pub fn OAuthConsent(request: String) -> Element {
                 span { class: "consent-brand-name", {tr.oauth_consent_brand()} }
             }
             {card}
-            if let Some(account) = account {
-                // Signing out keeps this request for whoever signs in next.
-                form { class: "consent-account", method: "post", action: "/auth/logout",
-                    input { r#type: "hidden", name: "return_to", value: "/oauth/consent?request={request}" }
+            // Signing out keeps this request for whoever signs in next. The
+            // name comes with the request, so the other states offer only the link.
+            form { class: "consent-account", method: "post", action: "/auth/logout",
+                input { r#type: "hidden", name: "return_to", value: "/oauth/consent?request={request}" }
+                if let Some(account) = account {
                     span { class: "consent-person", {account} }
-                    button { id: "consent-sign-out", r#type: "submit", class: "consent-sign-out",
-                        {tr.oauth_consent_sign_out()}
-                    }
+                }
+                button { id: "consent-sign-out", r#type: "submit", class: "consent-sign-out",
+                    {tr.oauth_consent_sign_out()}
                 }
             }
         }
