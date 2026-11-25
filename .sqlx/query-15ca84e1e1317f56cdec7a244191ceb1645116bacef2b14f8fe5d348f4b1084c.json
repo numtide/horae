@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET active = false\n             WHERE id = (SELECT user_id FROM oauth_grants WHERE id = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "15ca84e1e1317f56cdec7a244191ceb1645116bacef2b14f8fe5d348f4b1084c"
+}

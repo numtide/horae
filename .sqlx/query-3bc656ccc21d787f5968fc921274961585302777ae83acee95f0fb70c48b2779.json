@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_clients SET enabled = false\n             WHERE id = (SELECT client_id FROM oauth_grants WHERE id = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3bc656ccc21d787f5968fc921274961585302777ae83acee95f0fb70c48b2779"
+}

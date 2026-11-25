@@ -1257,6 +1257,62 @@ tbody tr.table-state td { padding: 0; }
   box-shadow: 0 24px 60px -34px rgba(0, 0, 0, 0.7);
 }
 
+/* OAuth approval page (spec 024): outside the shell, like sign-in. */
+.consent-page {
+  min-height: 100vh; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-5); padding: var(--space-8) var(--space-4);
+  background: var(--color-bg); color: var(--color-text);
+}
+.consent-brand { display: flex; align-items: center; gap: var(--space-2); }
+.consent-brand-name {
+  font-family: var(--font-family-display); font-size: var(--font-size-2xl); font-weight: 600;
+  letter-spacing: -0.01em; color: var(--color-text-strong);
+}
+.consent-page > .consent-card, .consent-page > .empty-state { width: 100%; max-width: 440px; box-sizing: border-box; }
+.consent-card {
+  padding: var(--space-6);
+  background: var(--color-bg-secondary); border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+.consent-title {
+  margin: 0; font-family: var(--font-family-display); font-size: var(--font-size-2xl);
+  font-weight: 600; line-height: 1.2; color: var(--color-text-strong); overflow-wrap: anywhere;
+}
+.consent-title-sm { font-size: var(--font-size-xl); }
+.consent-origin { margin-top: var(--space-2); display: flex; }
+.consent-lead { margin: var(--space-5) 0 var(--space-3); color: var(--color-text-secondary); line-height: var(--line-height-copy); }
+.consent-card > .consent-lead:last-child { margin-bottom: 0; margin-top: var(--space-3); }
+.consent-scopes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.consent-scope { display: flex; gap: var(--space-3); align-items: flex-start; line-height: var(--line-height-copy); }
+.consent-scope > span:last-child { padding-top: 4px; }
+.consent-scope-icon {
+  flex: none; width: 28px; height: 28px; border-radius: var(--radius-btn);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-bg-tertiary); border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+.consent-scope-icon svg { width: 15px; height: 15px; }
+.consent-return { margin: var(--space-5) 0 0; font-size: var(--font-size-sm); color: var(--color-text-subtle); line-height: var(--line-height-copy); }
+.consent-target { font-family: var(--font-family-mono); color: var(--color-text); overflow-wrap: anywhere; }
+.consent-error { margin: var(--space-4) 0 0; font-size: var(--font-size-sm); color: var(--color-danger-fg); }
+.consent-actions { display: flex; gap: var(--space-2); margin-top: var(--space-5); }
+.consent-actions > * { flex: 1; justify-content: center; }
+.consent-account {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: var(--space-2);
+  margin: 0; font-size: var(--font-size-xs); color: var(--color-text-subtle);
+}
+.consent-person::after { content: "·"; margin-left: var(--space-2); }
+.consent-sign-out {
+  padding: 0; border: 0; background: none; font: inherit; cursor: pointer;
+  color: var(--color-text-secondary); text-decoration: underline;
+}
+.consent-sign-out:hover { color: var(--color-text); }
+.consent-skeleton { display: flex; flex-direction: column; gap: 14px; }
+.consent-skeleton-title { width: 85%; height: 20px; }
+.consent-skeleton .consent-actions { margin-top: var(--space-3); }
+.consent-skeleton-button { height: 42px; border-radius: var(--radius-btn); }
+
 /* Empty, error and loading states (DESIGN.md, Empty, loading and error states).
    EmptyState and ErrorState share this card; only the icon tile's tint differs. */
 .empty-state {

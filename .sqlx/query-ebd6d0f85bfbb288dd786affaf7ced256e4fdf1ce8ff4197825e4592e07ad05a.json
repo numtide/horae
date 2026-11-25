@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT last_used_at AS \"last_used_at: chrono::DateTime<chrono::Utc>\"\n           FROM oauth_grants WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_used_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ebd6d0f85bfbb288dd786affaf7ced256e4fdf1ce8ff4197825e4592e07ad05a"
+}

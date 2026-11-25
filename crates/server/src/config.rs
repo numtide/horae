@@ -199,11 +199,16 @@ impl PublicUrl {
             url.query().is_none() && url.fragment().is_none(),
             "a query or fragment is not allowed"
         );
+        // The OAuth endpoints and the RFC 8414 metadata are served at the
+        // root, so an issuer with a path would advertise addresses Horae
+        // does not answer.
+        anyhow::ensure!(
+            url.path() == "/",
+            "serve Horae at the root of its host: remove the path {}",
+            url.path()
+        );
         // The parser always gives a bare host the path `/`, which the issuer omits.
-        let canonical = match url.path() {
-            "/" => url.as_str().trim_end_matches('/'),
-            _ => url.as_str(),
-        };
+        let canonical = url.as_str().trim_end_matches('/');
         anyhow::ensure!(value == canonical, "write it as {canonical}");
         anyhow::ensure!(!value.ends_with('/'), "remove the trailing slash");
         Ok(Self(value.to_owned()))
@@ -222,8 +227,7 @@ impl PublicUrl {
     }
 }
 
-/// Lifetimes of OAuth credentials and the token endpoint's limit (spec 024
-/// D-2, contracts/configuration.md).
+/// Lifetimes of OAuth credentials (spec 024 D-2, contracts/configuration.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OAuthConfig {
     pub access_ttl: std::time::Duration,
@@ -231,8 +235,6 @@ pub struct OAuthConfig {
     pub refresh_idle: std::time::Duration,
     /// No refresh token outlives its authorization's approval by more.
     pub refresh_max: std::time::Duration,
-    /// Requests per client to the token endpoint.
-    pub token_rate_limit: RateLimit,
 }
 
 const HOUR: u64 = 3600;
@@ -244,10 +246,6 @@ impl Default for OAuthConfig {
             access_ttl: std::time::Duration::from_secs(HOUR),
             refresh_idle: std::time::Duration::from_secs(30 * DAY),
             refresh_max: std::time::Duration::from_secs(365 * DAY),
-            token_rate_limit: RateLimit {
-                requests: 30,
-                window: std::time::Duration::from_secs(60),
-            },
         }
     }
 }
@@ -286,10 +284,6 @@ impl OAuthConfig {
             access_ttl: seconds_from_env("HORAE_OAUTH_ACCESS_TTL", default.access_ttl)?,
             refresh_idle: seconds_from_env("HORAE_OAUTH_REFRESH_IDLE", default.refresh_idle)?,
             refresh_max: seconds_from_env("HORAE_OAUTH_REFRESH_MAX", default.refresh_max)?,
-            token_rate_limit: RateLimit::from_env(
-                "HORAE_OAUTH_TOKEN_RATE_LIMIT",
-                default.token_rate_limit,
-            )?,
         }
         .validate()
     }
@@ -699,7 +693,7 @@ mod tests {
         use super::PublicUrl;
         for value in [
             "https://horae.example.test",
-            "https://horae.example.test:8443/horae",
+            "https://horae.example.test:8443",
             "http://127.0.0.1:8080",
             "http://[::1]:8080",
         ] {
@@ -711,13 +705,20 @@ mod tests {
                 "https://horae.example.test:443",
                 "https://horae.example.test",
             ),
-            (
-                "https://horae.example.test/a/../b",
-                "https://horae.example.test/b",
-            ),
         ] {
             let error = PublicUrl::parse(value).unwrap_err().to_string();
             assert_eq!(error, format!("write it as {canonical}"), "{value}");
+        }
+        for (value, path) in [
+            ("https://horae.example.test/horae", "/horae"),
+            ("https://horae.example.test/a/../b", "/b"),
+        ] {
+            let error = PublicUrl::parse(value).unwrap_err().to_string();
+            assert_eq!(
+                error,
+                format!("serve Horae at the root of its host: remove the path {path}"),
+                "{value}"
+            );
         }
         for value in [
             "https://horae.exam\tple.test",

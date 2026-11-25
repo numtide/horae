@@ -63,8 +63,10 @@ chrono-tz = "0.10"
 # Personal access tokens: the stored SHA-256 digest and the base64url secret.
 sha2 = "0.10"
 base64 = "0.22"
-# HORAE_PUBLIC_URL, the OAuth issuer.
+# HORAE_PUBLIC_URL, the OAuth issuer, and the authorization responses.
 url = "2"
+# Client secrets compared by digest in constant time.
+subtle = "2"
 
 [dev-dependencies]
 horae-harvest = { path = "../harvest", features = ["test-support"] }

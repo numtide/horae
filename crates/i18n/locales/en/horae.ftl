@@ -208,6 +208,35 @@ api-tokens-empty-hint = Create a token to let a script or another app use { -bra
 api-tokens-revoke-title = Revoke “{ $name }”?
 api-tokens-revoke-body = Anything that uses this token loses access at once. A revoked token cannot be restored.
 
+## OAuth approval
+
+oauth-error-title = This app can’t connect to { -brand }
+oauth-error-missing-client = The request doesn’t name an app.
+oauth-error-unknown-client = This app isn’t registered with this { -brand } workspace.
+oauth-error-disabled-client = An administrator has turned this app off.
+oauth-error-missing-redirect = The request doesn’t say where to send you back.
+oauth-error-unregistered-redirect = The app asked to send you back to an address it didn’t register.
+oauth-error-hint = Go back to the app and try again. If this keeps happening, ask your administrator.
+oauth-consent-brand = { -brand }
+oauth-consent-title = { $app } wants to use your { -brand } account
+oauth-consent-built-in = { -brand }’s own app
+oauth-consent-registered = Registered by your workspace
+oauth-consent-can = It will be able to:
+oauth-scope-time-read = See your time entries and timers
+oauth-scope-time-write = Add, change and delete your time entries and timers
+oauth-scope-catalog-read = See the clients, projects and tasks you work on
+oauth-consent-return = After you allow it, { -brand } sends you back to <target>{ $target }</target>.
+oauth-consent-allow = Allow
+oauth-consent-deny = Deny
+oauth-consent-signed-in = Signed in as { $name } · { $organization }
+oauth-consent-sign-out = Not you? Sign out
+oauth-consent-loading = Loading the request…
+oauth-consent-expired-title = This request has expired
+oauth-consent-expired-body = Go back to the app and start again. Nothing was shared.
+oauth-consent-failed = Could not load this request
+oauth-consent-failed-body = Check your connection and try again.
+oauth-consent-send-failed = Could not finish. Try again.
+
 ## Tasks
 
 tasks-load-failed = Could not load tasks

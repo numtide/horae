@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oauth_access_tokens (id, org_id, grant_id, token_sha256, scopes, expires_at)\n         VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bytea",
+        "TextArray",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f6c3f170ef51b72e9fe25637d6f8fe4e5509214535e243348dbf25c9db3b9285"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_grants SET revoked_at = now(), revoke_reason = 'client' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b1890429a267d40c0fdb4a3a6d7439b1d5547eb3bc8a8b69ffb53e14833b962"
+}
