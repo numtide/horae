@@ -90,7 +90,8 @@ let restoreSeededStates = () => {};
     await expect(items).toHaveText(['View timesheet', 'Permissions…', 'Rates…', 'Permission history']);
     await items.filter({ hasText: 'View timesheet' }).click();
     await page.waitForURL(url => url.pathname.startsWith('/timesheet/week/') && url.searchParams.get('user') === actor.id);
-    await page.goto(`${base}/people`);
+    // The server renders Add person; it opens the dialog only once the client has hydrated.
+    await page.goto(`${base}/people`, { waitUntil: 'networkidle' });
 
     // Add person is a dialog with the profile as radio cards.
     await page.getByRole('button', { name: 'Add person', exact: true }).click();
