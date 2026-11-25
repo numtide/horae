@@ -13,6 +13,7 @@ use crate::models::scoped_time::TimesheetTrackingOption;
 use crate::models::time_entry::TimeEntry as StoredEntry;
 use crate::ops::api_tokens::TokenIdentity;
 use crate::ops::clients::ClientRecord;
+use crate::ops::oauth::tokens::OAuthIdentity;
 use crate::ops::people::PersonRecord;
 use crate::ops::projects::reads::ProjectRecord;
 use crate::ops::projects::task_catalog::TaskRecord;
@@ -64,12 +65,62 @@ pub struct MeOrganization {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct MeToken {
+    /// The personal access token, or the OAuth access token.
     pub id: Uuid,
+    /// The personal access token's name, or the app's name.
     pub name: String,
     pub expires_at: Option<DateTime<Utc>>,
+    pub kind: TokenKind,
+    /// The app and its granted scopes; `null` for a personal access token.
+    #[schema(inline)]
+    pub oauth: Option<MeOAuth>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TokenKind {
+    Personal,
+    #[serde(rename = "oauth")]
+    OAuth,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct MeOAuth {
+    /// The app's public client id.
+    pub client_id: String,
+    pub app_name: String,
+    pub scopes: Vec<String>,
 }
 
 impl Me {
+    /// Who an app's OAuth access token acts as.
+    pub fn from_oauth(org_id: Uuid, identity: OAuthIdentity, permissions: OwnPermissions) -> Self {
+        Self {
+            person: MePerson {
+                id: identity.person_id,
+                name: identity.person_name,
+                email: identity.person_email,
+            },
+            organization: MeOrganization {
+                id: org_id,
+                name: identity.organization_name,
+            },
+            administrator: permissions.is_administrator,
+            profile: permissions.profile,
+            token: MeToken {
+                id: identity.token_id,
+                name: identity.app_name.clone(),
+                expires_at: Some(identity.expires_at),
+                kind: TokenKind::OAuth,
+                oauth: Some(MeOAuth {
+                    client_id: identity.client_id,
+                    app_name: identity.app_name,
+                    scopes: identity.scopes,
+                }),
+            },
+        }
+    }
+
     pub fn new(org_id: Uuid, identity: TokenIdentity, permissions: OwnPermissions) -> Self {
         let token = identity.token;
         Self {
@@ -88,6 +139,8 @@ impl Me {
                 id: token.id,
                 name: token.name,
                 expires_at: token.expires_at,
+                kind: TokenKind::Personal,
+                oauth: None,
             },
         }
     }

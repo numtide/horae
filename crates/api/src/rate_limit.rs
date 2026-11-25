@@ -1,5 +1,5 @@
-//! The per-token request limit (research R-7): a fixed window per token held
-//! in memory, which is enough while Horae runs as one process. Every API that
+//! The per-token request limit (research R-7): a fixed window per personal
+//! token, or per OAuth grant, held in memory, which is enough while Horae runs as one process. Every API that
 //! authenticates with tokens shares one [`RateLimiter`], so a token's requests
 //! count together wherever they go.
 
@@ -75,13 +75,16 @@ pub async fn limit(
     request: Request,
     next: Next,
 ) -> Response {
-    let token = match request.extensions().get::<Caller>() {
-        Some(Caller {
-            channel: Channel::Token { token_id },
-            ..
-        }) => Some(*token_id),
-        _ => None,
-    };
+    // An app's access tokens count against their grant, so refreshing does
+    // not start a new window (research R-14).
+    let token = request
+        .extensions()
+        .get::<Caller>()
+        .and_then(|caller| match caller.channel {
+            Channel::Token { token_id } => Some(token_id),
+            Channel::OAuth { grant_id, .. } => Some(grant_id),
+            _ => None,
+        });
     if let Some(token) = token
         && let Err(wait) = limiter.check(token, Instant::now())
     {

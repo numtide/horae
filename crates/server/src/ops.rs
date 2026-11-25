@@ -170,8 +170,34 @@ impl Caller {
                 grant_id,
                 token_id,
                 scopes,
+                unlocked: None,
             },
         }
+    }
+
+    /// The caller of an endpoint that declares `scope`. An OAuth caller
+    /// whose token holds it (`time:write` includes `time:read`) loads its
+    /// actor unlocked for it; `None` if the token does not. Every other
+    /// channel is unchanged.
+    pub fn unlock(self, scope: horae_core::permissions::oauth::Scope) -> Option<Self> {
+        let Channel::OAuth {
+            grant_id,
+            token_id,
+            scopes,
+            ..
+        } = self.channel
+        else {
+            return Some(self);
+        };
+        scopes.normalize().contains(scope).then_some(Self {
+            channel: Channel::OAuth {
+                grant_id,
+                token_id,
+                scopes,
+                unlocked: Some(scope),
+            },
+            ..self
+        })
     }
 
     /// The server's operator at its terminal (the CLI).

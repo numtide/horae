@@ -9,12 +9,15 @@
 use std::sync::{Arc, OnceLock};
 
 use axum::extract::{FromRef, FromRequestParts, Request, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
+use horae_core::permissions::oauth::Scope;
 use sqlx::PgPool;
-use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::openapi::security::{
+    AuthorizationCode, Flow, HttpAuthScheme, HttpBuilder, OAuth2, Scopes, SecurityScheme,
+};
 use utoipa::openapi::{
     ContentBuilder, HeaderBuilder, ObjectBuilder, Ref, RefOr, ResponseBuilder, Type,
 };
@@ -33,8 +36,11 @@ use crate::token::ApiCaller;
 mod catalogue;
 pub mod clients;
 pub mod me;
+#[cfg(test)]
+mod oauth_tests;
 pub mod people;
 pub mod projects;
+mod scopes;
 pub mod tasks;
 #[cfg(test)]
 pub(crate) mod testing;
@@ -140,6 +146,39 @@ impl Modify for BearerToken {
                     .build(),
             ),
         );
+        // Relative URLs: each instance serves its own document (research R-18).
+        let scopes =
+            Scopes::from_iter(Scope::ALL.map(|scope| (scope.as_str(), scope_purpose(scope))));
+        components.add_security_scheme(
+            "oauth2",
+            SecurityScheme::OAuth2(OAuth2::with_description(
+                [Flow::AuthorizationCode(
+                    AuthorizationCode::with_refresh_url(
+                        "/oauth/authorize",
+                        "/oauth/token",
+                        scopes,
+                        "/oauth/token",
+                    ),
+                )],
+                "An app's OAuth access token (horae_oat_…), from the authorization code flow \
+                 with PKCE. It acts as the person who approved the app, limited to its scopes.",
+            )),
+        );
+    }
+}
+
+/// What each scope lets an app do (FR-060).
+fn scope_purpose(scope: Scope) -> &'static str {
+    match scope {
+        Scope::TimeRead => "Read time entries the person may see.",
+        Scope::TimeWrite => {
+            "Create, edit, delete and run timers on time entries the person may change. \
+             Includes time:read."
+        }
+        Scope::CatalogRead => {
+            "Read the projects, tasks, clients and people the person may see, and the projects \
+             and tasks they may track time on."
+        }
     }
 }
 
@@ -223,10 +262,13 @@ pub fn document() -> &'static utoipa::openapi::OpenApi {
 }
 
 /// Every `/api/v1` route. Token routes check the token, then its request
-/// limit.
+/// limit, then an OAuth token's scope.
 pub fn router(state: V1State) -> Router {
+    // Built now, so a document with a bad scope fails at start-up.
+    scopes::requirements();
     let (tokens, _) = token_routes().split_for_parts();
     let tokens = tokens
+        .route_layer(axum::middleware::from_fn(scopes::require))
         .route_layer(from_fn_with_state(state.clone(), rate_limit::limit))
         .route_layer(from_fn_with_state(state.clone(), authenticate));
     let (public, _) = public_routes().split_for_parts();
@@ -236,7 +278,8 @@ pub fn router(state: V1State) -> Router {
 }
 
 /// Puts the token's [`Caller`](crate::ops::Caller) in the request extensions,
-/// or answers 401 `unauthenticated`.
+/// or answers 401 `unauthenticated` with a `Bearer` challenge, which names
+/// `invalid_token` when a credential was sent (RFC 6750 §3.1).
 async fn authenticate(State(state): State<V1State>, request: Request, next: Next) -> Response {
     let (mut parts, body) = request.into_parts();
     match ApiCaller::from_request_parts(&mut parts, &state).await {
@@ -244,7 +287,19 @@ async fn authenticate(State(state): State<V1State>, request: Request, next: Next
             parts.extensions.insert(caller);
             next.run(Request::from_parts(parts, body)).await
         }
-        Err(StatusCode::UNAUTHORIZED) => Problem::unauthenticated().into_response(),
+        Err(StatusCode::UNAUTHORIZED) => {
+            let challenge = if parts.headers.contains_key(header::AUTHORIZATION) {
+                r#"Bearer error="invalid_token""#
+            } else {
+                "Bearer"
+            };
+            let mut response = Problem::unauthenticated().into_response();
+            response.headers_mut().insert(
+                header::WWW_AUTHENTICATE,
+                HeaderValue::from_static(challenge),
+            );
+            response
+        }
         Err(_) => Problem::internal().into_response(),
     }
 }

@@ -17,8 +17,9 @@ fn whoami(pool: PgPool) -> Router {
         .route(
             "/whoami",
             get(|ApiCaller(caller): ApiCaller| async move {
-                let Channel::Token { token_id } = caller.channel else {
-                    panic!("not a token caller: {caller:?}");
+                let token_id = match caller.channel {
+                    Channel::Token { token_id } | Channel::OAuth { token_id, .. } => token_id,
+                    _ => panic!("not a token caller: {caller:?}"),
                 };
                 format!("{} {} {token_id}", caller.org_id, caller.user_id)
             }),
@@ -90,6 +91,29 @@ async fn a_revoked_token_is_unauthorized(pool: PgPool) {
     write.commit(result, &NoEvents).await.unwrap();
     let (status, _) = call(&pool, Some(&format!("Bearer {token}"))).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_oauth_access_token_answers_as_its_person(pool: PgPool) {
+    use crate::ops::oauth::testing::{public_app, signed_in};
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let admin = crate::testing::add_person(&pool, &ids, BuiltInProfile::Administrator).await;
+    let app = public_app(&pool, &admin).await;
+    let (_, tokens) = signed_in(&pool, &ids, &app).await;
+    let (status, body) = call(
+        &pool,
+        Some(&format!("Bearer {}", tokens.access_token.expose())),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.starts_with(&format!("{} {} ", ids.org_id, ids.user_id)));
+
+    // A refresh token is no bearer credential.
+    let refresh = format!("Bearer {}", tokens.refresh_token.expose());
+    assert_eq!(
+        call(&pool, Some(&refresh)).await.0,
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[test]

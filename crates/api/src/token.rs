@@ -1,6 +1,7 @@
-//! `Authorization: Bearer horae_pat_…`: the personal access token a public API
-//! request authenticates with (spec 022 FR-010). The session cookie is never
-//! read here.
+//! `Authorization: Bearer …`: the token a public API request authenticates
+//! with, a personal access token (`horae_pat_…`, spec 022 FR-010) or an
+//! app's OAuth access token (`horae_oat_…`, spec 024 FR-070). The session
+//! cookie is never read here.
 
 use axum::extract::{FromRef, FromRequestParts};
 use axum::http::request::Parts;
@@ -28,7 +29,15 @@ where
             .and_then(|value| value.to_str().ok())
             .and_then(bearer)
             .ok_or(StatusCode::UNAUTHORIZED)?;
-        match ops::api_tokens::authenticate(&PgPool::from_ref(state), token).await {
+        let pool = PgPool::from_ref(state);
+        // Each authenticator answers `None` for the other's prefix, and for
+        // any other credential.
+        let found = if token.starts_with(ops::oauth::ACCESS_TOKEN_PREFIX) {
+            ops::oauth::tokens::authenticate(&pool, token).await
+        } else {
+            ops::api_tokens::authenticate(&pool, token).await
+        };
+        match found {
             Ok(Some(caller)) => Ok(Self(caller)),
             Ok(None) => Err(StatusCode::UNAUTHORIZED),
             Err(error) => {
