@@ -151,7 +151,7 @@ ______________________________________________________________________
 - [X] T058 [US2] Key the limiter by `grant_id` for `Channel::OAuth` in `crates/api/src/rate_limit.rs`, with a test that rotating access tokens does not reset the window
 - [X] T059 [P] [US1] Per-scope tests over every v1 operation for a member, a manager and an administrator (SC-003), with responses validated against the schema, plus a personal access token on the same routes keeping the person's full authority (FR-064), in `crates/api/src/v1/oauth_tests.rs`
 - [X] T060 [US1] Refresh `crates/api/openapi/v1.json` with `UPDATE_OPENAPI=1 cargo test -p horae-api openapi`; run the `api-compat` check and, if oasdiff flags the added security alternative, record the decision in research R-18 before touching `v1.baseline.json`
-- [ ] T061 Checkpoint: `nix flake check` passes; PR E opened
+- [X] T061 Checkpoint: `nix flake check` passes; PR E opened
 
 ______________________________________________________________________
 
