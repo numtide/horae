@@ -261,7 +261,7 @@ fn ClientForm(
                     }
                     if shows_rate {
                         FormGroup { label: "Default rate", id: "client-form-rate",
-                            Input { id: "client-form-rate", class: "font-mono", value: fields.read().rate.clone(), disabled: busy(),
+                            Input { id: "client-form-rate", class: "text-mono", value: fields.read().rate.clone(), disabled: busy(),
                                 oninput: move |event: FormEvent| {
                                     let mut value = fields.write();
                                     value.rate = event.value(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());

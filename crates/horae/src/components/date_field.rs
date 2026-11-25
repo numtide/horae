@@ -32,7 +32,7 @@ pub fn DateField(
         div { class: "flex flex-wrap items-center gap-1",
             button {
                 id: "{id}", r#type: "button",
-                class: "np-date-field form-input flex items-center justify-between gap-3 max-w-full font-mono text-left",
+                class: "np-date-field form-input flex items-center justify-between gap-3 max-w-full text-mono text-left",
                 popovertarget: "{id}-calendar",
                 aria_haspopup: "dialog", aria_expanded: "false", aria_controls: "{id}-calendar",
                 aria_invalid: error_id.as_ref().map(|_| "true"),

@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use uuid::Uuid;
 
 use crate::components::badge::Badge;
-use crate::components::menu::{Menu, MenuDivider, MenuItem};
+use crate::components::menu::{Menu, MenuDivider, MenuItem, RowActions};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, ErrorState, Loading, NoAccess};
 use crate::components::session::use_session;
@@ -334,14 +334,14 @@ pub fn ClientList() -> Element {
                     }
                 } else {
                     div { class: "table-container rounded-xl bg-secondary", role: "region", aria_label: "Clients", tabindex: "0",
-                        table { class: "client-table",
+                        table { class: "name-table",
                             thead {
                                 tr {
-                                    th { scope: "col", class: "text-secondary", "Client" }
-                                    th { scope: "col", class: "text-right text-secondary", "Currency" }
-                                    th { scope: "col", class: "text-right text-secondary", "Projects" }
-                                    th { scope: "col", class: "text-secondary", "Status" }
-                                    if can_manage { th { scope: "col", class: "text-right text-secondary", "Actions" } }
+                                    th { scope: "col", "Client" }
+                                    th { scope: "col", class: "text-right", "Currency" }
+                                    th { scope: "col", class: "text-right", "Projects" }
+                                    th { scope: "col", "Status" }
+                                    if can_manage { th { scope: "col", class: "text-right", "Actions" } }
                                 }
                             }
                             tbody {
@@ -354,8 +354,8 @@ pub fn ClientList() -> Element {
                                         rsx! {
                                             tr { key: "{c.id}",
                                                 td { Link { to: Route::ClientDetail { id: c.id }, class: "font-semibold text-strong wrap-anywhere", "{c.name}" } }
-                                                td { class: "text-right font-mono text-secondary", "{row_currencies}" }
-                                                td { class: "text-right font-mono whitespace-nowrap",
+                                                td { class: "text-right text-mono text-secondary", "{row_currencies}" }
+                                                td { class: "text-right text-mono whitespace-nowrap",
                                                     span { aria_label: "{summary.active_projects} active of {summary.total_projects} visible projects",
                                                         "{summary.active_projects} / {summary.total_projects}"
                                                     }
@@ -420,8 +420,7 @@ fn ClientActions(
         }
     });
     rsx! {
-        Menu { id: "client-actions-{id}", aria_label: tr.action_menu_for(&label), align_right: true,
-            label: if restoring { tr.action_restoring() } else { tr.action_menu() }, busy: restoring,
+        RowActions { id: "client-actions-{id}", name: label, busy: restoring,
             MenuItem { id: "client-edit-{id}", onclick: edit, {tr.action_edit()} }
             MenuDivider {}
             MenuItem { id: "client-activity-{id}", disabled: if active { archive_pending } else { restoring }, onclick: change,

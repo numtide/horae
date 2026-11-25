@@ -43,7 +43,7 @@ pub(super) fn ErrorGroups(
                             }
                         }
                         div { class: "overflow-x-auto px-5 pb-4",
-                            table { class: "table",
+                            table {
                                 thead {
                                     tr {
                                         th { scope: "col", "Record" }
@@ -79,7 +79,7 @@ pub(super) fn ErrorGroups(
                             }
                         }
                         div { class: "overflow-x-auto px-5 pb-4",
-                            table { class: "table",
+                            table {
                                 thead {
                                     tr {
                                         th { scope: "col", "Name" }
@@ -110,7 +110,7 @@ pub(super) fn ErrorGroups(
                             }
                         }
                         div { class: "overflow-x-auto px-5 pb-4",
-                            table { class: "table",
+                            table {
                                 thead {
                                     tr {
                                         th { scope: "col", "Kind" }

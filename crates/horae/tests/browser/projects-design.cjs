@@ -299,7 +299,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await page.locator('html').evaluate(root => { root.dataset.theme = 'dark'; });
     profile = 'Administrator';
     await page.goto(`${base}/components`);
-    for (const name of [/^Actions/, /^Filter by client/]) {
+    // The gallery also has ⋮ row triggers named "Actions for …"; take the text trigger.
+    for (const name of [/^Actions ▾$/, /^Filter by client/]) {
       const trigger = page.getByRole('button', { name });
       await expect(trigger).toHaveCSS('font-size', '12px');
       await expect(trigger).toHaveCSS('padding-left', '12px');

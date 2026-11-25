@@ -277,7 +277,7 @@ fn MemberRow(
                 if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person) || form.read().rate_mode == RateMode::Legacy) {
                     label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-person-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::PersonRate(id)),
                         "bill"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", disabled: billable_access != ProjectFieldAccess::Editable || !options.read().can_edit_billable_settings, label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
+                        Input { class: "w-30 max-w-full text-mono text-right", id: "np-person-rate-{id}", disabled: billable_access != ProjectFieldAccess::Editable || !options.read().can_edit_billable_settings, label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
                             error_id: (invalid_field == Some(ProjectFormField::PersonRate(id))).then(|| format!("np-person-error-{id}")),
                             placeholder: if org_currency == billing_currency { person.as_ref().and_then(|person| person.billable_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()) } else { "Inherit".into() },
                             oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.billable_rate = event.value(); } }
@@ -288,7 +288,7 @@ fn MemberRow(
                 if cost_access != ProjectFieldAccess::Withheld {
                     label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-cost-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::CostRate(id)),
                         "cost"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-cost-rate-{id}", disabled: cost_access != ProjectFieldAccess::Editable, label: "Cost rate for {name} ({org_currency}/h)", value: member.cost_rate,
+                        Input { class: "w-30 max-w-full text-mono text-right", id: "np-cost-rate-{id}", disabled: cost_access != ProjectFieldAccess::Editable, label: "Cost rate for {name} ({org_currency}/h)", value: member.cost_rate,
                             error_id: (invalid_field == Some(ProjectFormField::CostRate(id))).then(|| format!("np-person-error-{id}")),
                             placeholder: person.as_ref().and_then(|person| person.cost_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()),
                             oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.cost_rate = event.value(); } }
@@ -299,7 +299,7 @@ fn MemberRow(
                 if form.read().budget_mode == BudgetMode::HoursPerPerson {
                     label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-person-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
                         "budget"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget,
+                        Input { class: "w-30 max-w-full text-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget,
                             error_id: (invalid_field == Some(ProjectFormField::PersonBudget(id))).then(|| format!("np-person-error-{id}")),
                             oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.budget = event.value(); } } }
                         "h"

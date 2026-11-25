@@ -10,7 +10,7 @@ use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::components::controls::Checkbox;
 use crate::components::icons::NavIcon;
-use crate::components::menu::{Menu, MenuDivider, MenuItem};
+use crate::components::menu::{Menu, MenuDivider, MenuItem, RowActions};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{
@@ -1113,7 +1113,7 @@ fn ProjectListContent(
                                                 }
                                               }
                                             }
-                                            div { class: "flex items-center justify-end gap-2 font-mono",
+                                            div { class: "flex items-center justify-end gap-2 text-mono",
                                                 if spend_ready {
                                                     span { class: "whitespace-nowrap", "{rs.budget}" }
                                                     if rs.recurring {
@@ -1123,7 +1123,7 @@ fn ProjectListContent(
                                                     span { class: "text-muted", aria_label: "Budget unavailable", "—" }
                                                 }
                                             }
-                                            div { class: "flex items-center justify-end gap-3 font-mono",
+                                            div { class: "flex items-center justify-end gap-3 text-mono",
                                                 if spend_ready {
                                                     span { class: "whitespace-nowrap", "{rs.spent}" }
                                                     if let Some(pct) = rs.pct {
@@ -1137,7 +1137,7 @@ fn ProjectListContent(
                                                     span { class: "text-muted", aria_label: "Spent unavailable", "—" }
                                                 }
                                             }
-                                            div { class: "flex items-baseline justify-end gap-2 font-mono",
+                                            div { class: "flex items-baseline justify-end gap-2 text-mono",
                                                 if spend_ready {
                                                     span { class: "whitespace-nowrap", "{rs.remaining}" }
                                                     if let Some(lbl) = rs.pct_label.clone() {
@@ -1149,7 +1149,7 @@ fn ProjectListContent(
                                             }
                                             div { class: "flex justify-end",
                                                 if catalog.editable.contains(&p.id) {
-                                                    Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
+                                                    RowActions { id: "project-actions-{p.id}", name: pname.clone(),
                                                         MenuItem {
                                                             onclick: {
                                                                 let id = p.id;
@@ -1449,7 +1449,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                             span { class: "text-xs text-secondary rounded-full border bg-tertiary px-2 py-1 whitespace-nowrap",
                                 "{view.project_type.label()}"
                             }
-                            span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
+                            span { class: "text-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
                                 "{view.project.currency}"
                             }
                             if !view.active { Badge { variant: "neutral", "Archived" } }

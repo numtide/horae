@@ -26,6 +26,10 @@ pub fn Menu(
     /// since the closed menu cannot.
     #[props(default)]
     busy: bool,
+    /// The trigger is the 32px «⋮» icon button of a table row, named by
+    /// `aria_label` alone; `label` is not shown. Use [`RowActions`].
+    #[props(default)]
+    icon: bool,
     children: Element,
 ) -> Element {
     let popover = if align_right {
@@ -33,13 +37,22 @@ pub fn Menu(
     } else {
         "menu menu-popover"
     };
+    debug_assert!(
+        !icon || aria_label.is_some(),
+        "an icon trigger needs aria_label"
+    );
+    let trigger = if icon {
+        "btn btn-secondary menu-kebab"
+    } else {
+        "btn btn-secondary btn-sm"
+    };
     rsx! {
         document::Script { src: asset!("/assets/js/menu.js") }
         div { class: "menu-anchor",
             button {
                 id: "{id}-trigger",
                 r#type: "button",
-                class: "btn btn-secondary btn-sm {trigger_class}",
+                class: "{trigger} {trigger_class}",
                 disabled,
                 aria_label,
                 "aria-busy": busy.then_some("true"),
@@ -47,8 +60,16 @@ pub fn Menu(
                 "aria-expanded": "false",
                 "aria-controls": "{id}",
                 popovertarget: "{id}",
-                "{label}"
-                span { class: "ml-2 text-faint", "▾" }
+                if icon {
+                    // Three stacked dots: zero-length strokes with round caps.
+                    svg { view_box: "0 0 16 16", fill: "none", stroke: "currentColor",
+                        stroke_width: "2.4", stroke_linecap: "round", "aria-hidden": "true",
+                        path { d: "M8 3 V3 M8 8 V8 M8 13 V13" }
+                    }
+                } else {
+                    "{label}"
+                    span { class: "ml-2 text-faint", "▾" }
+                }
             }
             div {
                 id: "{id}",
@@ -58,6 +79,28 @@ pub fn Menu(
                 "aria-labelledby": "{id}-trigger",
                 {children}
             }
+        }
+    }
+}
+
+/// The actions of one table row: a «⋮» [`Menu`] named "Actions for {name}",
+/// anchored to the right edge of the row's last cell.
+#[component]
+pub fn RowActions(
+    /// Unique and stable, as for [`Menu`].
+    id: String,
+    /// The row's record, for the trigger's accessible name.
+    name: String,
+    /// As for [`Menu`].
+    #[props(default)]
+    busy: bool,
+    children: Element,
+) -> Element {
+    let tr = crate::i18n::use_tr();
+    rsx! {
+        Menu { id, label: String::new(), icon: true, align_right: true,
+            aria_label: tr.action_menu_for(&name), busy,
+            {children}
         }
     }
 }

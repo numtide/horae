@@ -9,6 +9,7 @@ use crate::components::{
     menu::{Menu, MenuDivider, MenuItem},
     page_header::PageHeader,
     screen_state::{EmptyState, LoadError, Loading},
+    table::NameCell,
     toast::{Toast, ToastContainer},
 };
 use crate::models::client::ClientDetailView;
@@ -119,7 +120,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                         title: detail.client.name.clone(),
                         context: rsx! { "Added to Horae {detail.client.created_at.format(\"%d %b %Y\")}" },
                         meta: rsx! {
-                            span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
+                            span { class: "text-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
                                 "{detail.client.currency.trim()}"
                             }
                             if !detail.client.active { Badge { variant: "neutral", "Archived" } }
@@ -162,14 +163,14 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                 if let Some(billing) = &detail.billing {
                                     div { class: "flex flex-wrap justify-between gap-2 border-t pt-3",
                                         dt { class: "text-secondary", "Default rate" }
-                                        dd { class: "font-mono m-0 wrap-anywhere",
+                                        dd { class: "text-mono m-0 wrap-anywhere",
                                             {billing.default_rate_cents.map(|rate| format!("{} / h", format_cents(rate, detail.client.currency.trim()))).unwrap_or_else(|| "Not set".into())}
                                         }
                                     }
                                 }
                                 div { class: "flex flex-wrap justify-between gap-2",
                                     dt { class: "text-secondary", "Tax ID" }
-                                    dd { class: "font-mono m-0 wrap-anywhere",
+                                    dd { class: "text-mono m-0 wrap-anywhere",
                                         "{detail.client.tax_id.as_deref().filter(|value| !value.trim().is_empty()).unwrap_or(\"Not set\")}"
                                     }
                                 }
@@ -251,12 +252,12 @@ fn ClientProjects(client_id: Uuid) -> Element {
                         }
                     }
                     div { class: "overflow-x-auto", role: "region", aria_label: "Client projects", tabindex: "0",
-                        table { class: "client-table",
+                        table { class: "name-table",
                             thead { tr {
-                                th { scope: "col", class: "text-secondary", "Project" }
-                                th { scope: "col", class: "text-right text-secondary", "Hours" }
-                                th { scope: "col", class: "text-right text-secondary", "Spent" }
-                                th { scope: "col", class: "text-secondary", "Status" }
+                                th { scope: "col", "Project" }
+                                th { scope: "col", class: "text-right", "Hours" }
+                                th { scope: "col", class: "text-right", "Spent" }
+                                th { scope: "col", "Status" }
                             } }
                             tbody {
                                 for project in rows {
@@ -265,15 +266,14 @@ fn ClientProjects(client_id: Uuid) -> Element {
                                         let hours = total.map(|row| format_hhmm(row.spent_minutes)).unwrap_or_else(|| "—".into());
                                         let amount = total.and_then(|row| row.spent_cents).map(|cents| format_cents(cents, project.currency.trim())).unwrap_or_else(|| "—".into());
                                         rsx! { tr { key: "{project.id}",
-                                            td {
-                                                Link { to: Route::ProjectDetail { id: project.id }, class: "font-semibold text-strong wrap-anywhere",
+                                            NameCell { secondary: rsx! { "{project.project_type.label()} · {project.currency.trim()}" },
+                                                Link { to: Route::ProjectDetail { id: project.id }, class: "text-strong wrap-anywhere",
                                                     if let Some(code) = &project.code { "[{code}] " }
                                                     "{project.name}"
                                                 }
-                                                div { class: "text-xs text-secondary mt-1", "{project.project_type.label()} · {project.currency.trim()}" }
                                             }
-                                            td { class: "font-mono text-right whitespace-nowrap", "{hours}" }
-                                            td { class: "font-mono text-right whitespace-nowrap", "{amount}" }
+                                            td { class: "text-mono text-right whitespace-nowrap", "{hours}" }
+                                            td { class: "text-mono text-right whitespace-nowrap", "{amount}" }
                                             td { if project.active { Badge { variant: "success", "Active" } } else { Badge { variant: "neutral", "Inactive" } } }
                                         } }
                                     }
@@ -313,7 +313,7 @@ fn ClientInvoices(client_id: Uuid) -> Element {
                         for invoice in rows {
                             li { key: "{invoice.id}", class: "flex flex-wrap items-center justify-between gap-2 text-sm",
                                 Link { to: Route::InvoiceDetail { id: invoice.id }, class: "font-semibold wrap-anywhere", "{invoice.number}" }
-                                span { class: "font-mono text-secondary wrap-anywhere", "{format_cents(invoice.total_cents, invoice.currency.trim())}" }
+                                span { class: "text-mono text-secondary wrap-anywhere", "{format_cents(invoice.total_cents, invoice.currency.trim())}" }
                                 super::super::invoices::StatusBadge { shown: super::super::invoices::Shown::Status(invoice.status) }
                             }
                         }

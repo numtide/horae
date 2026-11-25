@@ -898,8 +898,8 @@ fn PreparedLines(estimate: InvoicePreparation) -> Element {
         p { class: "text-sm text-muted mb-3",
             {tr.invoices_preview_dates(lines.len() as i64, estimate.due_on.map(date).unwrap_or_default(), date(estimate.issued_on))}
         }
-        DataTable {
-            table {
+        DataTable { label: tr.invoices_lines_label(), compact: true,
+            table { aria_label: tr.invoices_lines_label(),
                 thead { tr {
                     th { scope: "col", {tr.invoices_column_description()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_hours()} }
