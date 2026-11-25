@@ -35,6 +35,7 @@ pub struct ClientsQuery {
     get,
     path = "/clients",
     operation_id = "listClients",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(ClientsQuery),
     responses(
@@ -76,6 +77,7 @@ pub async fn list(
     get,
     path = "/clients/{id}",
     operation_id = "getClient",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(("id" = Uuid, Path, description = "The client's id")),
     responses(

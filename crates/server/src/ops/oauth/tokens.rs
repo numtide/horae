@@ -3,8 +3,10 @@
 //!
 //! These have no [`Actor`](crate::ops::Actor): their authority is the
 //! presented code with its verifier, the refresh token, or the client's
-//! secret (constitution 7.1.0, spec D-3).
+//! secret (constitution 7.1.0, spec D-3). Only [`identity`], which reads back
+//! who a token's request acts as, takes one.
 
+use chrono::{DateTime, Utc};
 use horae_core::permissions::oauth::{ClientKind, ScopeSet, pkce};
 use sqlx::PgPool;
 use subtle::ConstantTimeEq;
@@ -13,7 +15,7 @@ use uuid::Uuid;
 use super::audit::{self, Action};
 use super::{ACCESS_TOKEN_PREFIX, REFRESH_TOKEN_PREFIX, Secret, digest};
 use crate::config::OAuthConfig;
-use crate::ops::{Caller, OpError, Tx};
+use crate::ops::{Actor, Caller, Channel, OpError, Tx};
 
 /// How an app identified itself at the token or revocation endpoint: HTTP
 /// Basic or the form body (research R-12).
@@ -272,6 +274,66 @@ pub async fn authenticate(pool: &PgPool, token: &str) -> Result<Option<Caller>, 
         found.id,
         scopes,
     )))
+}
+
+/// Who an OAuth access token's request acts as, and through which app
+/// (FR-061).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OAuthIdentity {
+    pub person_id: Uuid,
+    pub person_name: String,
+    pub person_email: String,
+    pub organization_name: String,
+    pub token_id: Uuid,
+    pub expires_at: DateTime<Utc>,
+    /// The app's public `client_id`.
+    pub client_id: String,
+    pub app_name: String,
+    /// The token's scopes, as granted.
+    pub scopes: ScopeSet,
+}
+
+/// The identity of an actor that came through an OAuth access token; any
+/// other channel, or an actor no scope unlocked, is not found.
+pub async fn identity(tx: &mut Tx, actor: &Actor) -> Result<OAuthIdentity, OpError> {
+    const NOT_FOUND: &str = "OAuth access token not found";
+    let Channel::OAuth {
+        token_id, scopes, ..
+    } = actor.channel()
+    else {
+        return Err(OpError::not_found(NOT_FOUND));
+    };
+    if !actor.is_active() {
+        return Err(OpError::not_found(NOT_FOUND));
+    }
+    let row = sqlx::query!(
+        r#"SELECT u.id AS person_id, u.name AS person_name, u.email,
+                  o.name AS organization_name, c.client_id, c.name AS app_name,
+                  t.expires_at AS "expires_at: DateTime<Utc>"
+           FROM oauth_access_tokens t
+           JOIN oauth_grants g ON g.org_id = t.org_id AND g.id = t.grant_id
+           JOIN oauth_clients c ON c.org_id = g.org_id AND c.id = g.client_id
+           JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id
+           JOIN organizations o ON o.id = t.org_id
+           WHERE t.id = $1 AND t.org_id = $2 AND g.user_id = $3"#,
+        token_id,
+        actor.org_id(),
+        actor.id(),
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| OpError::not_found(NOT_FOUND))?;
+    Ok(OAuthIdentity {
+        person_id: row.person_id,
+        person_name: row.person_name,
+        person_email: row.email,
+        organization_name: row.organization_name,
+        token_id,
+        expires_at: row.expires_at,
+        client_id: row.client_id,
+        app_name: row.app_name,
+        scopes,
+    })
 }
 
 async fn stamp_last_used(

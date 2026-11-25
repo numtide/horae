@@ -48,6 +48,46 @@ fn the_document_is_openapi_3_1_with_bearer_tokens() {
 }
 
 #[test]
+fn the_document_offers_oauth_with_relative_urls_and_the_three_scopes() {
+    let document = serde_json::to_value(document()).unwrap();
+    let scheme = &document["components"]["securitySchemes"]["oauth2"];
+    assert_eq!(scheme["type"], "oauth2");
+    let flow = &scheme["flows"]["authorizationCode"];
+    assert_eq!(flow["authorizationUrl"], "/oauth/authorize");
+    assert_eq!(flow["tokenUrl"], "/oauth/token");
+    assert_eq!(flow["refreshUrl"], "/oauth/token");
+    let scopes: Vec<&String> = flow["scopes"].as_object().unwrap().keys().collect();
+    assert_eq!(scopes, ["catalog:read", "time:read", "time:write"]);
+}
+
+/// Every token operation takes a personal token, or an OAuth token with the
+/// one scope it names (FR-062). Only the document itself is public, and only
+/// `/me` takes any scope (FR-061).
+#[test]
+fn every_token_operation_declares_its_oauth_scope() {
+    let document = serde_json::to_value(document()).unwrap();
+    for (path, methods) in document["paths"].as_object().unwrap() {
+        for (method, operation) in methods.as_object().unwrap() {
+            if path == "/openapi.json" {
+                continue;
+            }
+            let security = operation["security"].as_array().unwrap();
+            let [token, oauth] = &security[..] else {
+                panic!("{method} {path}: {security:?}");
+            };
+            assert_eq!(token, &json!({ "token": [] }), "{method} {path}");
+            let scopes = oauth["oauth2"].as_array().unwrap();
+            if path == "/me" {
+                assert!(scopes.is_empty(), "/me takes any scope");
+            } else {
+                assert_eq!(scopes.len(), 1, "{method} {path}: {scopes:?}");
+            }
+        }
+    }
+    assert_eq!(super::scopes::requirements().len(), 19);
+}
+
+#[test]
 fn every_operation_is_named_and_answers_errors_as_problems() {
     let document = serde_json::to_value(document()).unwrap();
     let mut operations = 0;

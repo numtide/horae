@@ -141,3 +141,27 @@ async fn last_used_is_stamped_at_most_once_a_minute(pool: PgPool) {
         .unwrap();
     assert_eq!(last_used(&pool, grant_id).await.unwrap(), stamped);
 }
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn identity_names_the_person_and_the_app_once_unlocked(pool: PgPool) {
+    let (admin, _, tokens) = flow(&pool).await;
+    let caller = authenticate(&pool, tokens.access_token.expose())
+        .await
+        .unwrap()
+        .unwrap();
+    let mut read = crate::ops::begin_read(&pool, caller).await.unwrap();
+    assert!(identity(&mut read.tx, &read.actor).await.is_err());
+
+    let scope = tokens.scopes.iter().next().unwrap();
+    let mut read = crate::ops::begin_read(&pool, caller.unlock(scope).unwrap())
+        .await
+        .unwrap();
+    let found = identity(&mut read.tx, &read.actor).await.unwrap();
+    assert_eq!(found.person_id, admin.user_id);
+    assert!(!found.app_name.is_empty());
+    assert_eq!(found.scopes, tokens.scopes);
+
+    let session = crate::ops::Caller::session(admin.org_id, admin.user_id);
+    let mut read = crate::ops::begin_read(&pool, session).await.unwrap();
+    assert!(identity(&mut read.tx, &read.actor).await.is_err());
+}

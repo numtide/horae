@@ -17,6 +17,7 @@ use crate::problem::{ApiJson, Problem};
     post,
     path = "/timers",
     operation_id = "startTimer",
+    security(("token" = []), ("oauth2" = ["time:write"])),
     tag = "timers",
     request_body = NewTimer,
     responses(

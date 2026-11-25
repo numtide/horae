@@ -36,6 +36,7 @@ pub struct PeopleQuery {
     get,
     path = "/people",
     operation_id = "listPeople",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(PeopleQuery),
     responses(
@@ -78,6 +79,7 @@ pub async fn list(
     get,
     path = "/people/{id}",
     operation_id = "getPerson",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(("id" = Uuid, Path, description = "The person's id")),
     responses(

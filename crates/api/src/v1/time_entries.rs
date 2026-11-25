@@ -63,6 +63,7 @@ impl TimeEntryQuery {
     get,
     path = "/time_entries",
     operation_id = "listTimeEntries",
+    security(("token" = []), ("oauth2" = ["time:read"])),
     tag = "time entries",
     params(TimeEntryQuery),
     responses(
@@ -111,6 +112,7 @@ pub async fn list(
     get,
     path = "/time_entries/{id}",
     operation_id = "getTimeEntry",
+    security(("token" = []), ("oauth2" = ["time:read"])),
     tag = "time entries",
     params(("id" = Uuid, Path, description = "The entry")),
     responses(
@@ -133,6 +135,7 @@ pub async fn get(
     post,
     path = "/time_entries",
     operation_id = "createTimeEntry",
+    security(("token" = []), ("oauth2" = ["time:write"])),
     tag = "time entries",
     request_body = NewTimeEntry,
     responses(
@@ -169,6 +172,7 @@ pub async fn create(
     patch,
     path = "/time_entries/{id}",
     operation_id = "updateTimeEntry",
+    security(("token" = []), ("oauth2" = ["time:write"])),
     tag = "time entries",
     params(("id" = Uuid, Path, description = "The entry")),
     request_body = TimeEntryPatch,
@@ -198,6 +202,7 @@ pub async fn update(
     delete,
     path = "/time_entries/{id}",
     operation_id = "deleteTimeEntry",
+    security(("token" = []), ("oauth2" = ["time:write"])),
     tag = "time entries",
     params(("id" = Uuid, Path, description = "The entry")),
     responses(
@@ -225,6 +230,7 @@ pub async fn delete(
     post,
     path = "/time_entries/{id}/stop",
     operation_id = "stopTimer",
+    security(("token" = []), ("oauth2" = ["time:write"])),
     tag = "timers",
     params(("id" = Uuid, Path, description = "The entry")),
     responses(
@@ -249,6 +255,7 @@ pub async fn stop(
     post,
     path = "/time_entries/{id}/restart",
     operation_id = "restartTimer",
+    security(("token" = []), ("oauth2" = ["time:write"])),
     tag = "timers",
     params(("id" = Uuid, Path, description = "The entry")),
     responses(

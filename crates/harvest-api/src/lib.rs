@@ -1171,9 +1171,15 @@ async fn user_rows(
             active: record
                 .active
                 .ok_or_else(|| internal("Missing user activity"))?,
-            is_admin: record
-                .is_admin
-                .ok_or_else(|| internal("Missing administrator flag"))?,
+            // The caller's own identity comes from their actor, which an
+            // OAuth token never makes an administrator.
+            is_admin: if uuid == read.actor.id() {
+                read.actor.administrator()
+            } else {
+                record
+                    .is_admin
+                    .ok_or_else(|| internal("Missing administrator flag"))?
+            },
             cost_rate_cents: record.cost_rate_cents,
             billable_rate_cents: record.billable_rate_cents,
             org_currency: record.org_currency,
@@ -1746,6 +1752,27 @@ mod tests {
         // Every grant without the identity is not an administrator.
         provision(&pool, &ids, Permission::ALL, false).await;
         let Json(me) = users_me(caller(&ids), State(pool.clone())).await.unwrap();
+        assert!(!me.is_admin);
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn an_administrators_oauth_token_is_not_an_administrator(pool: PgPool) {
+        use horae_core::permissions::oauth::{Scope, ScopeSet};
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
+        let oauth = ops::Caller::oauth(
+            ids.org_id,
+            ids.user_id,
+            Uuid::now_v7(),
+            Uuid::now_v7(),
+            ScopeSet::of(&Scope::ALL),
+        )
+        .unlock(Scope::CatalogRead)
+        .unwrap();
+        let user = AuthUser {
+            channel: oauth.channel,
+            ..caller(&ids)
+        };
+        let Json(me) = users_me(user, State(pool.clone())).await.unwrap();
         assert!(!me.is_admin);
     }
 

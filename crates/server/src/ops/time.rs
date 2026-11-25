@@ -453,6 +453,10 @@ struct Authority {
     owner: bool,
     whole_subject: bool,
     projects: Vec<Uuid>,
+    /// The actor's own Administrator identity when they are the subject, so
+    /// an OAuth actor, which never has it, does not track on every project;
+    /// `None` reads another subject's stored identity.
+    subject_administrator: Option<bool>,
 }
 
 impl Authority {
@@ -484,6 +488,7 @@ async fn authorize(
         whole_subject: actor.has(Permission::TimeWriteAll)
             || (owner && actor.has(Permission::TimeWriteOwn)),
         projects: Vec::new(),
+        subject_administrator: owner.then(|| actor.administrator()),
     };
     if actor.has(Permission::TimeWriteManaged) {
         let managed = sqlx::query_scalar!(
@@ -512,7 +517,7 @@ async fn subject_is_active(tx: &mut Tx, org: Uuid, subject: Uuid) -> Result<bool
 }
 
 /// The subject's trackable pairs, as `time_entry_contexts` defines them: an
-/// assignment, or the subject's stored Administrator state, admits a project.
+/// assignment, or the subject's Administrator identity, admits a project.
 async fn choices(
     tx: &mut Tx,
     authority: &Authority,
@@ -529,8 +534,8 @@ async fn choices(
              AND pt.active
              AND ($3 OR p.id=ANY($4))
              AND (EXISTS (SELECT 1 FROM assignments a WHERE a.user_id=u.id AND a.project_id=p.id)
-                 OR EXISTS (SELECT 1 FROM person_permission_states state
-                     WHERE state.org_id=u.org_id AND state.user_id=u.id AND state.is_administrator))
+                 OR COALESCE($7, EXISTS (SELECT 1 FROM person_permission_states state
+                     WHERE state.org_id=u.org_id AND state.user_id=u.id AND state.is_administrator)))
              AND NOT EXISTS (SELECT 1 FROM project_task_settings s
                  WHERE s.org_id=u.org_id AND s.project_id=p.id AND s.task_id=t.id AND s.restricted
                  AND NOT EXISTS (SELECT 1 FROM project_task_members m
@@ -538,18 +543,21 @@ async fn choices(
              AND ($5::uuid IS NULL OR p.id=$5) AND ($6::uuid IS NULL OR t.id=$6)
            ORDER BY p.name,p.id,t.name,t.id FOR SHARE OF p,c,pt,t"#,
         authority.org,authority.subject,authority.whole_subject,&authority.projects,
-        pair.map(|p| p.0),pair.map(|p| p.1)
+        pair.map(|p| p.0),pair.map(|p| p.1),authority.subject_administrator
     ).fetch_all(&mut **tx).await?)
 }
 
 /// The project/task pairs the actor may track for the context's person: ones
-/// the person can track and the actor may write.
+/// the person can track and the actor may write. A read: for their own time
+/// it follows [`Actor::may_track_own_time`], so an OAuth token without
+/// `time:write` still lists them; writes check through [`authorize`] alone.
 pub async fn tracking(
     tx: &mut Tx,
     actor: &Actor,
     context: &TimesheetWriteContext,
 ) -> Result<Vec<TimesheetTrackingOption>, OpError> {
-    let authority = authorize(tx, actor, context).await?;
+    let mut authority = authorize(tx, actor, context).await?;
+    authority.whole_subject |= authority.owner && actor.may_track_own_time();
     choices(tx, &authority, None).await
 }
 

@@ -26,11 +26,32 @@ A token can have an expiry date. Revoke it from the same page when a script no l
 Administrators see and revoke everyone's tokens under **Administration → API tokens**, which also
 shows when each token was last used.
 
+## Apps
+
+An app that people sign in to, such as a desktop or phone timer, does not ask for a personal token.
+It gets an access token (`horae_oat_…`) through OAuth 2.0 with PKCE, from the endpoints that
+`https://<your-instance>/.well-known/oauth-authorization-server` lists, and sends it the same way.
+An access token acts as the person who approved the app, limited to the scopes they granted:
+
+| Scope | Operations |
+| --- | --- |
+| `time:read` | `GET /me/timer`, `GET /time_entries`, `GET /time_entries/{id}` |
+| `time:write` | every time entry and timer write; includes `time:read` |
+| `catalog:read` | `GET /me/trackable` and the catalogue reads |
+
+`GET /me` takes any scope, and its `token` names the app and the granted scopes. Its `profile` is
+the person's permission profile, and `administrator` is the token's, so an administrator's app
+token shows their administrator profile with `"administrator": false`. A request outside
+the token's scopes gets `403` with code `insufficient_scope` and a
+`WWW-Authenticate: Bearer error="insufficient_scope", scope="…"` header naming the scope that would
+do. Within its scopes, a token still can do no more than its person can in the web app, and never
+acts as an administrator. The OpenAPI document lists each operation's scope.
+
 ## Requests
 
 | Topic | Rule |
 | --- | --- |
-| Authentication | `Authorization: Bearer horae_pat_…` on every operation except `openapi.json`. Cookies and query-string tokens are not accepted |
+| Authentication | `Authorization: Bearer horae_pat_…` (or an app's `horae_oat_…`) on every operation except `openapi.json`. Cookies and query-string tokens are not accepted |
 | Body | `Content-Type: application/json`. A field the operation does not know is refused (`422 unknown_field`) |
 | Ids | UUID strings |
 | Durations | whole minutes, in fields ending in `_minutes` or named `minutes` |
@@ -40,7 +61,8 @@ shows when each token was last used.
 | Unknown query parameters | ignored |
 
 A missing, unknown, revoked or expired token, and a token whose owner was deactivated, all get the
-same `401` with code `unauthenticated`.
+same `401` with code `unauthenticated` and a `WWW-Authenticate: Bearer error="invalid_token"`
+header (just `Bearer` when no token was sent).
 
 ## What you can do
 
@@ -138,6 +160,7 @@ when there is one. Program against `status` and `code`, not `detail`.
 | 400 | `invalid_cursor` | a cursor from another list or other filters, altered, or older than 24 hours |
 | 401 | `unauthenticated` | no token, or a token that is not valid (see above) |
 | 403 | `forbidden` | the owner may not do this in the web app |
+| 403 | `insufficient_scope` | an app's token lacks the operation's scope (see [Apps](#apps)) |
 | 404 | `not_found` | missing, or outside what the owner may see |
 | 409 | `conflict` | the record's state forbids it: submitted, approved, invoiced, no running timer, … |
 | 422 | `invalid`, `unknown_field` | a value fails validation, or the body has a field the operation does not take |
@@ -148,7 +171,8 @@ A later release may add codes. Treat an unknown `code` as its status.
 
 ## Limits
 
-Each token may make 100 requests per 15 seconds. The Harvest-compatible API counts against the same
+Each token may make 100 requests per 15 seconds. An app's access tokens share one limit per
+approval, so refreshing does not reset it. The Harvest-compatible API counts against the same
 limit. Over it, the answer is `429` with a `Retry-After` header in seconds. Responses carry no other
 rate headers. An administrator can change the limit with `HORAE_API_RATE_LIMIT`
 (`services.horae.api.rateLimit` on NixOS).

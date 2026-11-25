@@ -201,6 +201,17 @@ cite it. R-19 compares the design with Harvest's public OAuth documentation.
     personal or OAuth, can mint or revoke another. A new write guarded only by an active person
     or a time permission must choose one of these guards.
 
+  - One fact survives the narrowing, for reads only (PR E): `Actor::may_track_own_time`, whether
+    the stored grants hold `TimeWriteOwn` or `TimeWriteAll`. The list of what a person may track
+    (`ops::time::tracking`, behind `/me/trackable`, the task list of someone without
+    `TaskReadAll` and the Harvest project assignments) asks it for the person's own time, so
+    `catalog:read` shows "the projects and tasks they may track time on" (FR-060) without
+    `time:write`. Writes never ask it: they authorize through the narrowed grants alone.
+
+  - The adapter unlocks through the caller (PR E): `/api/v1`'s scope layer checks the token
+    against the operation's declared scope and passes `Caller::unlock(scope)` on, and
+    `Actor::load` calls `unlock_scope` with it. Handlers stay unchanged.
+
 - **Rationale**: FR-063 asks that scopes only narrow. Intersection makes it true by construction:
   whatever an operation checks, it checks against a subset of the person's grants. Some reads need
   no permission at all (any active person sees the people list for pickers), so the endpoint check

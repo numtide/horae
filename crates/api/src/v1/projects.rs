@@ -36,6 +36,7 @@ pub struct ProjectsQuery {
     get,
     path = "/projects",
     operation_id = "listProjects",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(ProjectsQuery),
     responses(
@@ -79,6 +80,7 @@ pub async fn list(
     get,
     path = "/projects/{id}",
     operation_id = "getProject",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(("id" = Uuid, Path, description = "The project's id")),
     responses(

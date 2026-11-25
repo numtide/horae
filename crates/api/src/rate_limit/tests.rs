@@ -115,6 +115,35 @@ async fn over_the_limit_the_answer_is_429_with_retry_after() {
     assert_eq!(call(&router, None).await.status(), StatusCode::OK);
 }
 
+#[tokio::test]
+async fn a_grants_access_tokens_share_one_window() {
+    use horae_core::permissions::oauth::{Scope, ScopeSet};
+    let limiter = Arc::new(limiter(2, 15));
+    let router = Router::new()
+        .route("/", get(|| async { "ok" }))
+        .route_layer(axum::middleware::from_fn_with_state(limiter, limit));
+    let (org, person, grant) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    let scopes = ScopeSet::of(&[Scope::TimeRead]);
+    // A refresh issues a new access token of the same grant.
+    let first = Caller::oauth(org, person, grant, Uuid::now_v7(), scopes);
+    let refreshed = Caller::oauth(org, person, grant, Uuid::now_v7(), scopes);
+
+    assert_eq!(call(&router, Some(first)).await.status(), StatusCode::OK);
+    assert_eq!(
+        call(&router, Some(refreshed)).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        call(&router, Some(refreshed)).await.status(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    let other_grant = Caller::oauth(org, person, Uuid::now_v7(), Uuid::now_v7(), scopes);
+    assert_eq!(
+        call(&router, Some(other_grant)).await.status(),
+        StatusCode::OK
+    );
+}
+
 #[test]
 fn retry_after_rounds_up_to_whole_seconds() {
     for (wait, seconds) in [
