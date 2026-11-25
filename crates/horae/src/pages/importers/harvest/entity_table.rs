@@ -15,7 +15,7 @@ pub(super) fn EntityTable(report: ImportReport, partial: bool) -> Element {
     rsx! {
         Card { title, id: "entities-title", flush: true, class: "mt-6",
             div { class: "overflow-x-auto border-t",
-                table { class: "table",
+                table {
                     thead {
                         tr {
                             th { scope: "col", "Records" }

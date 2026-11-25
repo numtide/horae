@@ -651,10 +651,7 @@ fn Prepare(sources: Sources) -> Element {
         (Ok(start), Ok(end)) => tr.invoices_period_range(date(start), date(end)),
         _ => preset().label(tr),
     };
-    let currency = estimate
-        .as_ref()
-        .map(|review| review.currency.clone())
-        .unwrap_or_default();
+    let currency = currency(estimate.as_ref());
     let awaiting = estimate
         .as_ref()
         .map_or(0, |review| review.awaiting_approval_minutes);
@@ -728,6 +725,10 @@ fn Prepare(sources: Sources) -> Element {
                                 estimate: estimate.clone(), disabled: busy(), ontoggle: toggle_project }
                         }
                     }
+                    tfoot { tr {
+                        th { scope: "row", colspan: "2", class: "text-right", {tr.invoices_total()} }
+                        {unbilled_cells(unbilled(estimate.as_ref(), |project| ticked(&project.to_string())), &currency)}
+                    } }
                 }
             }
         }
@@ -849,41 +850,61 @@ fn ProjectRow(
 ) -> Element {
     let tr = use_tr();
     let id = project.id.to_string();
+    let name_id = format!("inv-project-{id}");
     let toggle = use_callback(move |_: MouseEvent| ontoggle.call(id.clone()));
-    let lines: Vec<_> = estimate
-        .iter()
-        .flat_map(|review| review.lines.iter())
-        .filter(|line| line.project_id == project.id && line.selected)
-        .collect();
-    let minutes: i64 = lines
-        .iter()
-        .filter_map(|line| line.minutes)
-        .map(i64::from)
-        .sum();
-    let fees: i64 = lines
-        .iter()
-        .filter(|line| matches!(line.source, InvoiceSource::Fee { .. }))
-        .map(|line| line.amount_cents)
-        .sum();
-    let currency = estimate
-        .as_ref()
-        .map(|review| review.currency.clone())
-        .unwrap_or_default();
     let name = if project.active {
         project.name.clone()
     } else {
         tr.invoices_project_archived(project.name.clone())
     };
+    let found = if ticked {
+        unbilled(estimate.as_ref(), |other| other == project.id)
+    } else {
+        (0, 0)
+    };
     rsx! {
         tr {
-            td { Checkbox { label: name.clone(), compact: true, checked: ticked, disabled, onclick: toggle } }
-            td { class: "wrap-anywhere", "{name}" }
-            td { class: "text-mono text-right",
-                {if ticked && minutes > 0 { horae_core::duration::format_hhmm(minutes) } else { "—".into() }}
+            td {
+                Checkbox { label: name.clone(), labelledby: name_id.clone(), compact: true, checked: ticked, disabled,
+                    onclick: toggle }
             }
-            td { class: "text-mono text-right",
-                {if ticked && fees > 0 { money(fees, &currency) } else { "—".into() }}
-            }
+            td { id: name_id, class: "wrap-anywhere", "{name}" }
+            {unbilled_cells(found, &currency(estimate.as_ref()))}
+        }
+    }
+}
+
+/// The currency the preview prices the invoice in.
+fn currency(estimate: Option<&InvoicePreparation>) -> String {
+    estimate
+        .map(|review| review.currency.clone())
+        .unwrap_or_default()
+}
+
+/// The unbilled minutes and fees the preview finds on the projects `keeps`
+/// lets through, counting only the lines that will be on the invoice.
+fn unbilled(estimate: Option<&InvoicePreparation>, keeps: impl Fn(Uuid) -> bool) -> (i64, i64) {
+    let lines = estimate
+        .into_iter()
+        .flat_map(|review| review.lines.iter())
+        .filter(|line| line.selected && keeps(line.project_id));
+    lines.fold((0, 0), |(minutes, fees), line| {
+        let fee = matches!(line.source, InvoiceSource::Fee { .. });
+        (
+            minutes + line.minutes.map_or(0, i64::from),
+            fees + if fee { line.amount_cents } else { 0 },
+        )
+    })
+}
+
+/// A project row's or the total's unbilled time and fees, a dash for none.
+fn unbilled_cells((minutes, fees): (i64, i64), currency: &str) -> Element {
+    rsx! {
+        td { class: "text-mono text-right",
+            {if minutes > 0 { horae_core::duration::format_hhmm(minutes) } else { "—".into() }}
+        }
+        td { class: "text-mono text-right",
+            {if fees > 0 { money(fees, currency) } else { "—".into() }}
         }
     }
 }
@@ -898,8 +919,8 @@ fn PreparedLines(estimate: InvoicePreparation) -> Element {
         p { class: "text-sm text-muted mb-3",
             {tr.invoices_preview_dates(lines.len() as i64, estimate.due_on.map(date).unwrap_or_default(), date(estimate.issued_on))}
         }
-        DataTable {
-            table {
+        DataTable { label: tr.invoices_lines_label(), compact: true,
+            table { aria_label: tr.invoices_lines_label(),
                 thead { tr {
                     th { scope: "col", {tr.invoices_column_description()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_hours()} }

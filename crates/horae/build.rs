@@ -393,7 +393,6 @@ fn type_family() -> Family {
         ("tracking-eyebrow", "letter-spacing: 0.12em"),
         ("leading-tight", "line-height: 1.2"),
         ("font-sans", "font-family: var(--font-family)"),
-        ("font-mono", "font-family: var(--font-family-mono)"),
         ("text-mono", "font-family: var(--font-family-mono)"),
         ("font-display", "font-family: var(--font-family-display)"),
         (
