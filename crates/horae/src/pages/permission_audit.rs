@@ -705,7 +705,7 @@ fn detail(tr: Tr, page: &AuditPage, entry: &AuditEntry) -> Element {
     let table = !rows.is_empty();
     rsx! {
         if table {
-            AccessTable { label: tr.audit_detail_label(), rows }
+            AccessTable { label: tr.audit_detail_label(), rows, flush: true }
         }
         if !lines.is_empty() {
             ul { class: "audit-lines text-sm",

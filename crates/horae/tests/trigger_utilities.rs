@@ -16,7 +16,7 @@ mod menu;
 
 use combobox::{ComboOption, Combobox};
 use controls::Checkbox;
-use menu::Menu;
+use menu::{Menu, RowActions};
 
 #[test]
 fn checkbox_keeps_labelled_unchecked_defaults() {
@@ -70,6 +70,21 @@ fn menu_keeps_compact_defaults() {
     assert!(html.contains("btn btn-secondary btn-sm"), "{html}");
     assert!(!html.contains("text-sm"), "{html}");
     assert!(!html.contains("disabled"), "{html}");
+}
+
+#[test]
+fn row_actions_is_an_icon_trigger_named_after_its_row() {
+    let html = render(|| rsx! { RowActions { id: "row-menu", name: "Acme" } });
+    let trigger = html.split("<button").nth(1).unwrap();
+    assert!(trigger.contains("menu-kebab"), "{html}");
+    assert!(
+        trigger.contains("aria-label=\"Actions for Acme\""),
+        "{html}"
+    );
+    assert!(
+        !trigger.contains("▾") && !trigger.contains(">Actions"),
+        "{html}"
+    );
 }
 
 #[test]

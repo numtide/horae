@@ -63,8 +63,8 @@ const format = (code, cents) => {
     await expect(totalRow).toHaveCount(1);
   };
   const select = label => page.locator('.form-group', { has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) }).locator('select');
-  const totalRow = page.locator('tr.report-total-row');
-  const dataRows = page.locator('tbody tr:not(.report-total-row)');
+  const totalRow = page.locator('tfoot tr');
+  const dataRows = page.locator('tbody tr');
   const totalLines = async column => totalRow.locator(`td:nth-child(${column}) > div`).allInnerTexts();
   // Expected total lines for one money column, summed from the loaded row cells.
   const expectedLines = async column => {
@@ -163,7 +163,7 @@ const format = (code, cents) => {
             await shot(`-${name}-scrolled`);
           }
           await page.evaluate(() => {
-            document.querySelector('tr.report-total-row').closest('.table-container').scrollLeft = 0;
+            document.querySelector('tfoot tr').closest('.table-container').scrollLeft = 0;
             window.scrollTo(0, 0);
           });
           console.log(`${label}: text rows per total line: ${rows.join('; ')}`);

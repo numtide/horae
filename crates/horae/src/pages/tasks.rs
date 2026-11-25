@@ -206,7 +206,7 @@ pub fn TaskCatalog() -> Element {
                                 tr { key: "{task.id}",
                                     td { "{task.name}" }
                                     td { if task.billable_default { "Yes" } else { "No" } }
-                                    if page.can_read_rates { td { class: "font-mono text-sm whitespace-nowrap", {rate_label(tr, task.default_rate_cents, task.default_rate_currency.as_deref())} } }
+                                    if page.can_read_rates { td { class: "text-mono text-sm whitespace-nowrap", {rate_label(tr, task.default_rate_cents, task.default_rate_currency.as_deref())} } }
                                     td {
                                         if task.active {
                                             Badge { variant: "success", {tr.tasks_status_active()} }

@@ -150,7 +150,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await check('menu keyboard, disabled items, outside click and repeated opening', async () => {
       await page.setViewportSize({ width: 1280, height: 800 });
       await visit('/components', 'get_current_timer');
-      const trigger = page.getByRole('button', { name: /^Actions/ });
+      const trigger = page.getByRole('button', { name: 'Actions ▾', exact: true });
       await trigger.scrollIntoViewIfNeeded();
       await trigger.focus();
       await page.keyboard.press('Enter');
@@ -216,7 +216,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await check('short-screen menu scrolls internally and supports reverse Tab and Space', async () => {
       await page.setViewportSize({ width: 390, height: 200 });
       await visit('/components', 'get_current_timer');
-      const trigger = page.getByRole('button', { name: /^Actions/ });
+      const trigger = page.getByRole('button', { name: 'Actions ▾', exact: true });
       await trigger.click();
       const menu = page.getByRole('menu');
       await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
@@ -392,7 +392,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
           await page.setViewportSize({ width: 1280, height: 800 });
           await visit('/components', 'get_current_timer');
           await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, zoom);
-          const trigger = page.getByRole('button', { name: /^Actions/ });
+          const trigger = page.getByRole('button', { name: 'Actions ▾', exact: true });
           await trigger.scrollIntoViewIfNeeded();
           await trigger.focus();
           await page.keyboard.press('Enter');

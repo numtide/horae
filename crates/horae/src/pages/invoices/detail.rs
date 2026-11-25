@@ -223,8 +223,8 @@ fn Detail(data: InvoiceDetailView, onchanged: EventHandler<()>) -> Element {
             }
         }
 
-        DataTable {
-            table {
+        DataTable { label: tr.invoices_lines_label(), compact: true,
+            table { aria_label: tr.invoices_lines_label(),
                 if imported.is_some() {
                     thead { tr {
                         th { scope: "col", {tr.invoices_column_description()} }

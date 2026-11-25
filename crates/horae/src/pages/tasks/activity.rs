@@ -1,6 +1,6 @@
 use super::*;
 use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
-use crate::components::menu::{Menu, MenuDivider, MenuItem};
+use crate::components::menu::{MenuDivider, MenuItem, RowActions};
 use crate::models::task::TaskCatalogEntry;
 
 /// The task whose archive or restore confirmation is open.
@@ -25,7 +25,7 @@ pub(super) fn TaskActions(
     let changed = task.clone();
     let change = use_callback(move |_: MouseEvent| on_activity.call(changed.clone()));
     rsx! {
-        Menu { id: "task-actions-{id}", label: tr.action_menu(), aria_label: tr.action_menu_for(&task.name), align_right: true,
+        RowActions { id: "task-actions-{id}", name: task.name.clone(),
             MenuItem { id: "tasks-edit-{id}", onclick: edit, {tr.action_edit()} }
             MenuDivider {}
             MenuItem { id: "task-activity-{id}", onclick: change,

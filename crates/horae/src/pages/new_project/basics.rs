@@ -168,12 +168,12 @@ pub(super) fn Basics(
         }
         FormRow { label: "Project code", id: "np-code", hint: "Optional",
             div { class: "flex flex-wrap items-center gap-3",
-                input { id: "np-code", class: "np-code form-input max-w-full font-mono", value: form.read().code.clone(), placeholder: "Project code",
+                input { id: "np-code", class: "np-code form-input max-w-full text-mono", value: form.read().code.clone(), placeholder: "Project code",
                     aria_invalid: error_id(ProjectFormField::Code).map(|_| "true"),
                     aria_describedby: error_id(ProjectFormField::Code),
                     oninput: move |event| form.write().code = event.value() }
                 if let Some(code) = previous_code {
-                    span { class: "text-sm text-subtle", "Last code: " span { class: "font-mono", "{code}" } }
+                    span { class: "text-sm text-subtle", "Last code: " span { class: "text-mono", "{code}" } }
                 }
                 if let Some(code) = suggested_code {
                     button { r#type: "button", class: "btn btn-ghost btn-sm font-semibold", onclick: move |_| form.write().code = code.clone(), "Use {code}" }

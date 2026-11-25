@@ -1296,7 +1296,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     } finally {
       releaseReport?.();
     }
-    const reportRows = page.locator('tbody tr:not(.report-total-row)');
+    const reportRows = page.locator('tbody tr');
     await expect(reportRows).toHaveCount(1);
     await expect(reportRows).toContainText('Recovered latest edit');
     await expect(reportRows.locator('td').nth(1)).toHaveText('1.00');

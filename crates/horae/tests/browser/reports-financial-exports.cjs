@@ -99,7 +99,7 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
     const select = label => page.locator('.form-group', { has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) }).locator('select');
     const tab = name => page.getByRole('button', { name, exact: true });
     const link = format => page.getByRole('link', { name: `Export ${format}`, exact: true });
-    const cells = locator => locator.evaluateAll(rows => rows.map(tr => [...tr.querySelectorAll('td')].map(td => td.innerText.trim())));
+    const cells = locator => locator.evaluateAll(rows => rows.map(tr => [...tr.querySelectorAll('th, td')].map(td => td.innerText.trim())));
 
     const verify = async state => {
       const picked = state.entries.map(n => entries[n]);
@@ -115,9 +115,9 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
       await tab('Time').click();
       const expectedGroups = [...new Set(picked.map(entry => projects[entry.project][1]))].sort()
         .map(name => [name, ...(state.groups || byProject)[name]]);
-      await expect.poll(async () => (await cells(page.locator('tbody tr:not(.report-total-row)')))
+      await expect.poll(async () => (await cells(page.locator('tbody tr')))
         .map(cellsOfRow => cellsOfRow.slice(0, 4)).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(expectedGroups);
-      assert.deepEqual((await cells(page.locator('tr.report-total-row')))[0].slice(0, 4), ['Total', ...state.total], state.name);
+      assert.deepEqual((await cells(page.locator('tfoot tr')))[0].slice(0, 4), ['Total', ...state.total], state.name);
 
       // P3: Detailed rows in order; excluded entries absent.
       await tab('Detailed time').click();
