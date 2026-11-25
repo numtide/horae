@@ -509,7 +509,7 @@ fn UninvoicedTable(uninvoiced: Uninvoiced, can_prepare: bool, retry: Callback<()
     let fees = add_amounts(clients.iter().map(|client| client.fees.as_slice()));
     rsx! {
         DataTable { label: tr.invoices_view_uninvoiced(), busy: pending && !clients.is_empty(),
-            table { aria_label: tr.invoices_view_uninvoiced(),
+            table { class: "name-table", aria_label: tr.invoices_view_uninvoiced(),
                 thead { tr {
                     th { scope: "col", {tr.invoices_column_client()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_unbilled_time()} }
