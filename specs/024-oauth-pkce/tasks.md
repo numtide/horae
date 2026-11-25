@@ -124,14 +124,14 @@ authorization.
 
 **Independent test**: quickstart step 1 and the administrator part of step 6; a member is refused.
 
-- [ ] T044 [US3] Implement `list_oauth_apps`, `create_oauth_app`, `update_oauth_app`, `set_oauth_app_enabled`, `replace_oauth_app_secret`, `delete_oauth_app` in `crates/horae/src/server_fns/oauth.rs` over `ops::oauth::clients`
-- [ ] T045 [US4] Implement `list_oauth_app_grants` and `revoke_oauth_grant` in `crates/horae/src/server_fns/oauth.rs` over `ops::oauth::grants`
-- [ ] T046 [US3] Add the routes `AdminApps` (`/admin/apps`) and `AdminApp` (`/admin/apps/:id`) in `crates/horae/src/route.rs` and the admin subnavigation entry after API tokens
-- [ ] T047 [US3] Build `crates/horae/src/pages/admin/apps.rs` (list, built-in client first with Enable/Disable, "Register app", notice when `HORAE_PUBLIC_URL` is unset) and `crates/horae/src/pages/admin/apps/{detail,form}.rs` (detail with Actions menu, authorizations table with "Revoke…", register/edit `Modal`, one-time secret reveal reused from the API tokens page), following DESIGN.md *Destructive actions* and *Dialogs*
-- [ ] T048 [P] [US3] Add the `## Apps` section (`apps-*` ids) to `crates/i18n/locales/en/horae.ftl`
-- [ ] T049 [P] [US3] UI tests for the admin pages (list, register public and confidential, secret shown once, built-in client cannot be edited or deleted, revoke through `ConfirmDialog`) in `crates/horae/tests/oauth_apps_ui.rs`
-- [ ] T050 [P] [US3] Server-function tests for administrator-only access and error mapping in `crates/horae/src/server_fns/oauth/tests.rs`
-- [ ] T051 Add the `/admin/apps` rows to the Pages table and an *Apps* subsection to DESIGN.md
+- [X] T044 [US3] Implement `list_oauth_apps`, `create_oauth_app`, `update_oauth_app`, `set_oauth_app_enabled`, `replace_oauth_app_secret`, `delete_oauth_app` in `crates/horae/src/server_fns/oauth_apps.rs` over `ops::oauth::clients` (a module of its own beside the approval page's `oauth.rs`, plus `get_oauth_app` for the app page and `oauth_apps_can_connect` for the notice)
+- [X] T045 [US4] Implement `list_oauth_app_grants` and `revoke_oauth_grant` in `crates/horae/src/server_fns/oauth_apps.rs` over `ops::oauth::grants`
+- [X] T046 [US3] Add the routes `AdminApps` (`/admin/apps`) and `AdminApp` (`/admin/apps/:id`) in `crates/horae/src/route.rs` and the admin subnavigation entry after API tokens
+- [X] T047 [US3] Build `crates/horae/src/pages/admin/apps.rs` (list, built-in client first with Enable/Disable, "Register app", notice when `HORAE_PUBLIC_URL` is unset) and `crates/horae/src/pages/admin/apps/{detail,form}.rs` (detail with Actions menu, authorizations table with "Revoke…", register/edit `Modal`, one-time secret reveal reused from the API tokens page), following DESIGN.md *Destructive actions* and *Dialogs*
+- [X] T048 [P] [US3] Add the `## Apps` section (`apps-*` ids) to `crates/i18n/locales/en/horae.ftl`
+- [X] T049 [P] [US3] UI tests for the admin pages (list, register public and confidential, secret shown once, built-in client cannot be edited or deleted, revoke through `ConfirmDialog`) in `crates/horae/tests/oauth_apps_ui.rs`
+- [X] T050 [P] [US3] Server-function tests for administrator-only access and error mapping in `crates/horae/src/server_fns/oauth_apps/tests.rs`
+- [X] T051 Add the `/admin/apps` rows to the Pages table and an *Apps* subsection to DESIGN.md
 - [ ] T052 Checkpoint: `nix flake check` passes; PR D opened
 
 ______________________________________________________________________

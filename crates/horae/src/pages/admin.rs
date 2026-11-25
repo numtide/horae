@@ -1,12 +1,14 @@
 use dioxus::prelude::*;
 
 mod api_tokens;
+mod apps;
 pub(crate) mod permission_editor;
 mod plugins;
 pub(crate) mod rates;
 mod workspace;
 
 pub use api_tokens::AdminApiTokens;
+pub use apps::{AdminApp, AdminApps};
 pub use plugins::WorkspacePlugins;
 pub use workspace::WorkspaceSettings;
 

@@ -240,6 +240,7 @@ mod clients;
 mod importers;
 mod invoices;
 mod oauth;
+mod oauth_apps;
 #[cfg(all(test, feature = "server"))]
 mod op_error_tests;
 mod organization;
@@ -267,6 +268,7 @@ pub use clients::*;
 pub use importers::*;
 pub use invoices::*;
 pub use oauth::*;
+pub use oauth_apps::*;
 pub use organization::*;
 pub use permission_editor::*;
 pub use plugins::*;

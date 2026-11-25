@@ -15,6 +15,7 @@ enum Section {
     Audit,
     Importers,
     ApiTokens,
+    Apps,
 }
 
 impl Section {
@@ -27,6 +28,7 @@ impl Section {
             Section::Audit => "Audit log".into(),
             Section::Importers => "Importers".into(),
             Section::ApiTokens => "API tokens".into(),
+            Section::Apps => tr.apps_title(),
         }
     }
 }
@@ -47,7 +49,8 @@ impl WorkspaceAccess {
             Section::Settings | Section::Plugins => self.settings,
             Section::Audit => self.audit,
             Section::Importers => self.importers,
-            Section::ApiTokens => self.api_tokens,
+            // Apps, like API tokens, are for the administrator identity.
+            Section::ApiTokens | Section::Apps => self.api_tokens,
         }
     }
 }
@@ -103,6 +106,7 @@ pub fn AdminShell() -> Element {
         Route::WorkspacePlugins {} => Section::Plugins,
         Route::PermissionAudit { .. } => Section::Audit,
         Route::AdminApiTokens {} => Section::ApiTokens,
+        Route::AdminApps {} | Route::AdminApp { .. } => Section::Apps,
         _ => Section::Importers,
     };
     let tr = crate::i18n::use_tr();
@@ -164,7 +168,10 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                                 AdmLink { to: Route::WorkspaceSettings {}, label: tr.workspace_settings_title() }
                                 AdmLink { to: Route::WorkspacePlugins {}, label: tr.workspace_plugins_title() }
                             }
-                            if access.api_tokens { AdmLink { to: Route::AdminApiTokens {}, label: "API tokens" } }
+                            if access.api_tokens {
+                                AdmLink { to: Route::AdminApiTokens {}, label: "API tokens" }
+                                AdmLink { to: Route::AdminApps {}, label: tr.apps_title() }
+                            }
                         }
                     }
 

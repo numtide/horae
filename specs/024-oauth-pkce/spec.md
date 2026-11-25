@@ -333,8 +333,8 @@ ______________________________________________________________________
 - **FR-004**: Each app MUST have a client id that is unique, public and not guessable from another.
 - **FR-005**: Horae MUST ship a built-in public client for its own Android app, with a fixed client
   id and redirect URI, listed with the other apps and disabled until an administrator enables it
-  (D-1). Administrators can disable it again but not delete it or edit its id, redirect URI
-  or type.
+  (D-1). Administrators can enable and disable it, and nothing else: they cannot delete it or
+  edit its name, scopes, id, redirect URI or type.
 
 #### Redirect URIs
 
