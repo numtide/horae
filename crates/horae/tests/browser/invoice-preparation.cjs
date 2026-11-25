@@ -152,7 +152,7 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     // The row's checkbox takes its name from the project cell, not a copy of it.
     await expect(projectBox(project.name)).not.toHaveAttribute('aria-label');
     // One project ticked: the total is that project's fees.
-    const projectRow = projectTable.locator('tbody tr').filter({ has: projectBox(project.name) });
+    const projectRow = projectTable.locator('tbody tr').filter({ has: page.getByRole('checkbox', { name: project.name, exact: true }) });
     await expect(projectRow.locator('td').last()).toHaveText(/^EUR /);
     await expect(projectsTotal.locator('td').last()).toHaveText(await projectRow.locator('td').last().innerText());
     // A failed preview keeps the form and offers to try again.
