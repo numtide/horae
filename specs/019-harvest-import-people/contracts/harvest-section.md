@@ -11,7 +11,7 @@ server function calls `require_admin` (013 FR-002).
 | `/admin/importers/harvest` | `HarvestOverview`: connection card, preview, latest 5 runs |
 | `/admin/importers/harvest/oauth?focus=secret` | `HarvestOAuth`: OAuth client settings; `focus=secret` opens an empty, focused secret field |
 | `/admin/importers/harvest/csv` | `HarvestCsv`: file picker, preview |
-| `/admin/importers/harvest/runs?before={id}` | `HarvestRuns`: 20 runs a page; `before` is the last run of the previous page, absent for the newest |
+| `/admin/importers/harvest/runs` | `HarvestRuns`: the newest 20 runs; "Load more" appends the next 20, while the last page read was full |
 | `/admin/importers/harvest/runs/{id}` | `HarvestRun`: header and actions, progress, summary, error groups, people not imported |
 
 Starting a preview, a commit or a re-sync opens the new run's page; a retry stays on its run. The

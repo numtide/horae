@@ -3,6 +3,7 @@ use horae_core::importers::harvest::types::{IdNotice, ReportPerson};
 use uuid::Uuid;
 
 use super::{entity_label, presentation};
+use crate::components::table::DataTable;
 use crate::models::ErrorGroup;
 
 /// "Needs your attention": each problem once, with how often it happened and
@@ -42,7 +43,7 @@ pub(super) fn ErrorGroups(
                                 span { class: "text-sm text-secondary", "{advice(group)}" }
                             }
                         }
-                        div { class: "overflow-x-auto px-5 pb-4",
+                        DataTable { flush: true, compact: true,
                             table {
                                 thead {
                                     tr {
@@ -51,18 +52,18 @@ pub(super) fn ErrorGroups(
                                     }
                                 }
                                 tbody {
-                                    for sample in group.samples.iter() {
-                                        tr {
+                                    for (row, sample) in group.samples.iter().enumerate() {
+                                        tr { key: "{row}",
                                             td { class: "text-mono whitespace-nowrap", "{sample.location}" }
-                                            td { class: "text-sm", "{sample.reason}" }
+                                            td { "{sample.reason}" }
                                         }
                                     }
                                 }
                             }
-                            if group.count > group.samples.len() as u64 {
-                                p { class: "text-sm text-faint mt-2",
-                                    "{presentation::count(group.count - group.samples.len() as u64)} more are in the download."
-                                }
+                        }
+                        if group.count > group.samples.len() as u64 {
+                            p { class: "text-sm text-faint px-4 pb-4",
+                                "{presentation::count(group.count - group.samples.len() as u64)} more are in the download."
                             }
                         }
                     }
@@ -78,7 +79,7 @@ pub(super) fn ErrorGroups(
                                 }
                             }
                         }
-                        div { class: "overflow-x-auto px-5 pb-4",
+                        DataTable { flush: true, compact: true,
                             table {
                                 thead {
                                     tr {
@@ -87,10 +88,10 @@ pub(super) fn ErrorGroups(
                                     }
                                 }
                                 tbody {
-                                    for person in new_people.iter() {
-                                        tr {
+                                    for (row, person) in new_people.iter().enumerate() {
+                                        tr { key: "{row}",
                                             td { "{person.name}" }
-                                            td { class: "text-mono text-sm", {person.email.clone().unwrap_or_default()} }
+                                            td { class: "text-mono", {person.email.clone().unwrap_or_default()} }
                                         }
                                     }
                                 }
@@ -109,7 +110,7 @@ pub(super) fn ErrorGroups(
                                 }
                             }
                         }
-                        div { class: "overflow-x-auto px-5 pb-4",
+                        DataTable { flush: true, compact: true,
                             table {
                                 thead {
                                     tr {
@@ -128,10 +129,10 @@ pub(super) fn ErrorGroups(
                                     }
                                 }
                             }
-                            if omitted_id_notices > 0 {
-                                p { class: "text-sm text-faint mt-2",
-                                    "{presentation::count(omitted_id_notices)} more are only counted."
-                                }
+                        }
+                        if omitted_id_notices > 0 {
+                            p { class: "text-sm text-faint px-4 pb-4",
+                                "{presentation::count(omitted_id_notices)} more are only counted."
                             }
                         }
                     }

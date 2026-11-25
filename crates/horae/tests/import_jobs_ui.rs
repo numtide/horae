@@ -70,6 +70,8 @@ pub mod page_header;
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[path = "../src/components/button.rs"]
 pub mod button;
 #[allow(dead_code)]
@@ -77,16 +79,21 @@ pub mod button;
 pub mod card;
 #[path = "../src/components/confirm_dialog.rs"]
 pub mod confirm_dialog;
+#[allow(dead_code)]
+#[path = "../src/components/table.rs"]
+pub mod table;
 
 mod components {
-    pub use crate::{back_link, card, confirm_dialog, icons, menu, page_header, screen_state};
+    pub use crate::{
+        back_link, badge, card, confirm_dialog, icons, menu, page_header, screen_state, table,
+    };
 }
 
 /// The importer routes, as the app declares them.
 mod route {
     use crate::importers::{
         ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
-        ImporterIndex, RunsCursor, SecretFocus,
+        ImporterIndex, SecretFocus,
     };
     use dioxus::prelude::*;
     use uuid::Uuid;
@@ -115,8 +122,8 @@ mod route {
         HarvestOAuth { focus: SecretFocus },
         #[route("/admin/importers/harvest/csv")]
         HarvestCsv {},
-        #[route("/admin/importers/harvest/runs?:..before")]
-        HarvestRuns { before: RunsCursor },
+        #[route("/admin/importers/harvest/runs")]
+        HarvestRuns {},
         #[route("/admin/importers/harvest/runs/:id")]
         HarvestRun { id: Uuid },
     }
@@ -1318,13 +1325,13 @@ async fn the_overview_shows_the_latest_five_runs() {
     assert!(html.contains(&run_path(5)), "{html}");
     assert!(!html.contains(&run_path(6)), "{html}");
     assert!(
-        html.contains("href=\"/admin/importers/harvest/runs?\""),
+        html.contains("href=\"/admin/importers/harvest/runs\""),
         "{html}"
     );
 }
 
 #[tokio::test]
-async fn run_history_pages_back_and_returns_to_the_newest_runs() {
+async fn run_history_loads_more_runs_under_the_newest_ones() {
     let probe = Probe::default();
     probe
         .history
@@ -1332,14 +1339,35 @@ async fn run_history_pages_back_and_returns_to_the_newest_runs() {
         .extend((1..=24).map(|id| job(id, "succeeded")));
     let mut ui = Ui::at(&probe, "/admin/importers/harvest/runs");
     assert!(!ui.html().contains(&run_path(24)));
-    ui.click("older-history");
-    assert!(ui.html().contains(&run_path(24)), "{}", ui.html());
-    assert!(!ui.html().contains(&run_path(1)));
-    ui.click("newer-history");
-    assert!(ui.html().contains(&run_path(1)));
+    ui.click("load-more-runs");
+    let html = ui.html();
+    assert!(html.contains(&run_path(1)), "{html}");
+    assert!(html.contains(&run_path(24)), "{html}");
+    // The second page was short, so there is nothing more to load.
+    assert!(!html.contains("load-more-runs"), "{html}");
     assert_eq!(
         &*probe.history_cursors.borrow(),
-        &[None, Some(Uuid::from_u128(20)), None]
+        &[None, Some(Uuid::from_u128(20))]
+    );
+}
+
+#[tokio::test]
+async fn load_more_goes_away_when_the_next_page_is_empty() {
+    // Exactly one full page: the button shows, and the empty page after it ends the list.
+    let probe = Probe::default();
+    probe
+        .history
+        .borrow_mut()
+        .extend((1..=20).map(|id| job(id, "succeeded")));
+    let mut ui = Ui::at(&probe, "/admin/importers/harvest/runs");
+    assert!(ui.html().contains("load-more-runs"));
+    ui.click("load-more-runs");
+    let html = ui.html();
+    assert!(!html.contains("load-more-runs"), "{html}");
+    assert!(html.contains(&run_path(1)), "{html}");
+    assert_eq!(
+        &*probe.history_cursors.borrow(),
+        &[None, Some(Uuid::from_u128(20))]
     );
 }
 

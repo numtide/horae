@@ -165,6 +165,34 @@ const user = email => ({ id: '019956ed-0000-7000-8000-0000000000a0', email, name
       await expect(page.getByTestId('preview-again')).toHaveAttribute('href', '/admin/importers/harvest/csv');
     });
 
+    await check('importer tables use the shared frame, and a history row opens its run', async () => {
+      await page.goto(runUrl(previewId));
+      await expect(page.getByRole('region', { name: 'People not imported' })).toBeVisible();
+      // Inside their cards every table is flush and compact: no frame of its own.
+      const tables = page.locator('main table');
+      const count = await tables.count();
+      assert.ok(count >= 3, `expected the run's tables, found ${count}`);
+      for (const table of await tables.all()) {
+        assert.equal(await table.evaluate(t => t.parentElement.matches('.table-container.table-flush.table-compact')), true,
+          'each run table is a flush, compact DataTable');
+      }
+      for (const header of await page.locator('main thead th').all()) {
+        assert.equal(await header.getAttribute('scope'), 'col', 'column headers have scope');
+      }
+      const entries = page.getByRole('region', { name: 'People not imported' }).locator('thead th').last();
+      await expect(entries).toHaveCSS('text-align', 'right');
+      // Runs: the whole row is the link, with no separate "Open" link; two runs need no "Load more".
+      await page.goto(`${base}/admin/importers/harvest/runs`);
+      const row = page.locator('tr.row-link', { has: page.getByTestId(`run-${previewId}`) });
+      await expect(row).toBeVisible();
+      await expect(row.getByRole('link')).toHaveCount(1);
+      await expect(row.locator('.badge-info')).toHaveText('Ready to import');
+      await expect(page.locator('#load-more-runs')).toHaveCount(0);
+      const box = await row.locator('td').last().boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForURL(runUrl(previewId));
+    });
+
     await check('committing a dry run opens the commit run', async () => {
       await page.goto(runUrl(previewId));
       await page.getByTestId('commit-preview').click();

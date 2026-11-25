@@ -25,6 +25,9 @@ assert.ok(database.searchParams.get('host')?.startsWith('/tmp/horae-browser.'));
   // this document and returns to Clients.
   const visit = async (link, ready) => {
     await page.goto(`${base}/clients`);
+    // Clicked before hydration, the rail link loads a new document, and Back
+    // then leaves it without asking.
+    await expect(page.locator(link)).toHaveAttribute('data-dioxus-id', /\d+/);
     await page.locator(link).click();
     await expect(ready).toBeVisible();
   };

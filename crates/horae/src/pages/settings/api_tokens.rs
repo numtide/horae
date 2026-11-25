@@ -6,22 +6,28 @@ use chrono::{DateTime, Duration, Utc};
 use dioxus::prelude::*;
 use uuid::Uuid;
 
+use crate::components::badge::Badge;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::form::{FormGroup, Input, Select};
+use crate::components::menu::{MenuItem, RowActions};
 use crate::components::page_header::PageHeader;
 use crate::components::revealed_secret::RevealedSecret;
-use crate::components::screen_state::{EmptyState, LoadError, Loading};
+use crate::components::screen_state::{EmptyState, LoadError};
+use crate::components::table::{DataTable, NameCell, TableMessage, TableSkeleton};
+use crate::i18n::Tr;
 use crate::models::api_tokens::{ApiTokenRow, CreatedApiToken};
 use crate::server_fns;
 
-/// Expiry choices in days; an empty value never expires.
-const EXPIRIES: [(&str, &str); 5] = [
-    ("7", "7 days"),
-    ("30", "30 days"),
-    ("90", "90 days"),
-    ("365", "1 year"),
-    ("", "No expiry"),
-];
+/// Expiry choices: the value in days, empty for a token that never expires.
+fn expiries(tr: Tr) -> Vec<(String, String)> {
+    let mut options: Vec<(String, String)> = [7, 30, 90]
+        .into_iter()
+        .map(|days| (days.to_string(), tr.api_tokens_expiry_days(days)))
+        .collect();
+    options.push(("365".into(), tr.api_tokens_expiry_year()));
+    options.push((String::new(), tr.api_tokens_expiry_never()));
+    options
+}
 
 #[component]
 pub fn SettingsApiTokens() -> Element {
@@ -29,7 +35,6 @@ pub fn SettingsApiTokens() -> Element {
     let intro = tr.api_tokens_intro();
     let (intro_before, intro_link, intro_after) = crate::i18n::split_tag(&intro, "link");
     let mut tokens = use_resource(server_fns::list_api_tokens);
-    let retry = use_callback(move |_| tokens.restart());
     let mut name = use_signal(String::new);
     let mut expiry = use_signal(|| "90".to_string());
     let mut creating = use_signal(|| false);
@@ -44,7 +49,7 @@ pub fn SettingsApiTokens() -> Element {
         spawn(async move {
             match server_fns::revoke_api_token(id.to_string()).await {
                 Ok(_) => tokens.restart(),
-                Err(_) => revoke_error.set(Some("Could not revoke the token. Try again.".into())),
+                Err(_) => revoke_error.set(Some(tr.api_tokens_revoke_failed())),
             }
         });
     });
@@ -69,15 +74,12 @@ pub fn SettingsApiTokens() -> Element {
                     message,
                     ..
                 }) => error.set(Some(message)),
-                Err(_) => error.set(Some("Could not create the token. Try again.".into())),
+                Err(_) => error.set(Some(tr.api_tokens_create_failed())),
             }
             creating.set(false);
         });
     };
-    let expiry_options: Vec<(String, String)> = EXPIRIES
-        .iter()
-        .map(|(value, label)| (value.to_string(), label.to_string()))
-        .collect();
+    let expiry_options = expiries(tr);
 
     rsx! {
         PageHeader { title: tr.api_tokens_title(), title_id: "api-tokens-title" }
@@ -89,14 +91,14 @@ pub fn SettingsApiTokens() -> Element {
         HarvestAccount {}
         if let Some(token) = created() {
             div { class: "alert alert-success mb-4 max-w-form", role: "status", id: "api-token-created",
-                p { class: "font-semibold mb-2", "Token “{token.row.name}” created" }
-                p { class: "text-sm mb-2", "Copy it now. Horae keeps no copy and will not show it again." }
+                p { class: "font-semibold mb-2", {tr.api_tokens_created(token.row.name.clone())} }
+                p { class: "text-sm mb-2", {tr.api_tokens_created_hint()} }
                 RevealedSecret { id: "api-token-secret", value: token.token.clone(),
-                    label: tr.api_tokens_secret_label(), copy_label: tr.api_tokens_copy(),
+                    label: tr.api_tokens_secret_label(), copy_label: tr.api_tokens_copy_label(),
                 }
                 div { class: "flex justify-end mt-2",
                     button { id: "api-token-dismiss", r#type: "button", class: "btn btn-secondary btn-sm",
-                        onclick: move |_| created.set(None), "Done"
+                        onclick: move |_| created.set(None), {tr.api_tokens_done()}
                     }
                 }
             }
@@ -105,14 +107,14 @@ pub fn SettingsApiTokens() -> Element {
         section { class: "card max-w-form mb-6", aria_label: tr.api_tokens_form_label(),
             div { class: "form-row flex flex-wrap items-end gap-3",
                 div { class: "flex-1 min-w-0",
-                    FormGroup { label: "Name", id: "api-token-name",
+                    FormGroup { label: tr.api_tokens_name(), id: "api-token-name",
                         Input { id: "api-token-name", value: name(), disabled: creating(),
                             error_id: error().map(|_| "api-token-error".to_string()),
                             oninput: edit_name,
                         }
                     }
                 }
-                FormGroup { label: "Expires", id: "api-token-expiry",
+                FormGroup { label: tr.api_tokens_expires(), id: "api-token-expiry",
                     Select { id: "api-token-expiry", options: expiry_options, selected: expiry(),
                         disabled: creating(), onchange: pick_expiry,
                     }
@@ -120,7 +122,7 @@ pub fn SettingsApiTokens() -> Element {
                 button { id: "api-token-create", r#type: "button", class: "btn btn-primary",
                     disabled: creating() || name.read().trim().is_empty(),
                     onclick: create,
-                    if creating() { "Creating…" } else { "Create token" }
+                    if creating() { {tr.api_tokens_creating()} } else { {tr.api_tokens_create()} }
                 }
             }
             p { class: "form-hint mb-0", {tr.api_tokens_name_hint()} }
@@ -128,24 +130,12 @@ pub fn SettingsApiTokens() -> Element {
                 p { id: "api-token-error", class: "alert alert-danger mt-4 mb-0", role: "alert", "{message}" }
             }
         }
-        section { aria_label: tr.api_tokens_list_label(),
+        // The table names itself "Your tokens".
+        section {
             if let Some(message) = revoke_error() {
                 p { class: "alert alert-danger", role: "alert", "{message}" }
             }
-            match &*tokens.read() {
-                None => rsx! { Loading { label: "Loading your tokens…" } },
-                Some(Err(error)) => rsx! {
-                    LoadError { error: error.clone(), what: "your tokens", retry,
-                        pending: tokens.state()() != UseResourceState::Ready, focus_on_recovery: "api-tokens-title",
-                    }
-                },
-                Some(Ok(rows)) if rows.is_empty() => rsx! {
-                    EmptyState { icon: "key", title: tr.api_tokens_empty(),
-                        body: tr.api_tokens_empty_hint(),
-                    }
-                },
-                Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, focus_fallback: "api-tokens-title", on_revoke } },
-            }
+            TokenTable { tokens, show_owner: false, focus_fallback: "api-tokens-title", on_revoke }
         }
     }
 }
@@ -154,29 +144,53 @@ pub fn SettingsApiTokens() -> Element {
 /// is on; nothing otherwise.
 #[component]
 fn HarvestAccount() -> Element {
+    let tr = crate::i18n::use_tr();
     let account = use_resource(server_fns::harvest_account_id);
     let Some(Ok(Some(id))) = *account.read() else {
         return rsx! {};
     };
+    // As text, so the account id is not grouped into thousands.
+    let text = tr.api_tokens_harvest_account(id.to_string());
+    let (before, id, after) = crate::i18n::split_tag(&text, "id");
     rsx! {
         p { id: "api-harvest-account", class: "text-secondary text-sm mb-4",
-            "Clients of the Harvest API v2 work with these tokens at /harvest/v2. When they ask for an account ID, use "
+            "{before}"
             span { class: "text-mono", "{id}" }
-            "."
+            "{after}"
         }
     }
 }
 
-/// Tokens newest first, with a revoke action on each active one.
+/// Tokens newest first, with a revoke action on each active one. Loading,
+/// empty and a failed read show inside the frame, under the header.
 #[component]
 pub(crate) fn TokenTable(
-    rows: Vec<ApiTokenRow>,
+    tokens: Resource<Result<Vec<ApiTokenRow>, ServerFnError>>,
+    /// Everyone's tokens, for administrators, rather than the person's own.
     show_owner: bool,
-    /// Where focus goes after a revoke, since the row's Revoke button goes away.
+    /// Where focus goes after a revoke, since the row's menu goes away, and
+    /// after a failed read recovers.
     focus_fallback: &'static str,
     on_revoke: Callback<Uuid>,
 ) -> Element {
     let tr = crate::i18n::use_tr();
+    let mut tokens = tokens;
+    let retry = use_callback(move |_| tokens.restart());
+    let pending = !matches!(*tokens.state().read(), UseResourceState::Ready);
+    let columns = if show_owner { 7 } else { 6 };
+    let (loading, what, empty_hint) = if show_owner {
+        (
+            tr.api_tokens_admin_loading(),
+            tr.api_tokens_admin_what(),
+            tr.api_tokens_admin_empty_hint(),
+        )
+    } else {
+        (
+            tr.api_tokens_loading(),
+            tr.api_tokens_what(),
+            tr.api_tokens_empty_hint(),
+        )
+    };
     // The token whose revocation is being confirmed, with its name.
     let mut revoking = use_signal(|| None::<(Uuid, String)>);
     let on_ask = use_callback(move |token: (Uuid, String)| revoking.set(Some(token)));
@@ -198,27 +212,45 @@ pub(crate) fn TokenTable(
         .unwrap_or_default();
     rsx! {
         ConfirmDialog { id: "api-token-revoke-dialog", labelledby: "api-token-revoke-title",
-            open: revoking.read().is_some(), title: tr.api_tokens_revoke_title(name), confirm_label: "Revoke",
+            open: revoking.read().is_some(), title: tr.api_tokens_revoke_title(name), confirm_label: tr.api_tokens_revoke(),
             on_confirm: revoke, on_dismiss: keep,
             p { {tr.api_tokens_revoke_body()} }
         }
-        div { class: "table-container overflow-x-auto",
+        // Labelled, the scroller is a region a keyboard can scroll.
+        DataTable { label: if show_owner { tr.api_tokens_admin_list_label() } else { tr.api_tokens_list_label() },
+            busy: pending && tokens.read().is_some(),
             table {
                 thead {
                     tr {
-                        if show_owner { th { scope: "col", "Owner" } }
-                        th { scope: "col", "Name" }
-                        th { scope: "col", "Token" }
-                        th { scope: "col", "Created" }
-                        th { scope: "col", "Expires" }
-                        th { scope: "col", "Last used" }
-                        th { scope: "col", "Status" }
-                        th { scope: "col", aria_label: "Action" }
+                        th { scope: "col", {tr.api_tokens_column_name()} }
+                        if show_owner { th { scope: "col", {tr.api_tokens_column_owner()} } }
+                        th { scope: "col", {tr.api_tokens_column_created()} }
+                        th { scope: "col", {tr.api_tokens_column_expires()} }
+                        th { scope: "col", {tr.api_tokens_column_last_used()} }
+                        th { scope: "col", {tr.api_tokens_column_status()} }
+                        th { scope: "col", aria_label: tr.action_menu() }
                     }
                 }
                 tbody {
-                    for row in rows {
-                        TokenRow { key: "{row.id}", row, show_owner, on_ask }
+                    match &*tokens.read() {
+                        None => rsx! { TableSkeleton { columns, label: loading } },
+                        Some(Err(error)) => rsx! {
+                            TableMessage { columns,
+                                LoadError { error: error.clone(), what, retry, pending, inset: true,
+                                    focus_on_recovery: focus_fallback,
+                                }
+                            }
+                        },
+                        Some(Ok(rows)) if rows.is_empty() => rsx! {
+                            TableMessage { columns,
+                                EmptyState { icon: "key", title: tr.api_tokens_empty(), body: empty_hint, inset: true }
+                            }
+                        },
+                        Some(Ok(rows)) => rsx! {
+                            for row in rows.iter() {
+                                TokenRow { key: "{row.id}", row: row.clone(), show_owner, on_ask }
+                            }
+                        },
                     }
                 }
             }
@@ -228,28 +260,34 @@ pub(crate) fn TokenTable(
 
 #[component]
 fn TokenRow(row: ApiTokenRow, show_owner: bool, on_ask: Callback<(Uuid, String)>) -> Element {
-    let status = status(&row, Utc::now());
+    let tr = crate::i18n::use_tr();
+    let status = Status::of(&row, Utc::now());
     let id = row.id;
+    let name = row.name.clone();
+    let ask = use_callback(move |_: MouseEvent| on_ask.call((id, name.clone())));
+    let never = || tr.api_tokens_never();
     rsx! {
         tr {
-            if show_owner { td { class: "text-sm", "{row.owner_name}" } }
-            td { class: "text-sm", "{row.name}" }
-            td { class: "text-mono text-xs whitespace-nowrap", "horae_pat_{row.display_prefix}…" }
-            td { class: "text-sm whitespace-nowrap", {when(row.created_at)} }
-            td { class: "text-sm whitespace-nowrap", {row.expires_at.map_or("Never".into(), when)} }
-            td { class: "text-sm whitespace-nowrap", {row.last_used_at.map_or("Never".into(), when)} }
-            td { class: "whitespace-nowrap",
-                span { class: if status == "Active" { "badge badge-success badge-sm" } else { "badge badge-sm" }, "{status}" }
+            NameCell {
+                secondary: rsx! { span { class: "text-mono", "horae_pat_{row.display_prefix}…" } },
+                "{row.name}"
             }
-            td { class: "text-right whitespace-nowrap",
-                if status == "Active" {
-                    button { id: "api-token-revoke-{id}", r#type: "button", class: "btn btn-danger btn-sm",
-                        aria_label: "Revoke {row.name}",
-                        onclick: {
-                            let name = row.name.clone();
-                            move |_| on_ask.call((id, name.clone()))
-                        },
-                        "Revoke"
+            if show_owner { td { "{row.owner_name}" } }
+            // Mono dates may wrap after the comma, so the row's menu stays in the frame.
+            td { class: "text-mono text-secondary", {when(row.created_at)} }
+            td { class: "text-mono text-secondary", {row.expires_at.map_or_else(never, when)} }
+            td { class: "text-mono text-secondary", {row.last_used_at.map_or_else(never, when)} }
+            td { class: "whitespace-nowrap",
+                match status {
+                    Status::Active => rsx! { Badge { variant: "success", {tr.api_tokens_status_active()} } },
+                    Status::Expired => rsx! { Badge { variant: "neutral", {tr.api_tokens_status_expired()} } },
+                    Status::Revoked => rsx! { Badge { variant: "neutral", {tr.api_tokens_status_revoked()} } },
+                }
+            }
+            td { class: "text-right",
+                if status == Status::Active {
+                    RowActions { id: "api-token-actions-{id}", name: row.name.clone(),
+                        MenuItem { id: "api-token-revoke-{id}", danger: true, onclick: ask, {tr.api_tokens_revoke_action()} }
                     }
                 }
             }
@@ -257,13 +295,22 @@ fn TokenRow(row: ApiTokenRow, show_owner: bool, on_ask: Callback<(Uuid, String)>
     }
 }
 
-fn status(row: &ApiTokenRow, now: DateTime<Utc>) -> &'static str {
-    if row.revoked_at.is_some() {
-        "Revoked"
-    } else if row.expires_at.is_some_and(|at| at <= now) {
-        "Expired"
-    } else {
-        "Active"
+#[derive(Clone, Copy, PartialEq)]
+enum Status {
+    Active,
+    Expired,
+    Revoked,
+}
+
+impl Status {
+    fn of(row: &ApiTokenRow, now: DateTime<Utc>) -> Self {
+        if row.revoked_at.is_some() {
+            Self::Revoked
+        } else if row.expires_at.is_some_and(|at| at <= now) {
+            Self::Expired
+        } else {
+            Self::Active
+        }
     }
 }
 

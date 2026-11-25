@@ -10,8 +10,7 @@ use crate::route::Route;
 mod harvest;
 
 pub use harvest::{
-    ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, RunsCursor,
-    SecretFocus,
+    ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, SecretFocus,
 };
 
 /// The sources Horae imports from: the Harvest API and a Harvest CSV export.
