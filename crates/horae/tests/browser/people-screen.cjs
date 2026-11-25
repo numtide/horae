@@ -51,6 +51,8 @@ let restoreSeededStates = () => {};
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
     await page.goto(`${base}/people`);
+    // The server renders the page; its buttons handle clicks only once the client has hydrated.
+    await expect(page.locator('#people-add')).toHaveAttribute('data-dioxus-id', /\d+/);
 
     // The seeded week has time, so the administrator sees everyone's hours.
     await expect(row(actor.name)).toBeVisible();
@@ -91,6 +93,8 @@ let restoreSeededStates = () => {};
     await items.filter({ hasText: 'View timesheet' }).click();
     await page.waitForURL(url => url.pathname.startsWith('/timesheet/week/') && url.searchParams.get('user') === actor.id);
     await page.goto(`${base}/people`);
+    // The server renders Add person; it opens the dialog only once the client has hydrated.
+    await expect(page.locator('#people-add')).toHaveAttribute('data-dioxus-id', /\d+/);
 
     // Add person is a dialog with the profile as radio cards.
     await page.getByRole('button', { name: 'Add person', exact: true }).click();
