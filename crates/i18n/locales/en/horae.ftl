@@ -210,12 +210,10 @@ apps-table-label = Apps
 apps-loading = Loading apps…
 apps-what = the apps
 apps-column-app = App
-apps-column-type = Type
 apps-column-access = Access
 apps-column-status = Status
-apps-column-authorizations = Authorizations
-apps-built-in = { -brand }’s own app
-apps-registered-on = Registered { $date }
+# The count of people with an active authorization of the app.
+apps-column-people = People
 apps-kind-public = Installed on devices
 apps-kind-confidential = Runs on a server
 # The access an app may ask for, in short words. `time` is `write`, `read` or

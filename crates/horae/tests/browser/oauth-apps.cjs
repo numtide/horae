@@ -80,7 +80,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     const table = main.getByRole('table', { name: 'Apps' });
     const first = table.locator('tbody tr').first();
     await expect(first).toContainText('Horae for Android');
-    await expect(first).toContainText('Horae’s own app');
+    await expect(first).toContainText('Installed on devices · horae-android');
+    await expect(table.locator('thead th')).toHaveText(['App', 'Access', 'Status', 'People', '']);
     await expect(first).toContainText('Time, projects');
     await expect(main).not.toContainText('time:read');
     await expect(main.locator('.table-container')).toHaveCSS('border-radius', '16px');
@@ -88,6 +89,11 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     const nameLink = first.getByRole('link', { name: 'Horae for Android' });
     const lineHeight = await nameLink.evaluate(link => parseFloat(getComputedStyle(link).lineHeight));
     assert.ok((await nameLink.boundingBox()).height < lineHeight * 1.5, 'the name does not wrap');
+    // All five columns fit the admin panel at 1280px: nothing scrolls sideways
+    // and the row menu is on screen.
+    const region = main.locator('.table-container').first();
+    assert.ok(await region.evaluate(el => el.scrollWidth <= el.clientWidth), 'the table fits');
+    await expect(first.getByRole('button', { name: 'Actions for Horae for Android' })).toBeInViewport({ ratio: 1 });
     const notice = main.locator('#apps-not-ready');
     if (canConnect) {
       await expect(notice).toHaveCount(0);
@@ -108,7 +114,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
 
     // The whole row opens the app, not only its name: the name's link covers
     // the row, so a click on the Access cell lands on it.
-    const access = await first.locator('td').nth(2).boundingBox();
+    const access = await first.locator('td').nth(1).boundingBox();
     await page.mouse.click(access.x + access.width / 2, access.y + access.height / 2);
     await page.waitForURL(/\/admin\/apps\/[0-9a-f-]{36}$/);
     await expect(page.getByRole('heading', { name: 'Horae for Android', level: 1 })).toBeVisible();

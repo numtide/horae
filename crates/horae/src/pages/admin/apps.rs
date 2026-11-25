@@ -68,18 +68,17 @@ pub fn AdminApps() -> Element {
                 thead {
                     tr {
                         th { scope: "col", {tr.apps_column_app()} }
-                        th { scope: "col", {tr.apps_column_type()} }
                         th { scope: "col", {tr.apps_column_access()} }
                         th { scope: "col", {tr.apps_column_status()} }
-                        th { scope: "col", class: "text-right", {tr.apps_column_authorizations()} }
+                        th { scope: "col", class: "text-right", {tr.apps_column_people()} }
                         th { scope: "col", aria_label: tr.action_menu() }
                     }
                 }
                 tbody {
                     match &*apps.read() {
-                        None => rsx! { TableSkeleton { columns: 6, label: tr.apps_loading() } },
+                        None => rsx! { TableSkeleton { columns: 5, label: tr.apps_loading() } },
                         Some(Err(error)) => rsx! {
-                            TableMessage { columns: 6,
+                            TableMessage { columns: 5,
                                 LoadError { error: error.clone(), what: tr.apps_what(), retry, pending, inset: true,
                                     focus_on_recovery: "apps-title",
                                 }
@@ -92,7 +91,6 @@ pub fn AdminApps() -> Element {
                                     NameCell { secondary: rsx! { {app_secondary(tr, app)} },
                                         Link { to: Route::AdminApp { id: app.id }, id: "app-link-{app.id}", "{app.name}" }
                                     }
-                                    td { class: "text-secondary", {kind_label(tr, app.kind)} }
                                     td { {access_label(tr, &app.scopes)} }
                                     td { class: "whitespace-nowrap", StatusBadge { enabled: app.enabled } }
                                     td { class: "text-right text-mono", "{app.active_grants}" }
@@ -200,23 +198,18 @@ fn StatusBadge(enabled: bool) -> Element {
     }
 }
 
-/// Under the name: whose app it is or when it was registered, then the start
-/// of its client id, long enough to tell apps apart past the `horae_app_`
-/// prefix they share.
+/// Under the name: its type, then the start of its client id, long enough
+/// to tell apps apart past the `horae_app_` prefix they share.
 fn app_secondary(tr: Tr, app: &AppRow) -> String {
     const SHOWN: usize = 18;
-    let origin = if app.built_in {
-        tr.apps_built_in()
-    } else {
-        tr.apps_registered_on(date(app.created_at))
-    };
+    let kind = kind_label(tr, app.kind);
     let client_id: String = app.client_id.chars().take(SHOWN).collect();
     let ellipsis = if client_id.len() < app.client_id.len() {
         "…"
     } else {
         ""
     };
-    format!("{origin} · {client_id}{ellipsis}")
+    format!("{kind} · {client_id}{ellipsis}")
 }
 
 fn kind_label(tr: Tr, kind: AppKind) -> String {

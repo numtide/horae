@@ -267,7 +267,13 @@ async fn the_list_puts_horaes_own_app_first_with_access_in_words() {
     let html = html(&mount(&probe));
     let android = html.find("Horae for Android").expect("listed");
     assert!(android < html.find("Invoice sync").unwrap(), "{html}");
-    assert!(html.contains("Horae’s own app · horae-android"), "{html}");
+    assert!(
+        html.contains("Installed on devices · horae-android"),
+        "the type sits under the name: {html}"
+    );
+    assert!(html.contains("Runs on a server · horae_app_"), "{html}");
+    assert!(html.contains(">People<"), "{html}");
+    assert!(!html.contains(">Type<"), "no type column: {html}");
     assert!(
         html.contains("horae_app_7Q2fK9xV…"),
         "enough of the client id to tell apps apart: {html}"

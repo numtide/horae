@@ -65,7 +65,7 @@ until revoked. Removing a redirect URI does not affect issued tokens.
 
 Pages (admin shell, after "API tokens"):
 
-- `AdminApps` at `/admin/apps`: a table of apps (name, type, scopes, status, active authorizations),
+- `AdminApps` at `/admin/apps`: a table of apps (name with its type under it, scopes, status, active authorizations as People),
   a Primary "Register app" button, the built-in Android client first with an Enable/Disable action.
   When `HORAE_PUBLIC_URL` is unset, a notice explains that apps cannot connect until the operator
   sets it.
