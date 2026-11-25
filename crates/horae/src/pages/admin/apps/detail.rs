@@ -93,7 +93,7 @@ fn AppPage(id: Uuid) -> Element {
                         div {
                             dt { class: "text-secondary mb-1", {tr.apps_redirects()} }
                             dd { class: "m-0",
-                                ul { class: "list-none p-0 m-0 flex flex-col gap-1",
+                                ul { class: "data-list flex flex-col gap-1",
                                     for uri in row.redirect_uris.iter() {
                                         li { key: "{uri}", class: "text-mono text-xs wrap-anywhere", "{uri}" }
                                     }
@@ -103,7 +103,7 @@ fn AppPage(id: Uuid) -> Element {
                         div {
                             dt { class: "text-secondary mb-1", {tr.apps_scopes()} }
                             dd { class: "m-0",
-                                ul { class: "list-none p-0 m-0 flex flex-col gap-1",
+                                ul { class: "data-list flex flex-col gap-1",
                                     for scope in Scope::ALL.into_iter().filter(|scope| row.scopes.iter().any(|name| name == scope.as_str())) {
                                         li { key: "{scope.as_str()}", {scope_sentence(tr, scope)} }
                                     }
@@ -184,52 +184,52 @@ fn Authorizations(
                 span { class: "text-sm text-secondary", {tr.apps_authorizations_count(count)} }
             }
             DataTable { label: tr.apps_authorizations_title(), busy: pending && grants.read().is_some(),
-                    table { aria_labelledby: "app-authorizations-title",
-                        thead {
-                            tr {
-                                th { scope: "col", {tr.apps_column_person()} }
-                                th { scope: "col", {tr.apps_column_access()} }
-                                th { scope: "col", {tr.apps_column_allowed()} }
-                                th { scope: "col", {tr.apps_column_last_used()} }
-                                th { scope: "col", aria_label: tr.action_menu() }
-                            }
+                table { aria_labelledby: "app-authorizations-title",
+                    thead {
+                        tr {
+                            th { scope: "col", {tr.apps_column_person()} }
+                            th { scope: "col", {tr.apps_column_access()} }
+                            th { scope: "col", {tr.apps_column_allowed()} }
+                            th { scope: "col", {tr.apps_column_last_used()} }
+                            th { scope: "col", aria_label: tr.action_menu() }
                         }
-                        tbody {
-                            match &*grants.read() {
-                                None => rsx! { TableSkeleton { columns: 5, label: tr.apps_authorizations_loading() } },
-                                Some(Err(error)) => rsx! {
-                                    TableMessage { columns: 5,
-                                        LoadError { error: error.clone(), what: tr.apps_authorizations_what(), retry, pending,
-                                            inset: true, focus_on_recovery: "app-authorizations-title",
+                    }
+                    tbody {
+                        match &*grants.read() {
+                            None => rsx! { TableSkeleton { columns: 5, label: tr.apps_authorizations_loading() } },
+                            Some(Err(error)) => rsx! {
+                                TableMessage { columns: 5,
+                                    LoadError { error: error.clone(), what: tr.apps_authorizations_what(), retry, pending,
+                                        inset: true, focus_on_recovery: "app-authorizations-title",
+                                    }
+                                }
+                            },
+                            Some(Ok(rows)) if rows.is_empty() => rsx! {
+                                TableMessage { columns: 5,
+                                    EmptyState { icon: "users", title: tr.apps_authorizations_empty(),
+                                        body: tr.apps_authorizations_empty_hint(), inset: true,
+                                    }
+                                }
+                            },
+                            Some(Ok(rows)) => rsx! {
+                                for grant in rows.iter() {
+                                    tr { key: "{grant.id}",
+                                        NameCell { secondary: rsx! { "{grant.person_email}" }, "{grant.person_name}" }
+                                        td { {access_label(tr, &grant.scopes)} }
+                                        td { class: "whitespace-nowrap", {date(grant.approved_at)} }
+                                        td { class: "whitespace-nowrap",
+                                            {grant.last_used_at.map_or_else(|| tr.apps_never(), date)}
+                                        }
+                                        td { class: "text-right",
+                                            GrantActions { id: grant.id, person: grant.person_name.clone(), revoking }
                                         }
                                     }
-                                },
-                                Some(Ok(rows)) if rows.is_empty() => rsx! {
-                                    TableMessage { columns: 5,
-                                        EmptyState { icon: "users", title: tr.apps_authorizations_empty(),
-                                            body: tr.apps_authorizations_empty_hint(), inset: true,
-                                        }
-                                    }
-                                },
-                                Some(Ok(rows)) => rsx! {
-                                    for grant in rows.iter() {
-                                        tr { key: "{grant.id}",
-                                            NameCell { secondary: rsx! { "{grant.person_email}" }, "{grant.person_name}" }
-                                            td { {access_label(tr, &grant.scopes)} }
-                                            td { class: "whitespace-nowrap", {date(grant.approved_at)} }
-                                            td { class: "whitespace-nowrap",
-                                                {grant.last_used_at.map_or_else(|| tr.apps_never(), date)}
-                                            }
-                                            td { class: "text-right",
-                                                GrantActions { id: grant.id, person: grant.person_name.clone(), revoking }
-                                            }
-                                        }
-                                    }
-                                },
-                            }
+                                }
+                            },
                         }
                     }
                 }
+            }
         }
         ConfirmDialog { id: "grant-revoke-dialog", labelledby: "grant-revoke-title", open: revoking.read().is_some(),
             title: tr.apps_revoke_title(person.as_str()), confirm_label: tr.apps_revoke_confirm(),

@@ -37,10 +37,12 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await settled();
   };
   // Each state at both widths and in both themes; the page is left as found.
-  const shoot = async name => {
+  // A resize closes an open menu, so `reopen` brings it back.
+  const shoot = async (name, reopen) => {
     if (!evidence) return;
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      if (reopen) await reopen();
       for (const theme of ['dark', 'light']) {
         await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
         await page.screenshot({ path: join(evidence, `${name}-${width}-${theme}.png`), fullPage: true, animations: 'disabled' });
@@ -48,6 +50,15 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     }
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+    if (reopen) await reopen();
+  };
+  const openMenu = trigger => async () => {
+    const open = page.getByRole('menu').filter({ visible: true });
+    // The resize may close it a moment later, so start from closed.
+    await page.keyboard.press('Escape');
+    await expect(open).toHaveCount(0);
+    await trigger.click();
+    await expect(open).toBeVisible();
   };
   const main = page.locator('.adm-main');
   try {
@@ -87,7 +98,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await first.getByRole('button', { name: 'Actions for Horae for Android' }).click();
     const builtInMenu = page.getByRole('menu').filter({ visible: true });
     await expect(builtInMenu.getByRole('menuitem')).toHaveText(['Open', 'Enable']);
-    await shoot('apps-menu-built-in');
+    await shoot('apps-menu-built-in', openMenu(first.getByRole('button', { name: 'Actions for Horae for Android' })));
     await page.keyboard.press('Escape');
 
     // Register a server app. A refused address shows under its field and the
@@ -140,11 +151,11 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(main).toContainText('1 active');
     await shoot('apps-detail');
 
-    await page.getByRole('button', { name: 'Actions', exact: true }).click();
+    await page.locator('#app-actions-trigger').click();
     const actions = page.getByRole('menu').filter({ visible: true });
     await expect(actions.getByRole('menuitem')).toHaveText(['Edit…', 'Replace secret…', 'Disable', 'Delete…']);
     await expect(actions.getByRole('menuitem', { name: 'Delete…' })).toHaveClass(/danger/);
-    await shoot('apps-detail-menu');
+    await shoot('apps-detail-menu', openMenu(page.locator('#app-actions-trigger')));
     await actions.getByRole('menuitem', { name: 'Disable' }).click();
     await expect(page.locator('.page-header .badge')).toHaveText('Disabled');
 
@@ -161,7 +172,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(main).toContainText('0 active');
 
     // Delete asks first, then the list no longer has it.
-    await page.getByRole('button', { name: 'Actions', exact: true }).click();
+    await page.locator('#app-actions-trigger').click();
     await page.getByRole('menu').filter({ visible: true }).getByRole('menuitem', { name: 'Delete…' }).click();
     const deletion = page.getByRole('dialog', { name: 'Delete Invoice sync?' });
     await expect(deletion).toBeVisible();
