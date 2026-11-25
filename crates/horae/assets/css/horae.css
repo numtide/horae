@@ -1069,7 +1069,9 @@ tfoot tr:last-child td, tfoot tr:last-child th { padding-bottom: var(--space-4);
 tbody tr:hover { background: var(--color-row-hover); }
 /* A row that opens a record: its first link stretches over the whole row. */
 tr.row-link { position: relative; }
-tr.row-link a::after { content: ""; position: absolute; inset: 0; }
+tr.row-link > :first-child a::after { content: ""; position: absolute; inset: 0; }
+/* Other links in the row sit above that one and open their own record. */
+tr.row-link > :not(:first-child) a { position: relative; z-index: 1; }
 
 /* DataTable variants (components/table.rs). */
 /* The card is the frame; one rule under its title block. */

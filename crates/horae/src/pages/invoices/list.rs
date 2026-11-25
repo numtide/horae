@@ -14,8 +14,8 @@ use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::filter_bar::{FilterBar, SearchField};
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, LoadError, Skeleton};
-use crate::components::table::DataTable;
+use crate::components::screen_state::{EmptyState, LoadError};
+use crate::components::table::{DataTable, NameCell, TableMessage, TableSkeleton};
 use crate::i18n::{Tr, use_tr};
 use crate::models::invoice::{CurrencyAmount, InvoiceListItem, UninvoicedClient};
 use crate::route::Route;
@@ -163,24 +163,9 @@ pub(super) fn InvoiceListContent(filter: InvoiceFilter) -> Element {
                 }
             }
             if uninvoiced_view {
-                match &*uninvoiced.read() {
-                    None => rsx! { Skeleton { rows: 4, columns: 5, label: tr.invoices_uninvoiced_loading() } },
-                    Some(Err(error)) => rsx! {
-                        LoadError { error: error.clone(), what: tr.invoices_uninvoiced_what(), retry: retry_uninvoiced,
-                            pending: uninvoiced.state()() != UseResourceState::Ready }
-                    },
-                    Some(Ok(_)) => rsx! { UninvoicedTable { uninvoiced, can_prepare: storage.ready() } },
-                }
+                UninvoicedTable { uninvoiced, can_prepare: storage.ready(), retry: retry_uninvoiced }
             } else {
-                match &*invoices.read() {
-                    None => rsx! { Skeleton { rows: 5, columns: 6, label: tr.invoices_loading() } },
-                    Some(Err(error)) => rsx! {
-                        LoadError { error: error.clone(), what: tr.invoices_what(), retry: retry_invoices,
-                            pending: invoices.state()() != UseResourceState::Ready,
-                            focus_on_recovery: INVOICES_HEADING }
-                    },
-                    Some(Ok(_)) => rsx! { InvoicesTable { invoices, filter: filter.clone() } },
-                }
+                InvoicesTable { invoices, filter: filter.clone(), retry: retry_invoices }
             }
         }
     }
@@ -243,8 +228,10 @@ fn Summary(invoices: Invoices, uninvoiced: Uninvoiced) -> Element {
     }
 }
 
+/// The filters and the list. Loading, an error and no match show inside the
+/// table's frame, under its header, so the page does not jump.
 #[component]
-fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter) -> Element {
+fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter, retry: Callback<()>) -> Element {
     let tr = use_tr();
     let navigator = use_navigator();
     let today = crate::components::today::today();
@@ -316,17 +303,19 @@ fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter) -> Element {
         })
     };
 
-    let stale = invoices.state()() != UseResourceState::Ready;
+    let pending = invoices.state()() != UseResourceState::Ready;
     let read = invoices.read();
-    let Some(Ok(list)) = &*read else {
-        return rsx! {};
-    };
-    if list.is_empty() {
+    let list: &[InvoiceListItem] = match &*read {
+        // No invoice yet: the page's empty state rather than an empty table.
         // The header already holds "New invoice", the screen's one Primary.
-        return rsx! {
-            EmptyState { icon: "invoices", title: tr.invoices_empty_title(), body: tr.invoices_empty_body() }
-        };
-    }
+        Some(Ok(list)) if list.is_empty() => {
+            return rsx! {
+                EmptyState { icon: "invoices", title: tr.invoices_empty_title(), body: tr.invoices_empty_body() }
+            };
+        }
+        Some(Ok(list)) => list,
+        _ => &[],
+    };
 
     let needle = query().trim().to_lowercase();
     let visible: Vec<&InvoiceListItem> = list
@@ -380,27 +369,38 @@ fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter) -> Element {
             },
             search: rsx! { SearchField { id: "invoices-search", label: tr.invoices_search_label(), query } },
         }
-        if visible.is_empty() {
-            EmptyState { icon: "invoices", title: tr.invoices_none_match(),
-                actions: rsx! { Button { variant: ButtonVariant::Secondary, label: tr.invoices_clear_filters(), onclick: clear } },
-            }
-        } else {
-            div { class: "inv-content", aria_busy: stale,
-                DataTable {
-                    table {
-                        thead { tr {
-                            th { scope: "col", {tr.invoices_column_number()} }
-                            th { scope: "col", {tr.invoices_column_client()} }
-                            th { scope: "col", {tr.invoices_column_issued()} }
-                            th { scope: "col", {tr.invoices_column_due()} }
-                            th { scope: "col", class: "text-right", {tr.invoices_column_amount()} }
-                            th { scope: "col", {tr.invoices_column_status()} }
-                        } }
-                        tbody {
+        DataTable { label: tr.invoices_view_invoices(), sticky_header: true,
+            busy: pending && matches!(&*read, Some(Ok(_))),
+            table { aria_label: tr.invoices_view_invoices(),
+                thead { tr {
+                    th { scope: "col", {tr.invoices_column_number()} }
+                    th { scope: "col", {tr.invoices_column_client()} }
+                    th { scope: "col", {tr.invoices_column_issued()} }
+                    th { scope: "col", {tr.invoices_column_due()} }
+                    th { scope: "col", class: "text-right", {tr.invoices_column_amount()} }
+                    th { scope: "col", {tr.invoices_column_status()} }
+                } }
+                tbody {
+                    match &*read {
+                        None => rsx! { TableSkeleton { columns: 6, rows: 5, label: tr.invoices_loading() } },
+                        Some(Err(error)) => rsx! {
+                            TableMessage { columns: 6,
+                                LoadError { error: error.clone(), what: tr.invoices_what(), retry, pending, inset: true,
+                                    focus_on_recovery: INVOICES_HEADING }
+                            }
+                        },
+                        Some(Ok(_)) if visible.is_empty() => rsx! {
+                            TableMessage { columns: 6,
+                                EmptyState { icon: "invoices", inset: true, title: tr.invoices_none_match(),
+                                    actions: rsx! { Button { variant: ButtonVariant::Secondary, small: true, label: tr.invoices_clear_filters(), onclick: clear } },
+                                }
+                            }
+                        },
+                        Some(Ok(_)) => rsx! {
                             for item in visible {
                                 InvoiceRow { key: "{item.invoice.id}", item: item.clone() }
                             }
-                        }
+                        },
                     }
                 }
             }
@@ -422,8 +422,8 @@ fn InvoiceRow(item: InvoiceListItem) -> Element {
                 Link { to: Route::InvoiceDetail { id: invoice.id }, class: "font-semibold text-strong", "{invoice.number}" }
             }
             td { class: "wrap-anywhere", "{item.client_name}" }
-            td { class: "text-mono", {date(invoice.issued_on)} }
-            td { class: if item.overdue { "text-mono text-danger" } else { "text-mono" }, {date(invoice.due_on)} }
+            td { class: "text-mono text-secondary", {date(invoice.issued_on)} }
+            td { class: if item.overdue { "text-mono text-danger" } else { "text-mono text-secondary" }, {date(invoice.due_on)} }
             td { class: if void { "text-mono text-right inv-void-amount text-muted" } else { "text-mono text-right" },
                 {money(invoice.total_cents, &invoice.currency)}
             }
@@ -465,59 +465,122 @@ fn PeriodOption(
     rsx! { MenuItem { selected: current == value, onclick: choose, {period_label(tr, value)} } }
 }
 
-/// Clients with unbilled time or fees due, each with its own New invoice.
-#[component]
-fn UninvoicedTable(uninvoiced: Uninvoiced, can_prepare: bool) -> Element {
-    let tr = use_tr();
-    let read = uninvoiced.read();
-    let Some(Ok(Some(clients))) = &*read else {
-        return rsx! {};
-    };
-    if clients.is_empty() {
-        return rsx! {
-            EmptyState { icon: "invoices", success: true, title: tr.invoices_uninvoiced_empty_title(),
-                body: tr.invoices_uninvoiced_empty_body() }
-        };
+/// Per-currency sums of several lists of amounts, in currency order.
+/// `None` when a sum does not fit, so no total shows a capped figure.
+fn add_amounts<'a>(
+    lists: impl Iterator<Item = &'a [CurrencyAmount]>,
+) -> Option<Vec<CurrencyAmount>> {
+    let mut sums = std::collections::BTreeMap::<&str, i64>::new();
+    for amount in lists.flatten() {
+        let sum = sums.entry(amount.currency.as_str()).or_default();
+        *sum = sum.checked_add(amount.cents)?;
     }
+    Some(
+        sums.into_iter()
+            .map(|(currency, cents)| CurrencyAmount {
+                currency: currency.to_owned(),
+                cents,
+            })
+            .collect(),
+    )
+}
+
+/// Amounts in several currencies, or a dash when there are none.
+fn amounts_or_dash(sums: Option<&[CurrencyAmount]>) -> String {
+    match sums {
+        Some(sums) if !sums.is_empty() => amounts(sums),
+        _ => "—".into(),
+    }
+}
+
+/// Clients with unbilled time or fees due. Each row opens a new invoice for
+/// its client, and the footer adds them up per currency.
+#[component]
+fn UninvoicedTable(uninvoiced: Uninvoiced, can_prepare: bool, retry: Callback<()>) -> Element {
+    let tr = use_tr();
+    let pending = uninvoiced.state()() != UseResourceState::Ready;
+    let read = uninvoiced.read();
+    let clients: &[UninvoicedClient] = match &*read {
+        Some(Ok(Some(clients))) => clients,
+        _ => &[],
+    };
+    let minutes: i64 = clients.iter().map(|client| client.unbilled_minutes).sum();
+    let time = add_amounts(clients.iter().map(|client| client.time.as_slice()));
+    let fees = add_amounts(clients.iter().map(|client| client.fees.as_slice()));
     rsx! {
-        DataTable {
-            table {
+        DataTable { label: tr.invoices_view_uninvoiced(), busy: pending && !clients.is_empty(),
+            table { aria_label: tr.invoices_view_uninvoiced(),
                 thead { tr {
                     th { scope: "col", {tr.invoices_column_client()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_unbilled_time()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_unbilled_amount()} }
                     th { scope: "col", class: "text-right", {tr.invoices_column_fees_due()} }
                     th { scope: "col", {tr.invoices_column_last_invoice()} }
-                    th { scope: "col", aria_label: tr.action_menu() }
                 } }
                 tbody {
-                    for client in clients {
-                        tr { key: "{client.client_id}",
-                            td { class: "wrap-anywhere font-semibold", "{client.client_name}" }
-                            td { class: "text-mono text-right", {horae_core::duration::format_hhmm(client.unbilled_minutes)} }
-                            td { class: "text-mono text-right", {if client.time.is_empty() { "—".into() } else { amounts(&client.time) }} }
-                            td { class: "text-mono text-right", {if client.fees.is_empty() { "—".into() } else { amounts(&client.fees) }} }
-                            td {
-                                match &client.last_invoice {
-                                    Some(last) => rsx! {
-                                        Link { to: Route::InvoiceDetail { id: last.id }, class: "text-mono", "{last.number}" }
-                                        span { class: "text-sm text-muted", " " {tr.invoices_last_invoice_date(date(last.issued_on))} }
-                                    },
-                                    None => rsx! { span { class: "text-muted", {tr.invoices_never_invoiced()} } },
-                                }
+                    match &*read {
+                        None => rsx! { TableSkeleton { columns: 5, rows: 4, label: tr.invoices_uninvoiced_loading() } },
+                        Some(Err(error)) => rsx! {
+                            TableMessage { columns: 5,
+                                LoadError { error: error.clone(), what: tr.invoices_uninvoiced_what(), retry, pending, inset: true }
                             }
-                            td { class: "text-right",
-                                if can_prepare {
-                                    Link {
-                                        to: Route::NewInvoiceForClient { client: client.client_id.to_string() },
-                                        class: "btn btn-secondary btn-sm",
-                                        aria_label: tr.invoices_new_for(client.client_name.clone()),
-                                        {tr.invoices_new()}
-                                    }
-                                }
+                        },
+                        Some(Ok(_)) if clients.is_empty() => rsx! {
+                            TableMessage { columns: 5,
+                                EmptyState { icon: "invoices", success: true, inset: true, title: tr.invoices_uninvoiced_empty_title(),
+                                    body: tr.invoices_uninvoiced_empty_body() }
                             }
-                        }
+                        },
+                        Some(Ok(_)) => rsx! {
+                            for client in clients {
+                                UninvoicedRow { key: "{client.client_id}", client: client.clone(), can_prepare }
+                            }
+                        },
                     }
+                }
+                if !clients.is_empty() {
+                    tfoot { tr {
+                        th { scope: "row", {tr.invoices_total()} }
+                        td { class: "text-mono text-right", {horae_core::duration::format_hhmm(minutes)} }
+                        td { class: "text-mono text-right", {amounts_or_dash(time.as_deref())} }
+                        td { class: "text-mono text-right", {amounts_or_dash(fees.as_deref())} }
+                        td {}
+                    } }
+                }
+            }
+        }
+    }
+}
+
+/// One client with work to invoice. Its name opens a new invoice for it and
+/// covers the row; the last invoice keeps a link of its own above that.
+#[component]
+fn UninvoicedRow(client: UninvoicedClient, can_prepare: bool) -> Element {
+    let tr = use_tr();
+    rsx! {
+        tr { class: if can_prepare { "row-link" },
+            NameCell {
+                if can_prepare {
+                    Link {
+                        to: Route::NewInvoiceForClient { client: client.client_id.to_string() },
+                        class: "wrap-anywhere text-strong",
+                        aria_label: tr.invoices_new_for(client.client_name.clone()),
+                        "{client.client_name}"
+                    }
+                } else {
+                    span { class: "wrap-anywhere", "{client.client_name}" }
+                }
+            }
+            td { class: "text-mono text-right", {horae_core::duration::format_hhmm(client.unbilled_minutes)} }
+            td { class: "text-mono text-right", {amounts_or_dash(Some(client.time.as_slice()))} }
+            td { class: "text-mono text-right", {amounts_or_dash(Some(client.fees.as_slice()))} }
+            td {
+                match &client.last_invoice {
+                    Some(last) => rsx! {
+                        Link { to: Route::InvoiceDetail { id: last.id }, class: "text-mono", "{last.number}" }
+                        span { class: "text-sm text-secondary", " " {tr.invoices_last_invoice_date(date(last.issued_on))} }
+                    },
+                    None => rsx! { span { class: "text-muted", {tr.invoices_never_invoiced()} } },
                 }
             }
         }
@@ -609,6 +672,21 @@ mod tests {
             item("EUR", 1, InvoiceStatus::Sent, false),
         ];
         assert_eq!(totals(huge.iter()), None);
+    }
+
+    #[test]
+    fn uninvoiced_totals_add_up_per_currency_and_refuse_to_cap() {
+        let amount = |currency: &str, cents| CurrencyAmount {
+            currency: currency.into(),
+            cents,
+        };
+        let acme = [amount("EUR", 100), amount("USD", 50)];
+        let globex = [amount("EUR", 25)];
+        let sums = add_amounts([acme.as_slice(), &globex, &[]].into_iter()).unwrap();
+        assert_eq!(amounts(&sums), "EUR 1.25 · USD 0.50");
+        assert_eq!(amounts_or_dash(Some(&[])), "—");
+        let huge = [amount("EUR", i64::MAX)];
+        assert_eq!(add_amounts([huge.as_slice(), &globex].into_iter()), None);
     }
 
     #[test]

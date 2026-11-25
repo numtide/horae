@@ -142,8 +142,19 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await projectBox('All projects').click();
     await expect(page.getByText('Select at least one project.')).toBeVisible();
     await expect(generate).toBeDisabled();
+    // Nothing ticked: the total is empty, not zero.
+    const projectTable = page.getByRole('region', { name: 'Projects', exact: true }).getByRole('table');
+    const projectsTotal = projectTable.locator('tfoot tr');
+    await expect(projectsTotal.getByRole('rowheader', { name: 'Total', exact: true })).toBeVisible();
+    await expect(projectsTotal.locator('td').last()).toHaveText('—');
     await projectBox(project.name).click();
     await expect(generate).toBeEnabled();
+    // The row's checkbox takes its name from the project cell, not a copy of it.
+    await expect(projectBox(project.name)).not.toHaveAttribute('aria-label');
+    // One project ticked: the total is that project's fees.
+    const projectRow = projectTable.locator('tbody tr').filter({ has: projectBox(project.name) });
+    await expect(projectRow.locator('td').last()).toHaveText(/^EUR /);
+    await expect(projectsTotal.locator('td').last()).toHaveText(await projectRow.locator('td').last().innerText());
     // A failed preview keeps the form and offers to try again.
     await page.route('**/api/prepare_invoice*', route => route.abort());
     await page.getByLabel('PO number', { exact: true }).fill('Fee review retry');
