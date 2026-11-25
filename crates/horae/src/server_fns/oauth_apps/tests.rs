@@ -78,6 +78,11 @@ async fn a_member_is_refused_every_app_function(pool: PgPool) {
         .await
         .unwrap();
     let id = created.app.id;
+    let grant = authorize(&pool, &admin, id).await;
+    // Authorization comes before validation: an unknown scope is refused
+    // as forbidden too.
+    let mut unknown_scope = device_app("Timer");
+    unknown_scope.scopes = vec!["invoices:write".into()];
 
     let refused = [
         list(&pool, caller(&member)).await.map(drop),
@@ -94,10 +99,25 @@ async fn a_member_is_refused_every_app_function(pool: PgPool) {
         replace_secret(&pool, caller(&member), id).await.map(drop),
         delete(&pool, caller(&member), id).await,
         list_grants(&pool, caller(&member), id).await.map(drop),
+        create(&pool, caller(&member), unknown_scope.clone())
+            .await
+            .map(drop),
+        update(&pool, caller(&member), id, unknown_scope)
+            .await
+            .map(drop),
     ];
     for result in refused {
         assert_eq!(code(&result.unwrap_err()), FORBIDDEN);
     }
+    // Someone else's authorization is not the member's to see.
+    let error = revoke_grant(&pool, caller(&member), grant)
+        .await
+        .unwrap_err();
+    assert_eq!(code(&error), NOT_FOUND);
+    assert_eq!(
+        list_grants(&pool, caller(&admin), id).await.unwrap().len(),
+        1
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -160,10 +180,19 @@ async fn invalid_input_is_a_bad_request_naming_the_field(pool: PgPool) {
         .await
         .unwrap_err();
     assert_eq!(field(&error).as_deref(), Some("name"));
+
+    create(&pool, caller(&admin), device_app("Timer"))
+        .await
+        .unwrap();
+    let error = create(&pool, caller(&admin), server_app("Timer"))
+        .await
+        .unwrap_err();
+    assert_eq!(code(&error), CONFLICT);
+    assert_eq!(field(&error).as_deref(), Some("name"), "a taken name");
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn the_built_in_app_keeps_its_fixed_fields_and_cannot_be_deleted(pool: PgPool) {
+async fn the_built_in_app_can_only_be_enabled_or_disabled(pool: PgPool) {
     let admin = seed(&pool, BuiltInProfile::Administrator).await;
     let apps = list(&pool, caller(&admin)).await.unwrap();
     let android = built_in(&apps).clone();
@@ -171,12 +200,28 @@ async fn the_built_in_app_keeps_its_fixed_fields_and_cannot_be_deleted(pool: PgP
 
     let error = delete(&pool, caller(&admin), android.id).await.unwrap_err();
     assert_eq!(code(&error), CONFLICT);
-    let mut moved = device_app(&android.name);
-    moved.scopes = android.scopes.clone();
-    let error = update(&pool, caller(&admin), android.id, moved)
-        .await
-        .unwrap_err();
-    assert_eq!(code(&error), CONFLICT);
+    let unchanged = AppInput {
+        name: android.name.clone(),
+        kind: android.kind,
+        redirect_uris: android.redirect_uris.clone(),
+        scopes: android.scopes.clone(),
+    };
+    let mut moved = unchanged.clone();
+    moved.redirect_uris = vec!["com.example.timer:/callback".into()];
+    let mut renamed = unchanged.clone();
+    renamed.name = "Horae mobile".into();
+    let mut narrowed = unchanged;
+    narrowed.scopes = vec!["time:read".into()];
+    for changes in [moved, renamed, narrowed] {
+        let error = update(&pool, caller(&admin), android.id, changes)
+            .await
+            .unwrap_err();
+        assert_eq!(code(&error), CONFLICT);
+    }
+    assert_eq!(
+        get(&pool, caller(&admin), android.id).await.unwrap(),
+        android
+    );
     let error = replace_secret(&pool, caller(&admin), android.id)
         .await
         .unwrap_err();

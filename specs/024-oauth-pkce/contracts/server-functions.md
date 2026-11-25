@@ -53,7 +53,7 @@ audit log (C-4).
 | `get_oauth_app(id)` | administrator | | `AppRow` | `FORBIDDEN`; `NOT_FOUND` |
 | `oauth_apps_can_connect()` | signed-in person | | whether `HORAE_PUBLIC_URL` is set | |
 | `create_oauth_app(new)` | administrator | name, kind, redirect URIs, scopes | `CreatedApp` (secret once for confidential) | `BAD_REQUEST` with the field on invalid input |
-| `update_oauth_app(id, changes)` | administrator | name, redirect URIs, scopes | `AppRow` | `BAD_REQUEST`; `CONFLICT` for a built-in client's fixed fields |
+| `update_oauth_app(id, changes)` | administrator | name, redirect URIs, scopes | `AppRow` | `BAD_REQUEST`; `CONFLICT` for the built-in client and for a name another app has (field `name`) |
 | `set_oauth_app_enabled(id, enabled)` | administrator | | `AppRow` | |
 | `replace_oauth_app_secret(id)` | administrator | | the new secret once | `CONFLICT` for a public client |
 | `delete_oauth_app(id)` | administrator | | | `CONFLICT` for the built-in client |

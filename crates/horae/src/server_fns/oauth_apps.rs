@@ -135,14 +135,8 @@ fn scope_names(scopes: ScopeSet) -> Vec<String> {
     scopes.names().into_iter().map(str::to_owned).collect()
 }
 
-#[cfg(feature = "server")]
-fn scope_set(names: &[String]) -> Result<ScopeSet, ServerFnError> {
-    ScopeSet::parse_each(names.iter().map(String::as_str))
-        .map_err(|error| form_error(ops::OpError::invalid("scopes", error)))
-}
-
 /// Like [`op_error`], and names the field an invalid input blames, so the
-/// form shows the message under it.
+/// form shows the message under it. A conflict names its field itself.
 #[cfg(feature = "server")]
 fn form_error(error: ops::OpError) -> ServerFnError {
     let field = match error.kind() {
@@ -180,7 +174,7 @@ async fn create(
     app: AppInput,
 ) -> Result<CreatedApp, ServerFnError> {
     let input = ops::oauth::clients::NewClient {
-        scopes: scope_set(&app.scopes)?,
+        scopes: app.scopes,
         name: app.name,
         kind: match app.kind {
             AppKind::Public => ClientKind::Public,
@@ -208,7 +202,7 @@ async fn update(
     changes: AppInput,
 ) -> Result<AppRow, ServerFnError> {
     let changes = ops::oauth::clients::ClientChanges {
-        scopes: scope_set(&changes.scopes)?,
+        scopes: changes.scopes,
         name: changes.name,
         redirect_uris: changes.redirect_uris,
     };

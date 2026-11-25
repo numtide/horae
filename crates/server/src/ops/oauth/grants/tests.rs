@@ -20,7 +20,7 @@ async fn app(pool: &PgPool, admin: &SeedIds) -> Uuid {
         name: "Widget".into(),
         kind: ClientKind::Public,
         redirect_uris: vec!["com.example.app:/callback".into()],
-        scopes: ScopeSet::of(&[Scope::TimeRead]),
+        scopes: vec![Scope::TimeRead.as_str().to_owned()],
     };
     let result = clients::register(&mut write.tx, &write.actor, input).await;
     write

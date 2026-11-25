@@ -58,7 +58,7 @@ pub async fn register(
         name: name.into(),
         kind,
         redirect_uris,
-        scopes,
+        scopes: scopes.names().into_iter().map(str::to_owned).collect(),
     };
     let result = clients::register(&mut write.tx, &write.actor, input).await;
     let (client, secret) = write.commit(result, &NoEvents).await.unwrap();

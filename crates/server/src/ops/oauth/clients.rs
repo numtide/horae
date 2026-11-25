@@ -25,7 +25,7 @@ const NAME_TAKEN: &str = "Another app already has this name";
 const REDIRECT_COUNT: &str = "Add between 1 and 10 redirect URIs";
 const REDIRECT_DUPLICATE: &str = "Each redirect URI can be listed once";
 const SCOPES_EMPTY: &str = "Choose at least one scope";
-const BUILT_IN_FIXED: &str = "The redirect URIs of Horae's own app cannot change";
+const BUILT_IN_FIXED: &str = "Horae's own app cannot be edited; only enabled or disabled";
 const BUILT_IN_KEPT: &str = "Horae's own app cannot be deleted; disable it instead";
 const PUBLIC_NO_SECRET: &str = "A public app has no secret";
 
@@ -51,13 +51,14 @@ pub struct OAuthClient {
     pub updated_at: DateTime<Utc>,
 }
 
-/// What an administrator enters to register an app.
+/// What an administrator enters to register an app. Scopes arrive as names,
+/// so an unknown one is refused only after the caller is authorized.
 #[derive(Debug, Clone)]
 pub struct NewClient {
     pub name: String,
     pub kind: ClientKind,
     pub redirect_uris: Vec<String>,
-    pub scopes: ScopeSet,
+    pub scopes: Vec<String>,
 }
 
 /// What an administrator may change on an app; its kind stays as registered.
@@ -65,7 +66,7 @@ pub struct NewClient {
 pub struct ClientChanges {
     pub name: String,
     pub redirect_uris: Vec<String>,
-    pub scopes: ScopeSet,
+    pub scopes: Vec<String>,
 }
 
 /// Every app of the organization, the built-in client first.
@@ -89,7 +90,7 @@ pub async fn register(
     require_signed_in_administrator(actor)?;
     let name = valid_name(&input.name)?;
     let redirect_uris = valid_redirect_uris(&input.redirect_uris, input.kind)?;
-    let scopes = valid_scopes(input.scopes)?;
+    let scopes = valid_scopes(&input.scopes)?;
     let secret =
         (input.kind == ClientKind::Confidential).then(|| Secret::generate(CLIENT_SECRET_PREFIX));
     let id = Uuid::now_v7();
@@ -120,8 +121,8 @@ pub async fn register(
 }
 
 /// Changes an app's name, redirect URIs and scopes. The built-in client
-/// keeps its redirect URIs. Narrowing the scopes leaves existing
-/// authorizations as they were approved.
+/// cannot be edited, only enabled or disabled. Narrowing the scopes leaves
+/// existing authorizations as they were approved.
 pub async fn update(
     tx: &mut Tx,
     actor: &Actor,
@@ -130,12 +131,12 @@ pub async fn update(
 ) -> Result<Done<OAuthClient>, OpError> {
     require_signed_in_administrator(actor)?;
     let current = lock(tx, actor.org_id(), id).await?;
-    let name = valid_name(&changes.name)?;
-    let redirect_uris = valid_redirect_uris(&changes.redirect_uris, current.kind)?;
-    let scopes = valid_scopes(changes.scopes)?;
-    if current.built_in && redirect_uris != current.redirect_uris {
+    if current.built_in {
         return Err(OpError::conflict(BUILT_IN_FIXED));
     }
+    let name = valid_name(&changes.name)?;
+    let redirect_uris = valid_redirect_uris(&changes.redirect_uris, current.kind)?;
+    let scopes = valid_scopes(&changes.scopes)?;
     let updated = sqlx::query!(
         "UPDATE oauth_clients SET name = $2, redirect_uris = $3, scopes = $4 WHERE id = $1",
         id,
@@ -272,7 +273,9 @@ fn valid_redirect_uris(uris: &[String], kind: ClientKind) -> Result<Vec<String>,
     Ok(valid)
 }
 
-fn valid_scopes(scopes: ScopeSet) -> Result<ScopeSet, OpError> {
+fn valid_scopes(names: &[String]) -> Result<ScopeSet, OpError> {
+    let scopes = ScopeSet::parse_each(names.iter().map(String::as_str))
+        .map_err(|error| OpError::invalid("scopes", error))?;
     if scopes.is_empty() {
         return Err(OpError::invalid("scopes", SCOPES_EMPTY));
     }
@@ -286,7 +289,7 @@ fn name_taken(result: Result<sqlx::postgres::PgQueryResult, sqlx::Error>) -> Res
                 .as_database_error()
                 .is_some_and(|db| db.is_unique_violation()) =>
         {
-            Err(OpError::conflict(NAME_TAKEN))
+            Err(OpError::conflict(NAME_TAKEN).with_field("name"))
         }
         other => other.map(drop).map_err(OpError::from),
     }
