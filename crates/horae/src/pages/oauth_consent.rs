@@ -34,7 +34,6 @@ pub fn OAuthConsent(request: String) -> Element {
         let request = request.clone();
         move || server_fns::oauth_consent_details(request.clone())
     });
-    let me = use_resource(server_fns::get_me);
     let retry = use_callback(move |_| details.restart());
     // The answer being sent; once set, both buttons stay disabled.
     let mut sending = use_signal(|| None::<Answer>);
@@ -151,11 +150,14 @@ pub fn OAuthConsent(request: String) -> Element {
         }
     };
 
-    let person = me
-        .read()
-        .as_ref()
-        .and_then(|me| me.as_ref().ok())
-        .map(|me| me.name.clone());
+    // Who answers, and for which organization (FR-024).
+    let account = match &*details.read() {
+        Some(Ok(consent)) if !expired() => Some(tr.oauth_consent_signed_in(
+            consent.person_name.clone(),
+            consent.organization_name.clone(),
+        )),
+        _ => None,
+    };
     rsx! {
         main { class: "consent-page",
             div { class: "consent-brand",
@@ -163,11 +165,11 @@ pub fn OAuthConsent(request: String) -> Element {
                 span { class: "consent-brand-name", {tr.oauth_consent_brand()} }
             }
             {card}
-            if let Some(name) = person {
+            if let Some(account) = account {
                 // Signing out keeps this request for whoever signs in next.
                 form { class: "consent-account", method: "post", action: "/auth/logout",
                     input { r#type: "hidden", name: "return_to", value: "/oauth/consent?request={request}" }
-                    span { class: "consent-person", {tr.oauth_consent_signed_in(name)} }
+                    span { class: "consent-person", {account} }
                     button { id: "consent-sign-out", r#type: "submit", class: "consent-sign-out",
                         {tr.oauth_consent_sign_out()}
                     }

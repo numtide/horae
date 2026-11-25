@@ -31,7 +31,7 @@ mod components {
     pub use super::{badge, button, icons, logo, screen_state};
 }
 mod models {
-    pub use horae_types::{oauth, user};
+    pub use horae_types::oauth;
 }
 #[path = "../src/pages/oauth_consent.rs"]
 mod oauth_consent;
@@ -166,7 +166,7 @@ async fn the_page_names_the_app_its_access_and_where_it_returns() {
     );
     assert!(!html.contains("Add, change and delete"), "{html}");
     assert!(html.contains("dev.horae.android"), "{html}");
-    assert!(html.contains("Signed in as Ada Admin"), "{html}");
+    assert!(html.contains("Signed in as Ada Admin · Test Org"), "{html}");
     assert!(
         !tag(&html, "consent-allow").contains("disabled=true"),
         "{html}"
@@ -225,6 +225,8 @@ async fn an_expired_request_offers_no_action() {
     assert!(html.contains("Nothing was shared"), "{html}");
     assert!(!html.contains("consent-allow"), "{html}");
     assert!(!html.contains("consent-deny"), "{html}");
+    // Who is signed in comes with the request, so an expired one names no one.
+    assert!(!html.contains("Signed in as"), "{html}");
 }
 
 #[tokio::test]
@@ -265,17 +267,5 @@ mod server_fns {
     pub async fn deny_oauth_request(request: String) -> Result<String, ServerFnError> {
         use_context::<Probe>().denials.borrow_mut().push(request);
         Ok("dev.horae.android:/oauth/callback?error=access_denied".into())
-    }
-
-    pub async fn get_me() -> Result<models::user::CurrentUser, ServerFnError> {
-        Ok(models::user::CurrentUser {
-            id: uuid::Uuid::nil(),
-            org_id: uuid::Uuid::nil(),
-            email: "ada@example.com".into(),
-            name: "Ada Admin".into(),
-            timezone: None,
-            workspace_timezone: "UTC".into(),
-            utc_offset_seconds: 0,
-        })
     }
 }
