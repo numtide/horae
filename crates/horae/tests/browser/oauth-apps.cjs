@@ -106,8 +106,10 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.keyboard.press('Escape');
     await expect(builtInMenu).toHaveCount(0);
 
-    // The whole row opens the app, not only its name.
-    await first.locator('td').nth(2).click();
+    // The whole row opens the app, not only its name: the name's link covers
+    // the row, so a click on the Access cell lands on it.
+    const access = await first.locator('td').nth(2).boundingBox();
+    await page.mouse.click(access.x + access.width / 2, access.y + access.height / 2);
     await page.waitForURL(/\/admin\/apps\/[0-9a-f-]{36}$/);
     await expect(page.getByRole('heading', { name: 'Horae for Android', level: 1 })).toBeVisible();
     await page.goBack();
