@@ -37,6 +37,7 @@ pub struct TasksQuery {
     get,
     path = "/tasks",
     operation_id = "listTasks",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(TasksQuery),
     responses(
@@ -80,6 +81,7 @@ pub async fn list(
     get,
     path = "/tasks/{id}",
     operation_id = "getTask",
+    security(("token" = []), ("oauth2" = ["catalog:read"])),
     tag = "catalogue",
     params(("id" = Uuid, Path, description = "The task's id")),
     responses(
