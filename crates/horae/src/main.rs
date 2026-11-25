@@ -282,6 +282,7 @@ fn main() -> anyhow::Result<()> {
                         .with_job_policy(cfg.job_policy)
                         .with_mail(cfg.mail.clone())
                         .with_oauth(cfg.oauth)
+                        .with_public_url(cfg.public_url.clone())
                         .with_version(version::current()),
                 )
                 .await;

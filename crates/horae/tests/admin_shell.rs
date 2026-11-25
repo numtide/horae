@@ -523,6 +523,10 @@ mod route {
         },
         #[route("/admin/api-tokens")]
         AdminApiTokens {},
+        #[route("/admin/apps")]
+        AdminApps {},
+        #[route("/admin/apps/:id")]
+        AdminApp { id: uuid::Uuid },
     }
 
     pub fn route_is_active(to: &Route) -> bool {
@@ -572,6 +576,17 @@ mod route {
     }
 
     #[component]
+    fn AdminApps() -> Element {
+        rsx! { "Apps panel" }
+    }
+
+    #[component]
+    fn AdminApp(id: uuid::Uuid) -> Element {
+        let _ = id;
+        rsx! { "App panel" }
+    }
+
+    #[component]
     fn WorkspacePlugins() -> Element {
         rsx! { "Plugins panel" }
     }
@@ -617,6 +632,7 @@ async fn api_tokens_route_and_link_follow_the_administrator_identity() {
         let html = dioxus::ssr::render(&dom);
         assert_eq!(html.contains("API tokens panel"), allowed, "{html}");
         assert_eq!(html.contains("/admin/api-tokens"), allowed, "{html}");
+        assert_eq!(html.contains("/admin/apps"), allowed, "{html}");
     }
 }
 

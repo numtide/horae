@@ -147,8 +147,8 @@ idle-expired over a day ago. Index on `idle_expires_at` where `used_at` is null.
 ## Page DTOs (`horae-types::oauth`)
 
 - `ConsentDetails { request_id, app_name, built_in, scopes: Vec<String>, return_to_display, person_name, organization_name }`.
-- `AppRow { id, client_id, name, kind, scopes, redirect_uris, built_in, enabled, secret_prefix, active_grants, created_at }`, `NewApp`, `AppChanges`, `CreatedApp { app, secret: Option<String> }`.
-- `GrantRow { id, app_name, client_id, person_id, person_name, scopes, approved_at, last_used_at, expires_at }`.
+- `horae-types::oauth_apps`: `AppRow { id, client_id, name, kind, scopes, redirect_uris, built_in, enabled, secret_prefix, active_grants, created_at, created_by_name }`, `AppInput { name, kind, redirect_uris, scopes }` (registering and editing; an edit keeps the kind), `CreatedApp { app, secret: Option<String> }`.
+- `GrantRow { id, app_name, client_id, person_id, person_name, person_email, scopes, approved_at, last_used_at, expires_at }`.
 
 ## Configuration (no storage)
 

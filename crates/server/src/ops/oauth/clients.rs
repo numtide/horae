@@ -45,6 +45,9 @@ pub struct OAuthClient {
     /// Authorizations neither revoked nor expired.
     pub active_grants: i64,
     pub created_at: DateTime<Utc>,
+    /// Who registered it; `None` for the built-in client and once that
+    /// person's account is gone.
+    pub created_by_name: Option<String>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -316,10 +319,12 @@ async fn fetch(tx: &mut Tx, org_id: Uuid, id: Option<Uuid>) -> Result<Vec<OAuthC
                   c.scopes, c.built_in, c.enabled, c.secret_prefix,
                   c.created_at AS "created_at: DateTime<Utc>",
                   c.updated_at AS "updated_at: DateTime<Utc>",
+                  u.name AS "created_by_name?",
                   (SELECT count(*) FROM oauth_grants g
                    WHERE g.client_id = c.id AND g.revoked_at IS NULL AND g.expires_at > now())
                     AS "active_grants!"
            FROM oauth_clients c
+           LEFT JOIN users u ON u.org_id = c.org_id AND u.id = c.created_by
            WHERE c.org_id = $1 AND ($2::uuid IS NULL OR c.id = $2)
            ORDER BY c.built_in DESC, lower(c.name), c.id"#,
         org_id,
@@ -342,6 +347,7 @@ async fn fetch(tx: &mut Tx, org_id: Uuid, id: Option<Uuid>) -> Result<Vec<OAuthC
                 secret_prefix: row.secret_prefix,
                 active_grants: row.active_grants,
                 created_at: row.created_at,
+                created_by_name: row.created_by_name,
                 updated_at: row.updated_at,
             })
         })

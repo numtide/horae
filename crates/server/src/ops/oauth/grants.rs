@@ -23,6 +23,7 @@ pub struct GrantRow {
     pub app_built_in: bool,
     pub person_id: Uuid,
     pub person_name: String,
+    pub person_email: String,
     pub scopes: ScopeSet,
     pub approved_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
@@ -116,8 +117,8 @@ async fn fetch(
 ) -> Result<Vec<GrantRow>, OpError> {
     let rows = sqlx::query!(
         r#"SELECT g.id, c.id AS app_id, c.name AS app_name, c.client_id,
-                  c.built_in AS app_built_in, g.user_id, u.name AS person_name, g.scopes,
-                  g.approved_at AS "approved_at: DateTime<Utc>",
+                  c.built_in AS app_built_in, g.user_id, u.name AS person_name, u.email AS person_email,
+                  g.scopes, g.approved_at AS "approved_at: DateTime<Utc>",
                   g.last_used_at AS "last_used_at: DateTime<Utc>",
                   g.expires_at AS "expires_at: DateTime<Utc>"
            FROM oauth_grants g
@@ -144,6 +145,7 @@ async fn fetch(
                 app_built_in: row.app_built_in,
                 person_id: row.user_id,
                 person_name: row.person_name,
+                person_email: row.person_email,
                 scopes: ScopeSet::parse_each(row.scopes.iter().map(String::as_str)).map_err(
                     |_| {
                         tracing::error!("Invalid stored OAuth grant scopes");

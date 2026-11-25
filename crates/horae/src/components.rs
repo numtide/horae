@@ -25,6 +25,7 @@ pub mod page_header;
 pub mod period_nav;
 pub mod permission_description;
 pub mod project_task_picker;
+pub mod revealed_secret;
 pub mod screen_state;
 pub mod select_field;
 pub mod session;

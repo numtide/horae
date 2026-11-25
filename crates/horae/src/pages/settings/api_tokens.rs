@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::form::{FormGroup, Input, Select};
 use crate::components::page_header::PageHeader;
+use crate::components::revealed_secret::RevealedSecret;
 use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::models::api_tokens::{ApiTokenRow, CreatedApiToken};
 use crate::server_fns;
@@ -90,7 +91,9 @@ pub fn SettingsApiTokens() -> Element {
             div { class: "alert alert-success mb-4 max-w-form", role: "status", id: "api-token-created",
                 p { class: "font-semibold mb-2", "Token “{token.row.name}” created" }
                 p { class: "text-sm mb-2", "Copy it now. Horae keeps no copy and will not show it again." }
-                RevealedToken { token: token.token.clone() }
+                RevealedSecret { id: "api-token-secret", value: token.token.clone(),
+                    label: tr.api_tokens_secret_label(), copy_label: tr.api_tokens_copy(),
+                }
                 div { class: "flex justify-end mt-2",
                     button { id: "api-token-dismiss", r#type: "button", class: "btn btn-secondary btn-sm",
                         onclick: move |_| created.set(None), "Done"
@@ -160,35 +163,6 @@ fn HarvestAccount() -> Element {
             "Clients of the Harvest API v2 work with these tokens at /harvest/v2. When they ask for an account ID, use "
             span { class: "text-mono", "{id}" }
             "."
-        }
-    }
-}
-
-/// The new secret, read-only, with a copy button.
-#[component]
-fn RevealedToken(token: String) -> Element {
-    let mut copied = use_signal(|| false);
-    let copy = {
-        let token = token.clone();
-        move |_| {
-            let js = format!(
-                "navigator.clipboard.writeText({});",
-                serde_json::to_string(&token).unwrap_or_default()
-            );
-            document::eval(&js);
-            copied.set(true);
-        }
-    };
-    rsx! {
-        div { class: "input-group",
-            input { id: "api-token-secret", aria_label: "New token",
-                class: "input-group-field text-mono text-xs truncate", readonly: true, value: "{token}",
-            }
-            button { r#type: "button", class: "btn btn-secondary btn-sm",
-                aria_label: if copied() { "Token copied" } else { "Copy token" },
-                onclick: copy,
-                if copied() { "Copied" } else { "Copy" }
-            }
         }
     }
 }
