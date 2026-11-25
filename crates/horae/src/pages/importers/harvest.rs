@@ -52,8 +52,6 @@ mod run_panel;
 mod run_view;
 #[path = "harvest/runs.rs"]
 mod runs;
-#[path = "harvest/runs_cursor.rs"]
-mod runs_cursor;
 
 pub use connect_outcome::{ConnectOutcome, SecretFocus};
 pub use csv::HarvestCsv;
@@ -61,7 +59,6 @@ pub use oauth::HarvestOAuth;
 pub use overview::HarvestOverview;
 pub use run::HarvestRun;
 pub use runs::HarvestRuns;
-pub use runs_cursor::RunsCursor;
 
 /// Loaded/loading/error view of the connection resource.
 #[derive(Clone, PartialEq)]

@@ -70,6 +70,8 @@ pub mod page_header;
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
 
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[path = "../src/components/button.rs"]
 pub mod button;
 #[allow(dead_code)]
@@ -83,7 +85,7 @@ pub mod table;
 
 mod components {
     pub use crate::{
-        back_link, card, confirm_dialog, icons, menu, page_header, screen_state, table,
+        back_link, badge, card, confirm_dialog, icons, menu, page_header, screen_state, table,
     };
 }
 
@@ -91,7 +93,7 @@ mod components {
 mod route {
     use crate::importers::{
         ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
-        ImporterIndex, RunsCursor, SecretFocus,
+        ImporterIndex, SecretFocus,
     };
     use dioxus::prelude::*;
     use uuid::Uuid;
@@ -120,8 +122,8 @@ mod route {
         HarvestOAuth { focus: SecretFocus },
         #[route("/admin/importers/harvest/csv")]
         HarvestCsv {},
-        #[route("/admin/importers/harvest/runs?:..before")]
-        HarvestRuns { before: RunsCursor },
+        #[route("/admin/importers/harvest/runs")]
+        HarvestRuns {},
         #[route("/admin/importers/harvest/runs/:id")]
         HarvestRun { id: Uuid },
     }
@@ -1323,7 +1325,7 @@ async fn the_overview_shows_the_latest_five_runs() {
     assert!(html.contains(&run_path(5)), "{html}");
     assert!(!html.contains(&run_path(6)), "{html}");
     assert!(
-        html.contains("href=\"/admin/importers/harvest/runs?\""),
+        html.contains("href=\"/admin/importers/harvest/runs\""),
         "{html}"
     );
 }

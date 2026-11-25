@@ -186,6 +186,13 @@ async fn an_empty_list_says_so_and_create_waits_for_a_name() {
     let dom = mount(&Probe::default());
     let html = html(&dom);
     assert!(html.contains("No tokens yet"), "{html}");
+    // The empty state is a row of the table, under its real header.
+    let table = &html[html.find("<table").unwrap()..];
+    assert!(
+        table.find("Last used").unwrap() < table.find("No tokens yet").unwrap(),
+        "{html}"
+    );
+    assert!(table.contains(r#"<tr class="table-state">"#), "{html}");
     assert!(
         html.contains(r#"href="/api/v1/openapi.json""#),
         "the section links the API description: {html}"

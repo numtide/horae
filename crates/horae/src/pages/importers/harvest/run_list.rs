@@ -6,13 +6,13 @@ use crate::components::screen_state::{EmptyState, LoadError, Loading};
 use crate::models::JobStatus;
 use crate::server_fns;
 
-/// Runs newest first from `before`, each opening its own page. While the last
-/// page read was full, "Load more" appends the next older one.
+/// Runs newest first, each opening its own page. While the last page read was
+/// full, "Load more" appends the next older one.
 #[component]
-pub(super) fn RunList(before: Option<Uuid>, limit: i64) -> Element {
+pub(super) fn RunList(limit: i64) -> Element {
     let tr = crate::i18n::use_tr();
-    let mut runs = use_resource(use_reactive!(|before, limit| async move {
-        server_fns::list_harvest_import_jobs(before, Some(limit)).await
+    let mut runs = use_resource(use_reactive!(|limit| async move {
+        server_fns::list_harvest_import_jobs(None, Some(limit)).await
     }));
     let retry = use_callback(move |_| runs.restart());
     // The pages "Load more" appended, and whether the last one was full.
@@ -47,11 +47,7 @@ pub(super) fn RunList(before: Option<Uuid>, limit: i64) -> Element {
                 }
             },
             Some(Ok(jobs)) if jobs.is_empty() => rsx! {
-                if before.is_none() {
-                    EmptyState { icon: "import", title: "No retained runs", body: "Start a preview to create one." }
-                } else {
-                    EmptyState { icon: "import", title: "No older runs", body: "Every retained run is on the newer pages." }
-                }
+                EmptyState { icon: "import", title: "No retained runs", body: "Start a preview to create one." }
             },
             Some(Ok(jobs)) => {
                 let older = older.read();

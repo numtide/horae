@@ -186,7 +186,7 @@ const user = email => ({ id: '019956ed-0000-7000-8000-0000000000a0', email, name
       const row = page.locator('tr.row-link', { has: page.getByTestId(`run-${previewId}`) });
       await expect(row).toBeVisible();
       await expect(row.getByRole('link')).toHaveCount(1);
-      await expect(page.getByText('Ready to import')).toBeVisible();
+      await expect(row.locator('.badge-info')).toHaveText('Ready to import');
       await expect(page.locator('#load-more-runs')).toHaveCount(0);
       const box = await row.locator('td').last().boundingBox();
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);

@@ -11,8 +11,8 @@ use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::form::{FormGroup, Input, Select};
 use crate::components::menu::{MenuItem, RowActions};
 use crate::components::page_header::PageHeader;
-use crate::components::screen_state::{EmptyState, LoadError, Loading};
-use crate::components::table::{DataTable, NameCell};
+use crate::components::screen_state::{EmptyState, LoadError};
+use crate::components::table::{DataTable, NameCell, TableMessage, TableSkeleton};
 use crate::i18n::Tr;
 use crate::models::api_tokens::{ApiTokenRow, CreatedApiToken};
 use crate::server_fns;
@@ -34,7 +34,6 @@ pub fn SettingsApiTokens() -> Element {
     let intro = tr.api_tokens_intro();
     let (intro_before, intro_link, intro_after) = crate::i18n::split_tag(&intro, "link");
     let mut tokens = use_resource(server_fns::list_api_tokens);
-    let retry = use_callback(move |_| tokens.restart());
     let mut name = use_signal(String::new);
     let mut expiry = use_signal(|| "90".to_string());
     let mut creating = use_signal(|| false);
@@ -132,20 +131,7 @@ pub fn SettingsApiTokens() -> Element {
             if let Some(message) = revoke_error() {
                 p { class: "alert alert-danger", role: "alert", "{message}" }
             }
-            match &*tokens.read() {
-                None => rsx! { Loading { label: tr.api_tokens_loading() } },
-                Some(Err(error)) => rsx! {
-                    LoadError { error: error.clone(), what: tr.api_tokens_what(), retry,
-                        pending: tokens.state()() != UseResourceState::Ready, focus_on_recovery: "api-tokens-title",
-                    }
-                },
-                Some(Ok(rows)) if rows.is_empty() => rsx! {
-                    EmptyState { icon: "key", title: tr.api_tokens_empty(),
-                        body: tr.api_tokens_empty_hint(),
-                    }
-                },
-                Some(Ok(rows)) => rsx! { TokenTable { rows: rows.clone(), show_owner: false, focus_fallback: "api-tokens-title", on_revoke } },
-            }
+            TokenTable { tokens, show_owner: false, focus_fallback: "api-tokens-title", on_revoke }
         }
     }
 }
@@ -201,16 +187,36 @@ fn RevealedToken(token: String) -> Element {
     }
 }
 
-/// Tokens newest first, with a revoke action on each active one.
+/// Tokens newest first, with a revoke action on each active one. Loading,
+/// empty and a failed read show inside the frame, under the header.
 #[component]
 pub(crate) fn TokenTable(
-    rows: Vec<ApiTokenRow>,
+    tokens: Resource<Result<Vec<ApiTokenRow>, ServerFnError>>,
+    /// Everyone's tokens, for administrators, rather than the person's own.
     show_owner: bool,
-    /// Where focus goes after a revoke, since the row's Revoke button goes away.
+    /// Where focus goes after a revoke, since the row's menu goes away, and
+    /// after a failed read recovers.
     focus_fallback: &'static str,
     on_revoke: Callback<Uuid>,
 ) -> Element {
     let tr = crate::i18n::use_tr();
+    let mut tokens = tokens;
+    let retry = use_callback(move |_| tokens.restart());
+    let pending = !matches!(*tokens.state().read(), UseResourceState::Ready);
+    let columns = if show_owner { 7 } else { 6 };
+    let (loading, what, empty_hint) = if show_owner {
+        (
+            tr.api_tokens_admin_loading(),
+            tr.api_tokens_admin_what(),
+            tr.api_tokens_admin_empty_hint(),
+        )
+    } else {
+        (
+            tr.api_tokens_loading(),
+            tr.api_tokens_what(),
+            tr.api_tokens_empty_hint(),
+        )
+    };
     // The token whose revocation is being confirmed, with its name.
     let mut revoking = use_signal(|| None::<(Uuid, String)>);
     let on_ask = use_callback(move |token: (Uuid, String)| revoking.set(Some(token)));
@@ -238,6 +244,7 @@ pub(crate) fn TokenTable(
         }
         // My settings already names the section around the table.
         DataTable { label: show_owner.then(|| tr.api_tokens_admin_list_label()),
+            busy: pending && tokens.read().is_some(),
             table {
                 thead {
                     tr {
@@ -251,8 +258,25 @@ pub(crate) fn TokenTable(
                     }
                 }
                 tbody {
-                    for row in rows {
-                        TokenRow { key: "{row.id}", row, show_owner, on_ask }
+                    match &*tokens.read() {
+                        None => rsx! { TableSkeleton { columns, label: loading } },
+                        Some(Err(error)) => rsx! {
+                            TableMessage { columns,
+                                LoadError { error: error.clone(), what, retry, pending, inset: true,
+                                    focus_on_recovery: focus_fallback,
+                                }
+                            }
+                        },
+                        Some(Ok(rows)) if rows.is_empty() => rsx! {
+                            TableMessage { columns,
+                                EmptyState { icon: "key", title: tr.api_tokens_empty(), body: empty_hint, inset: true }
+                            }
+                        },
+                        Some(Ok(rows)) => rsx! {
+                            for row in rows.iter() {
+                                TokenRow { key: "{row.id}", row: row.clone(), show_owner, on_ask }
+                            }
+                        },
                     }
                 }
             }

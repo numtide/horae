@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::importers::harvest::types::{ImportMode, ImportReport, SourceKind};
 
 use super::presentation;
+use crate::components::badge::Badge;
 use crate::components::table::DataTable;
 use crate::i18n::Tr;
 use crate::models::{CommitAvailability, JobStatus};
@@ -44,7 +45,12 @@ pub(super) fn HistoryTable(
                                 }
                             }
                             td { class: "whitespace-nowrap", "{result(job)}" }
-                            td { class: "text-secondary whitespace-nowrap", {status(tr, job)} }
+                            td { class: "whitespace-nowrap",
+                                {
+                                    let (variant, text) = status(tr, job);
+                                    rsx! { Badge { variant, "{text}" } }
+                                }
+                            }
                         }
                     }
                 }
@@ -77,12 +83,22 @@ fn result(job: &JobStatus) -> String {
     )
 }
 
-fn status(tr: Tr, job: &JobStatus) -> String {
-    match job.commit_availability {
+/// The run's status and the `Badge` variant it shows with.
+fn status(tr: Tr, job: &JobStatus) -> (String, String) {
+    let (variant, text) = match job.commit_availability {
         // Its row is the way to review and import it.
-        CommitAvailability::Available => tr.harvest_history_ready(),
-        CommitAvailability::Committed => "Imported".into(),
-        CommitAvailability::NewerImport => "Replaced by a newer run".into(),
-        _ => presentation::state_label(&job.status).into(),
-    }
+        CommitAvailability::Available => ("info", tr.harvest_history_ready()),
+        CommitAvailability::Committed => ("success", "Imported".into()),
+        CommitAvailability::NewerImport => ("neutral", "Replaced by a newer run".into()),
+        _ => {
+            let variant = match job.status.as_str() {
+                "succeeded" => "success",
+                "failed" => "danger",
+                "running" => "info",
+                _ => "neutral",
+            };
+            (variant, presentation::state_label(&job.status).into())
+        }
+    };
+    (variant.into(), text)
 }

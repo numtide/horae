@@ -6,7 +6,6 @@ use super::connect_outcome::ConnectOutcome;
 use super::connection_card::ConnectionCard;
 use super::history_table::HistoryTable;
 use super::run_panel::RunPanel;
-use super::runs_cursor::RunsCursor;
 use super::{Conn, go_to_harvest, pause, presentation, use_connection};
 use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
 use crate::models::{CommitAvailability, JobErrorKind, JobStatus, RetryAvailability};
@@ -221,7 +220,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
             section { class: "card p-0 overflow-hidden mt-6", aria_labelledby: "history-title",
                 div { class: "flex items-center justify-between gap-3 px-6 py-4",
                     h2 { id: "history-title", tabindex: "-1", class: "card-title m-0", "History" }
-                    Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "all-runs", "All runs" }
+                    Link { to: Route::HarvestRuns {}, class: "text-sm", "data-testid": "all-runs", "All runs" }
                 }
                 match &*history.read() {
                     None => rsx! { Loading { label: "Loading runs…", class: "p-5" } },
