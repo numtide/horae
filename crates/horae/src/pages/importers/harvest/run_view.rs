@@ -17,10 +17,8 @@ use crate::models::JobStatus;
 use crate::route::Route;
 use crate::server_fns;
 
-/// Every state of a run goes back to the newest page of runs.
-const RUNS: Route = Route::HarvestRuns {
-    before: super::RunsCursor(None),
-};
+/// Every state of a run goes back to the list of runs.
+const RUNS: Route = Route::HarvestRuns {};
 const BACK_TO_RUNS: &str = "Back to Harvest runs";
 
 /// A run's state, followed until it ends, then what it changes in Horae and

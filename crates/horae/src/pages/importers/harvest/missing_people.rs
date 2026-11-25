@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 use horae_core::importers::harvest::types::{PersonErrorKind, SourceKind};
 
 use super::missing_person_row::{MissingPersonRow, UNAVAILABLE};
+use crate::components::table::DataTable;
 use crate::models::MissingPerson;
 use crate::models::user::{Activation, AddedPeople, NewPerson};
 use crate::route::Route;
@@ -118,13 +119,13 @@ pub(super) fn MissingPeople(
                     Link { to: preview_again, "data-testid": "preview-again", "Start a new preview" }
                 }
             }
-            div { class: "overflow-x-auto border-t",
+            DataTable { flush: true, compact: true,
                 table {
                     thead {
                         tr {
-                            th { class: "whitespace-nowrap", "Person" }
-                            th { class: "whitespace-nowrap", "Problem" }
-                            th { class: "whitespace-nowrap", "Entries" }
+                            th { scope: "col", class: "whitespace-nowrap", "Person" }
+                            th { scope: "col", class: "whitespace-nowrap", "Problem" }
+                            th { scope: "col", class: "whitespace-nowrap text-right", "Entries" }
                         }
                     }
                     tbody {

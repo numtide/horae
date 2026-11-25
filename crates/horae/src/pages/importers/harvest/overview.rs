@@ -6,7 +6,6 @@ use super::connect_outcome::ConnectOutcome;
 use super::connection_card::ConnectionCard;
 use super::history_table::HistoryTable;
 use super::run_panel::RunPanel;
-use super::runs_cursor::RunsCursor;
 use super::{Conn, go_to_harvest, pause, presentation, use_connection};
 use crate::components::screen_state::{EmptyState, ErrorState, LOAD_FAILED, Loading};
 use crate::models::{CommitAvailability, JobErrorKind, JobStatus, RetryAvailability};
@@ -219,9 +218,10 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                 }
             }
             section { class: "card p-0 overflow-hidden mt-6", aria_labelledby: "history-title",
-                div { class: "flex items-center justify-between gap-3 px-6 py-4 border-b",
+                // The flush table draws its own rule under the header; the other states need one.
+                div { class: if matches!(&*history.read(), Some(Ok(jobs)) if !jobs.is_empty()) { "flex items-center justify-between gap-3 px-6 py-4" } else { "flex items-center justify-between gap-3 px-6 py-4 border-b" },
                     h2 { id: "history-title", tabindex: "-1", class: "card-title m-0", "History" }
-                    Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "text-sm", "data-testid": "all-runs", "All runs" }
+                    Link { to: Route::HarvestRuns {}, class: "text-sm", "data-testid": "all-runs", "All runs" }
                 }
                 match &*history.read() {
                     None => rsx! { Loading { label: "Loading runs…", class: "p-5" } },
@@ -234,7 +234,7 @@ pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
                     Some(Ok(jobs)) if jobs.is_empty() => rsx! {
                         EmptyState { icon: "import", title: "No runs yet", body: "Start a preview to create one.", inset: true }
                     },
-                    Some(Ok(jobs)) => rsx! { HistoryTable { jobs: jobs.clone() } },
+                    Some(Ok(jobs)) => rsx! { HistoryTable { jobs: jobs.clone(), flush: true } },
                 }
             }
         }

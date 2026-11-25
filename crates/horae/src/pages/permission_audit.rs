@@ -243,7 +243,7 @@ fn audit_log(
                     if failure.is_none() && shown.page.next_after.is_some() {
                         div { class: "flex justify-center mt-4",
                             button { id: "audit-load-more", r#type: "button", class: "btn btn-secondary",
-                                disabled: pending, onclick: load_more, {tr.audit_load_more()}
+                                disabled: pending, onclick: load_more, {tr.action_load_more()}
                             }
                         }
                     }

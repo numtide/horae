@@ -11,7 +11,7 @@ use crate::pages::{
     gallery::Gallery,
     importers::{
         ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
-        ImporterIndex, RunsCursor, SecretFocus,
+        ImporterIndex, SecretFocus,
     },
     invoices::{
         DuplicateInvoice, EditInvoice, InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoice,
@@ -126,8 +126,8 @@ pub enum Route {
     HarvestOAuth { focus: SecretFocus },
     #[route("/admin/importers/harvest/csv")]
     HarvestCsv {},
-    #[route("/admin/importers/harvest/runs?:..before")]
-    HarvestRuns { before: RunsCursor },
+    #[route("/admin/importers/harvest/runs")]
+    HarvestRuns {},
     #[route("/admin/importers/harvest/runs/:id")]
     HarvestRun { id: Uuid },
     // The filters are the whole query, so a filtered view can be shared.
@@ -189,7 +189,7 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
                 Route::HarvestOverview { .. }
                     | Route::HarvestOAuth { .. }
                     | Route::HarvestCsv {}
-                    | Route::HarvestRuns { .. }
+                    | Route::HarvestRuns {}
                     | Route::HarvestRun { .. }
             )
     ) || std::mem::discriminant(current) == std::mem::discriminant(to)
@@ -347,15 +347,7 @@ mod tests {
             ),
             (
                 "/admin/importers/harvest/runs".to_owned(),
-                Route::HarvestRuns {
-                    before: RunsCursor::default(),
-                },
-            ),
-            (
-                format!("/admin/importers/harvest/runs?before={id}"),
-                Route::HarvestRuns {
-                    before: RunsCursor(Some(id)),
-                },
+                Route::HarvestRuns {},
             ),
             (
                 format!("/admin/importers/harvest/runs/{id}"),
