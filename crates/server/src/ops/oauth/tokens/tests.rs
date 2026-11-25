@@ -159,10 +159,7 @@ async fn identity_names_the_person_and_the_app_once_unlocked(pool: PgPool) {
     let found = identity(&mut read.tx, &read.actor).await.unwrap();
     assert_eq!(found.person_id, admin.user_id);
     assert!(!found.app_name.is_empty());
-    assert_eq!(
-        ScopeSet::parse_each(found.scopes.iter().map(String::as_str)).unwrap(),
-        tokens.scopes
-    );
+    assert_eq!(found.scopes, tokens.scopes);
 
     let session = crate::ops::Caller::session(admin.org_id, admin.user_id);
     let mut read = crate::ops::begin_read(&pool, session).await.unwrap();

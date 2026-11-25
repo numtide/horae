@@ -195,11 +195,13 @@ async fn reads_answer_as_the_personal_token_when_the_scopes_cover_them(pool: PgP
                     _ => {
                         assert_eq!(status, *personal_status, "{context}");
                         assert_ne!(body["code"], "insufficient_scope", "{context}");
-                        // Scopes never let more through than the person may see.
+                        // Scopes never let through a row the person may not see.
                         if let (Some(mine), Some(theirs)) =
                             (body["data"].as_array(), personal_body["data"].as_array())
                         {
-                            assert!(mine.len() <= theirs.len(), "{context}");
+                            for row in mine {
+                                assert!(theirs.contains(row), "{context}: {row}");
+                            }
                         }
                     }
                 }
@@ -236,6 +238,67 @@ async fn writes_need_time_write_and_then_answer_as_the_personal_token(pool: PgPo
             "{profile:?}"
         );
     }
+}
+
+/// On another person's entry, a `time:write` token answers as the person's
+/// personal token: an administrator or manager keeps the authority over
+/// others' time that their grants give, and a member gets none.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn writes_on_another_persons_entry_answer_as_the_personal_token(pool: PgPool) {
+    let org = org(&pool).await;
+    let router = router(&pool, 100_000);
+    let (_, manager) = &org.people[1];
+    let (_, member) = &org.people[2];
+    let time = ScopeSet::of(&[Scope::TimeWrite]).normalize();
+    for (profile, person) in &org.people {
+        let other = if person.user_id == member.user_id {
+            manager
+        } else {
+            member
+        };
+        let (others_token, _) = token(&pool, other, "other").await;
+        let (personal, _) = token(&pool, person, "script").await;
+        let secret = oauth_token(&pool, &org.app, person, time).await;
+        let mut answers = Vec::new();
+        for writer in [&personal, &secret] {
+            let entry = create_entry(&router, &others_token, other).await;
+            answers.push(edit_sequence(&router, writer, entry).await);
+        }
+        assert_eq!(answers[0], answers[1], "{profile:?}");
+        if *profile == BuiltInProfile::Administrator {
+            assert!(
+                answers[1].iter().all(StatusCode::is_success),
+                "{:?}",
+                answers[1]
+            );
+        }
+        if *profile == BuiltInProfile::Member {
+            assert!(
+                answers[1]
+                    .iter()
+                    .all(|status| matches!(*status, StatusCode::NOT_FOUND | StatusCode::FORBIDDEN)),
+                "a member changed someone else's entry: {:?}",
+                answers[1]
+            );
+        }
+    }
+}
+
+/// Reads, changes and deletes `entry`, and answers each step's status.
+async fn edit_sequence(router: &Router, secret: &str, entry: Uuid) -> Vec<StatusCode> {
+    let uri = format!("/api/v1/time_entries/{entry}");
+    let mut statuses = Vec::new();
+    for (operation, request) in [
+        ("getTimeEntry", get(&uri, Some(secret))),
+        (
+            "updateTimeEntry",
+            json("PATCH", &uri, secret, &json!({ "minutes": 30 })),
+        ),
+        ("deleteTimeEntry", call("DELETE", &uri, secret)),
+    ] {
+        statuses.push(send(router, operation, request).await.0);
+    }
+    statuses
 }
 
 fn writes(secret: &str, ids: &SeedIds, entry: Uuid) -> Vec<(&'static str, Request<Body>)> {
@@ -388,7 +451,12 @@ async fn me_names_the_app_and_its_scopes_for_any_scope(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_refused_oauth_token_gets_an_invalid_token_challenge(pool: PgPool) {
     let router = router(&pool, 1000);
-    for authorization in [Some("Bearer horae_oat_unknown"), None] {
+    for authorization in [
+        Some("Bearer horae_oat_unknown"),
+        None,
+        Some("Basic dXNlcjpwYXNz"),
+        Some("Bearer "),
+    ] {
         let mut request = Request::get("/api/v1/me");
         if let Some(value) = authorization {
             request = request.header(header::AUTHORIZATION, value);
@@ -397,11 +465,16 @@ async fn a_refused_oauth_token_gets_an_invalid_token_challenge(pool: PgPool) {
             send(&router, "getMe", request.body(Body::empty()).unwrap()).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(body["code"], "unauthenticated");
+        // Only a bearer token sent is an invalid token; anything else is no credential.
         let expected = match authorization {
-            Some(_) => r#"Bearer error="invalid_token""#,
-            None => "Bearer",
+            Some("Bearer horae_oat_unknown") => r#"Bearer error="invalid_token""#,
+            _ => "Bearer",
         };
-        assert_eq!(headers[header::WWW_AUTHENTICATE], expected);
+        assert_eq!(
+            headers[header::WWW_AUTHENTICATE],
+            expected,
+            "{authorization:?}"
+        );
     }
 }
 

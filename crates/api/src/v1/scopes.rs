@@ -56,6 +56,9 @@ pub(crate) fn requirements() -> &'static HashMap<(Method, String), Required> {
                 };
                 let method = Method::from_bytes(method.to_uppercase().as_bytes())
                     .unwrap_or_else(|_| panic!("{method} {path}: not a method"));
+                if let Err(problem) = fits(&method, path, required) {
+                    panic!("{method} {path}: {problem}");
+                }
                 map.insert((method, path.clone()), required);
             }
         }
@@ -63,10 +66,27 @@ pub(crate) fn requirements() -> &'static HashMap<(Method, String), Required> {
     })
 }
 
+/// Whether an operation's scope fits its method: a read names a read scope,
+/// anything else `time:write`, and only `GET /me` takes any scope. A write
+/// declared with a read scope would reach its handler unlocked, and a write
+/// guarded only by "active person" would go through (research R-6).
+fn fits(method: &Method, path: &str, required: Required) -> Result<(), &'static str> {
+    let read = matches!(*method, Method::GET | Method::HEAD);
+    match required {
+        Required::Any if read && path == "/me" => Ok(()),
+        Required::Any => Err("only GET /me may take any scope"),
+        Required::Scope(Scope::TimeRead | Scope::CatalogRead) if read => Ok(()),
+        Required::Scope(Scope::TimeWrite) if !read => Ok(()),
+        Required::Scope(_) if read => Err("a read must name time:read or catalog:read"),
+        Required::Scope(_) => Err("a write must name time:write"),
+    }
+}
+
 /// Middleware after [`super::authenticate`]: an OAuth caller reaches the
-/// operation only if its token holds the scope the operation declares, and
-/// then with its actor unlocked for it (`Caller::unlock`). Otherwise the
-/// answer is 403 `insufficient_scope`. Personal access tokens pass.
+/// operation only if its token holds the scope the operation declares. Its
+/// actor then loads unlocked (`Caller::unlock`), with the grants of all the
+/// token's scopes. Otherwise the answer is 403 `insufficient_scope`.
+/// Personal access tokens pass.
 pub(crate) async fn require(mut request: Request, next: Next) -> Response {
     let Some(caller) = request.extensions().get::<Caller>().copied() else {
         return next.run(request).await;
@@ -125,3 +145,6 @@ fn insufficient_scope(needed: Option<Scope>) -> Response {
     }
     response
 }
+
+#[cfg(test)]
+mod tests;

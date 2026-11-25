@@ -290,14 +290,17 @@ pub struct OAuthIdentity {
     pub client_id: String,
     pub app_name: String,
     /// The token's scopes, as granted.
-    pub scopes: Vec<String>,
+    pub scopes: ScopeSet,
 }
 
 /// The identity of an actor that came through an OAuth access token; any
 /// other channel, or an actor no scope unlocked, is not found.
 pub async fn identity(tx: &mut Tx, actor: &Actor) -> Result<OAuthIdentity, OpError> {
     const NOT_FOUND: &str = "OAuth access token not found";
-    let Channel::OAuth { token_id, .. } = actor.channel() else {
+    let Channel::OAuth {
+        token_id, scopes, ..
+    } = actor.channel()
+    else {
         return Err(OpError::not_found(NOT_FOUND));
     };
     if !actor.is_active() {
@@ -305,7 +308,7 @@ pub async fn identity(tx: &mut Tx, actor: &Actor) -> Result<OAuthIdentity, OpErr
     }
     let row = sqlx::query!(
         r#"SELECT u.id AS person_id, u.name AS person_name, u.email,
-                  o.name AS organization_name, c.client_id, c.name AS app_name, t.scopes,
+                  o.name AS organization_name, c.client_id, c.name AS app_name,
                   t.expires_at AS "expires_at: DateTime<Utc>"
            FROM oauth_access_tokens t
            JOIN oauth_grants g ON g.org_id = t.org_id AND g.id = t.grant_id
@@ -329,7 +332,7 @@ pub async fn identity(tx: &mut Tx, actor: &Actor) -> Result<OAuthIdentity, OpErr
         expires_at: row.expires_at,
         client_id: row.client_id,
         app_name: row.app_name,
-        scopes: row.scopes,
+        scopes,
     })
 }
 

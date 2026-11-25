@@ -31,7 +31,7 @@ pub enum Channel {
         scopes: ScopeSet,
         /// The scope the endpoint declares, which the adapter checked the
         /// token holds ([`Caller::unlock`](super::Caller::unlock)): the actor
-        /// loads already unlocked for it.
+        /// loads already unlocked, with the grants of all the token's scopes.
         unlocked: Option<Scope>,
     },
     /// The server's operator at its terminal: no person, and no grants. Each
@@ -239,8 +239,10 @@ impl Actor {
 
     /// Gives an OAuth actor its narrowed authority for a request whose
     /// endpoint declares `scope`, if the token holds it (`time:write`
-    /// includes `time:read`). Until then the actor answers like an inactive
-    /// person. Every other channel is unaffected.
+    /// includes `time:read`). The authority is the person's grants within
+    /// the ceiling of all the token's scopes, not only `scope`'s. Until then
+    /// the actor answers like an inactive person. Every other channel is
+    /// unaffected.
     pub fn unlock_scope(&mut self, scope: Scope) -> Result<(), OpError> {
         let Channel::OAuth { scopes, .. } = self.channel else {
             return Ok(());

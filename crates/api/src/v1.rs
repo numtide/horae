@@ -279,7 +279,7 @@ pub fn router(state: V1State) -> Router {
 
 /// Puts the token's [`Caller`](crate::ops::Caller) in the request extensions,
 /// or answers 401 `unauthenticated` with a `Bearer` challenge, which names
-/// `invalid_token` when a credential was sent (RFC 6750 §3.1).
+/// `invalid_token` only when a bearer token was sent (RFC 6750 §3.1).
 async fn authenticate(State(state): State<V1State>, request: Request, next: Next) -> Response {
     let (mut parts, body) = request.into_parts();
     match ApiCaller::from_request_parts(&mut parts, &state).await {
@@ -288,7 +288,13 @@ async fn authenticate(State(state): State<V1State>, request: Request, next: Next
             next.run(Request::from_parts(parts, body)).await
         }
         Err(StatusCode::UNAUTHORIZED) => {
-            let challenge = if parts.headers.contains_key(header::AUTHORIZATION) {
+            let sent_bearer = parts
+                .headers
+                .get(header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok())
+                .and_then(crate::token::bearer)
+                .is_some();
+            let challenge = if sent_bearer {
                 r#"Bearer error="invalid_token""#
             } else {
                 "Bearer"

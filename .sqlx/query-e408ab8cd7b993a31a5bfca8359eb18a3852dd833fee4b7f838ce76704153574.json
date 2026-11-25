@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT u.id AS person_id, u.name AS person_name, u.email,\n                  o.name AS organization_name, c.client_id, c.name AS app_name, t.scopes,\n                  t.expires_at AS \"expires_at: DateTime<Utc>\"\n           FROM oauth_access_tokens t\n           JOIN oauth_grants g ON g.org_id = t.org_id AND g.id = t.grant_id\n           JOIN oauth_clients c ON c.org_id = g.org_id AND c.id = g.client_id\n           JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id\n           JOIN organizations o ON o.id = t.org_id\n           WHERE t.id = $1 AND t.org_id = $2 AND g.user_id = $3",
+  "query": "SELECT u.id AS person_id, u.name AS person_name, u.email,\n                  o.name AS organization_name, c.client_id, c.name AS app_name,\n                  t.expires_at AS \"expires_at: DateTime<Utc>\"\n           FROM oauth_access_tokens t\n           JOIN oauth_grants g ON g.org_id = t.org_id AND g.id = t.grant_id\n           JOIN oauth_clients c ON c.org_id = g.org_id AND c.id = g.client_id\n           JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id\n           JOIN organizations o ON o.id = t.org_id\n           WHERE t.id = $1 AND t.org_id = $2 AND g.user_id = $3",
   "describe": {
     "columns": [
       {
@@ -35,11 +35,6 @@
       },
       {
         "ordinal": 6,
-        "name": "scopes",
-        "type_info": "TextArray"
-      },
-      {
-        "ordinal": 7,
         "name": "expires_at: DateTime<Utc>",
         "type_info": "Timestamptz"
       }
@@ -58,9 +53,8 @@
       false,
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "8dc6f24744d7fda5793963cd57c8884b0c05cefc7c5cb676b1a4f716ed741aa6"
+  "hash": "e408ab8cd7b993a31a5bfca8359eb18a3852dd833fee4b7f838ce76704153574"
 }

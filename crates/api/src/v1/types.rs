@@ -4,6 +4,7 @@
 //! shapes cannot reach the API unnoticed.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use horae_core::permissions::oauth::Scope;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -42,9 +43,11 @@ pub struct Me {
     pub person: MePerson,
     #[schema(inline)]
     pub organization: MeOrganization,
+    /// Whether the token acts as an administrator; never for an app's token.
     pub administrator: bool,
     /// The person's profile or permission template; `null` for individually
-    /// chosen permissions.
+    /// chosen permissions. For an app's token it is still the person's,
+    /// though the token is limited to its scopes.
     pub profile: Option<String>,
     #[schema(inline)]
     pub token: MeToken,
@@ -72,7 +75,7 @@ pub struct MeToken {
     pub expires_at: Option<DateTime<Utc>>,
     pub kind: TokenKind,
     /// The app and its granted scopes; `null` for a personal access token.
-    #[schema(inline)]
+    #[schema(inline, required = true)]
     pub oauth: Option<MeOAuth>,
 }
 
@@ -89,7 +92,28 @@ pub struct MeOAuth {
     /// The app's public client id.
     pub client_id: String,
     pub app_name: String,
-    pub scopes: Vec<String>,
+    pub scopes: Vec<OAuthScope>,
+}
+
+/// A scope an app may be granted (spec 024 FR-060).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub enum OAuthScope {
+    #[serde(rename = "time:read")]
+    TimeRead,
+    #[serde(rename = "time:write")]
+    TimeWrite,
+    #[serde(rename = "catalog:read")]
+    CatalogRead,
+}
+
+impl From<Scope> for OAuthScope {
+    fn from(scope: Scope) -> Self {
+        match scope {
+            Scope::TimeRead => Self::TimeRead,
+            Scope::TimeWrite => Self::TimeWrite,
+            Scope::CatalogRead => Self::CatalogRead,
+        }
+    }
 }
 
 impl Me {
@@ -115,7 +139,7 @@ impl Me {
                 oauth: Some(MeOAuth {
                     client_id: identity.client_id,
                     app_name: identity.app_name,
-                    scopes: identity.scopes,
+                    scopes: identity.scopes.iter().map(OAuthScope::from).collect(),
                 }),
             },
         }

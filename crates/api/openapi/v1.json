@@ -88,6 +88,7 @@
         "description": "Who the token acts as, and in which organization.",
         "properties": {
           "administrator": {
+            "description": "Whether the token acts as an administrator; never for an app's token.",
             "type": "boolean"
           },
           "organization": {
@@ -127,7 +128,7 @@
             "type": "object"
           },
           "profile": {
-            "description": "The person's profile or permission template; `null` for individually\nchosen permissions.",
+            "description": "The person's profile or permission template; `null` for individually\nchosen permissions. For an app's token it is still the person's,\nthough the token is limited to its scopes.",
             "type": [
               "string",
               "null"
@@ -171,7 +172,7 @@
                       },
                       "scopes": {
                         "items": {
-                          "type": "string"
+                          "$ref": "#/components/schemas/OAuthScope"
                         },
                         "type": "array"
                       }
@@ -189,7 +190,8 @@
             "required": [
               "id",
               "name",
-              "kind"
+              "kind",
+              "oauth"
             ],
             "type": "object"
           }
@@ -310,6 +312,15 @@
           "task_id"
         ],
         "type": "object"
+      },
+      "OAuthScope": {
+        "description": "A scope an app may be granted (spec 024 FR-060).",
+        "enum": [
+          "time:read",
+          "time:write",
+          "catalog:read"
+        ],
+        "type": "string"
       },
       "Page_Client": {
         "description": "One page of a list, in `id` order. `next_cursor` is `null` on the last\npage.",

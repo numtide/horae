@@ -39,7 +39,9 @@ An access token acts as the person who approved the app, limited to the scopes t
 | `time:write` | every time entry and timer write; includes `time:read` |
 | `catalog:read` | `GET /me/trackable` and the catalogue reads |
 
-`GET /me` takes any scope, and its `token` names the app and the granted scopes. A request outside
+`GET /me` takes any scope, and its `token` names the app and the granted scopes. Its `profile` is
+the person's permission profile, and `administrator` is the token's, so an administrator's app
+token shows their administrator profile with `"administrator": false`. A request outside
 the token's scopes gets `403` with code `insufficient_scope` and a
 `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"` header naming the scope that would
 do. Within its scopes, a token still can do no more than its person can in the web app, and never
