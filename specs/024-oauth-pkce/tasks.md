@@ -150,7 +150,7 @@ ______________________________________________________________________
 - [X] T057 [US1] Add `kind` and `oauth` to `MeToken` in `crates/api/src/v1/types.rs` and fill them in `crates/api/src/v1/me.rs` (a read in `ops::oauth::tokens` for the app name and scopes); `ops::api_tokens::identity` answers not found for any channel but `Token`, so `/me` needs an OAuth arm (FR-061)
 - [X] T058 [US2] Key the limiter by `grant_id` for `Channel::OAuth` in `crates/api/src/rate_limit.rs`, with a test that rotating access tokens does not reset the window
 - [X] T059 [P] [US1] Per-scope tests over every v1 operation for a member, a manager and an administrator (SC-003), with responses validated against the schema, plus a personal access token on the same routes keeping the person's full authority (FR-064), in `crates/api/src/v1/oauth_tests.rs`
-- [ ] T060 [US1] Refresh `crates/api/openapi/v1.json` with `UPDATE_OPENAPI=1 cargo test -p horae-api openapi`; run the `api-compat` check and, if oasdiff flags the added security alternative, record the decision in research R-18 before touching `v1.baseline.json`
+- [X] T060 [US1] Refresh `crates/api/openapi/v1.json` with `UPDATE_OPENAPI=1 cargo test -p horae-api openapi`; run the `api-compat` check and, if oasdiff flags the added security alternative, record the decision in research R-18 before touching `v1.baseline.json`
 - [ ] T061 Checkpoint: `nix flake check` passes; PR E opened
 
 ______________________________________________________________________
