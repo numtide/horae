@@ -82,8 +82,12 @@ struct Probe {
     grants: Rc<RefCell<Vec<GrantRow>>>,
     can_connect: bool,
     creates: Rc<RefCell<Vec<AppInput>>>,
+    updates: Rc<RefCell<Vec<(String, AppInput)>>>,
+    deletes: Rc<RefCell<Vec<String>>>,
+    /// Every app id a page loaded, in order.
+    gets: Rc<RefCell<Vec<String>>>,
     revokes: Rc<RefCell<Vec<String>>>,
-    /// The next create's refusal, if any.
+    /// The next create's or delete's refusal, if any.
     refusal: Rc<RefCell<Option<ServerFnError>>>,
 }
 
@@ -95,6 +99,9 @@ impl Probe {
             grants: Rc::default(),
             can_connect: true,
             creates: Rc::default(),
+            updates: Rc::default(),
+            deletes: Rc::default(),
+            gets: Rc::default(),
             revokes: Rc::default(),
             refusal: Rc::default(),
         }
@@ -261,6 +268,14 @@ async fn the_list_puts_horaes_own_app_first_with_access_in_words() {
     let android = html.find("Horae for Android").expect("listed");
     assert!(android < html.find("Invoice sync").unwrap(), "{html}");
     assert!(html.contains("Horae’s own app · horae-android"), "{html}");
+    assert!(
+        html.contains("horae_app_7Q2fK9xV…"),
+        "enough of the client id to tell apps apart: {html}"
+    );
+    assert!(
+        html.contains(r#"class="row-link""#),
+        "the row opens the app: {html}"
+    );
     assert!(html.contains("Time, projects"), "{html}");
     assert!(html.contains("Time (read), projects"), "{html}");
     assert!(html.contains("Runs on a server"), "{html}");
@@ -434,6 +449,105 @@ async fn revoking_an_authorization_asks_first() {
     assert!(html.contains("Nobody has allowed this app yet"), "{html}");
 }
 
+#[tokio::test]
+async fn editing_starts_from_the_apps_values_and_keeps_its_type() {
+    let probe = Probe::at("/admin/apps");
+    let server = server_app();
+    let id = server.id;
+    probe.apps.borrow_mut().push(server.clone());
+    let mut dom = mount(&probe);
+    click(&mut dom, &format!("app-edit-{id}"));
+    let form = html(&dom);
+    assert!(form.contains("Edit app"), "{form}");
+    assert!(
+        !form.contains("app-kind-confidential"),
+        "the type is fixed: {form}"
+    );
+    // Saved untouched, the form sends back what the app has.
+    submit(&mut dom, "app-editor-form");
+    let updates = probe.updates.borrow().clone();
+    let [(updated, changes)] = &updates[..] else {
+        panic!("one update: {updates:?}");
+    };
+    assert_eq!(updated, &id.to_string());
+    assert_eq!(changes.name, server.name);
+    assert_eq!(changes.kind, AppKind::Confidential);
+    assert_eq!(changes.redirect_uris, server.redirect_uris);
+    assert_eq!(changes.scopes, server.scopes);
+    assert!(!html(&dom).contains("app-editor-form"), "it closed");
+}
+
+#[tokio::test]
+async fn a_replaced_secret_shows_once_and_only_its_button_closes_it() {
+    let server = server_app();
+    let id = server.id;
+    let probe = Probe::at(&format!("/admin/apps/{id}"));
+    probe.apps.borrow_mut().push(server);
+    let mut dom = mount(&probe);
+    click(&mut dom, &format!("app-replace-secret-{id}"));
+    let confirm = html(&dom);
+    assert!(
+        confirm.contains("Replace the secret of Invoice sync?"),
+        "{confirm}"
+    );
+    assert!(!confirm.contains(SECRET), "not before confirming");
+    click(&mut dom, "app-replace-dialog-confirm");
+    let shown = html(&dom);
+    assert!(shown.contains("New secret for Invoice sync"), "{shown}");
+    assert!(shown.contains(SECRET), "{shown}");
+
+    // Escape does not throw the secret away.
+    fire(
+        &mut dom,
+        "app-secret-dialog",
+        "cancel",
+        Box::new(dioxus_html::SerializedCancelData {}),
+    );
+    assert!(html(&dom).contains(SECRET), "still shown after Escape");
+
+    click(&mut dom, "app-secret-done");
+    let html = html(&dom);
+    assert!(!html.contains(SECRET), "the secret is gone: {html}");
+    assert!(html.contains("Back to Apps"), "still on its page: {html}");
+}
+
+#[tokio::test]
+async fn deleting_asks_first_then_returns_to_the_list_without_reloading_the_app() {
+    let server = server_app();
+    let id = server.id;
+    let probe = Probe::at(&format!("/admin/apps/{id}"));
+    probe.apps.borrow_mut().push(server);
+    let mut dom = mount(&probe);
+    click(&mut dom, &format!("app-delete-{id}"));
+    assert!(html(&dom).contains("Delete Invoice sync?"));
+    click(&mut dom, "app-delete-dialog-cancel");
+    assert!(probe.deletes.borrow().is_empty(), "cancel deletes nothing");
+
+    // A refusal the user cannot retry shows the server's reason.
+    *probe.refusal.borrow_mut() = Some(ServerFnError::ServerError {
+        message: "App not found".into(),
+        code: 404,
+        details: None,
+    });
+    click(&mut dom, &format!("app-delete-{id}"));
+    click(&mut dom, "app-delete-dialog-confirm");
+    let refused = html(&dom);
+    assert!(refused.contains("App not found"), "{refused}");
+    assert!(!refused.contains("Try again"), "{refused}");
+
+    let loads = probe.gets.borrow().len();
+    click(&mut dom, "app-delete-dialog-confirm");
+    assert_eq!(*probe.deletes.borrow(), [id.to_string()]);
+    assert_eq!(
+        probe.gets.borrow().len(),
+        loads,
+        "the deleted app is not reloaded"
+    );
+    let html = html(&dom);
+    assert!(html.contains("apps-register"), "back on the list: {html}");
+    assert!(!html.contains("Invoice sync"), "{html}");
+}
+
 mod route {
     use super::apps::{AdminApp, AdminApps};
     use dioxus::prelude::*;
@@ -472,7 +586,9 @@ mod server_fns {
     }
 
     pub async fn get_oauth_app(id: String) -> Result<AppRow, ServerFnError> {
-        let apps = probe().apps.borrow().clone();
+        let probe = probe();
+        probe.gets.borrow_mut().push(id.clone());
+        let apps = probe.apps.borrow().clone();
         apps.into_iter()
             .find(|app| app.id.to_string() == id)
             .ok_or_else(not_found)
@@ -508,6 +624,10 @@ mod server_fns {
 
     pub async fn update_oauth_app(id: String, changes: AppInput) -> Result<AppRow, ServerFnError> {
         let probe = probe();
+        probe
+            .updates
+            .borrow_mut()
+            .push((id.clone(), changes.clone()));
         let mut apps = probe.apps.borrow_mut();
         let app = apps
             .iter_mut()
@@ -539,7 +659,12 @@ mod server_fns {
     }
 
     pub async fn delete_oauth_app(id: String) -> Result<(), ServerFnError> {
-        probe()
+        let probe = probe();
+        if let Some(refusal) = probe.refusal.borrow_mut().take() {
+            return Err(refusal);
+        }
+        probe.deletes.borrow_mut().push(id.clone());
+        probe
             .apps
             .borrow_mut()
             .retain(|app| app.id.to_string() != id);

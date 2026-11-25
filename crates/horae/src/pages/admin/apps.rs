@@ -64,7 +64,7 @@ pub fn AdminApps() -> Element {
             p { class: "alert alert-danger", role: "alert", "{message}" }
         }
         DataTable { label: tr.apps_table_label(), busy: pending && apps.read().is_some(),
-            table { aria_label: tr.apps_table_label(),
+            table { class: "name-table", aria_label: tr.apps_table_label(),
                 thead {
                     tr {
                         th { scope: "col", {tr.apps_column_app()} }
@@ -87,13 +87,14 @@ pub fn AdminApps() -> Element {
                         },
                         Some(Ok(rows)) => rsx! {
                             for app in rows.iter() {
-                                tr { key: "{app.id}",
+                                // The whole row opens the app, through the name's link.
+                                tr { key: "{app.id}", class: "row-link",
                                     NameCell { secondary: rsx! { {app_secondary(tr, app)} },
                                         Link { to: Route::AdminApp { id: app.id }, id: "app-link-{app.id}", "{app.name}" }
                                     }
                                     td { class: "text-secondary", {kind_label(tr, app.kind)} }
                                     td { {access_label(tr, &app.scopes)} }
-                                    td { StatusBadge { enabled: app.enabled } }
+                                    td { class: "whitespace-nowrap", StatusBadge { enabled: app.enabled } }
                                     td { class: "text-right text-mono", "{app.active_grants}" }
                                     td { class: "text-right",
                                         RowActions { id: "app-actions-{app.id}", name: app.name.clone(),
@@ -200,14 +201,16 @@ fn StatusBadge(enabled: bool) -> Element {
 }
 
 /// Under the name: whose app it is or when it was registered, then the start
-/// of its client id.
+/// of its client id, long enough to tell apps apart past the `horae_app_`
+/// prefix they share.
 fn app_secondary(tr: Tr, app: &AppRow) -> String {
+    const SHOWN: usize = 18;
     let origin = if app.built_in {
         tr.apps_built_in()
     } else {
         tr.apps_registered_on(date(app.created_at))
     };
-    let client_id: String = app.client_id.chars().take(14).collect();
+    let client_id: String = app.client_id.chars().take(SHOWN).collect();
     let ellipsis = if client_id.len() < app.client_id.len() {
         "…"
     } else {

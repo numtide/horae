@@ -1070,8 +1070,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* A row that opens a record: its first link stretches over the whole row. */
 tr.row-link { position: relative; }
 tr.row-link > :first-child a::after { content: ""; position: absolute; inset: 0; }
-/* Other links in the row sit above that one and open their own record. */
-tr.row-link > :not(:first-child) a { position: relative; z-index: 1; }
+/* Other links and buttons in the row (its ⋮ menu) sit above that one. */
+tr.row-link > :not(:first-child) :is(a, button) { position: relative; z-index: 1; }
 
 /* DataTable variants (components/table.rs). */
 /* The card is the frame; one rule under its title block. */

@@ -84,6 +84,10 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(first).toContainText('Time, projects');
     await expect(main).not.toContainText('time:read');
     await expect(main.locator('.table-container')).toHaveCSS('border-radius', '16px');
+    // The name column keeps its shared width, so the name stays on one line.
+    const nameLink = first.getByRole('link', { name: 'Horae for Android' });
+    const lineHeight = await nameLink.evaluate(link => parseFloat(getComputedStyle(link).lineHeight));
+    assert.ok((await nameLink.boundingBox()).height < lineHeight * 1.5, 'the name does not wrap');
     const notice = main.locator('#apps-not-ready');
     if (canConnect) {
       await expect(notice).toHaveCount(0);
@@ -100,6 +104,15 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(builtInMenu.getByRole('menuitem')).toHaveText(['Open', 'Enable']);
     await shoot('apps-menu-built-in', openMenu(first.getByRole('button', { name: 'Actions for Horae for Android' })));
     await page.keyboard.press('Escape');
+    await expect(builtInMenu).toHaveCount(0);
+
+    // The whole row opens the app, not only its name.
+    await first.locator('td').nth(2).click();
+    await page.waitForURL(/\/admin\/apps\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole('heading', { name: 'Horae for Android', level: 1 })).toBeVisible();
+    await page.goBack();
+    await page.waitForURL(`${base}/admin/apps`);
+    await settled();
 
     // Register a server app. A refused address shows under its field and the
     // form keeps what was typed.
@@ -125,6 +138,11 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     assert.match(secret, /^horae_ocs_/);
     await expect(reveal.getByRole('button')).toHaveText(['Copy', 'I’ve stored it']);
     await shoot('apps-secret');
+    // It cannot be shown again, so neither Escape nor a click beside it closes it.
+    await page.keyboard.press('Escape');
+    await page.mouse.click(4, 4);
+    await expect(reveal).toBeVisible();
+    await expect(reveal.locator('#app-secret-value')).toHaveValue(secret);
     await reveal.getByRole('button', { name: 'I’ve stored it' }).click();
 
     // Its page: details, access in sentences, the Actions menu.

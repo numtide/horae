@@ -14,6 +14,7 @@ use crate::route::Route;
 use crate::server_fns;
 
 const BAD_REQUEST: u16 = 400;
+const NOT_FOUND: u16 = 404;
 const CONFLICT: u16 = 409;
 
 /// The dialog open on an apps page, if any.
@@ -31,8 +32,22 @@ pub(super) enum AppDialog {
     },
 }
 
-/// Every dialog of an apps page. `on_changed` runs after a save, a new
-/// secret or a deletion; `on_deleted` after a deletion only.
+/// Why replacing a secret or deleting failed: the server's own message when
+/// it refused the change (the app is gone, or cannot do that), since trying
+/// again won't help; otherwise a general one.
+fn action_error(tr: crate::i18n::Tr, error: ServerFnError) -> String {
+    match error {
+        ServerFnError::ServerError {
+            code: NOT_FOUND | CONFLICT,
+            message,
+            ..
+        } => message,
+        _ => tr.apps_change_failed(),
+    }
+}
+
+/// Every dialog of an apps page. `on_changed` runs after a save or a new
+/// secret; after a deletion only `on_deleted` runs.
 #[component]
 pub(super) fn AppDialogs(
     dialog: Signal<Option<AppDialog>>,
@@ -106,7 +121,7 @@ pub(super) fn AppDialogs(
                         registered: false,
                     }));
                 }
-                Err(_) => error.set(Some(tr.apps_change_failed())),
+                Err(error_) => error.set(Some(action_error(tr, error_))),
             }
         });
     });
@@ -123,15 +138,18 @@ pub(super) fn AppDialogs(
             let result = server_fns::delete_oauth_app(app.id.to_string()).await;
             busy.set(false);
             match result {
+                // The app is gone: only `on_deleted`, so nothing reloads it.
                 Ok(()) => {
                     dialog.set(None);
-                    on_changed.call(());
                     on_deleted.call(());
                 }
-                Err(_) => error.set(Some(tr.apps_change_failed())),
+                Err(error_) => error.set(Some(action_error(tr, error_))),
             }
         });
     });
+    // The secret cannot be shown again, so only "I've stored it" closes it:
+    // not Escape, not a click beside it.
+    let keep_secret = use_callback(|_| {});
     let stored = use_callback(move |_| {
         let Some(AppDialog::Secret {
             created,
@@ -192,7 +210,7 @@ pub(super) fn AppDialogs(
             focus_fallback: Some(focus_fallback),
             primary: ModalAction::click(tr.apps_secret_done(), stored).id("app-secret-done"),
             cancel: None::<ModalCancel>,
-            on_dismiss: stored,
+            on_dismiss: keep_secret,
             if let Some((created, registered)) = secret {
                 ModalHeader { id: "app-secret-title",
                     title: if registered {

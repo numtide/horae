@@ -184,7 +184,7 @@ fn Authorizations(
                 span { class: "text-sm text-secondary", {tr.apps_authorizations_count(count)} }
             }
             DataTable { label: tr.apps_authorizations_title(), busy: pending && grants.read().is_some(),
-                table { aria_labelledby: "app-authorizations-title",
+                table { class: "name-table", aria_labelledby: "app-authorizations-title",
                     thead {
                         tr {
                             th { scope: "col", {tr.apps_column_person()} }
