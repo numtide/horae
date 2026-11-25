@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_codes SET expires_at = now() WHERE grant_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9e279e1adf89fb5e45844e3de26eb4c6e01891e49ea58b46abbe87d14c2daba4"
+}

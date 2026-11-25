@@ -76,13 +76,42 @@ pub async fn dev_login_post(
             },
         });
 
-    Ok(Redirect::to("/"))
+    Ok(Redirect::to(&super::take_return_to(&session).await))
 }
 
 /// `POST /auth/logout` — flush the session and redirect to login.
-pub async fn logout_post(session: Session) -> impl IntoResponse {
+///
+/// A form field `return_to` naming an `/oauth/` page ("Not you? Sign out" on
+/// the approval page) survives the flush with the pending authorization
+/// requests, so the next sign-in comes back to the same request.
+pub async fn logout_post(session: Session, body: axum::body::Bytes) -> impl IntoResponse {
+    let return_to = url::form_urlencoded::parse(&body)
+        .find(|(key, _)| key == "return_to")
+        .and_then(|(_, value)| super::safe_return_to(&value).map(str::to_owned));
+    let requests: Option<serde_json::Value> = match return_to {
+        Some(_) => session.get(crate::oauth::pending::KEY).await.ok().flatten(),
+        None => None,
+    };
+    end_session(&session).await;
+    if let Some(return_to) = return_to {
+        let kept = async {
+            session.insert(super::RETURN_TO_KEY, return_to).await?;
+            if let Some(requests) = requests {
+                session.insert(crate::oauth::pending::KEY, requests).await?;
+            }
+            Ok::<_, tower_sessions::session::Error>(())
+        };
+        if let Err(error) = kept.await {
+            tracing::warn!(%error, "Could not keep the authorization request across sign-out");
+        }
+    }
+    Redirect::to("/auth/login")
+}
+
+/// Announces the sign-out and empties the session.
+async fn end_session(session: &Session) {
     // Capture the user before clearing the session so the logout can be announced.
-    if let Some(uid) = super::session::get_session_user_id(&session).await {
+    if let Some(uid) = super::session::get_session_user_id(session).await {
         let state = crate::state::global_state().await;
         let payload = async {
             let mut connection = state.db.acquire().await?;
@@ -112,6 +141,5 @@ pub async fn logout_post(session: Session) -> impl IntoResponse {
                 });
         }
     }
-    clear_session(&session).await.ok();
-    Redirect::to("/auth/login")
+    clear_session(session).await.ok();
 }

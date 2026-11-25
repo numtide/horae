@@ -18,6 +18,7 @@ use crate::pages::{
         NewInvoiceForClient,
     },
     new_project::{EditProject, NewProject, NewProjectForClient},
+    oauth_consent::OAuthConsent,
     people::People,
     permission_audit::PermissionAudit,
     projects::{ProjectDetail, ProjectList, ProjectsForClient},
@@ -154,6 +155,9 @@ pub enum Route {
     #[route("/components")]
     Gallery {},
     #[end_layout]
+    // Outside the app shell, like sign-in: an app asks for access (spec 024).
+    #[route("/oauth/consent?:request")]
+    OAuthConsent { request: String },
     #[route("/:..route")]
     NotFound { route: Vec<String> },
 }

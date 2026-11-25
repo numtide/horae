@@ -324,15 +324,29 @@ pub mod pkce {
     /// RFC 7636 §4.1) and `BASE64URL(SHA256(verifier))` equals `challenge`,
     /// compared in constant time.
     pub fn verify(verifier: &str, challenge: &str) -> bool {
-        let well_formed = (43..=128).contains(&verifier.len())
-            && verifier
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || b"-._~".contains(&byte));
-        if !well_formed {
+        if !well_formed_verifier(verifier) {
             return false;
         }
         let computed = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
         computed.as_bytes().ct_eq(challenge.as_bytes()).into()
+    }
+
+    /// 43 to 128 unreserved characters (RFC 7636 §4.1). A verifier of another
+    /// shape is a malformed request rather than a mismatch.
+    pub fn well_formed_verifier(verifier: &str) -> bool {
+        (43..=128).contains(&verifier.len())
+            && verifier
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"-._~".contains(&byte))
+    }
+
+    /// What `BASE64URL(SHA256(verifier))` always looks like: 43 characters of
+    /// the base64url alphabet.
+    pub fn well_formed_challenge(challenge: &str) -> bool {
+        challenge.len() == 43
+            && challenge
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
     }
 }
 

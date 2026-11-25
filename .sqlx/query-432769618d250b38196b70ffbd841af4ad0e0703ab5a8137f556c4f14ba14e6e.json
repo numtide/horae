@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.redirect_uri, c.code_challenge, c.used_at IS NOT NULL AS \"used!\",\n                  c.expires_at > now() AS \"live!\", g.id AS grant_id, g.org_id,\n                  g.client_id AS app_id, g.scopes,\n                  g.revoked_at IS NULL AND g.expires_at > now() AND u.active AS \"active!\"\n           FROM oauth_codes c\n           JOIN oauth_grants g ON g.id = c.grant_id\n           JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id\n           WHERE c.code_sha256 = $1\n           FOR UPDATE OF c",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "redirect_uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "code_challenge",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "used!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "live!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "app_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "432769618d250b38196b70ffbd841af4ad0e0703ab5a8137f556c4f14ba14e6e"
+}

@@ -40,12 +40,17 @@ utoipa-axum = "0.2"
 hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
+# The OAuth endpoints' form bodies and redirect addresses.
+url = "2"
+# The authorize error page's text.
+horae-i18n = { path = "../i18n" }
 
 [dev-dependencies]
 # Schema validation only; no remote `$ref` is ever fetched.
 jsonschema = { version = "0.61", default-features = false }
 horae-server = { path = "../server", features = ["test-support"] }
 serial_test = "3"
+tracing-subscriber = "0.3"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["compression-gzip"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

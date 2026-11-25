@@ -14,6 +14,7 @@ pub mod exports;
 pub mod harvest_oauth;
 mod health;
 pub mod import_errors;
+pub mod oauth;
 pub mod problem;
 pub mod rate_limit;
 pub mod token;
@@ -34,11 +35,14 @@ pub struct RouterOptions {
     pub dev_login: bool,
     pub login_assets: LoginAssets,
     pub v1: v1::V1State,
+    /// The OAuth authorization server; `None` without `HORAE_PUBLIC_URL`.
+    pub oauth: Option<oauth::OAuthState>,
 }
 
 /// Every route this crate serves: `/health`, the exports, the import error
-/// download, the Harvest OAuth callback, `/auth/*` and `/api/v1`. The caller
-/// adds the session layer and [`login_redirect_guard`].
+/// download, the Harvest OAuth callback, `/auth/*`, `/api/v1` and the OAuth
+/// authorization server. The caller adds the session layer and
+/// [`login_redirect_guard`].
 ///
 /// Any other `/api/…` path answers 404 with an empty body, so it does not
 /// fall through to the web app's HTML.
@@ -78,6 +82,7 @@ pub fn router(options: RouterOptions) -> Router {
             get(exports::export_invoice_pdf),
         )
         .merge(auth::router(options.dev_login, options.login_assets))
+        .merge(oauth::router(options.oauth))
         .merge(harvest_oauth::callback_router())
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",

@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oauth_grants g\n           SET revoked_at = now(), revoke_reason = $2::text::oauth_revoke_reason\n           FROM oauth_clients c\n           WHERE g.id = $1 AND g.revoked_at IS NULL AND c.id = g.client_id\n           RETURNING g.user_id, g.scopes, c.name AS app_name, c.client_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 2,
+        "name": "app_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "client_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "45353e337be21873d6347fda2186f48637a2adf096988480b678fd5eeaf6431a"
+}

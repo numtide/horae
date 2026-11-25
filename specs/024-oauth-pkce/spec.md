@@ -453,8 +453,10 @@ ______________________________________________________________________
 - **FR-080**: Requests made with OAuth access tokens MUST be rate-limited per authorization by the
   shared limiter, with the same limits as personal tokens, across both APIs (022 FR-051). Rotating
   access tokens MUST NOT reset the count.
-- **FR-081**: The token endpoint MUST be rate-limited per client, so a client cannot try codes,
-  verifiers or refresh tokens at speed. Over the limit it answers 429 with `Retry-After`.
+- **FR-081**: Horae MUST NOT limit the rate of the token and revocation endpoints itself; the
+  operator limits them at the reverse proxy (research R-14). Guessing is not a practical attack:
+  every credential carries 256 random bits (FR-050). A `client_id` longer than any Horae issues
+  is refused as `invalid_client` before any lookup.
 
 #### Revocation and listing
 
@@ -535,8 +537,8 @@ ______________________________________________________________________
   is out of scope.
 - Access tokens are opaque and checked against the database on each request, like personal tokens,
   so revocation takes effect immediately; self-contained (JWT) access tokens are not needed.
-- The default limits of the token endpoint (FR-081) and the lifetimes (FR-040, FR-044) are operator
-  settings with the defaults stated here.
+- The lifetimes (FR-040, FR-044) are operator settings with the defaults stated here. The token
+  endpoint's request rate is the reverse proxy's to limit (FR-081).
 
 ## Relation to 021
 

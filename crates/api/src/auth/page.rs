@@ -90,7 +90,7 @@ pub fn render(variant: LoginVariant, notice: Option<&LoginNotice>, assets: &Logi
 /// Minimal HTML-text escaping for interpolating operator-controlled config into
 /// the page. Covers the characters that can break out of element text or an
 /// attribute value.
-fn escape_html(s: &str) -> String {
+pub(crate) fn escape_html(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {

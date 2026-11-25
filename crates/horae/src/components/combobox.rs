@@ -45,6 +45,7 @@ pub fn Combobox(
     /// Extra utility classes on the trigger; compact styling remains the default.
     #[props(default)]
     trigger_class: String,
+    #[props(default)] disabled: bool,
     #[props(default)] onselect: EventHandler<String>,
 ) -> Element {
     let mut open = use_signal(|| false);
@@ -77,6 +78,7 @@ pub fn Combobox(
             button {
                 r#type: "button",
                 class: "btn btn-secondary btn-sm {trigger_class}",
+                disabled,
                 "aria-haspopup": "listbox",
                 "aria-expanded": "{open}",
                 onclick: move |_| {
