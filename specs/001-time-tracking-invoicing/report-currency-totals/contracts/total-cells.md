@@ -1,6 +1,6 @@
 # Contract: legacy Time report total cells (R02)
 
-Scope: the Billable amount and Cost cells of `.report-total-row` in the legacy
+Scope: the Billable amount and Cost cells of the total row (the table's `tfoot`) in the legacy
 (policy 0) Time tab. Every other cell and surface is unchanged.
 
 ## Core helper (`horae_core::money`)
