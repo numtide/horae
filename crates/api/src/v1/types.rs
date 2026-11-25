@@ -14,6 +14,7 @@ use crate::models::scoped_time::TimesheetTrackingOption;
 use crate::models::time_entry::TimeEntry as StoredEntry;
 use crate::ops::api_tokens::TokenIdentity;
 use crate::ops::clients::ClientRecord;
+use crate::ops::invoices::reads::{InvoiceDetailRecord, InvoiceRecord};
 use crate::ops::oauth::tokens::OAuthIdentity;
 use crate::ops::people::PersonRecord;
 use crate::ops::projects::reads::ProjectRecord;
@@ -525,6 +526,212 @@ impl From<PersonRecord> for Person {
             active: person.active,
             created_at: person.created_at,
             updated_at: person.updated_at,
+        }
+    }
+}
+
+/// Where an invoice is: being prepared, sent to the client, paid, written off
+/// (`closed`, only invoices imported from Harvest) or void.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InvoiceStatus {
+    Draft,
+    Sent,
+    Paid,
+    Closed,
+    Void,
+}
+
+impl From<horae_core::types::InvoiceStatus> for InvoiceStatus {
+    fn from(status: horae_core::types::InvoiceStatus) -> Self {
+        use horae_core::types::InvoiceStatus as Stored;
+        match status {
+            Stored::Draft => Self::Draft,
+            Stored::Sent => Self::Sent,
+            Stored::Paid => Self::Paid,
+            Stored::Closed => Self::Closed,
+            Stored::Void => Self::Void,
+        }
+    }
+}
+
+impl From<InvoiceStatus> for horae_core::types::InvoiceStatus {
+    fn from(status: InvoiceStatus) -> Self {
+        match status {
+            InvoiceStatus::Draft => Self::Draft,
+            InvoiceStatus::Sent => Self::Sent,
+            InvoiceStatus::Paid => Self::Paid,
+            InvoiceStatus::Closed => Self::Closed,
+            InvoiceStatus::Void => Self::Void,
+        }
+    }
+}
+
+/// Where an invoice was made: in Horae, or imported from Harvest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InvoiceSource {
+    Horae,
+    Harvest,
+}
+
+/// An invoice, as the Invoices page lists it. Amounts are the ones the
+/// invoice recorded, in its currency.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct Invoice {
+    pub id: Uuid,
+    pub number: String,
+    pub status: InvoiceStatus,
+    pub source: InvoiceSource,
+    pub client_id: Uuid,
+    /// The client's name now.
+    pub client_name: String,
+    /// One line naming what the invoice is for; empty when unset.
+    pub subject: String,
+    pub issued_on: NaiveDate,
+    pub due_on: NaiveDate,
+    /// Sent, unpaid and past its due date on the organization's today.
+    pub overdue: bool,
+    #[schema(pattern = "^[A-Z]{3}$")]
+    pub currency: String,
+    /// The lines' sum, before the discount and taxes.
+    pub subtotal: Money,
+    pub discount: Money,
+    pub tax: Money,
+    /// The second tax's name; `null` when the invoice has none.
+    pub second_tax_name: Option<String>,
+    pub second_tax: Money,
+    /// What the client is asked to pay: the subtotal less the discount, plus
+    /// both taxes.
+    pub total: Money,
+    /// The client's purchase order; empty when unset.
+    pub po_number: String,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl Invoice {
+    fn new(
+        invoice: crate::models::Invoice,
+        client_name: String,
+        overdue: bool,
+        imported: bool,
+        updated_at: DateTime<Utc>,
+    ) -> Self {
+        let money = |amount_minor| Money {
+            amount_minor,
+            currency: invoice.currency.clone(),
+        };
+        Self {
+            id: invoice.id,
+            status: invoice.status.into(),
+            source: if imported {
+                InvoiceSource::Harvest
+            } else {
+                InvoiceSource::Horae
+            },
+            client_id: invoice.client_id,
+            client_name,
+            issued_on: invoice.issued_on,
+            due_on: invoice.due_on,
+            overdue,
+            subtotal: money(invoice.subtotal_cents),
+            discount: money(invoice.discount_cents),
+            tax: money(invoice.tax1_cents),
+            second_tax: money(invoice.tax2_cents),
+            total: money(invoice.total_cents),
+            number: invoice.number,
+            subject: invoice.subject,
+            second_tax_name: invoice.tax2_name,
+            po_number: invoice.po_number,
+            notes: invoice.notes,
+            created_at: invoice.created_at,
+            updated_at,
+            currency: invoice.currency,
+        }
+    }
+}
+
+impl From<InvoiceRecord> for Invoice {
+    fn from(record: InvoiceRecord) -> Self {
+        let item = record.item;
+        Self::new(
+            item.invoice,
+            item.client_name,
+            item.overdue,
+            item.imported.is_some(),
+            record.updated_at,
+        )
+    }
+}
+
+/// An invoice with its lines, as its page shows it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct InvoiceDetail {
+    #[serde(flatten)]
+    pub invoice: Invoice,
+    /// In the invoice's order.
+    pub lines: Vec<InvoiceLine>,
+}
+
+/// A line of an invoice: billed time, a fee, or a line imported from Harvest.
+/// An imported line's quantity and unit price are decimals as Harvest wrote
+/// them, so only its amount is given.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct InvoiceLine {
+    pub description: String,
+    /// The time entry the line bills; `null` for a fee or an imported line.
+    pub time_entry_id: Option<Uuid>,
+    /// The billed minutes; `null` for a fee or an imported line.
+    pub minutes: Option<i32>,
+    /// The hourly rate the line billed; `null` for a fee or an imported line.
+    pub hourly_rate: Option<Money>,
+    pub amount: Money,
+}
+
+impl From<InvoiceDetailRecord> for InvoiceDetail {
+    fn from(record: InvoiceDetailRecord) -> Self {
+        let detail = record.detail;
+        let currency = detail.invoice.currency.clone();
+        let money = |amount_minor| Money {
+            amount_minor,
+            currency: currency.clone(),
+        };
+        let lines = if detail.imported.is_some() {
+            detail
+                .imported_lines
+                .into_iter()
+                .map(|line| InvoiceLine {
+                    description: line.description,
+                    time_entry_id: None,
+                    minutes: None,
+                    hourly_rate: None,
+                    amount: money(line.amount_cents),
+                })
+                .collect()
+        } else {
+            detail
+                .lines
+                .into_iter()
+                .map(|line| InvoiceLine {
+                    description: line.description,
+                    time_entry_id: line.time_entry_id,
+                    minutes: line.minutes,
+                    hourly_rate: line.rate_cents.map(money),
+                    amount: money(line.amount_cents),
+                })
+                .collect()
+        };
+        Self {
+            invoice: Invoice::new(
+                detail.invoice,
+                detail.client_name,
+                detail.overdue,
+                detail.imported.is_some(),
+                record.updated_at,
+            ),
+            lines,
         }
     }
 }

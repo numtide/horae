@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency,\n                               total_cents, discount_bps, discount_cents, tax1_bps, tax1_cents,\n                               subject, po_number)\n         VALUES ($1, $2, $3, $4, $5::text::invoice_status, '2026-09-01', '2026-10-01', 'EUR',\n                 12960, 1000, 1200, 2000, 2160, 'September', 'PO-7')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ca844c92fc3e30c86d3501d2d1dd6e83acd87272bf6045d2889bf8ea24771a7"
+}

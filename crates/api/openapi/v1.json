@@ -1,6 +1,17 @@
 {
   "components": {
     "responses": {
+      "Pdf": {
+        "content": {
+          "application/pdf": {
+            "schema": {
+              "format": "binary",
+              "type": "string"
+            }
+          }
+        },
+        "description": "The invoice as a PDF, as an attachment named after its number"
+      },
       "Problem": {
         "content": {
           "application/problem+json": {
@@ -81,6 +92,201 @@
           "submitted",
           "approved",
           "invoiced"
+        ],
+        "type": "string"
+      },
+      "Invoice": {
+        "description": "An invoice, as the Invoices page lists it. Amounts are the ones the\ninvoice recorded, in its currency.",
+        "properties": {
+          "client_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "client_name": {
+            "description": "The client's name now.",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "discount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "due_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "issued_on": {
+            "format": "date",
+            "type": "string"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "overdue": {
+            "description": "Sent, unpaid and past its due date on the organization's today.",
+            "type": "boolean"
+          },
+          "po_number": {
+            "description": "The client's purchase order; empty when unset.",
+            "type": "string"
+          },
+          "second_tax": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "second_tax_name": {
+            "description": "The second tax's name; `null` when the invoice has none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/InvoiceSource"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InvoiceStatus"
+          },
+          "subject": {
+            "description": "One line naming what the invoice is for; empty when unset.",
+            "type": "string"
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/Money",
+            "description": "The lines' sum, before the discount and taxes."
+          },
+          "tax": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money",
+            "description": "What the client is asked to pay: the subtotal less the discount, plus\nboth taxes."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "source",
+          "client_id",
+          "client_name",
+          "subject",
+          "issued_on",
+          "due_on",
+          "overdue",
+          "currency",
+          "subtotal",
+          "discount",
+          "tax",
+          "second_tax",
+          "total",
+          "po_number",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "InvoiceDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Invoice"
+          },
+          {
+            "properties": {
+              "lines": {
+                "description": "In the invoice's order.",
+                "items": {
+                  "$ref": "#/components/schemas/InvoiceLine"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "lines"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "An invoice with its lines, as its page shows it."
+      },
+      "InvoiceLine": {
+        "description": "A line of an invoice: billed time, a fee, or a line imported from Harvest.\nAn imported line's quantity and unit price are decimals as Harvest wrote\nthem, so only its amount is given.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "description": {
+            "type": "string"
+          },
+          "hourly_rate": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Money",
+                "description": "The hourly rate the line billed; `null` for a fee or an imported line."
+              }
+            ]
+          },
+          "minutes": {
+            "description": "The billed minutes; `null` for a fee or an imported line.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "time_entry_id": {
+            "description": "The time entry the line bills; `null` for a fee or an imported line.",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "description",
+          "amount"
+        ],
+        "type": "object"
+      },
+      "InvoiceSource": {
+        "description": "Where an invoice was made: in Horae, or imported from Harvest.",
+        "enum": [
+          "horae",
+          "harvest"
+        ],
+        "type": "string"
+      },
+      "InvoiceStatus": {
+        "description": "Where an invoice is: being prepared, sent to the client, paid, written off\n(`closed`, only invoices imported from Harvest) or void.",
+        "enum": [
+          "draft",
+          "sent",
+          "paid",
+          "closed",
+          "void"
         ],
         "type": "string"
       },
@@ -365,6 +571,134 @@
                 "name",
                 "currency",
                 "active",
+                "created_at",
+                "updated_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "Page_Invoice": {
+        "description": "One page of a list, in `id` order. `next_cursor` is `null` on the last\npage.",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "An invoice, as the Invoices page lists it. Amounts are the ones the\ninvoice recorded, in its currency.",
+              "properties": {
+                "client_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "client_name": {
+                  "description": "The client's name now.",
+                  "type": "string"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "currency": {
+                  "pattern": "^[A-Z]{3}$",
+                  "type": "string"
+                },
+                "discount": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "due_on": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "issued_on": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "notes": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "number": {
+                  "type": "string"
+                },
+                "overdue": {
+                  "description": "Sent, unpaid and past its due date on the organization's today.",
+                  "type": "boolean"
+                },
+                "po_number": {
+                  "description": "The client's purchase order; empty when unset.",
+                  "type": "string"
+                },
+                "second_tax": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "second_tax_name": {
+                  "description": "The second tax's name; `null` when the invoice has none.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "$ref": "#/components/schemas/InvoiceSource"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/InvoiceStatus"
+                },
+                "subject": {
+                  "description": "One line naming what the invoice is for; empty when unset.",
+                  "type": "string"
+                },
+                "subtotal": {
+                  "$ref": "#/components/schemas/Money",
+                  "description": "The lines' sum, before the discount and taxes."
+                },
+                "tax": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "total": {
+                  "$ref": "#/components/schemas/Money",
+                  "description": "What the client is asked to pay: the subtotal less the discount, plus\nboth taxes."
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "number",
+                "status",
+                "source",
+                "client_id",
+                "client_name",
+                "subject",
+                "issued_on",
+                "due_on",
+                "overdue",
+                "currency",
+                "subtotal",
+                "discount",
+                "tax",
+                "second_tax",
+                "total",
+                "po_number",
                 "created_at",
                 "updated_at"
               ],
@@ -1302,6 +1636,163 @@
         "summary": "One client the owner may see, active or archived.",
         "tags": [
           "catalogue"
+        ]
+      }
+    },
+    "/invoices": {
+      "get": {
+        "operationId": "listInvoices",
+        "parameters": [
+          {
+            "description": "Invoices per page, 1 to 1000.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "format": "int32",
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The previous page's `next_cursor`.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only invoices with this status.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/InvoiceStatus"
+            }
+          },
+          {
+            "description": "Only invoices of this client.",
+            "in": "query",
+            "name": "client_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only invoices changed at or after this instant: a status change, or\nan edit of a draft.",
+            "in": "query",
+            "name": "updated_since",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Invoice"
+                }
+              }
+            },
+            "description": "A page of invoices"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ],
+        "summary": "Every invoice of the organization, in `id` order. Needs the permission to\nview all invoices.",
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/invoices/{id}": {
+      "get": {
+        "operationId": "getInvoice",
+        "parameters": [
+          {
+            "description": "The invoice's id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDetail"
+                }
+              }
+            },
+            "description": "The invoice"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ],
+        "summary": "One invoice with its lines.",
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/invoices/{id}/pdf": {
+      "get": {
+        "operationId": "getInvoicePdf",
+        "parameters": [
+          {
+            "description": "The invoice's id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Pdf"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ],
+        "summary": "The invoice as the PDF the web app downloads, byte for byte the same for\nthe same invoice and organization details.",
+        "tags": [
+          "invoices"
         ]
       }
     },
@@ -2326,6 +2817,10 @@
     {
       "description": "Projects, tasks, clients and people, read-only",
       "name": "catalogue"
+    },
+    {
+      "description": "Invoices, read-only, with their PDF. Personal access tokens only: no OAuth scope covers invoices yet",
+      "name": "invoices"
     }
   ]
 }

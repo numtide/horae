@@ -62,7 +62,8 @@ fn the_document_offers_oauth_with_relative_urls_and_the_three_scopes() {
 
 /// Every token operation takes a personal token, or an OAuth token with the
 /// one scope it names (FR-062). Only the document itself is public, and only
-/// `/me` takes any scope (FR-061).
+/// `/me` takes any scope (FR-061). The invoices take personal tokens only: no
+/// scope covers them yet (spec 028 FR-005).
 #[test]
 fn every_token_operation_declares_its_oauth_scope() {
     let document = serde_json::to_value(document()).unwrap();
@@ -72,6 +73,10 @@ fn every_token_operation_declares_its_oauth_scope() {
                 continue;
             }
             let security = operation["security"].as_array().unwrap();
+            if path.starts_with("/invoices") {
+                assert_eq!(security, &[json!({ "token": [] })], "{method} {path}");
+                continue;
+            }
             let [token, oauth] = &security[..] else {
                 panic!("{method} {path}: {security:?}");
             };
@@ -109,7 +114,7 @@ fn every_operation_is_named_and_answers_errors_as_problems() {
             );
         }
     }
-    assert_eq!(operations, 20);
+    assert_eq!(operations, 23);
 }
 
 #[test]

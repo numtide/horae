@@ -45,6 +45,7 @@ mod entries;
 mod fees;
 mod generate;
 pub mod preview;
+pub mod reads;
 #[cfg(test)]
 mod rounding_tests;
 pub mod uninvoiced;

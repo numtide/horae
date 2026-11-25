@@ -35,6 +35,7 @@ use crate::token::ApiCaller;
 
 mod catalogue;
 pub mod clients;
+pub mod invoices;
 pub mod me;
 #[cfg(test)]
 mod oauth_tests;
@@ -118,7 +119,7 @@ impl FromRef<V1State> for Arc<RateLimiter> {
     ),
     servers((url = "/api/v1")),
     security(("token" = [])),
-    components(schemas(Problem), responses(ProblemResponse)),
+    components(schemas(Problem), responses(ProblemResponse, invoices::PdfResponse)),
     modifiers(&BearerToken),
     tags(
         (name = "description", description = "This document"),
@@ -126,6 +127,11 @@ impl FromRef<V1State> for Arc<RateLimiter> {
         (name = "time entries", description = "Time spent, read and written as on the Timesheet"),
         (name = "timers", description = "Starting, stopping and restarting timers"),
         (name = "catalogue", description = "Projects, tasks, clients and people, read-only"),
+        (
+            name = "invoices",
+            description = "Invoices, read-only, with their PDF. Personal access tokens only: \
+                           no OAuth scope covers invoices yet"
+        ),
     )
 )]
 struct ApiDoc;
@@ -247,6 +253,9 @@ fn token_routes() -> OpenApiRouter<V1State> {
         .routes(routes!(clients::get))
         .routes(routes!(people::list))
         .routes(routes!(people::get))
+        .routes(routes!(invoices::list))
+        .routes(routes!(invoices::get))
+        .routes(routes!(invoices::pdf))
 }
 
 /// The published description of `/api/v1`, built once.
