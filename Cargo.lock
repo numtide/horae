@@ -3500,6 +3500,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "horae-jobs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "horae-server"
 version = "0.1.0"
 dependencies = [
@@ -3514,6 +3530,7 @@ dependencies = [
  "futures-util",
  "horae-core",
  "horae-harvest",
+ "horae-jobs",
  "horae-types",
  "openidconnect",
  "serde",

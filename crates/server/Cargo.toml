@@ -6,10 +6,11 @@ license = "MIT"
 
 [features]
 # The `testing` fixtures, for the `horae` crate's own tests.
-test-support = ["horae-harvest/test-support"]
+test-support = ["horae-harvest/test-support", "horae-jobs/test-support"]
 
 [dependencies]
 horae-core = { path = "../core", features = ["sqlx"] }
+horae-jobs = { path = "../jobs" }
 horae-types = { path = "../types" }
 horae-harvest = { path = "../harvest" }
 serde = { version = "1", features = ["derive"] }
@@ -70,6 +71,7 @@ subtle = "2"
 
 [dev-dependencies]
 horae-harvest = { path = "../harvest", features = ["test-support"] }
+horae-jobs = { path = "../jobs", features = ["test-support"] }
 serial_test = "3"
 tempfile = "3"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
