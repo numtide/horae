@@ -21,9 +21,10 @@ sqlx = { version = "0.8", features = [
   "postgres",
   "uuid",
   "json",
-  "migrate",
 ] }
 
 [dev-dependencies]
+# The tests' MIGRATOR over the server's migrations.
+sqlx = { version = "0.8", features = ["migrate"] }
 futures-util = "0.3"
 serial_test = "3"

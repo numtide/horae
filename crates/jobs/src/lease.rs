@@ -93,8 +93,9 @@ impl JobContext {
         Ok(())
     }
 
-    /// Cancel only the SQL consumer. Its caller still closes the source channel,
-    /// joins the blocking producer, and releases the import session before ack.
+    /// Stops only `work` when the attempt is cancelled or loses its lease.
+    /// Whatever the handler started beside it (a producer thread, a session)
+    /// is the caller's to wind down before the run returns.
     pub async fn run<T>(&self, work: impl Future<Output = anyhow::Result<T>>) -> anyhow::Result<T> {
         let mut stop = self.stop.clone();
         if *stop.borrow() {
@@ -148,8 +149,8 @@ impl JobContext {
         }
     }
 
-    /// With an import transaction, the job's report and domain writes become
-    /// visible together. The conditional update locks the job until commit, so
+    /// Inside the handler's transaction, the job's report and its domain writes
+    /// become visible together. The conditional update locks the job until commit, so
     /// cancellation/reclaim cannot slip between the ownership check and COMMIT.
     pub async fn complete(
         &self,

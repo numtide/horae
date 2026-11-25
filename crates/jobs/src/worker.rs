@@ -172,6 +172,7 @@ async fn start<'r>(
     worker_id: &str,
     job: &ClaimedJob,
 ) -> anyhow::Result<(&'r dyn Handler, serde_json::Value)> {
+    // Every kind starts in phase `importing`, as when the queue ran only imports.
     let started = sqlx::query!(
         r#"UPDATE horae_jobs SET phase = 'importing', updated_at = now()
             WHERE id = $1 AND worker_id = $2 AND claim_token = $3
@@ -201,7 +202,7 @@ pub async fn run_claimed(
 ) -> anyhow::Result<()> {
     tokio::pin!(work);
     // No detached heartbeat survives an aborted worker. On cancellation, let
-    // the importer join its producer and flush rollback before recording ack.
+    // the handler wind down and roll back before the outcome is recorded.
     let result = tokio::select! {
         result = &mut work => result,
         monitor = ctx.monitor(pool) => {
@@ -221,8 +222,8 @@ pub async fn run_claimed(
                     .await?
             };
             if !completed {
-                // Committing imports already completed atomically with their
-                // writes. Otherwise a concurrent cancellation still needs ack.
+                // A handler that completed inside its own transaction already
+                // finished the job. Otherwise a concurrent cancellation still needs ack.
                 fail_claimed(pool, ctx, &anyhow::Error::from(Interrupted).into()).await?;
             }
         }

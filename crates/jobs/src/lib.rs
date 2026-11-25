@@ -79,8 +79,14 @@ pub struct Registry {
 }
 
 impl Registry {
+    /// Panics when the kind already has a handler, so a copied `kind()` cannot
+    /// make one kind run another's handler.
     pub fn register(&mut self, handler: impl Handler) -> &mut Self {
-        self.handlers.insert(handler.kind(), Box::new(handler));
+        let kind = handler.kind();
+        assert!(
+            self.handlers.insert(kind, Box::new(handler)).is_none(),
+            "duplicate handler for job kind {kind}"
+        );
         self
     }
 

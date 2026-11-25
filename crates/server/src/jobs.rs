@@ -1700,6 +1700,26 @@ mod tests {
         );
     }
 
+    /// An API import row as servers before the extraction stored it.
+    #[test]
+    fn an_api_payload_queued_before_the_extraction_still_decodes() {
+        let stored = serde_json::json!({
+            "version": 1,
+            "payload": {"kind": "HarvestApi", "value": {"mode": "DryRun", "sync": "Full"}}
+        });
+        assert!(matches!(
+            decode_payload(stored.clone()).unwrap(),
+            JobPayload::HarvestApi {
+                mode: ImportMode::DryRun,
+                sync: SyncScope::Full
+            }
+        ));
+        assert_eq!(
+            sync_scope("harvest_api_import", &stored),
+            Some(SyncScope::Full)
+        );
+    }
+
     /// A job enqueued by a server from before the queue had its own crate:
     /// the row and payload are written literally, as that server stored them.
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
