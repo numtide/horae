@@ -115,6 +115,7 @@ Not design work, but it changes the screens above or has to land before them.
 | Spec 021 step 5, the spec update | `spec/harvest-api-step5` | In progress |
 | Unknown currency fix, PR 1: a zero rate counts as no rate, and a missing currency reads "currency not set" instead of "Unknown currency 0.00" (P-8.3) | `fix/unknown-currency` | In progress |
 | Spec 026, task rate templates: templates have no currency and two decimals, and take the project's currency; each line rounds half up, and totals are the sum of the lines | `spec/task-rate-templates` | Being specified. Implementation after the Harvest invoice import and the deploy, near the Tasks PR |
+| Spec 027, Harvest mirror mode: Horae reads Harvest every few minutes and keeps a read-only copy, nightly parity checks compare records, report totals and invoices, and the durable queue moves into its own crate (`horae-jobs`) | `spec/harvest-mirror` | Specified. Ten PRs, the jobs crate first; the mirror is turned on only after spec 026's second delivery. Adds a "Synced from Harvest" mark and a mirror status page in the Harvest section |
 
 ## Findings cited
 

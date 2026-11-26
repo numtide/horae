@@ -3,7 +3,9 @@
 
 use std::time::Duration;
 
-use super::{OutboxEvent, POLL, Worker, claim_outbox, mark_outbox_delivered, mark_outbox_failed};
+use horae_jobs::POLL;
+
+use super::{OutboxEvent, Worker, claim_outbox, mark_outbox_delivered, mark_outbox_failed};
 use crate::{plugin::AppEvent, state::AppState};
 
 const DELIVERY_TIMEOUT: Duration = Duration::from_secs(60);
@@ -40,7 +42,7 @@ pub fn spawn(state: &AppState) -> Worker {
             }
         }
     });
-    Worker { stop, task }
+    Worker::new(stop, task)
 }
 
 /// The deadline is shorter than the outbox lease. A cancelled or crashed

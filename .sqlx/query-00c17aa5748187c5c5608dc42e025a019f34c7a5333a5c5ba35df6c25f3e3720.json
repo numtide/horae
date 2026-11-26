@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts)\n               VALUES ($1, $2, 'harvest_csv_import',\n                       '{\"version\": 1, \"payload\": {\"kind\": \"HarvestCsv\", \"value\": {\"mode\": \"DryRun\"}}}'::jsonb\n                         || jsonb_build_object('upload_sha256', encode(sha256($3::bytea), 'hex')),\n                       'before-extraction', 5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00c17aa5748187c5c5608dc42e025a019f34c7a5333a5c5ba35df6c25f3e3720"
+}

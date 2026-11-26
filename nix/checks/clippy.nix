@@ -20,6 +20,7 @@ perSystem.self.default.overrideAttrs (old: {
     # The browser bundle compiles the catalog too.
     cargo clippy -p horae-i18n --target wasm32-unknown-unknown -- -D warnings
     cargo clippy -p horae-harvest --all-targets -- -D warnings -W clippy::perf
+    cargo clippy -p horae-jobs --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-server --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-api --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-harvest-api --all-targets -- -D warnings -W clippy::perf
