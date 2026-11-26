@@ -97,9 +97,16 @@ let restoreSeededStates = () => {};
     const catalog = await context.request.get(`${base}/harvest/v2/tasks/${unlinked}`);
     assert.equal(catalog.status(), 200);
     assert.equal((await catalog.json()).default_hourly_rate, 678.9);
-    await expect(page.locator('.sidebar-resize')).toHaveCSS('pointer-events', 'none');
+    // The open panel sits in the top layer, over the rail's resize handle.
+    const handleUnderPanel = await page.evaluate(() => {
+      const handle = document.querySelector('.sidebar-resize').getBoundingClientRect();
+      const panel = document.querySelector('.sidebar-timer-pop').getBoundingClientRect();
+      const hit = document.elementFromPoint(handle.left + handle.width / 2, (panel.top + panel.bottom) / 2);
+      return hit.closest('.sidebar-timer-pop') !== null;
+    });
+    assert.ok(handleUnderPanel, 'the open timer panel must cover the resize handle');
     await popover.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(popover).toHaveCount(0);
+    await expect(popover).toBeHidden();
     await expect(page.locator('.sidebar-resize')).toHaveCSS('pointer-events', 'auto');
     const handle = await page.locator('.sidebar-resize').boundingBox();
     await page.mouse.move(handle.x + handle.width / 2, 100);

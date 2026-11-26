@@ -66,7 +66,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await expect(picker).toBeVisible();
     await picker.getByRole('button', { name: 'Start timer', exact: true }).click();
     await picker.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(picker).toHaveCount(0);
+    await expect(picker).toBeHidden();
     await sidebar.locator('.sidebar-footer').click();
     await sidebar.getByRole('link', { name: 'My settings', exact: true }).click();
     await expect(page).toHaveURL(`${base}/settings/profile`);
