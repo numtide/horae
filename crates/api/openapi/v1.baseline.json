@@ -205,7 +205,7 @@
         "type": "object"
       },
       "Money": {
-        "description": "An amount of money: an integer in the ISO 4217 minor unit of its currency.\nEUR 12.10 is `1210`, JPY 8000 (no minor unit) is `8000` and BHD 10.500\n(three decimals) is `10500`. Every amount in this API is a `Money`.",
+        "description": "An amount of money: an integer in the ISO 4217 minor unit of its currency.\nEUR 12.10 is `1210`, JPY 8000 (no minor unit) is `8000` and BHD 10.500\n(three decimals) is `10500`. Every amount in this API is a `Money`; a\nprice per hour is a `Rate`.",
         "examples": [
           {
             "amount_minor": 1210,
@@ -499,7 +499,7 @@
                   ]
                 },
                 "hourly_rate": {
-                  "$ref": "#/components/schemas/Money",
+                  "$ref": "#/components/schemas/Rate",
                   "description": "The project's hourly rate; absent when unset or when the owner may not\nread this project's rates."
                 },
                 "id": {
@@ -885,7 +885,7 @@
             ]
           },
           "hourly_rate": {
-            "$ref": "#/components/schemas/Money",
+            "$ref": "#/components/schemas/Rate",
             "description": "The project's hourly rate; absent when unset or when the owner may not\nread this project's rates."
           },
           "id": {
@@ -932,6 +932,38 @@
           "retainer"
         ],
         "type": "string"
+      },
+      "Rate": {
+        "description": "A price per hour: a decimal string in major units with exactly two\ndecimals, trailing zeros included, and its ISO 4217 currency. Horae keeps\nrates in hundredths for every currency, since a rate multiplies time before\nthe result is rounded, so a JPY rate can be `\"80.50\"` and a BHD rate has two\ndecimals, not three. Every price per hour in this API is a `Rate`; an\namount is a `Money`.",
+        "examples": [
+          {
+            "amount": "120.00",
+            "currency": "EUR"
+          },
+          {
+            "amount": "80.50",
+            "currency": "JPY"
+          },
+          {
+            "amount": "10.50",
+            "currency": "BHD"
+          }
+        ],
+        "properties": {
+          "amount": {
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "type": "string"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ],
+        "type": "object"
       },
       "Task": {
         "description": "A task of the catalogue.",

@@ -1,6 +1,5 @@
 use super::super::form::{
-    ValidatedProject, budget_step, form_payload, optional_amount, validate_project_form,
-    with_field,
+    ValidatedProject, budget_step, form_payload, optional_amount, validate_project_form, with_field,
 };
 use super::*;
 use crate::models::Project;

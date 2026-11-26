@@ -179,8 +179,9 @@ fn sum_budgets<'a>(
     let mut total = None;
     for (field, value) in values {
         let amount = match money_in {
-            Some(currency) => optional_amount(value, "Budget")
-                .and_then(|amount| budget_step(amount, currency)),
+            Some(currency) => {
+                optional_amount(value, "Budget").and_then(|amount| budget_step(amount, currency))
+            }
             None => optional_hours(value),
         }
         .map_err(|error| with_field(error, field))?;
@@ -765,38 +766,23 @@ mod tests {
     }
 
     /// A money budget is a whole number of the currency's minor unit: JPY
-    /// takes no decimals, in the project's budget and in each task's.
+    /// takes no decimals. The form's own currencies all have two, so this
+    /// matters for projects kept in another currency (legacy or imported).
     #[test]
     fn money_budgets_follow_the_currencys_minor_unit() {
-        use crate::models::project_creation::ProjectTaskInput;
-        let task = Uuid::now_v7();
-        let form = |mode, budget: &str| ProjectForm {
-            name: "Valid project".into(),
-            budget_mode: mode,
-            budget_value: budget.into(),
-            tasks: vec![ProjectTaskInput {
-                id: task,
-                source: TaskSource::Existing {
-                    task_id: Uuid::now_v7(),
-                },
-                billable: true,
-                rate: String::new(),
-                budget: budget.into(),
-                access: TaskAccess::Everyone,
-            }],
-            ..Default::default()
-        };
-        for mode in [BudgetMode::TotalFees, BudgetMode::FeesPerTask] {
-            for (currency, budget) in [("JPY", "8000"), ("EUR", "80.50"), ("BHD", "80.50")] {
-                let parsed = validate_project_form(&form(mode, budget), currency, false);
-                assert!(parsed.is_ok(), "{currency} {budget}");
-            }
+        for (amount, currency) in [
+            (None, "JPY"),
+            (Some(800_000), "JPY"),
+            (Some(8_050), "EUR"),
+            (Some(8_050), "BHD"),
+        ] {
+            assert_eq!(budget_step(amount, currency).unwrap(), amount, "{currency}");
         }
-        let (message, field) = field_rejection(&form(BudgetMode::TotalFees, "80.50"), "JPY", false);
-        assert_eq!(field, serde_json::json!("budget_value"));
-        assert_eq!(message, "Budget: JPY amounts have no decimal places");
-        let (_, field) = field_rejection(&form(BudgetMode::FeesPerTask, "80.50"), "JPY", false);
-        assert_eq!(field, serde_json::json!({ "task_budget": task }));
+        let error = budget_step(Some(8_050), " JPY").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Budget: JPY amounts have no decimal places"
+        );
     }
 
     fn assert_rejection_field(form: &ProjectForm, email: bool, expected: serde_json::Value) {

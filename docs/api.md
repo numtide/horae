@@ -55,7 +55,8 @@ acts as an administrator. The OpenAPI document lists each operation's scope.
 | Body | `Content-Type: application/json`. A field the operation does not know is refused (`422 unknown_field`) |
 | Ids | UUID strings |
 | Durations | whole minutes, in fields ending in `_minutes` or named `minutes` |
-| Money | `{ "amount_minor": 1250, "currency": "EUR" }`, in the currency's ISO 4217 minor unit: EUR 12.50 is `1250`, JPY 8000 is `8000`, BHD 10.500 is `10500` |
+| Money (amounts, such as a budget) | `{ "amount_minor": 1250, "currency": "EUR" }`, in the currency's ISO 4217 minor unit: EUR 12.50 is `1250`, JPY 8000 is `8000`, BHD 10.500 is `10500` |
+| Rate (prices per hour) | `{ "amount": "80.50", "currency": "JPY" }`, a decimal string in major units with exactly two decimals in every currency, as Horae stores rates: `"120.00"` in EUR, `"80.50"` in JPY, `"10.50"` in BHD |
 | Instants | RFC 3339 in UTC, such as `2026-11-18T09:30:00Z` |
 | Dates | `YYYY-MM-DD`. A time entry's date is the person's calendar day, as on the timesheet |
 | Unknown query parameters | ignored |

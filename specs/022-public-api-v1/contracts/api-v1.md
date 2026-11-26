@@ -32,7 +32,8 @@ And where PR H's differs:
 | Media type | `application/json` in and out; errors `application/problem+json` |
 | Ids | UUID v7 strings (FR-041) |
 | Durations | integer minutes, fields ending in `_minutes` (FR-042) |
-| Money | `{ "amount_minor": 1250, "currency": "EUR" }`, in the currency's ISO 4217 minor unit: JPY 8000 is `8000`, BHD 10.500 is `10500` (FR-042) |
+| Money (amounts) | `{ "amount_minor": 1250, "currency": "EUR" }`, in the currency's ISO 4217 minor unit: JPY 8000 is `8000`, BHD 10.500 is `10500` (FR-042) |
+| Rate (prices per hour) | `{ "amount": "80.50", "currency": "JPY" }`, a decimal string with exactly two decimals in every currency (FR-042) |
 | Instants | RFC 3339 in UTC, e.g. `2026-11-18T09:30:00Z` (FR-043) |
 | Dates | `YYYY-MM-DD`; a time entry's date is the person's calendar day, as in the timesheet |
 | Unknown query parameters | ignored |

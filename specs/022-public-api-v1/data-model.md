@@ -2,8 +2,8 @@
 
 Every new table has a UUID v7 primary key and `org_id` (Principle III). Durations stay integer
 minutes and money integer hundredths of the major unit for every currency (Principle I);
-`/api/v1` exposes durations as they are stored and money in the currency's ISO 4217 minor unit
-(research R-8; see **Money** below). New schema goes in `crates/server/migrations/0002_*.sql` onwards; the baseline is
+`/api/v1` exposes durations as they are stored, amounts in the currency's ISO 4217 minor unit and
+rates as two-decimal strings (research R-8; see **Money** and **Rate** below). New schema goes in `crates/server/migrations/0002_*.sql` onwards; the baseline is
 never edited.
 
 ## New table: `api_tokens` (PR C)
@@ -112,7 +112,13 @@ Shapes are in [contracts/api-v1.md](contracts/api-v1.md); the draft schema is
   and read into stored hundredths only through `horae_core::money::{to_iso_minor, from_iso_minor}`.
   A stored amount with no exact minor-unit value (JPY with hundredths) answers `500` and is logged,
   never rounded; a received one that storage cannot hold (BHD not a multiple of 10) is a `422`
-  naming the field.
+  naming the field. Project budgets cannot hit the `500`: the project form refuses them and
+  `projects_budget_amount_currency_step` (migration 0014) checks them. Used for
+  `Project.budget_amount`.
+- **Rate**: `{ amount: string, currency: string }`, a price per hour as a decimal in major units
+  with exactly two decimals, trailing zeros included: EUR `"120.00"`, JPY `"80.50"`, BHD `"10.50"`.
+  Horae stores every rate in hundredths, so it never fails. Built only through
+  `horae_core::money::rate_decimal`. Used for `Project.hourly_rate`.
 - **Page\<T>**: `{ data: [T], next_cursor: string | null }`.
 - **Problem**: RFC 9457 body with `code` and optional `field` (research R-4).
 
