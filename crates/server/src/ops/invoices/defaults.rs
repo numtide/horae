@@ -1,11 +1,33 @@
 use crate::models::invoice::InvoiceDefaults;
+use horae_core::invoice::Rounding;
 use horae_core::project::Percentage;
+use horae_core::types::RoundingMethod;
 
 use crate::ops::OpError;
+
+/// Checks the values alone; with no subtotal, rounding makes no difference.
+pub fn validate(defaults: &InvoiceDefaults) -> Result<(), OpError> {
+    amounts(defaults, 0, Rounding::new("", RoundingMethod::default())).map(drop)
+}
+
+/// The rounding method a new invoice is computed with: the organization's
+/// current setting. An existing invoice keeps the method it stores.
+pub(super) async fn org_rounding(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+) -> Result<RoundingMethod, OpError> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT invoice_rounding AS "rounding: RoundingMethod" FROM organizations WHERE id = $1"#,
+        org_id
+    )
+    .fetch_one(&mut **tx)
+    .await?)
+}
 
 pub fn amounts(
     defaults: &InvoiceDefaults,
     subtotal: i64,
+    rounding: Rounding,
 ) -> Result<horae_core::invoice::InvoiceAmounts, OpError> {
     if !(0..=365).contains(&defaults.terms_days) {
         return Err(OpError::bad_input(
@@ -37,6 +59,7 @@ pub fn amounts(
         percentage(defaults.discount_bps)?,
         percentage(defaults.tax1_bps)?,
         percentage(defaults.tax2_bps.unwrap_or(0))?,
+        rounding,
     )
     .map_err(|error| OpError::conflict(error.to_string()))
 }
@@ -71,6 +94,6 @@ pub(super) async fn resolve(
         }
         None => first,
     };
-    amounts(&defaults, 0)?;
+    validate(&defaults)?;
     Ok(defaults)
 }

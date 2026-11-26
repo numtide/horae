@@ -1,8 +1,10 @@
-//! Organization server functions: week start, name and invoice branding.
+//! Organization server functions: week start, name, invoice branding and
+//! invoice rounding.
 
 use super::*;
 #[cfg(feature = "server")]
 use crate::ops;
+use horae_core::types::RoundingMethod;
 
 /// First weekday of the signed-in user's organization, shared by the timesheet
 /// and its date picker. Invalid stored configuration must not silently default.
@@ -73,6 +75,27 @@ pub async fn update_org_branding(
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result =
         ops::organization::update_branding(&mut write.tx, &write.actor, &expected, &branding).await;
+    write
+        .commit(result, &*state.plugins)
+        .await
+        .map_err(op_error)
+}
+
+#[server]
+pub async fn get_invoice_rounding() -> Result<RoundingMethod, ServerFnError> {
+    let caller = session_caller().await?;
+    let state = crate::state::global_state().await;
+    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let result = ops::organization::invoice_rounding(&mut read.tx, &read.actor).await;
+    read.finish(result).await.map_err(op_error)
+}
+
+#[server]
+pub async fn set_invoice_rounding(method: RoundingMethod) -> Result<RoundingMethod, ServerFnError> {
+    let caller = session_caller().await?;
+    let state = crate::state::global_state().await;
+    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
+    let result = ops::organization::set_invoice_rounding(&mut write.tx, &write.actor, method).await;
     write
         .commit(result, &*state.plugins)
         .await

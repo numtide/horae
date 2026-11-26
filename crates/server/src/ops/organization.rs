@@ -1,7 +1,7 @@
 //! Organization settings: the invoice branding (issuer, payment details and
-//! invoice defaults) and the workspace time zone.
+//! invoice defaults), the invoice rounding method and the workspace time zone.
 //!
-//! Branding needs `InvoiceWriteAll`, to read as well as to save: it is the
+//! Branding and rounding need `InvoiceWriteAll`, to read as well as to save: they are the
 //! invoice settings page, which has no read-only form. The time zone, and
 //! reading the workspace settings pages (Plugins), need `CompanyWrite`.
 //!
@@ -11,6 +11,7 @@
 //! which reaches the caller as a conflict.
 
 use horae_core::permissions::catalog::Permission;
+use horae_core::types::RoundingMethod;
 
 use super::{Actor, Done, OpError, Tx};
 use crate::models::OrgBranding;
@@ -166,6 +167,36 @@ fn branding_values(branding: &OrgBranding) -> [&Option<String>; 12] {
         &branding.invoice_notes,
         &branding.invoice_payment_terms,
     ]
+}
+
+/// How new invoices round their discount and taxes, read like [`branding`].
+pub async fn invoice_rounding(tx: &mut Tx, actor: &Actor) -> Result<RoundingMethod, OpError> {
+    authorize(actor, Permission::InvoiceWriteAll, SETTINGS_REQUIRED)?;
+    sqlx::query_scalar!(
+        r#"SELECT invoice_rounding AS "rounding: RoundingMethod" FROM organizations WHERE id = $1"#,
+        actor.org_id(),
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| OpError::not_found(NOT_FOUND))
+}
+
+/// Changes how invoices created from now on round. Existing invoices keep the
+/// method they store, so none of them changes.
+pub async fn set_invoice_rounding(
+    tx: &mut Tx,
+    actor: &Actor,
+    method: RoundingMethod,
+) -> Result<Done<RoundingMethod>, OpError> {
+    authorize(actor, Permission::InvoiceWriteAll, SETTINGS_REQUIRED)?;
+    sqlx::query!(
+        "UPDATE organizations SET invoice_rounding = $2 WHERE id = $1",
+        actor.org_id(),
+        method as RoundingMethod,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(Done::new(method))
 }
 
 /// Allows the workspace settings pages, Plugins included, to someone with

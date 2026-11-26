@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::NaiveDate;
-use horae_core::types::InvoiceStatus;
+use horae_core::types::{InvoiceStatus, RoundingMethod};
 use uuid::Uuid;
 
 use super::{SourceRead, balances, defaults, entries, fees, preview};
@@ -246,9 +246,11 @@ pub async fn generate(
     let issued_on = now.date_naive();
     let due_on = horae_core::project::payment_due_date(issued_on, settings.terms_days as u16)
         .map_err(OpError::bad_input)?;
-    preview::allocate_lines(&mut prepared, settings.discount_bps)?;
+    let method = defaults::org_rounding(tx, org_id).await?;
+    let rounding = horae_core::invoice::Rounding::new(&currency, method);
+    preview::allocate_lines(&mut prepared, settings.discount_bps, rounding)?;
     let subtotal_cents = preview::subtotal(&prepared)?;
-    let amounts = defaults::amounts(&settings, subtotal_cents)?;
+    let amounts = defaults::amounts(&settings, subtotal_cents, rounding)?;
     let excess = preview::excess(&prepared)?;
     if let Some(request) = &canonical {
         let review = &request.review;
@@ -325,9 +327,10 @@ pub async fn generate(
     let subject = subject.unwrap_or_default();
     let notes = sqlx::query_scalar!(
         r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents,
-             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents,notes,subject)
+             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents,notes,subject,
+             rounding)
            VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9,$10,$11,$12,$13,$14,$15,$16,
-             CASE WHEN $17 THEN $18 ELSE (SELECT invoice_notes FROM organizations WHERE id = $2) END, $19)
+             CASE WHEN $17 THEN $18 ELSE (SELECT invoice_notes FROM organizations WHERE id = $2) END, $19, $20)
            RETURNING notes"#,
         invoice_id,
         org_id,
@@ -340,6 +343,7 @@ pub async fn generate(
         settings.po_number, settings.discount_bps, settings.tax1_bps, settings.tax2_name,
         settings.tax2_bps, amounts.discount_cents, amounts.tax1_cents, amounts.tax2_cents,
         source_notes.is_some(), source_notes.clone().flatten(), subject,
+        method as RoundingMethod,
     )
     .fetch_one(&mut **tx)
     .await

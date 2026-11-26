@@ -4,6 +4,7 @@ use crate::models::invoice::{
     InvoiceProjectDefaults, InvoiceSourceExcess,
 };
 use crate::ops::{Actor, OpError, Tx};
+use horae_core::invoice::Rounding;
 use std::collections::BTreeSet;
 
 /// Previews the invoice a client's uninvoiced time and fees would produce,
@@ -24,7 +25,7 @@ pub async fn prepare(
         return Err(OpError::bad_input("Select between 1 and 1000 projects"));
     }
     if let Some(overrides) = overrides {
-        defaults::amounts(overrides, 0)?;
+        defaults::validate(overrides)?;
     }
     let selected = selected.map(|ids| {
         ids.iter()
@@ -128,12 +129,13 @@ pub async fn prepare(
         .cloned()
         .or_else(|| projects.is_empty().then(InvoiceDefaults::default));
     let issued_on = chrono::Utc::now().date_naive();
+    let rounding = Rounding::new(&currency, defaults::org_rounding(tx, org_id).await?);
     let amounts = defaults
         .as_ref()
-        .map(|defaults| defaults::amounts(defaults, subtotal_cents))
+        .map(|defaults| defaults::amounts(defaults, subtotal_cents, rounding))
         .transpose()?;
     if let Some(defaults) = &defaults {
-        allocate_lines(&mut lines, defaults.discount_bps)?;
+        allocate_lines(&mut lines, defaults.discount_bps, rounding)?;
     }
     let excess = if defaults.is_some() {
         excess(&lines)?
@@ -244,6 +246,7 @@ pub(super) fn subtotal(lines: &[InvoicePreviewLine]) -> Result<i64, OpError> {
 pub(super) fn allocate_lines(
     lines: &mut [InvoicePreviewLine],
     discount_bps: i16,
+    rounding: Rounding,
 ) -> Result<(), OpError> {
     // Display dates must not change discount tie-breaking from persisted sources.
     let mut order: Vec<_> = (0..lines.len()).collect();
@@ -258,7 +261,7 @@ pub(super) fn allocate_lines(
             }
         })
         .collect();
-    let net = balances::allocate(&gross, discount_bps)?;
+    let net = balances::allocate(&gross, discount_bps, rounding)?;
     for (i, net) in order.into_iter().zip(net) {
         lines[i].net_before_tax_cents = Some(net);
     }

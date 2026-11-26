@@ -1027,6 +1027,17 @@ mod server_fns {
         unreachable!("detail navigation never opens invoice settings")
     }
 
+    pub async fn get_invoice_rounding() -> Result<horae_core::types::RoundingMethod, ServerFnError>
+    {
+        unreachable!("detail navigation never opens invoice settings")
+    }
+
+    pub async fn set_invoice_rounding(
+        _method: horae_core::types::RoundingMethod,
+    ) -> Result<horae_core::types::RoundingMethod, ServerFnError> {
+        unreachable!("detail navigation never opens invoice settings")
+    }
+
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
         Ok(chrono::Weekday::Mon)
     }

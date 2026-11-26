@@ -779,6 +779,7 @@ async fn invoice_defaults_overflow_leaves_dates_and_exact_total(pool: PgPool) {
 
 #[test]
 fn invoice_defaults_validate_all_override_fields() {
+    let eur = horae_core::invoice::Rounding::new("EUR", horae_core::types::RoundingMethod::HalfUp);
     for invalid in [
         InvoiceDefaults {
             terms_days: -1,
@@ -821,7 +822,7 @@ fn invoice_defaults_validate_all_override_fields() {
     ] {
         assert!(
             matches!(
-                defaults::amounts(&invalid, 10000),
+                defaults::amounts(&invalid, 10000, eur),
                 Err(crate::ops::OpError::Invalid { field: None, .. })
             ),
             "{invalid:?}"
@@ -832,7 +833,7 @@ fn invoice_defaults_validate_all_override_fields() {
         tax1_bps: 10000,
         ..Default::default()
     };
-    assert_eq!(defaults::amounts(&free, 1).unwrap().total_cents, 0);
+    assert_eq!(defaults::amounts(&free, 1, eur).unwrap().total_cents, 0);
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

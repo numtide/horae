@@ -5,7 +5,10 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
+use horae_core::types::RoundingMethod;
+
 use crate::components::back_link::BackLink;
+use crate::components::controls::Radio;
 use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{LoadError, Loading};
@@ -250,6 +253,7 @@ fn SettingsForm(initial: OrgBranding) -> Element {
                 for card in Card::ALL {
                     SettingsCard { key: "{card.fields()[0].id}", card, saved, draft }
                 }
+                RoundingCard {}
             }
             // The wrapper stretches with the row; the preview card keeps its own height.
             div { class: "w-full max-w-sm min-w-0",
@@ -344,6 +348,113 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
                 }
             }
         }
+    }
+}
+
+fn rounding_label(tr: Tr, method: RoundingMethod) -> (String, String) {
+    match method {
+        RoundingMethod::HalfUp => (
+            tr.invoices_settings_rounding_half_up(),
+            tr.invoices_settings_rounding_half_up_hint(),
+        ),
+        RoundingMethod::Down => (
+            tr.invoices_settings_rounding_down(),
+            tr.invoices_settings_rounding_down_hint(),
+        ),
+        RoundingMethod::Up => (
+            tr.invoices_settings_rounding_up(),
+            tr.invoices_settings_rounding_up_hint(),
+        ),
+    }
+}
+
+/// The rounding method of new invoices; it loads and saves on its own, since
+/// it is no branding value and changes no existing invoice.
+#[component]
+fn RoundingCard() -> Element {
+    let tr = use_tr();
+    let mut rounding = use_resource(server_fns::get_invoice_rounding);
+    let retry = use_callback(move |_| rounding.restart());
+    match &*rounding.read() {
+        None => rsx! { Loading { label: tr.invoices_settings_rounding_loading() } },
+        Some(Ok(initial)) => rsx! { RoundingForm { initial: *initial } },
+        Some(Err(error)) => rsx! {
+            LoadError { error: error.clone(), what: tr.invoices_settings_rounding_what(), retry }
+        },
+    }
+}
+
+#[component]
+fn RoundingForm(initial: RoundingMethod) -> Element {
+    let tr = use_tr();
+    let mut choice = use_signal(|| initial);
+    let mut busy = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+    let mut notice = use_signal(|| false);
+
+    let save = move |event: FormEvent| {
+        event.prevent_default();
+        if busy() {
+            return;
+        }
+        notice.set(false);
+        error.set(None);
+        busy.set(true);
+        let method = *choice.peek();
+        spawn(async move {
+            match server_fns::set_invoice_rounding(method).await {
+                Ok(stored) => {
+                    choice.set(stored);
+                    notice.set(true);
+                }
+                Err(failure) => error.set(Some(message_of(failure))),
+            }
+            busy.set(false);
+        });
+    };
+
+    rsx! {
+        form { class: "card p-5", novalidate: true, aria_labelledby: "inv-settings-rounding-title", onsubmit: save,
+            h2 { id: "inv-settings-rounding-title", class: "card-title", {tr.invoices_settings_rounding()} }
+            p { class: "text-sm text-secondary mb-4", {tr.invoices_settings_rounding_hint()} }
+            if let Some(message) = error() {
+                div { class: "alert alert-danger", role: "alert", "{message}" }
+            }
+            fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: busy(),
+                div { class: "flex flex-col gap-2 mb-4", role: "radiogroup",
+                    aria_labelledby: "inv-settings-rounding-title",
+                    for method in [RoundingMethod::HalfUp, RoundingMethod::Down, RoundingMethod::Up] {
+                        RoundingChoice { key: "{method}", method, choice, notice }
+                    }
+                }
+            }
+            div { class: "flex flex-wrap items-center gap-3",
+                button { r#type: "submit", class: "btn btn-primary", disabled: busy(),
+                    if busy() { {tr.invoices_settings_saving()} } else { {tr.invoices_settings_save_rounding()} }
+                }
+                p { class: "text-sm text-secondary m-0", role: "status",
+                    if notice() { {tr.invoices_settings_saved()} }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn RoundingChoice(
+    method: RoundingMethod,
+    choice: Signal<RoundingMethod>,
+    notice: Signal<bool>,
+) -> Element {
+    let tr = use_tr();
+    let (mut choice, mut notice) = (choice, notice);
+    let choose = use_callback(move |_: MouseEvent| {
+        notice.set(false);
+        choice.set(method);
+    });
+    let (label, hint) = rounding_label(tr, method);
+    rsx! {
+        Radio { id: "inv-settings-rounding-{method}", selected: choice() == method, label, hint, onclick: choose }
     }
 }
 

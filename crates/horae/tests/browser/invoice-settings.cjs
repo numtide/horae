@@ -20,7 +20,8 @@ const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')
 const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${grantsSql(grants)} WHERE id='${state}'`);
 const branding = column => sql(`SELECT coalesce(${column}, '<null>') FROM organizations WHERE id='${org}'`);
 const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provider_email', 'provider_phone',
-  'bank_name', 'bank_iban', 'bank_bic', 'bank_routing', 'bank_account', 'invoice_notes', 'invoice_payment_terms'];
+  'bank_name', 'bank_iban', 'bank_bic', 'bank_routing', 'bank_account', 'invoice_notes', 'invoice_payment_terms',
+  'invoice_rounding'];
 const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')} FROM organizations WHERE id='${org}') o`));
 let restoreSeededStates = () => {};
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
@@ -106,6 +107,22 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await expect(page.getByLabel('Invoice notes', { exact: true })).toHaveValue('Thank you for your business.');
     await expect(page.getByLabel('Company name', { exact: true })).toHaveValue('Acme Studio S.L.');
     console.log('PASS: inline validation, blank values cleared and saved values survive a reload');
+
+    // The rounding card saves its own choice, which a reload keeps.
+    const rounding = page.locator('form', { has: page.getByRole('heading', { name: 'Rounding', exact: true }) });
+    const halfUp = rounding.getByRole('radio', { name: /^Nearest, halves up/ });
+    const down = rounding.getByRole('radio', { name: /^Down/ });
+    await expect(halfUp).toHaveAttribute('aria-checked', 'true');
+    await down.click();
+    await expect(down).toHaveAttribute('aria-checked', 'true');
+    await expect(halfUp).toHaveAttribute('aria-checked', 'false');
+    assert.equal(branding('invoice_rounding::text'), before.invoice_rounding);
+    await rounding.getByRole('button', { name: 'Save rounding' }).click();
+    await expect(rounding.getByRole('status')).toHaveText('Saved.');
+    assert.equal(branding('invoice_rounding::text'), 'down');
+    await page.reload();
+    await expect(down).toHaveAttribute('aria-checked', 'true');
+    console.log('PASS: the rounding choice saves on its own and survives a reload');
 
     // Someone else saves the IBAN while this page is open: a later save here must not restore it.
     sql(`UPDATE organizations SET bank_iban='DE89 3704 0044 0532 0130 00' WHERE id='${org}'`);

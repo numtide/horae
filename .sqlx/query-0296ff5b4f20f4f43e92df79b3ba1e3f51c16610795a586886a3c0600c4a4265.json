@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (to_jsonb(i) - 'rounding')::text AS \"row!\" FROM invoices i ORDER BY number",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "row!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0296ff5b4f20f4f43e92df79b3ba1e3f51c16610795a586886a3c0600c4a4265"
+}
