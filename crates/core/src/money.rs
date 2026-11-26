@@ -236,6 +236,54 @@ pub fn currency_decimals(currency: &str) -> u8 {
     }
 }
 
+// ISO 4217 minor units, the unit of `/api/v1`'s `Money`. Storage keeps
+// hundredths for every currency; these two are the only conversions.
+
+/// A stored or received amount that the other unit cannot hold exactly.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum MinorUnitsError {
+    /// Not a whole number of the target unit: JPY 10.50 has no yen value,
+    /// and BHD 10.505 has no hundredths value.
+    #[error("the amount is not a whole number of the currency's unit")]
+    Inexact,
+    #[error("the amount is out of range")]
+    Overflow,
+}
+
+/// Stored hundredths as ISO 4217 minor units: EUR 1210 → 1210, JPY 800000 →
+/// 8000, BHD 1050 → 10500. Errors rather than rounds when a zero-decimal
+/// amount carries hundredths.
+pub fn to_iso_minor(hundredths: i64, currency: &str) -> Result<i64, MinorUnitsError> {
+    match currency_decimals(currency) {
+        0 if hundredths % 100 != 0 => Err(MinorUnitsError::Inexact),
+        0 => Ok(hundredths / 100),
+        3 => hundredths.checked_mul(10).ok_or(MinorUnitsError::Overflow),
+        _ => Ok(hundredths),
+    }
+}
+
+/// ISO 4217 minor units as stored hundredths, the inverse of
+/// [`to_iso_minor`]. Errors when the amount cannot be stored: a
+/// three-decimal amount that is not a multiple of 10, or one too large.
+pub fn from_iso_minor(minor: i64, currency: &str) -> Result<i64, MinorUnitsError> {
+    match currency_decimals(currency) {
+        0 => minor.checked_mul(100).ok_or(MinorUnitsError::Overflow),
+        3 if minor % 10 != 0 => Err(MinorUnitsError::Inexact),
+        3 => Ok(minor / 10),
+        _ => Ok(minor),
+    }
+}
+
+/// A per-hour price (a rate) as `/api/v1` serves it: a decimal in major units
+/// with exactly the two decimals Horae stores for every currency, trailing
+/// zeros included. JPY 8050 hundredths is `"80.50"`, JPY 800000 is
+/// `"8000.00"`, USD 12000 is `"120.00"` and BHD 1050 is `"10.50"`. A rate
+/// multiplies time before rounding, so it keeps its stored precision even
+/// where the currency's minor unit is coarser, and never fails.
+pub fn rate_decimal(hundredths: i64) -> String {
+    format_cents_plain(hundredths)
+}
+
 /// Display a project budget in its own unit: money for an amount budget, hours
 /// for an hours budget, empty for no budget.
 pub fn format_budget(
@@ -327,6 +375,40 @@ mod tests {
         assert_eq!(format_major_units(-100, "KRW"), "-1");
         assert_eq!(format_major_units(1_230, "BHD"), "12.300");
         assert_eq!(format_major_units(-5, "KWD"), "-0.050");
+    }
+
+    #[test]
+    fn iso_minor_units_follow_the_currencys_decimals() {
+        assert_eq!(to_iso_minor(1_210, "EUR"), Ok(1_210));
+        assert_eq!(to_iso_minor(800_000, "JPY"), Ok(8_000));
+        assert_eq!(to_iso_minor(1_050, "BHD"), Ok(10_500));
+        assert_eq!(to_iso_minor(-100, "KRW"), Ok(-1));
+        assert_eq!(from_iso_minor(1_210, "EUR"), Ok(1_210));
+        assert_eq!(from_iso_minor(8_000, "JPY"), Ok(800_000));
+        assert_eq!(from_iso_minor(10_500, "BHD"), Ok(1_050));
+    }
+
+    #[test]
+    fn rates_keep_their_two_stored_decimals_in_every_currency() {
+        assert_eq!(rate_decimal(8_050), "80.50");
+        assert_eq!(rate_decimal(800_000), "8000.00");
+        assert_eq!(rate_decimal(12_000), "120.00");
+        assert_eq!(rate_decimal(1_050), "10.50");
+        assert_eq!(rate_decimal(5), "0.05");
+    }
+
+    #[test]
+    fn iso_minor_units_refuse_what_they_cannot_hold() {
+        assert_eq!(to_iso_minor(800_050, "JPY"), Err(MinorUnitsError::Inexact));
+        assert_eq!(
+            to_iso_minor(i64::MAX, "BHD"),
+            Err(MinorUnitsError::Overflow)
+        );
+        assert_eq!(from_iso_minor(10_505, "BHD"), Err(MinorUnitsError::Inexact));
+        assert_eq!(
+            from_iso_minor(i64::MIN, "JPY"),
+            Err(MinorUnitsError::Overflow)
+        );
     }
 
     #[test]

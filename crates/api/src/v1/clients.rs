@@ -69,7 +69,7 @@ pub async fn list(
     let mut read = ops::begin_read(&state.pool, caller).await?;
     let result = clients::page(&mut read.tx, &read.actor, &page).await;
     let rows = read.finish(result).await?;
-    Ok(catalogue::page(&walk, rows, position, |client| client.id))
+    catalogue::page(&walk, rows, position, |client| client.id)
 }
 
 /// One client the owner may see, active or archived.

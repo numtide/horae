@@ -72,7 +72,7 @@ pub async fn list(
     let mut read = ops::begin_read(&state.pool, caller).await?;
     let result = reads::page(&mut read.tx, &read.actor, &page).await;
     let rows = read.finish(result).await?;
-    Ok(catalogue::page(&walk, rows, position, |project| project.id))
+    catalogue::page(&walk, rows, position, |project| project.id)
 }
 
 /// One project the owner may see, active or archived.
@@ -95,5 +95,5 @@ pub async fn get(
 ) -> Result<Json<Project>, Problem> {
     let mut read = ops::begin_read(&state.pool, caller).await?;
     let result = reads::get(&mut read.tx, &read.actor, id).await;
-    Ok(Json(read.finish(result).await?.into()))
+    Ok(Json(read.finish(result).await?.try_into()?))
 }

@@ -73,7 +73,7 @@ pub async fn list(
     let mut read = ops::begin_read(&state.pool, caller).await?;
     let result = task_catalog::visible_page(&mut read.tx, &read.actor, &page).await;
     let rows = read.finish(result).await?;
-    Ok(catalogue::page(&walk, rows, position, |task| task.id))
+    catalogue::page(&walk, rows, position, |task| task.id)
 }
 
 /// One task the owner may see, active or archived.
