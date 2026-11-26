@@ -110,4 +110,5 @@ address is loopback. Never set it in production.
 `/api/v1` and the Harvest-compatible API authenticate with personal access tokens, created under
 **My settings → API tokens**. A token acts with its owner's permissions. The [API guide](api.md)
 explains how to create, use and revoke them, and [Harvest](harvest.md#harvest-compatible-api) how
-Harvest clients send them.
+Harvest clients send them. Apps use OAuth access tokens instead, on both APIs, limited to the
+scopes the person granted ([Apps](api.md#apps)).

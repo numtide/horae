@@ -3,7 +3,7 @@
 
 mod time_entry_writes;
 mod timer_reads;
-mod tokens;
+pub(crate) mod tokens;
 
 use super::pagination_tests::{api_id, limiter, page, request, signed_in};
 use super::*;

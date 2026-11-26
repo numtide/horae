@@ -69,6 +69,20 @@ token page as `Harvest-Account-Id`. A signed-in browser session also works for r
 only the session cookie answers `401`. Requests count against
 the same per-token rate limit as `/api/v1` ([Limits](api.md#limits)).
 
+An app's OAuth access token ([Apps](api.md#apps)) works too, in the `Authorization` header only:
+in the `access_token` query parameter it answers `401`. It is limited to its scopes:
+
+| Scope | Endpoints |
+| --- | --- |
+| any | `/company`, `/users/me` |
+| `time:read` | `GET /time_entries`, `GET /time_entries/{id}` |
+| `time:write` | every time entry write; includes `time:read` |
+| `catalog:read` | my project assignments, projects, clients, tasks, users, and the empty lists of kinds Horae lacks |
+
+A request outside the token's scopes answers `403` with `"error": "insufficient_scope"` and a
+`WWW-Authenticate: Bearer error="insufficient_scope", scope="…"` header. An app's requests count
+against its authorization, so a refreshed access token keeps the same limit.
+
 IDs are integers, as on Harvest; the older UUID form is still accepted in paths and filters.
 Lists take `per_page` from 1 to 2000 (default 2000) and `page`; a page size or page number out
 of range answers `422`. Links in each list are absolute URLs on the host the request arrived on
