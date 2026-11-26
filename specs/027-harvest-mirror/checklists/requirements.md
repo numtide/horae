@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,10 +31,8 @@
 
 ## Notes
 
-- Four markers remain on purpose (OQ-1 to OQ-4): the maintainer asked for them to be recorded with
-  a recommendation and left open. That is one more than the template's limit of three. Each one
-  names its recommendation, and the plan proceeds on the recommendations; only OQ-1 changes
-  requirements (FR-020 to FR-023) if answered no.
+- The four questions left open at specification (OQ-1 to OQ-4) were answered on 2026-11-26 and are
+  recorded in the spec's Clarifications; no marker remains.
 - The spec names Harvest's `updated_since`, the crate boundary and the API surfaces. Like the
   earlier Harvest specs (004, 005, 025), the feature is an integration and an internal redesign
   whose observable behaviour is defined by those names; the requirements still state outcomes, not

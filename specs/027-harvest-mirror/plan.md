@@ -152,8 +152,8 @@ LISTEN/NOTIFY wake-ups (R-5) are an optional task after PR 3; they change no con
 
 ## Open items for implementation
 
-- OQ-1 to OQ-4 (spec): the plan follows the recommendations. If OQ-1 is answered no, PR 6 drops the
-  guard and parity gains an "edited in Horae" class.
+- OQ-1 to OQ-4 were answered on 2026-11-26 (spec.md, Clarifications): read only while mirrored, a
+  5-minute default interval, the exit criterion of research R-11, and the two validators.
 - User assignments' per-person hourly rate has no Horae column (research R-3). If the production
   account bills by person, layer 2's billable amounts will differ; check in the rehearsal and decide
   whether to add the column before validation.

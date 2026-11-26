@@ -66,24 +66,22 @@ jobs. This feature moves the queue into its own crate first and adds those mecha
 - No Horae to Harvest sync after cutover. Rolling back in the first days means going back to Harvest
   and importing again.
 
-### Open questions
+### Session 2026-11-26
 
-These are the maintainer's to answer. Each carries a recommendation; nothing in the plan depends on
-the answer except where noted.
+The maintainer accepted the recommendation on each of the four questions left open at
+specification.
 
-- **OQ-1**: [NEEDS CLARIFICATION: Are mirrored records read only in Horae while the mirror is on?]
-  Recommendation: yes. Everything Harvest owns is read only (FR-020), so parity can only find
-  differences that Horae computed, never ones someone typed. Without it, FR-020 to FR-023 and the
-  "extra in Horae" class need a rule for edits made on both sides.
-- **OQ-2**: [NEEDS CLARIFICATION: How often does the mirror pass run?] Recommendation: every 5
-  minutes, configurable down to 1 minute (FR-011). A 5-minute pass uses a handful of requests when
-  little changed, far below the limit.
-- **OQ-3**: [NEEDS CLARIFICATION: What ends the validation period?] Recommendation: four consecutive
-  weeks with zero unexplained differences, one complete month close in which the reports and the
-  invoices reconcile, and zero unexplained mirror errors over the same weeks (SC-005).
-- **OQ-4**: [NEEDS CLARIFICATION: Who in the company checks Horae, read only, during validation?]
-  Recommendation: the person who closes the month in Harvest (invoicing) and one project manager,
-  so the reports and invoices they use every month are the ones compared by eye as well.
+- **OQ-1**: Are mirrored records read only in Horae while the mirror is on? → A: Yes. Everything
+  Harvest owns is read only (FR-020 to FR-023), so parity can only find differences that Horae
+  computed, never ones someone typed.
+- **OQ-2**: How often does the mirror pass run? → A: Every 5 minutes, configurable from 1 to 60
+  minutes (FR-011). A pass with few changes uses a handful of requests, far below the limit.
+- **OQ-3**: What ends the validation period? → A: Four consecutive weeks with zero unexplained
+  differences, one complete month close in which the reports and the invoices reconcile, and zero
+  unexplained mirror errors over the same weeks (SC-005).
+- **OQ-4**: Who in the company checks Horae, read only, during validation? → A: The person who closes
+  the month in Harvest (invoicing) and one project manager, so the reports and invoices they use
+  every month are also compared by eye.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -566,9 +564,9 @@ schedule across a daylight-saving change.
   unexplained differences on an account that was imported and then left unchanged.
 - **SC-004**: After a server is killed mid-pass, another worker resumes the pass within 2 minutes,
   and no record is written twice.
-- **SC-005**: The validation period ends only when the agreed exit criterion holds (OQ-3); proposed:
-  four consecutive weeks with zero unexplained differences, one month closed with reports and
-  invoices reconciled, and zero unexplained mirror errors.
+- **SC-005**: The validation period ends only when the exit criterion holds (OQ-3): four consecutive
+  weeks with zero unexplained differences, one complete month closed with reports and invoices
+  reconciled, and zero unexplained mirror errors.
 - **SC-006**: No edit to a mirrored record succeeds through any surface while the mirror is on, apart
   from write-through.
 - **SC-007**: Every existing job, importer and CLI test passes unchanged after the extraction, and the
@@ -580,7 +578,8 @@ schedule across a daylight-saving change.
    read-only marking and status page (US2 to US4, US6), then the parity checker (US5).
 1. **Validation period on shipyard.** Take a Postgres backup routine in place first (needed before
    the cutover, not before the mirror). Reset the database, run a full import of the production
-   account, turn the mirror on. The people named in OQ-4 check Horae read only. The period ends when
+   account, turn the mirror on. The person who closes the month in Harvest and one project manager check Horae read
+   only (OQ-4). The period ends when
    the exit criterion holds (OQ-3).
 1. **Write-through, optional** (US8). Test account first; then, with the maintainer's authorization,
    a few pilot people on the production account; time entries and timers only.

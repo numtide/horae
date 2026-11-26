@@ -240,7 +240,7 @@ Alternatives considered: a plugin event. Possible later through the outbox; no c
 
 ## R-11. Exit criterion (OQ-3)
 
-Proposed: four consecutive weeks with zero unexplained differences, one complete month close in that
+Decided on 2026-11-26: four consecutive weeks with zero unexplained differences, one complete month close in that
 period with reports and invoices reconciled, and zero unexplained mirror errors. "Unexplained mirror
 error" means a pass error not caused by Harvest's availability (5xx, timeouts) or by a record Harvest
 itself holds invalid. The status page counts days since the last unexplained difference and since the

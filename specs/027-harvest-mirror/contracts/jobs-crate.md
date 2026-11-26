@@ -61,8 +61,13 @@ pub async fn delete_schedule(tx: &mut PgConnection, org_id: Uuid, name: &str) ->
 pub fn next_due(cadence: &Cadence, zone: Tz, after: DateTime<Utc>) -> DateTime<Utc>;   // pure
 ```
 
-A kind with no registered handler is left queued and logged once per worker start; it is never
-failed, so a rolling upgrade cannot fail jobs that a newer server knows.
+A job whose kind has no registered handler stays queued: the claim only selects kinds the worker's
+registry holds, so the job is never claimed, its attempts never grow and it is never failed. The
+worker logs each such kind once per start. A rolling upgrade therefore cannot fail jobs that a newer
+server knows, and a server started with `HORAE_HARVEST_MIRROR=0` leaves mirror jobs waiting rather
+than failing them. `horae jobs list` still shows them as queued. A job that was running when its
+server stopped and whose kind the next server lacks stays `running` with a stale heartbeat until a
+worker that has the handler reclaims it.
 
 Status, list, cancel and retry keep their current signatures and move with the crate.
 
