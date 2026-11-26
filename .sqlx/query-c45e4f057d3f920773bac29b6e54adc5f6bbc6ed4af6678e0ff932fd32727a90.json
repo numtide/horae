@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, concurrency_key,\n                                       available_at, priority, max_attempts)\n               VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()), $8, $9)\n               ON CONFLICT DO NOTHING\n               RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int2",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c45e4f057d3f920773bac29b6e54adc5f6bbc6ed4af6678e0ff932fd32727a90"
+}

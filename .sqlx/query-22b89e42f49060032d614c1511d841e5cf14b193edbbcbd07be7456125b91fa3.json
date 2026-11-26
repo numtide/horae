@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(\n             SELECT 1 FROM horae_jobs j JOIN horae_jobs other\n                    ON other.org_id = j.org_id AND other.kind = j.kind\n                   AND other.concurrency_key = j.concurrency_key AND other.id <> j.id\n              WHERE j.id = $1 AND j.org_id = $2\n                AND other.status IN ('queued', 'running') AND NOT other.cancellation_requested\n           ) AS \"held!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "held!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "22b89e42f49060032d614c1511d841e5cf14b193edbbcbd07be7456125b91fa3"
+}

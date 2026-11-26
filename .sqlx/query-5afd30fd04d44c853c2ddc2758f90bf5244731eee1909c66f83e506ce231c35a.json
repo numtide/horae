@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n             SELECT id,\n                    COALESCE((SELECT k.secs FROM unnest($3::text[], $4::int[]) AS k(kind, secs)\n                               WHERE k.kind = horae_jobs.kind), stale_after_secs) AS stale\n               FROM horae_jobs\n              WHERE attempts < max_attempts AND NOT cancellation_requested\n                AND ($3::text[] IS NULL OR kind = ANY($3))\n                AND ((status = 'queued' AND available_at <= now())\n                  OR (status = 'running' AND lease_until < now()))\n              ORDER BY priority DESC, available_at, created_at\n              FOR UPDATE SKIP LOCKED\n              LIMIT 1\n           )\n           UPDATE horae_jobs j\n              SET status = 'running', attempts = j.attempts + 1,\n                  stale_after_secs = candidate.stale, heartbeat_at = now(),\n                  lease_until = now() + candidate.stale * interval '1 second',\n                  worker_id = $1, claim_token = $2,\n                  started_at = COALESCE(j.started_at, now()), updated_at = now()\n             FROM candidate\n            WHERE j.id = candidate.id\n        RETURNING j.id, j.org_id, j.kind, j.payload, j.attempts, j.stale_after_secs",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "stale_after_secs",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5afd30fd04d44c853c2ddc2758f90bf5244731eee1909c66f83e506ce231c35a"
+}

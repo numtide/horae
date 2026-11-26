@@ -4,7 +4,7 @@
 
 use anyhow::Context;
 use horae_core::importers::harvest::types::{ImportMode, ImportReport, SourceKind, SyncScope};
-use horae_jobs::{BoxFuture, Completed, JobContext, JobError, Registry};
+use horae_jobs::{BoxFuture, Completed, JobContext, JobError, Registry, RetryPolicy};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,7 +17,7 @@ pub use horae_jobs::outbox::{
     OutboxEvent, claim_outbox, enqueue_outbox, mark_outbox_delivered, mark_outbox_failed,
     stop_outbox_delivery,
 };
-pub use horae_jobs::{Worker, cancel};
+pub use horae_jobs::{ConcurrencyKeyHeld, Worker, cancel};
 pub use lease::JobLease;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -700,9 +700,24 @@ pub async fn retry_in(
         generation.is_none_or(|generation| generation == current.account_generation),
         crate::importers::harvest::account_switch::ChangeError::OldImport
     );
+    // Another job may hold this job's concurrency key since it ended.
+    let key_held = sqlx::query_scalar!(
+        r#"SELECT EXISTS(
+             SELECT 1 FROM horae_jobs j JOIN horae_jobs other
+                    ON other.org_id = j.org_id AND other.kind = j.kind
+                   AND other.concurrency_key = j.concurrency_key AND other.id <> j.id
+              WHERE j.id = $1 AND j.org_id = $2
+                AND other.status IN ('queued', 'running') AND NOT other.cancellation_requested
+           ) AS "held!""#,
+        id,
+        org_id,
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+    anyhow::ensure!(!key_held, ConcurrencyKeyHeld);
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
-              SET status = 'queued', available_at = now(), lease_until = NULL,
+              SET status = 'queued', available_at = now(), lease_until = NULL, heartbeat_at = NULL,
                   attempts = 0, worker_id = NULL, last_error = NULL, error_kind = NULL, phase = NULL,
                   claim_token = NULL, cancellation_requested = false,
                   finished_at = NULL, updated_at = now()
@@ -714,7 +729,15 @@ pub async fn retry_in(
         org_id,
     )
     .execute(&mut **tx)
-    .await?;
+    .await
+    // A job enqueued with the key after the check above.
+    .map_err(|error| {
+        if horae_jobs::is_concurrency_key_conflict(&error) {
+            anyhow::Error::new(ConcurrencyKeyHeld)
+        } else {
+            error.into()
+        }
+    })?;
     Ok(result.rows_affected() == 1)
 }
 
@@ -749,9 +772,22 @@ struct ImportJob {
     kind: &'static str,
 }
 
+/// The imports keep the queue's original curve. Each job stops at the
+/// `max_attempts` stored when it was queued (`HORAE_JOB_MAX_ATTEMPTS`).
+fn import_policy(policy: JobPolicy) -> RetryPolicy {
+    RetryPolicy {
+        max_attempts: policy.max_attempts,
+        ..RetryPolicy::default()
+    }
+}
+
 impl horae_jobs::Handler for ImportJob {
     fn kind(&self) -> &'static str {
         self.kind
+    }
+
+    fn policy(&self) -> RetryPolicy {
+        import_policy(self.state.job_policy)
     }
 
     fn run<'a>(
@@ -908,7 +944,9 @@ pub async fn run_claimed(
             })
             .map_err(job_error)
     };
-    horae_jobs::run_claimed(pool, lease, stop, work).await
+    // Only the delays are read here; the attempt limit is the job's stored one.
+    let policy = import_policy(JobPolicy::default());
+    horae_jobs::run_claimed(pool, lease, &policy, stop, work).await
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -2183,6 +2221,41 @@ mod tests {
                 .phase
                 .is_none()
         );
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn retry_refuses_a_job_whose_concurrency_key_another_job_holds(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let keyed = || async {
+            let mut tx = pool.begin().await.unwrap();
+            let enqueued = horae_jobs::enqueue_in(
+                &mut tx,
+                horae_jobs::Enqueue {
+                    org_id,
+                    kind: "synthetic_test_job",
+                    payload: serde_json::to_value(JobPayload::Synthetic).unwrap(),
+                    idempotency_key: None,
+                    concurrency_key: Some("pass"),
+                    run_at: None,
+                    priority: 0,
+                    max_attempts: 1,
+                },
+            )
+            .await
+            .unwrap();
+            tx.commit().await.unwrap();
+            enqueued
+        };
+        let ended = keyed().await.id();
+        assert!(cancel(&pool, org_id, ended).await.unwrap());
+        let holder = keyed().await;
+        assert!(matches!(holder, horae_jobs::Enqueued::Created(_)));
+
+        let refused = retry(&pool, org_id, ended).await.unwrap_err();
+        assert!(refused.is::<ConcurrencyKeyHeld>(), "{refused:#}");
+
+        assert!(cancel(&pool, org_id, holder.id()).await.unwrap());
+        assert!(retry(&pool, org_id, ended).await.unwrap());
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]

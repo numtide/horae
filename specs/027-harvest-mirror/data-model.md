@@ -12,9 +12,9 @@ Column types follow the baseline's conventions. Migration numbers are taken when
 | `concurrency_key` | text, null | At most one queued or running job per `(org_id, kind, concurrency_key)` |
 | `priority` | smallint, default 0 | Claimed highest first, then `available_at`, then `created_at` |
 | `heartbeat_at` | timestamptz, null | Written every 15 s while running |
-| `stale_after_secs` | integer, default 60 | Set from the kind's handler at enqueue; `CHECK (stale_after_secs BETWEEN 15 AND 3600)` |
+| `stale_after_secs` | integer, default 60 | Set at each claim from the claiming worker's handler, clamped to 15..3600; `CHECK (stale_after_secs BETWEEN 15 AND 3600)` |
 
-New index: `UNIQUE (org_id, kind, concurrency_key) WHERE concurrency_key IS NOT NULL AND status IN ('queued', 'running')`.
+New index: `UNIQUE (org_id, kind, concurrency_key) WHERE concurrency_key IS NOT NULL AND status IN ('queued', 'running') AND NOT cancellation_requested`. A cancelling job gives the key up because its attempt can no longer write.
 
 `lease_until` stays and is renewed with each heartbeat to `heartbeat_at + stale_after_secs`, so every
 fence that checks it today keeps working. The claim's recovery condition becomes `status = 'running' AND lease_until < now()`, which is now at most a minute after the last heartbeat.
@@ -40,7 +40,9 @@ of the fixed `2^attempts` seconds capped at 300.
 | `outcome` | text, null | `succeeded`, `failed`, `retrying`, `cancelled`, `interrupted` |
 | `error` | text, null | Bounded to 4 KiB |
 
-Deleted with their job by the existing 30-day cleanup.
+Deleted with their job by the existing 30-day cleanup. The same cleanup closes, as `interrupted`,
+any open attempt of a finished job. At most one attempt per job is open (a partial unique index on
+`job_id WHERE outcome IS NULL`).
 
 ### `horae_job_schedules` (PR 3)
 

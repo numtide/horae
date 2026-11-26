@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH failed AS (\n             UPDATE horae_jobs\n                SET status = CASE WHEN cancellation_requested THEN 'cancelled'\n                                  WHEN $5 OR attempts >= max_attempts THEN 'failed' ELSE 'queued' END,\n                    available_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts\n                                        THEN available_at ELSE now() + $7::int * interval '1 second' END,\n                    finished_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts THEN now() ELSE NULL END,\n                    lease_until = NULL, worker_id = NULL, claim_token = NULL, heartbeat_at = NULL,\n                    last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,\n                    error_kind = CASE WHEN cancellation_requested THEN NULL ELSE $6 END,\n                    updated_at = now()\n              WHERE id = $2 AND org_id = $3 AND claim_token = $4 AND status = 'running'\n                AND lease_until > clock_timestamp()\n          RETURNING id, status\n           )\n           UPDATE horae_job_attempts a\n              SET finished_at = now(),\n                  outcome = CASE failed.status WHEN 'queued' THEN 'retrying' ELSE failed.status END,\n                  error = CASE WHEN failed.status = 'cancelled' THEN NULL ELSE $8 END\n             FROM failed\n            WHERE a.job_id = failed.id AND a.outcome IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Text",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae26ee1ed907821bbb9fc743fee67f80756a57681eb4d51119f45833f1ac2678"
+}

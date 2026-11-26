@@ -14,18 +14,40 @@ pub struct Enqueue<'a> {
     pub concurrency_key: Option<&'a str>, // FR-005
     pub run_at: Option<DateTime<Utc>>,    // FR-008, default now
     pub priority: i16,                    // FR-008, default 0
-    pub max_attempts: Option<i32>,        // default from the kind's policy
+    pub max_attempts: i32,                // required; usually the kind's RetryPolicy::max_attempts
 }
 
 pub enum Enqueued { Created(Uuid), Existing(Uuid) }
+pub enum EnqueueError { Conflict, Contended, Database(sqlx::Error) }
 
 pub async fn enqueue_in(tx: &mut PgConnection, request: Enqueue<'_>) -> Result<Enqueued, EnqueueError>;
 ```
 
 - Runs inside the caller's transaction, so a job exists only if the caller's change commits.
+- `max_attempts` is required because enqueue has no registry to look the kind's policy up in.
+- The insert uses `ON CONFLICT DO NOTHING`, which covers both keys. When it inserts nothing, enqueue
+  looks the conflicting job up by idempotency key, then by concurrency key. A concurrent enqueue
+  with the same key waits for the first transaction and then finds its job.
 - A concurrency-key conflict returns `Existing` with the queued or running job's id.
 - An idempotency-key conflict with a different payload is `EnqueueError::Conflict`, as
   `RequestConflict` is today.
+- If the job holding the key finishes between the insert and the lookup, the insert is tried
+  again, at most three times; then enqueue returns `EnqueueError::Contended`.
+- A job whose cancellation was requested gives its key up at once, even while its handler winds
+  down: enqueue then creates a new job. The cancelling attempt cannot write anything any more,
+  because every fence checks `NOT cancellation_requested`.
+- Manual retry (`horae-server`'s `retry_in`) refuses a job whose key another queued or running job
+  holds, with `ConcurrencyKeyHeld` (409 through `ops`), and maps the index's unique violation to
+  the same error when the holder appears after the check. `is_concurrency_key_conflict` tells that
+  violation apart.
+
+Known limits:
+
+- `enqueue_in` assumes READ COMMITTED, PostgreSQL's default. Under REPEATABLE READ or
+  SERIALIZABLE a concurrent enqueue of the same key fails with a serialization error, and a job
+  committed after the caller's snapshot is not found (ending in `Contended`).
+- A running job whose lease expired with its attempts used up keeps its key until the next claim
+  pass fails it (every 2 s while a worker runs). Enqueue returns that job meanwhile.
 
 ## Handlers
 
@@ -46,8 +68,23 @@ pub struct JobError { pub error: anyhow::Error, pub permanent: bool, pub error_k
 `JobContext` carries the job id, organization, attempt number, pool and the lease operations that
 exist today: `load_checkpoint`, `save_checkpoint`, `run` (fenced work), and a cancellation receiver.
 The heartbeat runs beside the handler in the existing monitor; a handler does nothing to keep it.
+It beats every 15 s, or four times per stale limit when that limit is shorter.
+
+A claim writes the job's `stale_after_secs` from the claiming worker's handler, clamped to
+15..3600 (the column's CHECK). Claims take no advisory lock: the partial unique index admits one
+queued or running job per key, so a claim cannot start a second job for a key, and the claim
+token and the heartbeat fence the run.
+
+Attempt rows open at claim and close when the attempt ends. An attempt whose worker died ends as
+`interrupted` when its job is reclaimed or failed, and the worker's cleanup also closes, as
+`interrupted`, any open attempt of a finished job (an older binary in a rolling upgrade finishes
+jobs without touching attempts). Attempts are numbered from the first row the table has for the
+job, so a job that was running when the migration ran starts its history at attempt 1.
 
 The delay before attempt `k + 1` is `min(first_delay × multiplier^(k-1), max_delay)`.
+`RetryPolicy::max_attempts` is the value enqueuers pass; the worker stops at the job's stored
+`max_attempts`.
+`RetryPolicy::default()` is 5 attempts, 2 s, ×2, 300 s: the curve the queue ran before policies.
 
 ## Worker and scheduler
 
@@ -75,7 +112,7 @@ Status, list, cancel and retry keep their current signatures and move with the c
 
 | Kind | Registered by | Policy (attempts, first delay, multiplier, max) | Concurrency key | Priority |
 | --- | --- | --- | --- | --- |
-| `harvest_api_import` | server (existing) | `HORAE_JOB_MAX_ATTEMPTS` (default 5), 1 s, ×2, 300 s (today's curve) | none | 0 |
+| `harvest_api_import` | server (existing) | `HORAE_JOB_MAX_ATTEMPTS` (default 5), 2 s, ×2, 300 s (today's curve) | none | 0 |
 | `harvest_csv_import` | server (existing) | same | none | 0 |
 | `long_timer_sweep` | server, PR 3 | 1, n/a | `sweep:long_timer` | 0 |
 | `budget_alert_sweep` | server, PR 3 | 1, n/a | `sweep:budget` | 0 |

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use sqlx::{PgConnection, PgPool};
 use tokio::sync::watch;
@@ -10,6 +12,8 @@ pub struct JobContext {
     pub(crate) id: Uuid,
     pub(crate) org_id: Uuid,
     pub(crate) token: Uuid,
+    pub(crate) attempt: i32,
+    pub(crate) stale_after: Duration,
     pub(crate) stop: watch::Receiver<bool>,
 }
 
@@ -29,6 +33,11 @@ impl JobContext {
     /// The attempt's claim token, which every fenced write checks.
     pub fn token(&self) -> Uuid {
         self.token
+    }
+
+    /// Which attempt of the job's budget this is, from 1.
+    pub fn attempt(&self) -> i32 {
+        self.attempt
     }
 
     pub async fn load_checkpoint(
@@ -108,15 +117,18 @@ impl JobContext {
         }
     }
 
-    pub(crate) async fn renew(&self, pool: &PgPool) -> anyhow::Result<()> {
+    /// Records that the attempt is alive and extends its lease to the stale
+    /// limit from now, so every fence that checks `lease_until` follows the
+    /// heartbeat.
+    pub(crate) async fn heartbeat(&self, pool: &PgPool) -> anyhow::Result<()> {
         let renewed = sqlx::query!(
             r#"UPDATE horae_jobs
-                  SET lease_until = clock_timestamp() + $1::int * interval '1 second',
+                  SET heartbeat_at = clock_timestamp(),
+                      lease_until = clock_timestamp() + stale_after_secs * interval '1 second',
                       updated_at = clock_timestamp()
-                WHERE id = $2 AND org_id = $3 AND claim_token = $4
+                WHERE id = $1 AND org_id = $2 AND claim_token = $3
                   AND status = 'running' AND NOT cancellation_requested
                   AND lease_until > clock_timestamp()"#,
-            crate::LEASE.as_secs() as i32,
             self.id,
             self.org_id,
             self.token,
@@ -131,10 +143,10 @@ impl JobContext {
 
     pub(crate) async fn monitor(&self, pool: &PgPool) -> anyhow::Result<()> {
         let mut poll = tokio::time::interval(crate::POLL);
-        let mut renewal = tokio::time::interval(crate::LEASE / 3);
+        let mut heartbeat = tokio::time::interval(crate::HEARTBEAT.min(self.stale_after / 4));
         loop {
             tokio::select! {
-                _ = renewal.tick() => self.renew(pool).await?,
+                _ = heartbeat.tick() => self.heartbeat(pool).await?,
                 _ = poll.tick() => {
                     let live = sqlx::query_scalar!(
                         r#"SELECT id FROM horae_jobs
@@ -158,22 +170,31 @@ impl JobContext {
         report: &serde_json::Value,
         processed_count: i64,
     ) -> anyhow::Result<bool> {
-        let updated = sqlx::query!(
-            r#"UPDATE horae_jobs
-                  SET status = 'succeeded', report = $1, processed_count = $2, total_count = $2,
-                      lease_until = NULL, worker_id = NULL, claim_token = NULL, checkpoint = NULL,
-                      finished_at = clock_timestamp(), updated_at = clock_timestamp()
-                WHERE id = $3 AND org_id = $4 AND claim_token = $5
-                  AND status = 'running' AND NOT cancellation_requested
-                  AND lease_until > clock_timestamp()"#,
+        let completed = sqlx::query_scalar!(
+            r#"WITH done AS (
+                 UPDATE horae_jobs
+                    SET status = 'succeeded', report = $1, processed_count = $2, total_count = $2,
+                        lease_until = NULL, worker_id = NULL, claim_token = NULL, checkpoint = NULL,
+                        heartbeat_at = NULL,
+                        finished_at = clock_timestamp(), updated_at = clock_timestamp()
+                  WHERE id = $3 AND org_id = $4 AND claim_token = $5
+                    AND status = 'running' AND NOT cancellation_requested
+                    AND lease_until > clock_timestamp()
+              RETURNING id
+               ), attempt AS (
+                 UPDATE horae_job_attempts a
+                    SET outcome = 'succeeded', finished_at = clock_timestamp()
+                   FROM done WHERE a.job_id = done.id AND a.outcome IS NULL
+               )
+               SELECT count(*) AS "count!" FROM done"#,
             report,
             processed_count,
             self.id,
             self.org_id,
             self.token,
         )
-        .execute(connection)
+        .fetch_one(connection)
         .await?;
-        Ok(updated.rows_affected() == 1)
+        Ok(completed == 1)
     }
 }

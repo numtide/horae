@@ -24,6 +24,7 @@ const NOT_RETRYABLE: &str = "Import job not found or is not retryable";
 const UNRECOGNIZED_CSV: &str = "Not a recognizable Harvest CSV; check required columns";
 const REQUEST_CONFLICT: &str = "Request ID already belongs to different import input";
 const SUBMISSION_FAILED: &str = "Unable to submit import";
+const KEY_HELD: &str = "Another job of this kind is already queued or running";
 
 /// Whether the organization has a usable Harvest connection (never the tokens).
 pub async fn connection_status(
@@ -248,6 +249,9 @@ fn enqueue_error(error: anyhow::Error) -> OpError {
     if error.is::<jobs::RequestConflict>() {
         return OpError::conflict(REQUEST_CONFLICT);
     }
+    if error.is::<jobs::ConcurrencyKeyHeld>() {
+        return OpError::conflict(KEY_HELD);
+    }
     tracing::error!(%error, "durable import submission failed");
     OpError::Internal(SUBMISSION_FAILED.into())
 }
@@ -264,4 +268,13 @@ fn storage(error: anyhow::Error) -> OpError {
 fn internal(error: impl std::fmt::Display) -> OpError {
     tracing::error!(%error, "Import job read failed");
     OpError::Internal("Could not complete the request. Please retry.".into())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_held_concurrency_key_is_a_conflict() {
+        let error = super::enqueue_error(super::jobs::ConcurrencyKeyHeld.into());
+        assert!(matches!(error, super::OpError::Conflict(message) if message == super::KEY_HELD));
+    }
 }

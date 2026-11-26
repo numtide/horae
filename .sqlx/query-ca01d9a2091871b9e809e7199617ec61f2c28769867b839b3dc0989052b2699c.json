@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH ended AS (\n             UPDATE horae_jobs\n                SET status = CASE WHEN cancellation_requested THEN 'cancelled' ELSE 'failed' END,\n                    lease_until = NULL, worker_id = NULL, claim_token = NULL, heartbeat_at = NULL,\n                    finished_at = now(), updated_at = now(),\n                    last_error = CASE WHEN cancellation_requested THEN NULL\n                        ELSE COALESCE(last_error, 'Job attempt limit reached after interruption') END\n              WHERE (attempts >= max_attempts OR cancellation_requested)\n                AND (status = 'queued' OR (status = 'running' AND lease_until < now()))\n                AND ($1::text[] IS NULL OR kind = ANY($1))\n          RETURNING id\n           )\n           UPDATE horae_job_attempts a SET outcome = 'interrupted'\n             FROM ended WHERE a.job_id = ended.id AND a.outcome IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca01d9a2091871b9e809e7199617ec61f2c28769867b839b3dc0989052b2699c"
+}

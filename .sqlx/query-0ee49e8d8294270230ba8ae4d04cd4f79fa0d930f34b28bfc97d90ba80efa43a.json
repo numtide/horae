@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET attempts = 1 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ee49e8d8294270230ba8ae4d04cd4f79fa0d930f34b28bfc97d90ba80efa43a"
+}
