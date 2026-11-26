@@ -191,6 +191,10 @@ impl document::Document for Probe {
     }
 }
 
+#[path = "../src/pages/projects/filter.rs"]
+#[allow(dead_code)]
+mod project_filter;
+
 mod route {
     pub use super::new_project::EditReturn;
     use super::*;
@@ -200,8 +204,8 @@ mod route {
     #[rustfmt::skip]
     pub enum Route {
         #[layout(TestNavigation)]
-        #[route("/projects")]
-        ProjectList {},
+        #[route("/projects?:..filter")]
+        ProjectList { filter: ProjectFilter },
         #[route("/projects/new")]
         NewProject {},
         #[route("/projects/:id/edit?:..return_to")]
@@ -223,8 +227,11 @@ mod route {
             Outlet::<Route> {}
         }
     }
+    pub use super::project_filter::ProjectFilter;
+
     #[component]
-    fn ProjectList() -> Element {
+    fn ProjectList(filter: ProjectFilter) -> Element {
+        let _ = filter;
         rsx! { h1 { "Projects" } }
     }
     #[component]

@@ -256,10 +256,22 @@ fn nav_sections(access: NavAccess) -> Vec<(&'static str, Vec<NavRow>)> {
                 access
                     .people
                     .then(|| row(Route::People {}, "team", "People")),
-                access
-                    .clients
-                    .then(|| row(Route::ClientList {}, "clients", "Clients")),
-                Some(row(Route::ProjectList {}, "projects", "Projects")),
+                access.clients.then(|| {
+                    row(
+                        Route::ClientList {
+                            filter: Default::default(),
+                        },
+                        "clients",
+                        "Clients",
+                    )
+                }),
+                Some(row(
+                    Route::ProjectList {
+                        filter: Default::default(),
+                    },
+                    "projects",
+                    "Projects",
+                )),
                 access
                     .tasks
                     .then(|| row(Route::TaskCatalog {}, "tasks", "Tasks")),

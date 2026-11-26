@@ -65,7 +65,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     assert.equal(bodies[1], bodies[0], 'Retry preserves the committed request identity and snapshot');
     assert.notEqual(bodies[2], bodies[0], 'Newer edits are sent only after the retry');
     await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('Latest edit survives body failure');
     assert.deepEqual(errors, [], 'A response body failure must not panic the WASM application');

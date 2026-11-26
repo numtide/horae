@@ -132,7 +132,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page.locator('.np-page header').getByRole('status')).toHaveText('No draft saved yet');
     await page.locator('.np-page').getByRole('button', { name: 'Discard draft', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard draft', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.route('**/api/list_clients*', route => route.abort('failed'));
     await page.goto(`${base}/invoices/new/client/${client}`);
     await expect(page.getByRole('alert')).toBeVisible();

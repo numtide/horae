@@ -109,7 +109,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div { class: "client-detail min-w-0",
-            BackLink { to: Route::ClientList {}, label: "Back to Clients" }
+            BackLink { to: Route::ClientList { filter: Default::default() }, label: "Back to Clients" }
             if !ready && !matches!(&*data, Some(Err(_))) {
                 Loading { label: "Loading client…" }
             } else if let Some(Err(error)) = &*data {

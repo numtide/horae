@@ -11,6 +11,7 @@ use crate::components::modal::{
 };
 use crate::components::permission_description::permission_description;
 use crate::components::screen_state::Loading;
+use crate::components::select_field::SelectField;
 use crate::models::permission_editor::{
     PermissionRequester, ProfileAction, ProfilePreview, ProfileSource,
 };
@@ -40,6 +41,19 @@ const FORBIDDEN: u16 = 403;
 const NOT_FOUND: u16 = 404;
 const CONFLICT: u16 = 409;
 const PROFILE_FIELD: &str = "person-permissions-profile";
+
+/// A built-in profile's value in the profile picker; it is part of an
+/// option's id, so it has no spaces.
+fn profile_key(profile: BuiltInProfile) -> &'static str {
+    match profile {
+        BuiltInProfile::Member => "member",
+        BuiltInProfile::ProjectManager => "project_manager",
+        BuiltInProfile::PeopleAdmin => "people_admin",
+        BuiltInProfile::Accounting => "accounting",
+        BuiltInProfile::ExecutiveManager => "executive_manager",
+        BuiltInProfile::Administrator => "administrator",
+    }
+}
 const REVIEW_BUTTON: &str = "permission-review";
 const SAVE_BUTTON: &str = "permission-save";
 const CREATE_TEMPLATE_BUTTON: &str = "permission-template-create";
@@ -276,6 +290,7 @@ fn PermissionForm(
     on_reload: EventHandler<()>,
     on_saved: EventHandler<bool>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut state = use_signal(|| initial);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
@@ -286,6 +301,26 @@ fn PermissionForm(
     let template_dirty = use_signal(|| false);
     use_effect(move || {
         dirty.set(state.read().has_changes() || (template_intent().is_some() && template_dirty()))
+    });
+    let pick_profile = use_callback(move |value: String| {
+        if busy() || state.peek().request.is_some() || reload_required() || unavailable() {
+            return;
+        }
+        let result = if value == "current" {
+            let restored = DraftState::new(state.peek().editor.clone());
+            restored.map(|restored| state.set(restored))
+        } else if let Some(profile) = BuiltInProfile::ALL
+            .iter()
+            .find(|p| profile_key(**p) == value)
+            .copied()
+        {
+            state.write().choose_builtin(profile)
+        } else if let Ok(id) = value.parse::<Uuid>() {
+            state.write().choose_template(id)
+        } else {
+            Err("This profile is unavailable. Reload to try again.".into())
+        };
+        error.set(result.err());
     });
     let reload = use_callback(move |()| {
         if !busy() {
@@ -381,7 +416,7 @@ fn PermissionForm(
     let administrator = snapshot.administrator();
     let selection_key = match snapshot.action {
         ProfileAction::Edit => "current".to_owned(),
-        ProfileAction::BuiltIn { profile } => profile_label(profile).to_owned(),
+        ProfileAction::BuiltIn { profile } => profile_key(profile).to_owned(),
         ProfileAction::Template { id, .. } => id.to_string(),
     };
     let (primary, secondary) = if reload_required() || unavailable() {
@@ -447,31 +482,14 @@ fn PermissionForm(
             if !snapshot.editor.active {
                 p { class: "text-sm text-secondary mb-4", "This person is inactive. Saving permissions will not activate their account." }
             }
-            FormGroup { label: "Profile", id: "person-permissions-profile",
-                select { id: PROFILE_FIELD, class: "form-select",
-                    value: selection_key, disabled: frozen,
-                    onchange: move |event| {
-                        if busy() || state.peek().request.is_some() || reload_required() || unavailable() { return; }
-                        let value = event.value();
-                        let result = if value == "current" {
-                            let restored = DraftState::new(state.peek().editor.clone());
-                            restored.map(|restored| state.set(restored))
-                        } else if let Some(profile) = BuiltInProfile::ALL.iter().find(|p| profile_label(**p) == value).copied() {
-                            state.write().choose_builtin(profile)
-                        } else if let Ok(id) = value.parse::<Uuid>() {
-                            state.write().choose_template(id)
-                        } else {
-                            Err("This profile is unavailable. Reload to try again.".into())
-                        };
-                        error.set(result.err());
-                    },
-                    option { value: "current", "Current configuration" }
-                    for profile in BuiltInProfile::ALL.iter().copied() {
-                        option { value: profile_label(profile), "{profile_label(profile)}" }
-                    }
-                    for template in &snapshot.editor.templates {
-                        option { value: "{template.id}", "{template.name} (custom profile)" }
-                    }
+            FormGroup { label: tr.permissions_profile_label(), id: PROFILE_FIELD,
+                SelectField { id: PROFILE_FIELD, label: tr.permissions_profile_label(),
+                    selected: selection_key, disabled: frozen,
+                    options: std::iter::once(("current".to_string(), tr.permissions_profile_current()))
+                        .chain(BuiltInProfile::ALL.iter().map(|profile| (profile_key(*profile).to_string(), profile_label(*profile).to_string())))
+                        .chain(snapshot.editor.templates.iter().map(|template| (template.id.to_string(), tr.permissions_profile_custom(&template.name))))
+                        .collect(),
+                    onselect: pick_profile,
                 }
             }
             if !matches!(snapshot.action, ProfileAction::Edit) {

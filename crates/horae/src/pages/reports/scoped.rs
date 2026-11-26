@@ -4,10 +4,13 @@ use horae_core::duration::format_hours2 as hours;
 
 use crate::components::controls::Checkbox;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
-use crate::components::form::{FormGroup, Input, Select};
+use crate::components::filter_bar::FilterBar;
+use crate::components::form::Input;
+use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::table::DataTable;
+use crate::i18n::Tr;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
     TimeReportBillability, TimeReportCursor, TimeReportGroupCursor, TimeReportGroupQuery,
@@ -95,6 +98,14 @@ fn period(from: &str, to: &str) -> Result<(NaiveDate, NaiveDate), &'static str> 
     Ok((from, to))
 }
 
+fn billability_label(tr: Tr, value: TimeReportBillability) -> String {
+    match value {
+        TimeReportBillability::All => tr.reports_hours_all(),
+        TimeReportBillability::Billable => tr.reports_hours_billable(),
+        TimeReportBillability::NonBillable => tr.reports_hours_non_billable(),
+    }
+}
+
 fn billability_value(value: TimeReportBillability) -> &'static str {
     match value {
         TimeReportBillability::All => "all",
@@ -108,6 +119,7 @@ pub(super) fn ScopedReports(
     requester: PermissionRequester,
     on_check_access: EventHandler<()>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let today = crate::components::today::today();
     let mut from = use_signal(move || today.with_day(1).unwrap_or(today).to_string());
     let mut to = use_signal(move || today.to_string());
@@ -228,45 +240,36 @@ pub(super) fn ScopedReports(
                 onclick: move |_| { selection.set(vec![]); cursors.set(vec![None]); show_groups.set(false); }, "Detailed time"
             }
         }
-        div { class: "flex flex-wrap items-end gap-4 mb-6",
-            FormGroup { label: "From", id: "report-from",
-                Input { kind: "date", id: "report-from", value: from(), error_id: date_error_id.clone(),
-                    oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); from.set(event.value()); }
-                }
-            }
-            FormGroup { label: "To", id: "report-to",
-                Input { kind: "date", id: "report-to", value: to(), error_id: date_error_id,
-                    oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); to.set(event.value()); }
-                }
-            }
-            FormGroup { label: "Show", id: "report-billability",
-                Select {
-                    id: "report-billability",
-                    selected: billability_value(billability()),
-                    options: vec![
-                        ("all".into(), "All hours".into()),
-                        ("billable".into(), "Billable hours".into()),
-                        ("non_billable".into(), "Non-billable hours".into()),
-                    ],
-                    onchange: move |event: FormEvent| {
-                        let next = match event.value().as_str() {
-                            "all" => TimeReportBillability::All,
-                            "billable" => TimeReportBillability::Billable,
-                            "non_billable" => TimeReportBillability::NonBillable,
-                            _ => return,
-                        };
-                        cursors.set(vec![None]); group_cursors.set(vec![None]); billability.set(next);
+        FilterBar {
+            filters: rsx! {
+                div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
+                    label { class: "text-sm text-secondary", r#for: "report-from", {tr.reports_from()} }
+                    Input { kind: "date", id: "report-from", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: from(), error_id: date_error_id.clone(),
+                        oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); from.set(event.value()); }
+                    }
+                    label { class: "text-sm text-secondary", r#for: "report-to", {tr.reports_to()} }
+                    Input { kind: "date", id: "report-to", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: to(), error_id: date_error_id,
+                        oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); to.set(event.value()); }
                     }
                 }
-            }
-        }
-        div { class: "mb-4",
-            Checkbox { id: "report-active-projects-only", label: "Active projects only", checked: active_projects_only(),
-                onclick: move |_| {
-                    let next = !active_projects_only();
-                    cursors.set(vec![None]); group_cursors.set(vec![None]); active_projects_only.set(next);
+                Menu { id: "report-billability", label: billability_label(tr, billability()), trigger_class: "text-sm px-4",
+                    for choice in [TimeReportBillability::All, TimeReportBillability::Billable, TimeReportBillability::NonBillable] {
+                        MenuItem { key: "{billability_value(choice)}", id: "report-billability-{billability_value(choice)}", selected: billability() == choice,
+                            onclick: move |_| {
+                                if billability() == choice { return; }
+                                cursors.set(vec![None]); group_cursors.set(vec![None]); billability.set(choice);
+                            },
+                            {billability_label(tr, choice)}
+                        }
+                    }
                 }
-            }
+                Checkbox { id: "report-active-projects-only", label: tr.reports_active_projects_only(), checked: active_projects_only(),
+                    onclick: move |_| {
+                        let next = !active_projects_only();
+                        cursors.set(vec![None]); group_cursors.set(vec![None]); active_projects_only.set(next);
+                    }
+                }
+            },
         }
         if !show_groups() { h2 { class: "text-lg mb-4", "Detailed time" } }
         if let Err(message) = dates {

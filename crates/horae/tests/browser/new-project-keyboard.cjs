@@ -414,7 +414,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.unroute('**/api/project_creation_options*');
     await activate(screen.getByRole('button', { name: 'Discard draft', exact: true }));
     await activate(page.getByRole('dialog', { name: 'Discard this draft?', exact: true }).getByRole('button', { name: 'Discard draft', exact: true }));
-    await page.waitForURL(`${base}/projects`);
+    await page.waitForURL(/\/projects\??$/);
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       for (const type of ['Time & Materials', 'Fixed Fee', 'Non-Billable']) {

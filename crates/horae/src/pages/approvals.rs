@@ -10,6 +10,7 @@ use super::{Failure, loaded};
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
+use crate::components::filter_bar::FilterBar;
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, NoAccess};
 use crate::components::session::{use_session, use_week_start};
@@ -29,12 +30,32 @@ fn reviews_approvals(own: &OwnPermissions) -> bool {
             .any(|grant| own.grants.contains(grant))
 }
 
-/// The `list_approvals` status argument for a Segmented label.
-fn status_arg(label: &str) -> Option<String> {
-    match label {
-        "Approved" => Some("approved".to_string()),
-        "All" => None,
-        _ => Some("submitted".to_string()), // "Pending"
+/// Which timesheets the list shows; the Segmented switches between them.
+#[derive(Clone, Copy, PartialEq)]
+enum ApprovalView {
+    Pending,
+    Approved,
+    All,
+}
+
+impl ApprovalView {
+    const ALL: [Self; 3] = [Self::Pending, Self::Approved, Self::All];
+
+    fn label(self, tr: crate::i18n::Tr) -> String {
+        match self {
+            Self::Pending => tr.approvals_view_pending(),
+            Self::Approved => tr.approvals_view_approved(),
+            Self::All => tr.approvals_view_all(),
+        }
+    }
+
+    /// The `list_approvals` status argument.
+    fn status_arg(self) -> Option<String> {
+        match self {
+            Self::Pending => Some("submitted".to_string()),
+            Self::Approved => Some("approved".to_string()),
+            Self::All => None,
+        }
     }
 }
 
@@ -121,7 +142,7 @@ pub fn Approvals(week: String) -> Element {
     let session = use_session();
     let own = session.permissions;
     let first_day = use_week_start();
-    let mut status_label = use_signal(|| "Pending".to_string());
+    let mut view = use_signal(|| ApprovalView::Pending);
     let refresh = use_signal(|| 0u32);
     let action_error = use_signal(|| None::<String>);
     let busy = use_signal(|| false);
@@ -135,7 +156,7 @@ pub fn Approvals(week: String) -> Element {
     // Each response carries the week it was requested for, so a slower answer
     // for a week no longer selected is never shown under the current one.
     let mut approvals = use_resource(move || {
-        let f = status_arg(&status_label.read());
+        let f = view().status_arg();
         let _tick = *refresh.read();
         let start = selected()
             .filter(|_| review_access(&own.read()))
@@ -167,6 +188,11 @@ pub fn Approvals(week: String) -> Element {
         _ => Vec::new(),
     };
     let tr = crate::i18n::use_tr();
+    let pick_view = use_callback(move |label: String| {
+        if let Some(picked) = ApprovalView::ALL.into_iter().find(|v| v.label(tr) == label) {
+            view.set(picked);
+        }
+    });
     let approve_all = {
         let ids = pending_ids.clone();
         move |_| {
@@ -223,28 +249,28 @@ pub fn Approvals(week: String) -> Element {
                             _ => None,
                         };
                         rsx! {
-                            div { class: "flex items-center gap-3 flex-wrap mb-4",
-                                div { class: "ts-pager",
-                                    {pager_step(adjacent(start, false, first), "prev", "Previous week", "←")}
-                                    span { class: "ts-pager-label",
-                                        span { class: "cur", if current { "This week" } else { "Week" } }
-                                        span { class: "ts-pager-range", "{period_label(start, end)}" }
+                            // The status stays a Segmented control: it switches views.
+                            FilterBar {
+                                filters: rsx! {
+                                    div { class: "ts-pager",
+                                        {pager_step(adjacent(start, false, first), "prev", "Previous week", "←")}
+                                        span { class: "ts-pager-label",
+                                            span { class: "cur", if current { "This week" } else { "Week" } }
+                                            span { class: "ts-pager-range", "{period_label(start, end)}" }
+                                        }
+                                        {pager_step(adjacent(start, true, first), "next", "Next week", "→")}
                                     }
-                                    {pager_step(adjacent(start, true, first), "next", "Next week", "→")}
-                                }
-                                if !current {
-                                    if let Some(current) = this_week {
-                                        Link { to: week_route(current), class: "btn btn-ghost btn-sm", "This week" }
+                                    if !current {
+                                        if let Some(current) = this_week {
+                                            Link { to: week_route(current), class: "btn btn-ghost btn-sm", "This week" }
+                                        }
                                     }
-                                }
-                            }
-
-                            div { class: "mb-6",
-                                Segmented {
-                                    items: vec!["Pending".to_string(), "Approved".to_string(), "All".to_string()],
-                                    active: status_label(),
-                                    onselect: move |v| status_label.set(v),
-                                }
+                                    Segmented {
+                                        items: ApprovalView::ALL.map(|v| v.label(tr)).to_vec(),
+                                        active: view().label(tr),
+                                        onselect: pick_view,
+                                    }
+                                },
                             }
 
                             if let Some(err) = &*action_error.read() {
@@ -260,13 +286,13 @@ pub fn Approvals(week: String) -> Element {
                                 focus: Some("approvals-heading"),
                             }, |items| {
                                     if items.is_empty() {
-                                        let (title, body) = match status_label().as_str() {
-                                            "Pending" => ("Nothing to approve", "No timesheets are waiting for approval this week."),
-                                            "Approved" => ("No approved timesheets", "Timesheets approved for this week appear here."),
-                                            _ => ("No timesheets submitted", "Timesheets appear here once people submit their week."),
+                                        let (title, body) = match view() {
+                                            ApprovalView::Pending => ("Nothing to approve", "No timesheets are waiting for approval this week."),
+                                            ApprovalView::Approved => ("No approved timesheets", "Timesheets approved for this week appear here."),
+                                            ApprovalView::All => ("No timesheets submitted", "Timesheets appear here once people submit their week."),
                                         };
                                         return rsx! {
-                                            EmptyState { icon: "approvals", title, body, success: status_label() == "Pending" }
+                                            EmptyState { icon: "approvals", title, body, success: view() == ApprovalView::Pending }
                                         };
                                     }
                                     let total: i64 = items.iter().map(|s| s.total_minutes).sum();

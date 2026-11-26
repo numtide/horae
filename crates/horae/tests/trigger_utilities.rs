@@ -141,7 +141,7 @@ fn combobox_composes_trigger_utilities() {
         }
     });
     assert!(
-        html.contains("btn btn-secondary btn-sm text-sm px-4"),
+        html.contains("btn btn-secondary btn-sm max-w-full text-sm px-4"),
         "{html}"
     );
 }

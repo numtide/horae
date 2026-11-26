@@ -4,6 +4,8 @@ use horae_core::money::format_cents;
 use crate::i18n::Tr;
 
 use crate::components::badge::Badge;
+use crate::components::filter_bar::FilterBar;
+use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{
     EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, is_refusal, load_pinned,
@@ -32,6 +34,38 @@ const TASK_GROUPS: [(bool, &str, &str, &str); 2] = [
         "Added to a project from its task list.",
     ),
 ];
+
+/// One status in the Tasks filter menu.
+#[component]
+fn ActivityOption(
+    choice: TaskActivity,
+    current: TaskActivity,
+    on_pick: Callback<TaskActivity>,
+) -> Element {
+    let tr = crate::i18n::use_tr();
+    let pick = use_callback(move |_: MouseEvent| on_pick.call(choice));
+    rsx! {
+        MenuItem { id: "tasks-activity-{activity_value(choice)}", selected: current == choice, onclick: pick,
+            {activity_label(tr, choice)}
+        }
+    }
+}
+
+fn activity_value(activity: TaskActivity) -> &'static str {
+    match activity {
+        TaskActivity::Active => "active",
+        TaskActivity::Archived => "archived",
+        TaskActivity::All => "all",
+    }
+}
+
+fn activity_label(tr: Tr, activity: TaskActivity) -> String {
+    match activity {
+        TaskActivity::Active => tr.tasks_filter_active(),
+        TaskActivity::Archived => tr.tasks_filter_archived(),
+        TaskActivity::All => tr.tasks_filter_all(),
+    }
+}
 
 const FORBIDDEN: u16 = 403;
 const UNAUTHORIZED: u16 = 401;
@@ -75,6 +109,15 @@ pub fn TaskCatalog() -> Element {
         selected.set(None);
         notice.set(None);
         catalog.restart();
+    });
+    let pick_activity = use_callback(move |choice: TaskActivity| {
+        if *activity.peek() == choice {
+            return;
+        }
+        selected.set(None);
+        notice.set(None);
+        cursors.set(vec![None]);
+        activity.set(choice);
     });
     let key = (activity(), cursors.read().last().cloned().flatten());
     let response = catalog.read();
@@ -148,22 +191,17 @@ pub fn TaskCatalog() -> Element {
                     }
                 } },
             }
-            if !refused { div { class: "flex flex-wrap items-center gap-3 mb-4",
-                label { r#for: "tasks-activity", class: "form-label", "Show" }
-                select { id: "tasks-activity", class: "form-select", disabled: pending,
-                    value: match activity() { TaskActivity::Active => "active", TaskActivity::Archived => "archived", TaskActivity::All => "all" },
-                    onchange: move |event| {
-                        let filter = match event.value().as_str() {
-                            "active" => TaskActivity::Active, "archived" => TaskActivity::Archived,
-                            "all" => TaskActivity::All, _ => return,
-                        };
-                        selected.set(None); notice.set(None); cursors.set(vec![None]); activity.set(filter);
+            if !refused {
+                FilterBar {
+                    filters: rsx! {
+                        Menu { id: "tasks-activity", label: activity_label(tr, activity()), trigger_class: "text-sm px-4", disabled: pending,
+                            for choice in [TaskActivity::Active, TaskActivity::Archived, TaskActivity::All] {
+                                ActivityOption { key: "{choice:?}", choice, current: activity(), on_pick: pick_activity }
+                            }
+                        }
                     },
-                    option { value: "active", "Active tasks" }
-                    option { value: "archived", "Archived tasks" }
-                    option { value: "all", "All tasks" }
                 }
-            } }
+            }
             if let Some(message) = notice() { p { class: "text-sm text-secondary mb-3", role: "status", "{message}" } }
             if let Some(error) = failed {
                 if refused {

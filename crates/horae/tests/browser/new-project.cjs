@@ -300,7 +300,8 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await screen.getByRole('button', { name: '+ New client', exact: true }).click();
     const client = page.getByRole('dialog', { name: 'New client', exact: true });
     await client.getByLabel('Client name', { exact: true }).fill('New project browser client');
-    await client.getByLabel('Currency', { exact: true }).selectOption('EUR');
+    await client.locator('#np-new-client-currency').click();
+    await client.locator('#np-new-client-currency-options').getByRole('option', { name: 'EUR', exact: true }).click();
     await client.getByLabel('Default hourly rate', { exact: true }).fill('0');
     await client.getByRole('button', { name: /Create client/ }).click();
     await expect(client).not.toBeVisible();
@@ -314,18 +315,20 @@ const sql = query => require('node:child_process').execFileSync('psql',
     };
     await editClient();
     await clientEditor.getByLabel('Client name', { exact: true }).fill('Rejected currency rename');
-    await clientEditor.getByLabel('Currency', { exact: true }).selectOption('USD');
+    await clientEditor.locator('#client-form-currency').click();
+    await clientEditor.locator('#client-form-currency-options').getByRole('option', { name: 'USD', exact: true }).click();
     await clientEditor.getByLabel('Billing address', { exact: true }).fill('Retained address');
     await clientEditor.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(clientEditor.getByRole('dialog').getByRole('alert')).toContainText('Confirm the default rate');
     await expect(clientEditor.getByLabel('Client name', { exact: true })).toHaveValue('Rejected currency rename');
-    await expect(clientEditor.getByLabel('Currency', { exact: true })).toHaveValue('USD');
+    await expect(clientEditor.locator('#client-form-currency')).toHaveText(/USD/);
     await expect(clientEditor.getByLabel('Billing address', { exact: true })).toHaveValue('Retained address');
     await expect(clientEditor.getByLabel('Default rate', { exact: true })).toHaveValue('0.00');
     await expect(clientRow).toContainText('EUR');
     await expect(clientRow).not.toContainText('Retained address');
     await clientEditor.getByLabel('Client name', { exact: true }).fill('New project browser client');
-    await clientEditor.getByLabel('Currency', { exact: true }).selectOption('EUR');
+    await clientEditor.locator('#client-form-currency').click();
+    await clientEditor.locator('#client-form-currency-options').getByRole('option', { name: 'EUR', exact: true }).click();
     await clientEditor.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(clientEditor.getByRole('dialog')).toBeHidden();
     await clientEditor.reload();
@@ -705,7 +708,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
           await readsFinished(page);
           await screen.getByRole('button', { name: 'Cancel', exact: true }).focus();
           await page.keyboard.press('Enter');
-          await expect(page).toHaveURL(`${base}/projects`);
+          await expect(page).toHaveURL(/\/projects\??$/);
           await page.getByRole('link', { name: 'New project', exact: true }).click();
           await expect(field).toHaveValue(invalid);
           await field.fill(original);
@@ -761,7 +764,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
 
     await readsFinished(page);
     await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     const writesBeforeFailedResume = draftWrites;
     await page.route('**/api/load_project_draft*', route => route.abort());
     await page.getByRole('link', { name: 'New project', exact: true }).click();
@@ -800,7 +803,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await saved();
     await readsFinished(page);
     await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     // The editor saw mail configured; the real isolated server has it disabled.
     // This models configuration disappearing before finalization, without sending mail.
     await page.route('**/api/project_creation_options*', async route => {
@@ -818,7 +821,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await emailAlert.click();
     await retryValidation();
     await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(emailAlert).toBeDisabled();
     console.log('PASS: a stale email configuration rejection can be corrected without sending mail');
@@ -1097,7 +1100,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(screen.locator('#np-project-rate')).toHaveValue('75.25');
     await saved();
     await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('Recoverable browser project');
     console.log('PASS: responsive form, conditional panels and Cancel preserve the draft');
@@ -1241,9 +1244,9 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(page.locator('.proj-row')).toHaveCount(1);
     await expect(createdRow).toBeVisible();
     await expect(page.locator('#project-bulk-menu-trigger')).toBeDisabled();
-    await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
+    await page.getByRole('searchbox', { name: 'Search by project or client' }).fill('no matching project');
     await expect(page.getByRole('heading', { name: 'No projects match your filters', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
     await expect(page.locator('.proj-row')).toHaveCount(unfilteredProjects.length);
     await expect.poll(visibleProjects).toEqual(unfilteredProjects);
     await expect(page.getByRole('button', { name: /^All tags/ })).toBeVisible();
@@ -1277,7 +1280,11 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await page.getByRole('link', { name: 'Reports', exact: true }).click();
     await page.locator('input[type="date"]').first().fill(entryDate);
     await page.locator('input[type="date"]').last().fill(entryDate);
-    const reportTag = page.getByRole('combobox', { name: 'Project tag', exact: true });
+    const reportTag = page.locator('#report-tag-trigger');
+    const pickTag = async name => {
+      await reportTag.click();
+      await page.getByRole('menuitem', { name, exact: true }).click();
+    };
     await expect(reportTag).toBeVisible();
     // The dates load once typing pauses, so wait for that report, not only idle requests.
     await expect(page.getByText('Loading report…', { exact: true })).toHaveCount(0);
@@ -1289,7 +1296,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
       await route.fulfill({ response });
     });
     try {
-      await reportTag.selectOption({ label: 'browser' });
+      await pickTag('browser');
       await expect.poll(() => !!releaseReport).toBe(true);
       await expect(page.getByRole('status')).toHaveText('Loading report…');
       await expect(page.locator('tbody tr')).toHaveCount(0);
@@ -1302,7 +1309,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(reportRows.locator('td').nth(1)).toHaveText('1.00');
     await readsFinished(page);
     await page.unroute('**/api/report_time*');
-    const tagId = await reportTag.inputValue();
+    const tagId = sql(`SELECT id FROM project_tags WHERE name = 'browser'`);
     for (const format of ['CSV', 'XLSX']) {
       const href = await page.getByRole('link', { name: `Export ${format}`, exact: true }).getAttribute('href');
       assert.equal(new URL(href, base).searchParams.get('tag_id'), tagId);
@@ -1322,7 +1329,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(page.locator('tbody tr')).toContainText('Tagged project report check');
     await page.getByRole('button', { name: 'Time', exact: true }).click();
     await page.route('**/api/report_time*', route => route.abort());
-    await reportTag.selectOption('');
+    await pickTag('All tags');
     await expect(page.getByRole('alert')).toContainText('Could not load the report');
     await expect(page.locator('tbody tr')).toHaveCount(0);
     await readsFinished(page);
@@ -1464,7 +1471,7 @@ const sql = query => require('node:child_process').execFileSync('psql',
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('First tab acknowledged');
     await screen.getByRole('button', { name: 'Discard draft', exact: true }).click();
     await discard.getByRole('button', { name: 'Discard draft', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
     await readsFinished(page);
     await page.goto(`${base}/projects/new`);

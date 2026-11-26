@@ -310,9 +310,8 @@ let restoreSeededStates = () => {};
       await page.evaluate(() => new Promise(requestAnimationFrame));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'viewport must not overflow');
       assert.equal(await page.locator('#report-from').evaluate(el => el.labels.length), 1);
-      assert.equal(await page.locator('#report-billability').evaluate(el => el.labels.length), 1);
-      await page.getByRole('combobox', { name: 'Show', exact: true }).focus();
-      await expect(page.locator('#report-billability')).toBeFocused();
+      await page.locator('#report-billability-trigger').focus();
+      await expect(page.locator('#report-billability-trigger')).toBeFocused();
       for (const [column, characters] of [[1, 10], [2, 6], [3, 6]]) {
         const lines = await page.locator(`tbody tr:first-child td:nth-child(${column})`).evaluate((cell, length) => {
           const range = document.createRange();
@@ -429,12 +428,18 @@ let restoreSeededStates = () => {};
     await expect(page.locator('dl')).toContainText('503.50');
     // Effective billability changes without changing any entry's raw flag.
     sql(`UPDATE projects SET project_type='non_billable' WHERE id='${project}'`);
-    const billability = page.getByRole('combobox', { name: 'Show', exact: true });
-    await expect(billability).toHaveValue('all');
-    await billability.focus();
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
-    await expect(billability).toHaveValue('billable');
+    const billabilityTrigger = page.locator('#report-billability-trigger');
+    const billabilityLabels = { all: 'All hours', billable: 'Billable hours', non_billable: 'Non-billable hours' };
+    const billability = {
+      selectOption: async value => {
+        await billabilityTrigger.click();
+        await page.getByRole('menuitem', { name: billabilityLabels[value], exact: true }).click();
+      },
+    };
+    const expectBillability = value => expect(billabilityTrigger).toContainText(billabilityLabels[value]);
+    await expectBillability('all');
+    await billability.selectOption('billable');
+    await expectBillability('billable');
     await expect(page.locator('tbody tr')).toHaveCount(1);
     await expect(page.locator('tbody')).toContainText('Active own entry');
     const checkBillabilityDownload = async (grouped, filter, hours) => {
@@ -492,7 +497,7 @@ let restoreSeededStates = () => {};
     await expect(page.locator(`#report-expanded-hours-${actor.id}`)).toHaveText('503.00');
     await page.locator(`#report-expanded-hours-${actor.id}`).click();
     await expect(page.locator('tbody tr')).toHaveCount(500);
-    await expect(billability).toHaveValue('non_billable');
+    await expectBillability('non_billable');
     await checkBillabilityDownload(false, 'non_billable', '503.00');
     await billability.selectOption('billable');
     await expect(page.locator('tbody')).toHaveCount(0);

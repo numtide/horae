@@ -73,7 +73,8 @@ const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Client name', { exact: true }).fill(name);
     await dialog.getByLabel('Default rate', { exact: true }).fill('123.45');
-    await dialog.getByLabel('Currency', { exact: true }).selectOption('EUR');
+    await dialog.locator('#client-form-currency').click();
+    await dialog.locator('#client-form-currency-options').getByRole('option', { name: 'EUR', exact: true }).click();
     await dialog.getByRole('button', { name: 'Create client', exact: true }).click();
     await expect(dialog).toBeHidden();
     const client = sql(`SELECT id FROM clients WHERE name = '${name}'`);

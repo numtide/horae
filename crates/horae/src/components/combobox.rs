@@ -46,6 +46,12 @@ pub fn Combobox(
     #[props(default)]
     trigger_class: String,
     #[props(default)] disabled: bool,
+    /// The trigger's id; with `name`, the trigger reads as "{name} {selection}".
+    #[props(default)]
+    id: Option<String>,
+    /// What the filter chooses ("Client"), for the trigger's accessible name.
+    #[props(default)]
+    name: Option<String>,
     #[props(default)] onselect: EventHandler<String>,
 ) -> Element {
     let mut open = use_signal(|| false);
@@ -74,10 +80,16 @@ pub fn Combobox(
     }
 
     rsx! {
-        div { class: "menu-anchor",
+        // A long chosen name wraps inside the trigger instead of widening the page.
+        div { class: "menu-anchor max-w-full",
+            if let (Some(id), Some(name)) = (&id, &name) {
+                span { id: "{id}-name", class: "sr-only", "{name}" }
+            }
             button {
                 r#type: "button",
-                class: "btn btn-secondary btn-sm {trigger_class}",
+                id: id.clone(),
+                aria_labelledby: id.as_ref().filter(|_| name.is_some()).map(|id| format!("{id}-name {id}")),
+                class: "btn btn-secondary btn-sm max-w-full {trigger_class}",
                 disabled,
                 "aria-haspopup": "listbox",
                 "aria-expanded": "{open}",
@@ -103,6 +115,7 @@ pub fn Combobox(
                     }
                     button {
                         r#type: "button",
+                        id: id.as_ref().map(|id| format!("{id}-option-")),
                         class: if value.is_empty() { "menu-item selected" } else { "menu-item" },
                         onclick: move |_| {
                             onselect.call(String::new());
@@ -122,6 +135,7 @@ pub fn Combobox(
                                 rsx! {
                                     button {
                                         r#type: "button",
+                                        id: id.as_ref().map(|id| format!("{id}-option-{}", o.value)),
                                         class: if selected { "menu-item selected" } else { "menu-item" },
                                         onclick: move |_| {
                                             onselect.call(val.clone());

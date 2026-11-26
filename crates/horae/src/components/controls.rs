@@ -1,14 +1,16 @@
 use dioxus::prelude::*;
 
 /// A segmented control: one active item out of several. Emits the chosen label.
+/// `label_id` names the control after a visible label.
 #[component]
 pub fn Segmented(
     items: Vec<String>,
     active: String,
+    #[props(default)] label_id: Option<String>,
     #[props(default)] onselect: EventHandler<String>,
 ) -> Element {
     rsx! {
-        div { class: "segmented", role: "tablist",
+        div { class: "segmented", role: "tablist", aria_labelledby: label_id,
             for item in items {
                 button {
                     r#type: "button",

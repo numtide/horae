@@ -8,11 +8,16 @@ use horae_core::money::{Withheld, sum_by_currency};
 
 use super::{Failure, loaded};
 use crate::components::badge::Badge;
+use crate::components::combobox::{ComboOption, Combobox};
+use crate::components::controls::Segmented;
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
-use crate::components::form::{FormGroup, Input};
+use crate::components::filter_bar::FilterBar;
+use crate::components::form::Input;
+use crate::components::menu::{Menu, MenuItem};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, ErrorState, Loading};
 use crate::components::table::DataTable;
+use crate::i18n::Tr;
 use crate::server_fns;
 
 /// The Reports title, where focus lands once a failed report loads again.
@@ -47,32 +52,26 @@ fn opt(v: String) -> Option<String> {
     if v.is_empty() { None } else { Some(v) }
 }
 
-/// A labelled dropdown for one report filter: a leading "all" option followed by
-/// `(value, name)` choices. Emits the picked value ("" for "all").
-#[component]
-fn FilterSelect(
-    id: String,
-    label: String,
-    value: String,
-    all_label: String,
-    options: Vec<(String, String)>,
-    onselect: EventHandler<String>,
-) -> Element {
-    rsx! {
-        div { class: "form-group min-w-0 max-w-full",
-            label { class: "form-label", r#for: "{id}", "{label}" }
-            select {
-                id: "{id}",
-                class: "form-select min-w-0 max-w-full min-h-control",
-                value: "{value}",
-                oninput: move |e| onselect.call(e.value()),
-                option { value: "", "{all_label}" }
-                for (v, name) in options.iter() {
-                    option { key: "{v}", value: "{v}", "{name}" }
-                }
-            }
-        }
-    }
+/// `(value, name)` choices of a report filter, for its `Combobox`.
+fn combo(options: Vec<(String, String)>) -> Vec<ComboOption> {
+    options
+        .into_iter()
+        .map(|(value, label)| ComboOption {
+            value,
+            label,
+            group: None,
+        })
+        .collect()
+}
+
+/// The time report's groupings: (the server's value, the label).
+fn group_choices(tr: Tr) -> [(&'static str, String); 4] {
+    [
+        ("project", tr.reports_group_project()),
+        ("client", tr.reports_group_client()),
+        ("task", tr.reports_group_task()),
+        ("person", tr.reports_group_person()),
+    ]
 }
 
 #[component]
@@ -125,6 +124,7 @@ pub fn Reports() -> Element {
 
 #[component]
 fn FinancialReports() -> Element {
+    let tr = crate::i18n::use_tr();
     let today = crate::components::today::today();
     let month_start = today.with_day(1).unwrap_or(today);
 
@@ -142,6 +142,21 @@ fn FinancialReports() -> Element {
     let mut user_filter = use_signal(String::new);
     let mut tag_filter = use_signal(String::new);
     let mut active_tab = use_signal(|| "time".to_string());
+    // A client's projects replace the list, so its project choice resets.
+    let pick_client = use_callback(move |value: String| {
+        client_filter.set(value);
+        project_filter.set(String::new());
+    });
+    let pick_project = use_callback(move |value: String| project_filter.set(value));
+    let pick_teammate = use_callback(move |value: String| user_filter.set(value));
+    let pick_group = use_callback(move |picked: String| {
+        if let Some((value, _)) = group_choices(tr)
+            .into_iter()
+            .find(|(_, label)| *label == picked)
+        {
+            group_by.set(value.to_string());
+        }
+    });
 
     // Dropdown sources. Projects narrow to the chosen client.
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
@@ -223,6 +238,16 @@ fn FinancialReports() -> Element {
         .filter(|tag| seen_tags.insert(tag.tag_id))
         .map(|tag| (tag.tag_id.to_string(), tag.name.clone()))
         .collect::<Vec<_>>();
+    let tag_label = if tag_filter().is_empty() {
+        tr.reports_tag_any()
+    } else {
+        tag_options
+            .iter()
+            .find(|(id, _)| *id == tag_filter())
+            .map(|(_, name)| tr.reports_tag_named(name))
+            .unwrap_or_else(|| tr.reports_tag_unavailable())
+    };
+    let groups = group_choices(tr);
 
     rsx! {
         div {
@@ -233,87 +258,70 @@ fn FinancialReports() -> Element {
                 },
             }
 
-            // Below 640px the panel drops its chrome so a full native date fits at
-            // enlarged text; the sm: variants restore the card at wider widths.
-            div { class: "card mb-6 p-0 sm:p-6 border-0 sm:border bg-base sm:bg-secondary",
-                div { class: "flex gap-4 items-end flex-wrap",
-                    div { class: "min-w-0 max-w-full",
-                        FormGroup { label: "From", id: "report-filter-from",
-                            Input {
-                                kind: "date",
-                                id: "report-filter-from",
-                                class: "min-w-0 max-w-full min-h-control px-1 sm:px-3",
-                                value: "{from_input}",
-                                oninput: move |e: FormEvent| from_input.set(e.value()),
-                            }
+            FilterBar {
+                filters: rsx! {
+                    div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
+                        label { class: "text-sm text-secondary", r#for: "report-filter-from", {tr.reports_from()} }
+                        Input {
+                            kind: "date",
+                            id: "report-filter-from",
+                            // Narrow padding below 640px lets a full date fit at enlarged text.
+                            class: "w-auto min-w-0 max-w-full min-h-control px-1 sm:px-3",
+                            value: "{from_input}",
+                            oninput: move |e: FormEvent| from_input.set(e.value()),
+                        }
+                        label { class: "text-sm text-secondary", r#for: "report-filter-to", {tr.reports_to()} }
+                        Input {
+                            kind: "date",
+                            id: "report-filter-to",
+                            // Narrow padding below 640px lets a full date fit at enlarged text.
+                            class: "w-auto min-w-0 max-w-full min-h-control px-1 sm:px-3",
+                            value: "{to_input}",
+                            oninput: move |e: FormEvent| to_input.set(e.value()),
                         }
                     }
-                    div { class: "min-w-0 max-w-full",
-                        FormGroup { label: "To", id: "report-filter-to",
-                            Input {
-                                kind: "date",
-                                id: "report-filter-to",
-                                class: "min-w-0 max-w-full min-h-control px-1 sm:px-3",
-                                value: "{to_input}",
-                                oninput: move |e: FormEvent| to_input.set(e.value()),
-                            }
-                        }
-                    }
-                    div { class: "form-group min-w-0 max-w-full",
-                        label { class: "form-label", r#for: "report-filter-group", "Group by" }
-                        select {
-                            id: "report-filter-group",
-                            class: "form-select min-w-0 max-w-full min-h-control",
-                            value: "{group_by}",
-                            oninput: move |e| group_by.set(e.value()),
-                            option { value: "project", "Project" }
-                            option { value: "client", "Client" }
-                            option { value: "task", "Task" }
-                            option { value: "person", "Person" }
-                        }
-                    }
-                    FilterSelect {
+                    Combobox {
                         id: "report-filter-client",
-                        label: "Client",
+                        name: tr.reports_client(),
+                        trigger_class: "text-sm px-4",
+                        options: combo(client_opts),
                         value: client_filter(),
-                        all_label: "All clients",
-                        options: client_opts,
-                        onselect: move |v| {
-                            client_filter.set(v);
-                            project_filter.set(String::new());
-                        },
+                        placeholder: tr.reports_client_any(),
+                        all_label: tr.reports_client_any(),
+                        onselect: pick_client,
                     }
-                    FilterSelect {
+                    Combobox {
                         id: "report-filter-project",
-                        label: "Project",
+                        name: tr.reports_project(),
+                        trigger_class: "text-sm px-4",
+                        options: combo(project_opts),
                         value: project_filter(),
-                        all_label: "All projects",
-                        options: project_opts,
-                        onselect: move |v| project_filter.set(v),
+                        placeholder: tr.reports_project_any(),
+                        all_label: tr.reports_project_any(),
+                        onselect: pick_project,
                     }
-                    FilterSelect {
+                    Combobox {
                         id: "report-filter-teammate",
-                        label: "Teammate",
+                        name: tr.reports_teammate(),
+                        trigger_class: "text-sm px-4",
+                        options: combo(user_opts),
                         value: user_filter(),
-                        all_label: "All teammates",
-                        options: user_opts,
-                        onselect: move |v| user_filter.set(v),
+                        placeholder: tr.reports_teammate_any(),
+                        all_label: tr.reports_teammate_any(),
+                        onselect: pick_teammate,
                     }
                     if !tag_options.is_empty() || !tag_filter().is_empty() {
-                        div { class: "min-w-0 max-w-full",
-                            FormGroup { label: "Project tag", id: "report-tag",
-                                select { id: "report-tag", class: "form-select min-w-0 max-w-full min-h-control", value: tag_filter(),
-                                    oninput: move |event| tag_filter.set(event.value()),
-                                    option { value: "", "All tags" }
-                                    if !tag_filter().is_empty() && !tag_options.iter().any(|(id, _)| *id == tag_filter()) {
-                                        option { value: tag_filter(), disabled: true, "Selected tag unavailable" }
-                                    }
-                                    for (id, name) in tag_options { option { key: "{id}", value: "{id}", "{name}" } }
+                        Menu { id: "report-tag", label: tag_label, trigger_class: "text-sm px-4",
+                            MenuItem { selected: tag_filter().is_empty(), onclick: move |_| tag_filter.set(String::new()), {tr.reports_tag_any()} }
+                            for (id, name) in tag_options {
+                                MenuItem { key: "{id}", selected: tag_filter() == id,
+                                    onclick: { let id = id.clone(); move |_| tag_filter.set(id.clone()) },
+                                    "{name}"
                                 }
                             }
                         }
                     }
-                }
+                },
             }
 
             if matches!(&*tags.read(), Some(Err(_))) {
@@ -322,7 +330,7 @@ fn FinancialReports() -> Element {
                 }
             }
 
-            div { class: "report-tabs flex items-center gap-6 mb-6",
+            div { class: "report-tabs flex flex-wrap items-center gap-6 mb-6",
                 button {
                     class: if tab == "time" { "report-tab active" } else { "report-tab" },
                     onclick: move |_| active_tab.set("time".into()),
@@ -332,6 +340,17 @@ fn FinancialReports() -> Element {
                     class: if tab == "detailed" { "report-tab active" } else { "report-tab" },
                     onclick: move |_| active_tab.set("detailed".into()),
                     "Detailed time"
+                }
+                // Grouping switches the time report's view, so it is a Segmented.
+                if tab == "time" {
+                    div { class: "flex-1" }
+                    div { class: "flex flex-wrap items-center gap-3 min-w-0 max-w-full",
+                        span { id: "report-group-label", class: "text-sm text-secondary", {tr.reports_group_by()} }
+                        Segmented { label_id: Some("report-group-label".to_string()), items: groups.iter().map(|(_, label)| label.clone()).collect(),
+                            active: groups.iter().find(|(value, _)| *value == group_by()).map(|(_, label)| label.clone()).unwrap_or_default(),
+                            onselect: pick_group,
+                        }
+                    }
                 }
             }
 

@@ -121,7 +121,7 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     };
     // Different project values need a choice before anything can be created.
     await expect(page.getByRole('status').filter({ hasText: 'different invoice values' })).toBeVisible();
-    await rejectNavigation(() => page.locator('a.nav-item[href="/clients"]').click());
+    await rejectNavigation(() => page.locator('a.nav-item[href^="/clients"]').click());
     await rejectNavigation(() => page.evaluate(() => history.back()));
     await rejectNavigation(() => page.evaluate(() => history.replaceState(history.state, '', '/clients')));
     await expect(page.locator('#inv-to')).toContainText('30 Sep 2026');
@@ -370,7 +370,7 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await expect(saveChanges).toBeDisabled();
     await feeAmount.fill('60.00');
     await feeDescription.fill('First installment');
-    await rejectNavigation(() => page.locator('a.nav-item[href="/clients"]').click());
+    await rejectNavigation(() => page.locator('a.nav-item[href^="/clients"]').click());
     await rejectNavigation(() => page.evaluate(() => history.replaceState(history.state, '', '/clients')));
     await rejectNavigation(() => page.evaluate(() => location.reload()), 'beforeunload');
     await expect(feeDescription).toHaveValue('First installment');
@@ -396,7 +396,7 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await expect(feeAmount).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Discard changes', exact: true })).toBeDisabled();
     const committedRevision = sql(`SELECT edit_revision FROM invoices WHERE id='${result.invoice.id}'`);
-    await rejectNavigation(() => page.locator('a.nav-item[href="/clients"]').click(), 'pending');
+    await rejectNavigation(() => page.locator('a.nav-item[href^="/clients"]').click(), 'pending');
     // The editor was opened from the invoice inside the app, so going back is
     // an in-app navigation, blocked like the sidebar link.
     await rejectNavigation(() => page.evaluate(() => history.back()), 'pending');
@@ -542,9 +542,9 @@ const dayLabel = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB',
     await expect(dialog).toContainText('excess EUR 12.00');
     await dialog.getByRole('button', { name: 'Cancel over-invoicing', exact: true }).click();
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore + 3);
-    await page.locator('a.nav-item[href="/clients"]').click();
+    await page.locator('a.nav-item[href^="/clients"]').click();
     await discardInvoice.click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await page.evaluate(() => {
       window.originalInvoiceGetItem = Storage.prototype.getItem;
       Storage.prototype.getItem = function(key) {

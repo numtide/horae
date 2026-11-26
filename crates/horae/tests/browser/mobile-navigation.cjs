@@ -45,7 +45,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await open.tap();
     if (process.env.HORAE_TEST_SCREENSHOT) await page.screenshot({ path: process.env.HORAE_TEST_SCREENSHOT, fullPage: true });
     await sidebar.getByRole('link', { name: 'Projects', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await expect(sidebar).toBeHidden();
     await expect(page.locator('main')).toBeFocused();
     console.log('PASS: mobile content width, keyboard toggle, Escape/focus restoration and navigation close');

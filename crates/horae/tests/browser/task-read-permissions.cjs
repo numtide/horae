@@ -41,8 +41,10 @@ let restoreSeededStates = () => {};
     await page.locator('.sidebar-timer-wrap').getByRole('button', { name: 'Start timer', exact: true }).click();
     const rows = await (await response).json();
     rateFree(rows);
-    await popover.getByRole('combobox', { name: 'Project', exact: true }).selectOption(project);
-    await expect(popover.getByRole('combobox', { name: 'Task', exact: true }).locator('option')).toHaveText(['Select task…', 'Enabled scoped task']);
+    await popover.locator('#timer-project').click();
+    await popover.locator(`#timer-project-option-${project}`).click();
+    // The closed popover's options are hidden, so getByRole would skip them.
+    await expect(popover.locator('#timer-task-options [role="option"]')).toHaveText(['Enabled scoped task']);
     return rows;
   };
   try {
@@ -78,7 +80,8 @@ let restoreSeededStates = () => {};
     await expect(page.locator('.sidebar-timer-live')).toHaveCount(0);
     assert.equal(sql(`SELECT is_running FROM time_entries WHERE id='${timer}'`), 'f');
     await openPicker();
-    await popover.getByRole('combobox', { name: 'Task', exact: true }).selectOption(enabled);
+    await popover.locator('#timer-task').click();
+    await popover.locator(`#timer-task-option-${enabled}`).click();
     await popover.getByRole('button', { name: 'Start timer', exact: true }).click();
     await expect(page.locator('.sidebar-timer-proj')).toHaveText('Task reader project · Enabled scoped task');
     assert.equal(sql(`SELECT task_id FROM time_entries WHERE user_id='${actor.id}' AND is_running`), enabled);

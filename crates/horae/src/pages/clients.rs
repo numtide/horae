@@ -3,6 +3,9 @@ use std::collections::BTreeSet;
 use uuid::Uuid;
 
 use crate::components::badge::Badge;
+use crate::components::button::{Button, ButtonVariant};
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
+use crate::components::filter_bar::{FilterBar, SearchField};
 use crate::components::menu::{Menu, MenuDivider, MenuItem, RowActions};
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, ErrorState, Loading, NoAccess};
@@ -14,6 +17,7 @@ use crate::server_fns;
 
 #[path = "clients/filters.rs"]
 mod filters;
+pub use filters::ClientFilter;
 use filters::{ClientScope, matches_query_currency};
 
 #[path = "clients/detail.rs"]
@@ -59,14 +63,77 @@ fn restore_opener_focus(opener: &str, fallback: &str) {
 }
 
 #[component]
-pub fn ClientList() -> Element {
+pub fn ClientList(filter: ClientFilter) -> Element {
     let tr = crate::i18n::use_tr();
-    // Management view: include inactive clients so managers can reactivate them.
-    let mut query = use_signal(String::new);
-    let mut scope = use_signal(ClientScope::default);
-    let mut currency_filter = use_signal(String::new);
-
+    let navigator = use_navigator();
     let mut show_form = use_signal(|| false);
+    // Management view: include inactive clients so managers can reactivate them.
+    // The search box answers at once; the URL follows when typing pauses.
+    let mut query = use_signal(|| filter.search.clone());
+    let settled = use_debounced(query, SEARCH_DEBOUNCE);
+    // Only a newly settled search moves the URL, once. Reading the route
+    // subscribes this effect to it, so a route change alone (Back to an older
+    // search, or an editor's guard holding the replace) must do nothing.
+    let acted = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(filter.search.clone())));
+    use_effect(move || {
+        let search = settled();
+        // An open editor holds navigation; the URL catches up once it closes.
+        if show_form() || *acted.borrow() == search {
+            return;
+        }
+        let Route::ClientList { filter: current } = dioxus::router::router().current::<Route>()
+        else {
+            return;
+        };
+        *acted.borrow_mut() = search.clone();
+        if search != current.search {
+            navigator.replace(Route::ClientList {
+                filter: ClientFilter { search, ..current },
+            });
+        }
+    });
+    // Back, or a shared link, brings another search: show it in the box.
+    let external = filter.search.clone();
+    use_effect(use_reactive!(|external| {
+        if external != *settled.peek() {
+            query.set(external);
+        }
+    }));
+    let scope = filter.scope;
+    let currency_filter = filter.currency.clone();
+    let go = {
+        let current = filter.clone();
+        move |next: ClientFilter| {
+            if next != current {
+                navigator.push(Route::ClientList { filter: next });
+            }
+        }
+    };
+    let pick_scope = {
+        let go = go.clone();
+        let current = filter.clone();
+        use_callback(move |scope: ClientScope| {
+            go(ClientFilter {
+                scope,
+                ..current.clone()
+            })
+        })
+    };
+    let pick_currency = {
+        let go = go.clone();
+        let current = filter.clone();
+        use_callback(move |currency: String| {
+            go(ClientFilter {
+                currency,
+                ..current.clone()
+            })
+        })
+    };
+    let clear_filters = use_callback(move |_: MouseEvent| {
+        query.set(String::new());
+        go(ClientFilter::cleared());
+    });
+
     // `Some(id)` while editing an existing client, `None` while creating.
     let mut editing_id = use_signal(|| None::<Uuid>);
     let mut action_error = use_signal(|| None::<String>);
@@ -131,7 +198,7 @@ pub fn ClientList() -> Element {
     let matching: Vec<_> = list
         .into_iter()
         .flatten()
-        .filter(|row| matches_query_currency(row, &query(), &currency_filter()))
+        .filter(|row| matches_query_currency(row, &query(), &currency_filter))
         .collect();
     let count_scope = |status: ClientScope| {
         matching
@@ -139,24 +206,30 @@ pub fn ClientList() -> Element {
             .filter(|row| status.matches(row.client.active))
             .count()
     };
-    let active_count = count_scope(ClientScope::Active);
-    let inactive_count = count_scope(ClientScope::Inactive);
-    let all_count = matching.len();
-    let scope_label = format!("{} ({})", scope().label(), count_scope(scope()));
+    let scope_label = |status: ClientScope| {
+        let count = count_scope(status) as i64;
+        match status {
+            ClientScope::Active => tr.clients_status_active(count),
+            ClientScope::Inactive => tr.clients_status_archived(count),
+            ClientScope::All => tr.clients_status_all(count),
+        }
+    };
+    let scope_labels = ClientScope::ALL.map(|status| (status, scope_label(status)));
+    let scope_shown = scope_label(scope);
     let currencies: BTreeSet<String> = list
         .into_iter()
         .flatten()
         .flat_map(|row| std::iter::once(&row.client.currency).chain(row.project_currencies.iter()))
         .map(|currency| currency.trim().to_owned())
         .collect();
-    let currency_label = if currency_filter().is_empty() {
-        "All currencies".to_owned()
+    let currency_label = if currency_filter.is_empty() {
+        tr.clients_currency_any()
     } else {
-        currency_filter()
+        currency_filter.clone()
     };
     let visible: Vec<_> = matching
         .into_iter()
-        .filter(|row| scope().matches(row.client.active))
+        .filter(|row| scope.matches(row.client.active))
         .collect();
 
     let mut reset_form = move || {
@@ -208,54 +281,32 @@ pub fn ClientList() -> Element {
                     if can_import {
                         Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import" }
                     }
-                    // Without access the header keeps no controls.
-                    if !denied { input {
-                        id: "clients-search",
-                        class: "form-input client-search w-form-select max-w-full",
-                        r#type: "search",
-                        aria_label: "Search clients by name",
-                        placeholder: "Search clients by name",
-                        value: "{query}",
-                        oninput: move |event| query.set(event.value()),
-                        // Text typed into the server-rendered field before hydration
-                        // never reaches `query`, and every render rewrites `value`
-                        // from `query`. Read the field now, before the next render.
-                        onmounted: move |_| {
-                            let typed = document::eval("return document.getElementById('clients-search')?.value ?? '';");
-                            async move {
-                                if let Ok(typed) = typed.join::<String>().await
-                                    && !typed.is_empty()
-                                    && query.peek().is_empty()
-                                {
-                                    query.set(typed);
-                                }
-                            }
-                        },
-                    } }
                 },
             }
 
-            if ready && list.is_some() {
-                div { class: "flex flex-wrap items-center gap-4 mb-5",
-                    Menu { id: "client-scope-menu", label: scope_label, trigger_class: "text-sm px-4",
-                        MenuItem { selected: scope() == ClientScope::Active,
-                            onclick: move |_| scope.set(ClientScope::Active), "Active clients ({active_count})" }
-                        MenuItem { selected: scope() == ClientScope::Inactive,
-                            onclick: move |_| scope.set(ClientScope::Inactive), "Archived clients ({inactive_count})" }
-                        MenuItem { selected: scope() == ClientScope::All,
-                            onclick: move |_| scope.set(ClientScope::All), "All clients ({all_count})" }
-                    }
-                    div { class: "flex-1" }
-                    Menu { id: "client-currency-menu", label: currency_label, align_right: true, trigger_class: "text-sm px-4",
-                        MenuItem { selected: currency_filter().is_empty(),
-                            onclick: move |_| currency_filter.set(String::new()), "All currencies" }
-                        for code in currencies {
-                            MenuItem { key: "{code}", selected: currency_filter() == code,
-                                onclick: { let code = code.clone(); move |_| currency_filter.set(code.clone()) },
-                                "{code}"
+            // Without access the screen keeps no controls. The menus wait for
+            // the list, whose counts and currencies they show.
+            if !denied {
+                FilterBar {
+                    filters: rsx! {
+                        Menu { id: "client-scope-menu", label: scope_shown, trigger_class: "text-sm px-4", disabled: list.is_none(),
+                            for (status, label) in scope_labels {
+                                MenuItem { key: "{status:?}", selected: scope == status, onclick: move |_| pick_scope.call(status), "{label}" }
                             }
                         }
-                    }
+                        Menu { id: "client-currency-menu", label: currency_label, trigger_class: "text-sm px-4", disabled: list.is_none(),
+                            MenuItem { selected: currency_filter.is_empty(), onclick: move |_| pick_currency.call(String::new()),
+                                {tr.clients_currency_any()}
+                            }
+                            for code in currencies {
+                                MenuItem { key: "{code}", selected: currency_filter == code,
+                                    onclick: { let code = code.clone(); move |_| pick_currency.call(code.clone()) },
+                                    "{code}"
+                                }
+                            }
+                        }
+                    },
+                    search: rsx! { SearchField { id: "clients-search", label: tr.clients_search_label(), query } },
                 }
             }
 
@@ -323,12 +374,10 @@ pub fn ClientList() -> Element {
                     } else {
                         EmptyState {
                             icon: "clients",
-                            title: "No clients match your filters",
-                            body: "Try another name, status or currency.",
+                            title: tr.clients_none_match(),
+                            body: tr.clients_none_match_hint(),
                             actions: rsx! {
-                                button { class: "btn btn-secondary", onclick: move |_| {
-                                    query.set(String::new()); currency_filter.set(String::new()); scope.set(ClientScope::All);
-                                }, "Clear filters" }
+                                Button { id: "clients-clear-filters", variant: ButtonVariant::Secondary, label: tr.action_clear_filters(), onclick: clear_filters }
                             },
                         }
                     }

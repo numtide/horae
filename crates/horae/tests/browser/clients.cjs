@@ -42,12 +42,13 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     const warning = page.getByRole('dialog', { name: 'Discard unsaved client changes?', exact: true });
     await warning.getByRole('button', { name: 'Keep editing', exact: true }).click();
     await expect(warning).toBeHidden();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await expect(field('Client name')).toHaveValue(name);
     await field('Default rate').fill('0');
     await field('Billing address').fill('Test street\nFloor 2');
     await field('Tax ID (optional)').fill('TEST-VAT');
-    await dialog.getByRole('combobox', { name: 'Currency', exact: true }).selectOption('EUR');
+    await dialog.locator('#client-form-currency').click();
+    await dialog.locator('#client-form-currency-options').getByRole('option', { name: 'EUR', exact: true }).click();
     await dialog.getByRole('button', { name: 'Create client', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(create).toBeFocused();
@@ -88,7 +89,8 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await page.reload();
     await expect(page.getByRole('region', { name: 'Billing', exact: true })).toContainText('Test street');
     await openEditor();
-    await dialog.getByRole('combobox', { name: 'Currency', exact: true }).selectOption('USD');
+    await dialog.locator('#client-form-currency').click();
+    await dialog.locator('#client-form-currency-options').getByRole('option', { name: 'USD', exact: true }).click();
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText('Confirm the default rate');
     await expect(field('Default rate')).toHaveValue('0.00');
@@ -126,7 +128,7 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
       await expect(warning).toContainText('A client save is pending. Wait for it to finish before leaving.');
       await warning.getByRole('button', { name: 'Stay on this page', exact: true }).click();
       await expect(warning).toBeHidden();
-      await expect(page).toHaveURL(`${base}/clients`);
+      await expect(page).toHaveURL(/\/clients\??$/);
       await expect(field('Client name')).toHaveValue(uncertainName);
     } finally { release(); }
     await expect(dialog.getByRole('status')).toContainText('Creation may have completed');

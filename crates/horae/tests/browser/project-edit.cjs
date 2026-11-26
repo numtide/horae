@@ -407,24 +407,24 @@ const before = sql(`SELECT json_build_array(
       await expect(page).toHaveURL(atEditor(configuredId));
       await expect(editor.locator('#np-name')).toHaveValue('Keep this unsaved edit');
     };
-    await dismiss(() => page.locator('a.nav-item[href="/clients"]').click());
+    await dismiss(() => page.locator('a.nav-item[href^="/clients"]').click());
     await dismiss(() => page.evaluate(() => history.back()));
     await dismiss(() => page.evaluate(() => location.reload()), true);
     await dismiss(() => page.evaluate(() => history.replaceState(history.state, '', '/clients')));
     await page.evaluate(() => history.back());
     await guard.getByRole('button', { name: 'Discard changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.evaluate(() => history.forward());
     await expect(editor.locator('#np-name')).toHaveValue('Configured edit fixture');
     await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.evaluate(() => history.back());
     await expect(editor.locator('#np-name')).toHaveValue('Configured edit fixture');
     await editor.locator('#np-name').fill('Keep this unsaved edit');
     await dismiss(() => page.evaluate(() => history.forward()));
     await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     assert.equal(sql(`SELECT name FROM projects WHERE id = '${configuredId}'`), 'Configured edit fixture');
     console.log('PASS: sidebar, back, forward, reload and replacement navigation preserve dirty edits until explicitly discarded');
 
@@ -472,7 +472,7 @@ const before = sql(`SELECT json_build_array(
     const savedRevision = sql(`SELECT edit_revision FROM projects WHERE id = '${configuredId}'`);
     await expect(editor.locator('#np-name')).toBeDisabled();
     await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
-    await page.locator('a.nav-item[href="/clients"]').click();
+    await page.locator('a.nav-item[href^="/clients"]').click();
     const pendingDialog = page.getByRole('dialog', { name: 'Wait before leaving', exact: true });
     await expect(pendingDialog).toContainText('A project save is unresolved.');
     await pendingDialog.getByRole('button', { name: 'Stay on this page', exact: true }).click();

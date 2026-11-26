@@ -39,8 +39,10 @@ if (output) fs.mkdirSync(output, { recursive: true });
       }
       const search = root.querySelector('input[type="search"]');
       if (search && innerWidth >= 1440 && rem === 16) {
-        const action = root.querySelector('.page-actions button');
-        if (Math.abs(search.getBoundingClientRect().top - action.getBoundingClientRect().top) > 2) problems.push('Desktop search wraps below actions');
+        // The search shares the FilterBar's row with the filters.
+        const filter = root.querySelector('#client-scope-menu-trigger');
+        const middle = el => { const box = el.getBoundingClientRect(); return (box.top + box.bottom) / 2; };
+        if (filter && Math.abs(middle(search) - middle(filter)) > 2) problems.push('Desktop search wraps below the filters');
       }
       const grid = root.querySelector('.client-detail-grid');
       if (grid) {

@@ -30,8 +30,10 @@ use crate::pages::{
     timesheet::{Anchor, CalSpan, Timesheet, ViewMode},
 };
 // Route constructors outside the editor name the typed query through this module.
+pub use crate::pages::clients::ClientFilter;
 pub use crate::pages::invoices::InvoiceFilter;
 pub use crate::pages::new_project::EditReturn;
+pub use crate::pages::projects::ProjectFilter;
 
 #[component]
 fn NotFound(route: Vec<String>) -> Element {
@@ -67,12 +69,13 @@ pub enum Route {
         span: CalSpan,
         user: String,
     },
-    #[route("/clients")]
-    ClientList {},
+    // The filters are the whole query, so a filtered view can be shared.
+    #[route("/clients?:..filter")]
+    ClientList { filter: ClientFilter },
     #[route("/clients/:id")]
     ClientDetail { id: Uuid },
-    #[route("/projects")]
-    ProjectList {},
+    #[route("/projects?:..filter")]
+    ProjectList { filter: ProjectFilter },
     #[route("/projects/client/:client")]
     ProjectsForClient { client: String },
     #[route("/projects/new")]
@@ -174,12 +177,12 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
     matches!(
         (to, current),
         (
-            Route::ProjectList {},
+            Route::ProjectList { .. },
             Route::NewProject {}
                 | Route::NewProjectForClient { .. }
                 | Route::ProjectsForClient { .. }
                 | Route::EditProject { .. }
-        ) | (Route::ClientList {}, Route::ClientDetail { .. })
+        ) | (Route::ClientList { .. }, Route::ClientDetail { .. })
             | (
                 Route::InvoiceList { .. },
                 Route::NewInvoice {}
@@ -247,8 +250,18 @@ mod tests {
     fn client_workflow_paths_preserve_context_and_navigation_section() {
         let id = Uuid::now_v7();
         for (path, section) in [
-            (format!("/projects/new/client/{id}"), Route::ProjectList {}),
-            (format!("/projects/client/{id}"), Route::ProjectList {}),
+            (
+                format!("/projects/new/client/{id}"),
+                Route::ProjectList {
+                    filter: ProjectFilter::default(),
+                },
+            ),
+            (
+                format!("/projects/client/{id}"),
+                Route::ProjectList {
+                    filter: ProjectFilter::default(),
+                },
+            ),
             (
                 format!("/invoices/new/client/{id}"),
                 Route::InvoiceList {
@@ -266,7 +279,12 @@ mod tests {
             assert!(!matches!(route, Route::NotFound { .. }), "{path}");
             assert_eq!(route.to_string(), path);
             assert!(matches_navigation(&section, &route));
-            assert!(!matches_navigation(&Route::ClientList {}, &route));
+            assert!(!matches_navigation(
+                &Route::ClientList {
+                    filter: ClientFilter::default()
+                },
+                &route
+            ));
         }
     }
 
@@ -367,7 +385,15 @@ mod tests {
                 matches_navigation(&Route::ImporterIndex {}, &route),
                 "{path}"
             );
-            assert!(!matches_navigation(&Route::ClientList {}, &route), "{path}");
+            assert!(
+                !matches_navigation(
+                    &Route::ClientList {
+                        filter: ClientFilter::default()
+                    },
+                    &route
+                ),
+                "{path}"
+            );
         }
         // A success, and the callback's old failure link, carry no outcome.
         for path in [
@@ -404,8 +430,18 @@ mod tests {
         let route: Route = path.parse().unwrap();
         assert!(matches!(route, Route::ClientDetail { id: parsed } if parsed == id));
         assert_eq!(route.to_string(), path);
-        assert!(matches_navigation(&Route::ClientList {}, &route));
-        assert!(!matches_navigation(&Route::ProjectList {}, &route));
+        assert!(matches_navigation(
+            &Route::ClientList {
+                filter: ClientFilter::default()
+            },
+            &route
+        ));
+        assert!(!matches_navigation(
+            &Route::ProjectList {
+                filter: ProjectFilter::default()
+            },
+            &route
+        ));
         assert!(!matches_navigation(
             &Route::InvoiceList {
                 filter: InvoiceFilter::default()
@@ -418,8 +454,18 @@ mod tests {
     fn new_project_is_static_and_highlights_only_projects() {
         let route: Route = "/projects/new".parse().unwrap();
         assert!(matches!(route, Route::NewProject {}));
-        assert!(matches_navigation(&Route::ProjectList {}, &route));
-        assert!(!matches_navigation(&Route::ClientList {}, &route));
+        assert!(matches_navigation(
+            &Route::ProjectList {
+                filter: ProjectFilter::default()
+            },
+            &route
+        ));
+        assert!(!matches_navigation(
+            &Route::ClientList {
+                filter: ClientFilter::default()
+            },
+            &route
+        ));
         assert!(!matches_navigation(
             &Route::InvoiceList {
                 filter: InvoiceFilter::default()
@@ -439,8 +485,18 @@ mod tests {
         // Serializing the route does append an empty query delimiter.
         assert_eq!(route.to_string(), format!("{path}?"));
         assert!(route.to_string().parse::<Route>().unwrap() == route);
-        assert!(matches_navigation(&Route::ProjectList {}, &route));
-        assert!(!matches_navigation(&Route::ClientList {}, &route));
+        assert!(matches_navigation(
+            &Route::ProjectList {
+                filter: ProjectFilter::default()
+            },
+            &route
+        ));
+        assert!(!matches_navigation(
+            &Route::ClientList {
+                filter: ClientFilter::default()
+            },
+            &route
+        ));
         assert!(
             matches!(format!("/projects/{id}").parse::<Route>().unwrap(), Route::ProjectDetail { id: parsed } if parsed == id)
         );
@@ -484,7 +540,13 @@ mod tests {
     fn assert_bare_list_exit(url: &str, id: Uuid) {
         let written = format!("/projects/{id}/edit?");
         assert!(
-            edit_exit(url, id) == (Route::ProjectList {}, written),
+            edit_exit(url, id)
+                == (
+                    Route::ProjectList {
+                        filter: ProjectFilter::default()
+                    },
+                    written
+                ),
             "{url}"
         );
     }
@@ -507,7 +569,12 @@ mod tests {
         );
         assert!(url.parse::<Route>().unwrap() == route);
         assert!(edit_exit(&url, id) == (Route::ProjectDetail { id }, url.clone()));
-        assert!(matches_navigation(&Route::ProjectList {}, &route));
+        assert!(matches_navigation(
+            &Route::ProjectList {
+                filter: ProjectFilter::default()
+            },
+            &route
+        ));
         // The router decodes the query once, so a standard encoding is the same path.
         let encoded = format!("/projects/{id}/edit?return_to=%2Fprojects%2F{id}");
         assert!(edit_exit(&encoded, id) == (Route::ProjectDetail { id }, url));
@@ -538,7 +605,15 @@ mod tests {
             matches!(foreign.parse::<Route>().unwrap(), Route::EditProject { return_to, .. }
                 if return_to == EditReturn::detail(other))
         );
-        assert!(edit_exit(&foreign, id) == (Route::ProjectList {}, foreign.clone()));
+        assert!(
+            edit_exit(&foreign, id)
+                == (
+                    Route::ProjectList {
+                        filter: ProjectFilter::default()
+                    },
+                    foreign.clone()
+                )
+        );
         // Everything else is not lexically the canonical query and is dropped.
         let upper = id.to_string().to_uppercase();
         let simple = id.simple().to_string();
@@ -620,8 +695,18 @@ mod tests {
         let target =
             EditReturn::from(format!("return_to={}", Route::ProjectDetail { id: other }).as_str());
         assert!(target == EditReturn::detail(other));
-        assert!(edit_return_route(id, target) == Route::ProjectList {});
+        assert!(
+            edit_return_route(id, target)
+                == Route::ProjectList {
+                    filter: ProjectFilter::default()
+                }
+        );
         assert!(edit_return_route(other, target) == Route::ProjectDetail { id: other });
-        assert!(edit_return_route(id, EditReturn::default()) == Route::ProjectList {});
+        assert!(
+            edit_return_route(id, EditReturn::default())
+                == Route::ProjectList {
+                    filter: ProjectFilter::default()
+                }
+        );
     }
 }

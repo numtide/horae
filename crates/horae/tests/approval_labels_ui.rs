@@ -25,6 +25,8 @@ pub mod avatar;
 pub mod badge;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/filter_bar.rs"]
+pub mod filter_bar;
 #[allow(dead_code)]
 #[path = "../src/i18n.rs"]
 mod i18n;
@@ -43,7 +45,8 @@ pub mod table;
 pub mod today;
 mod components {
     pub use super::{
-        avatar, badge, controls, icons, page_header, screen_state, session, table, today,
+        avatar, badge, controls, filter_bar, icons, page_header, screen_state, session, table,
+        today,
     };
 }
 mod models {

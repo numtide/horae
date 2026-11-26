@@ -615,7 +615,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 /* Combobox popover: like .menu-pop but wider + scrollable for the search list. */
 .combobox-pop {
-  width: 280px; max-height: 360px; overflow-y: auto; padding: var(--space-2);
+  width: 280px; max-width: calc(100vw - 2 * var(--space-4)); max-height: 360px; overflow-y: auto; padding: var(--space-2);
   scrollbar-color: var(--color-pine) transparent;   /* pine thumb inside menus */
 }
 .combobox-pop::-webkit-scrollbar-thumb { background: var(--color-pine); }
@@ -1391,6 +1391,9 @@ tbody tr.table-state td { padding: 0; }
 /* Segmented control */
 .segmented {
   display: inline-flex;
+  /* A narrow screen wraps the items instead of widening the page. */
+  flex-wrap: wrap;
+  max-width: 100%;
   padding: 3px;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -2019,12 +2022,6 @@ tbody tr.table-state td { padding: 0; }
 
 /* Projects — client-grouped budget table. Structural only (grid template,
    grouped banding); colours/spacing come from tokens, layout from utilities. */
-.proj-search { width: 300px; max-width: 100%; }
-.proj-search-input {
-  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
-  color: var(--color-text); font: inherit; font-size: var(--font-size-sm);
-}
-.proj-search:focus-within { border-color: var(--color-primary); box-shadow: var(--ring-soft); }
 
 /* Share content-sized numeric tracks across every row: currency codes and
    large amounts widen the table inside its scroller, never overlap a neighbour.
@@ -2246,7 +2243,6 @@ tbody tr.table-state td { padding: 0; }
 }
 .imp-icon-csv { color: var(--color-text-secondary); }
 .imp-icon-muted { color: var(--color-text-muted); }
-.client-search::placeholder { color: var(--color-text-secondary); }
 /* SearchField: the magnifier sits inside the input's left padding. */
 .search-field { position: relative; }
 .search-field-icon {

@@ -62,7 +62,21 @@ const format = (code, cents) => {
     await expect(page.getByText('Loading report…', { exact: true })).toHaveCount(0);
     await expect(totalRow).toHaveCount(1);
   };
-  const select = label => page.locator('.form-group', { has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) }).locator('select');
+  // Group by is a Segmented control; Client is a Combobox, whose options
+  // exist only while it is open.
+  const groupLabels = { project: 'Project', client: 'Client', task: 'Task', person: 'Person' };
+  const select = label => ({
+    selectOption: async value => {
+      if (label === 'Group by') {
+        await page.locator('[aria-labelledby="report-group-label"]')
+          .getByRole('button', { name: groupLabels[value], exact: true }).click();
+        return;
+      }
+      const id = `report-filter-${label.toLowerCase()}`;
+      await page.locator(`#${id}`).click();
+      await page.locator(`[id="${id}-option-${value}"]`).click();
+    },
+  });
   const totalRow = page.locator('tfoot tr');
   const dataRows = page.locator('tbody tr');
   const totalLines = async column => totalRow.locator(`td:nth-child(${column}) > div`).allInnerTexts();

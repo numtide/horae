@@ -34,7 +34,7 @@ const other = '019f2a00-0000-7000-8000-000000000001', otherName = 'Empty trackin
     const hint = page.locator(`#${await add.getAttribute('aria-describedby')}`);
     await expect(hint).toHaveText(/^No projects are assigned to you yet\./);
     // The dev admin manages projects, so the hint leads to them.
-    await expect(hint.getByRole('link', { name: 'Open Projects', exact: true })).toHaveAttribute('href', '/projects');
+    await expect(hint.getByRole('link', { name: 'Open Projects', exact: true })).toHaveAttribute('href', /^\/projects\??$/);
     console.log('PASS: the disabled add button explains missing assignments and links to Projects');
 
     // Opening one's own sheet by id is still one's own.
@@ -74,7 +74,7 @@ const other = '019f2a00-0000-7000-8000-000000000001', otherName = 'Empty trackin
     await expect(popover.locator('select, input, textarea')).toHaveCount(0);
     await expect(popover.getByRole('button', { name: 'Start timer', exact: true })).toHaveCount(0);
     await popover.getByRole('link', { name: 'Open Projects', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await expect(popover).toHaveCount(0);
     console.log('PASS: the timer popover shows the empty state instead of an empty picker');
 

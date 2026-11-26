@@ -223,7 +223,8 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
         "Fixed Fee".into(),
         "EUR".into(),
         "Back to Projects".into(),
-        "href=\"/projects\"".into(),
+        // An empty filter query still renders its `?`.
+        "href=\"/projects?\"".into(),
         format!("href=\"/clients/{}\"", Uuid::from_u128(50)),
         edit_href(project),
         "project-detail-actions-trigger".into(),
@@ -275,7 +276,7 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
         assert!(!html.contains(&hidden), "{hidden}: {html}");
     }
     assert!(menu_items(&html).is_empty(), "{html}");
-    assert!(html.contains("href=\"/projects\""), "{html}");
+    assert!(html.contains("href=\"/projects?\""), "{html}");
 }
 
 #[tokio::test]

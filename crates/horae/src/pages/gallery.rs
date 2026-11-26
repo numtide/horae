@@ -7,13 +7,14 @@ use crate::components::card::{Card, MetricCard};
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::{Checkbox, Radio, Segmented, Toggle};
 use crate::components::date_picker::DatePicker;
-use crate::components::form::{FormGroup, Input, Select, Textarea};
+use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::menu::{Menu, MenuDivider, MenuItem, RowActions};
 use crate::components::nav::NavItem;
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{
     EmptyState, ErrorState, LOAD_FAILED, Loading, NoAccess, Skeleton,
 };
+use crate::components::select_field::SelectField;
 use crate::components::table::{BulkBar, DataTable, NameCell, TableMessage, TableSkeleton};
 use crate::components::toast::Toast;
 
@@ -129,15 +130,17 @@ pub fn Gallery() -> Element {
                         }
                     }
                     div { class: "gallery-field",
-                        FormGroup { label: "Dropdown",
-                            Select {
+                        FormGroup { label: "Dropdown", id: "gallery-dropdown",
+                            SelectField {
+                                id: "gallery-dropdown",
+                                label: "Dropdown",
                                 selected: plan(),
                                 options: vec![
                                     ("Member".to_string(), "Member".to_string()),
                                     ("Manager".to_string(), "Manager".to_string()),
                                     ("Admin".to_string(), "Admin".to_string()),
                                 ],
-                                onchange: move |e: FormEvent| plan.set(e.value()),
+                                onselect: move |value: String| plan.set(value),
                             }
                         }
                     }

@@ -52,6 +52,8 @@ pub mod permission_description;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
+#[path = "../src/components/select_field.rs"]
+pub mod select_field;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/toast.rs"]
@@ -61,8 +63,8 @@ pub mod today;
 mod components {
     pub use super::{
         avatar, badge, button, confirm_dialog, controls, filter_bar, form, icons, menu, modal,
-        page_header, period_nav, permission_description, screen_state, session, table, toast,
-        today,
+        page_header, period_nav, permission_description, screen_state, select_field, session,
+        table, toast, today,
     };
 }
 pub use horae_types::{
@@ -611,7 +613,7 @@ impl Ui {
     }
 
     fn select_profile(&mut self, value: &str) {
-        self.form_event("person-permissions-profile", "change", value);
+        self.click(&format!("person-permissions-profile-option-{value}"));
     }
 
     fn form_event(&mut self, name: &str, event_name: &str, value: &str) {
@@ -739,7 +741,7 @@ async fn subject_picker_preserves_dirty_draft_until_confirmed_and_reloads_select
         .send(Ok(probe.subjects_page(other, "Other person", None)))
         .unwrap();
     let mut ui = Ui::new(probe.clone());
-    ui.select_profile("Member");
+    ui.select_profile("member");
     for keep in [Keep::Button, Keep::Escape] {
         ui.click(&format!("permission-subject-{other}"));
         assert!(ui.html().contains("Discard unsaved permission changes?"));
@@ -1376,7 +1378,7 @@ async fn dirty_close_requires_confirmation_and_failure_preserves_the_draft() {
     for path in ["permission-editor-cancel", "escape", "backdrop"] {
         let probe = Probe::new();
         let mut ui = Ui::new(probe.clone());
-        ui.select_profile("Member");
+        ui.select_profile("member");
         for keep in [Keep::Button, Keep::Escape] {
             ui.dismiss(path);
             assert!(ui.html().contains("Discard unsaved permission changes?"));
@@ -1439,7 +1441,7 @@ async fn creating_a_template_captures_final_grants_and_retries_without_saving_th
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
     ui.navigation_state("clean");
-    ui.select_profile("Member");
+    ui.select_profile("member");
     ui.navigation_state("dirty");
     ui.click("permission-ClientReadAll");
     ui.click("permission-template-create");
@@ -1556,7 +1558,7 @@ const DELETE_CANCEL: &str = "permission-template-delete-dialog-cancel";
 async fn cancelling_template_creation_keeps_the_unsaved_person_draft() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
-    ui.select_profile("Member");
+    ui.select_profile("member");
     ui.click("permission-ClientReadAll");
     ui.click("permission-template-create");
     ui.click("permission-template-save");
@@ -1582,7 +1584,7 @@ async fn cancelling_template_creation_keeps_the_unsaved_person_draft() {
 async fn template_creation_is_disabled_for_administrator_identity_or_fifty_profiles() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
-    ui.select_profile("Administrator");
+    ui.select_profile("administrator");
     ui.click("permission-template-create");
     assert!(!ui.html().contains("permission-template-name"));
     assert!(ui.html().contains("Choose a non-administrative profile"));
@@ -1750,7 +1752,7 @@ async fn rejected_template_reload_fetches_and_explicitly_discards_the_person_dra
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
     assert_eq!(*probe.loads.borrow(), 1);
-    ui.select_profile("Member");
+    ui.select_profile("member");
     ui.click("permission-template-create");
     ui.form_event("permission-template-name", "input", "Duplicate");
     let reply = probe.template_reply();
@@ -1781,7 +1783,7 @@ async fn rejected_template_reload_fetches_and_explicitly_discards_the_person_dra
 async fn cancelling_a_loaded_deletion_preview_preserves_person_edits_without_mutation() {
     let (probe, template) = deletion_fixture();
     let mut ui = Ui::new(probe.clone());
-    ui.select_profile("Member");
+    ui.select_profile("member");
     let reply = probe.deletion_reply();
     ui.click(&format!("permission-template-delete-{}", template.id));
     reply
@@ -1814,9 +1816,9 @@ async fn navigation_tracks_reverted_edits_and_cancelled_template_inputs() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
     ui.navigation_state("clean");
-    ui.select_profile("Project Manager");
+    ui.select_profile("project_manager");
     ui.navigation_state("clean");
-    ui.select_profile("Member");
+    ui.select_profile("member");
     ui.navigation_state("dirty");
     ui.select_profile("current");
     ui.navigation_state("clean");
@@ -1900,7 +1902,7 @@ async fn permission_revocation_hides_the_form_without_reporting_success() {
 async fn keeping_projects_requires_new_review_and_confirmation_of_remaining_people() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
-    ui.select_profile("Member");
+    ui.select_profile("member");
     let reply = probe.preview_reply();
     ui.click("permission-review");
     let proposed = probe.previews.borrow()[0].clone();

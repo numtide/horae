@@ -99,19 +99,19 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     }), true, 'Project name and type share a line');
     console.log('PASS: design heading, compact row typography and inline project type');
 
-    await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
+    await page.getByRole('searchbox', { name: 'Search by project or client' }).fill('no matching project');
     await expect(page.getByRole('heading', { name: 'No projects match your filters' })).toBeVisible();
-    await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
     await expect(page.locator('.proj-row')).toHaveCount(1);
-    await expect(page.getByRole('textbox', { name: 'Search by project or client' })).toHaveValue('');
+    await expect(page.getByRole('searchbox', { name: 'Search by project or client' })).toHaveValue('');
     await page.getByRole('button', { name: /^Active projects/ }).click();
     await page.getByRole('menuitem', { name: /^Archived projects/ }).click();
-    await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Active projects/ })).toBeVisible();
     await page.getByRole('button', { name: /^All clients/ }).click();
     await page.getByRole('listbox').getByRole('button', { name: fixtureClient.name, exact: true }).click();
-    await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
-    await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
+    await page.getByRole('searchbox', { name: 'Search by project or client' }).fill('no matching project');
+    await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
     await expect(page.getByRole('button', { name: /^All clients/ })).toBeVisible();
     await expect(page.locator('.proj-row')).toHaveCount(1);
     console.log('PASS: filtered empty state resets search, scope and client');
@@ -289,7 +289,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         await expect(page).toHaveURL(`${base}/projects/new`);
         await expect(page.getByRole('heading', { name: 'New project', exact: true })).toBeVisible();
         await page.getByRole('button', { name: /Back to Projects/ }).click();
-        await expect(page).toHaveURL(`${base}/projects`);
+        await expect(page).toHaveURL(/\/projects\??$/);
       }
       console.log(`PASS: empty-state guidance and action visibility for ${profile}`);
     }

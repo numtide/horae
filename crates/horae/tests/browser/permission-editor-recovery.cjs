@@ -564,7 +564,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
 
     // Self-demotion makes any second server send forbidden; cleanup must stay local.
     await openEditor(actor.name);
-    await editor.locator('#person-permissions-profile').selectOption('Member');
+    await editor.locator('#person-permissions-profile').click();
+    await editor.locator('#person-permissions-profile-options').getByRole('option', { name: 'Member', exact: true }).click();
     await review();
     await page.evaluate(() => {
       const original = Storage.prototype.setItem;

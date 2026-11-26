@@ -3,9 +3,10 @@ use horae_core::client::{parse_default_rate, validate_profile};
 use horae_core::money::format_cents_plain;
 use uuid::Uuid;
 
-use crate::components::form::{FormGroup, Input, Select, Textarea};
+use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::modal::{Modal, ModalAction, ModalActions, ModalBody, ModalHeader};
 use crate::components::screen_state::Loading;
+use crate::components::select_field::SelectField;
 use crate::models::client::{
     ClientBillingSnapshot, ClientDetails, ClientProfile, ClientProfileEdit, ClientRateChange,
 };
@@ -169,6 +170,7 @@ fn ClientForm(
     on_dismiss: EventHandler<()>,
     on_saved: EventHandler<ClientDetails>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut fields = use_signal(|| ClientFields::new(initial.as_ref()));
     let initial = use_signal(|| initial);
     let baseline = use_signal(|| fields.peek().clone());
@@ -253,10 +255,10 @@ fn ClientForm(
                     Input { id: "client-form-name", value: fields.read().name.clone(), disabled: busy(), oninput: move |event: FormEvent| fields.write().name = event.value() }
                 }
                 div { class: "grid sm:grid-cols-2 gap-3",
-                    FormGroup { label: "Currency", id: "client-form-currency",
-                        Select { id: "client-form-currency", selected: fields.read().currency.clone(), disabled: busy(),
+                    FormGroup { label: tr.clients_form_currency(), id: "client-form-currency",
+                        SelectField { id: "client-form-currency", label: tr.clients_form_currency(), selected: fields.read().currency.clone(), disabled: busy(),
                             options: horae_core::project::PROJECT_CURRENCIES.iter().map(|code| (code.to_string(), code.to_string())).collect(),
-                            onchange: move |event: FormEvent| fields.write().currency = event.value(),
+                            onselect: move |value: String| fields.write().currency = value,
                         }
                     }
                     if shows_rate {
