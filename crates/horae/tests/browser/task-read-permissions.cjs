@@ -32,7 +32,6 @@ let restoreSeededStates = () => {};
   const rateFree = rows => {
     for (const row of rows) {
       assert.ok(!Object.hasOwn(row, 'default_rate_cents'));
-      assert.ok(!Object.hasOwn(row, 'default_rate_currency'));
     }
   };
   const popover = page.locator('.sidebar-timer-pop');
@@ -54,10 +53,10 @@ let restoreSeededStates = () => {};
       INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,report_visibility)
         VALUES ('${id(7)}','${org}','${project}','${actor.id}','project','managers');
       INSERT INTO assignments (id,project_id,user_id) VALUES ('${id(8)}','${project}','${actor.id}');
-      INSERT INTO tasks (id,org_id,name,active,default_rate_cents,default_rate_currency) VALUES
-        ('${historical}','${org}','Archived timer task',false,45678,'EUR'),
-        ('${enabled}','${org}','Enabled scoped task',true,56789,'EUR'),
-        ('${unlinked}','${org}','Unlinked catalog task',true,67890,'EUR');
+      INSERT INTO tasks (id,org_id,name,active,default_rate_cents) VALUES
+        ('${historical}','${org}','Archived timer task',false,45678),
+        ('${enabled}','${org}','Enabled scoped task',true,56789),
+        ('${unlinked}','${org}','Unlinked catalog task',true,67890);
       INSERT INTO project_tasks (project_id,task_id,billable) VALUES ('${project}','${historical}',true),('${project}','${enabled}',true);
       INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,is_running,started_at)
         VALUES ('${timer}','${org}','${actor.id}','${project}','${historical}',CURRENT_DATE,0,true,true,now());

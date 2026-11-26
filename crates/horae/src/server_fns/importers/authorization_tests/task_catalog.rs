@@ -50,8 +50,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         crate::testing::clear_state(pool, ids.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();
-        sqlx::query!("UPDATE tasks SET active=false,default_rate_cents=8000,default_rate_currency='USD' WHERE id=$1", ids.task_id)
-            .execute(pool).await.unwrap();
+        sqlx::query!(
+            "UPDATE tasks SET active=false,default_rate_cents=8000 WHERE id=$1",
+            ids.task_id
+        )
+        .execute(pool)
+        .await
+        .unwrap();
         let cookie = api.cookie(ids.user_id).await;
         let body = json!({"activity":"archived","after":null,"expected_requester":null});
         let response = api
@@ -82,14 +87,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         assert_eq!(
             task.get("default_rate_cents"),
             read_rates.then_some(&json!(8000))
-        );
-        assert_eq!(
-            task.get("default_rate_currency"),
-            read_rates.then_some(&json!("USD"))
-        );
-        assert_eq!(
-            page.get("rate_currency"),
-            edit_rates.then_some(&json!("EUR"))
         );
         let mut switched = body.clone();
         switched["expected_requester"] = json!({"org_id":ids.org_id,"user_id":Uuid::now_v7()});

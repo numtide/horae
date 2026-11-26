@@ -147,7 +147,6 @@ mod tests {
             name: "Common".into(),
             billable,
             default_rate_cents: Some(5000),
-            default_rate_currency: Some("EUR".into()),
         };
         let common = [task(true), task(false)];
         let state = DraftState::new(None, None, &common);

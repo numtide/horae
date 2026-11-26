@@ -682,14 +682,6 @@ pub async fn resolve_task(
     }
     // Harvest reports a task without a default rate as 0; zero is no rate.
     let default_rate_cents = rate_cents(row.billable_rate)?.filter(|&cents| cents != 0);
-    let rate_currency = row
-        .rate_currency
-        .map(|value| value.trim().to_ascii_uppercase())
-        .filter(|value| {
-            default_rate_cents.is_some()
-                && value.len() == 3
-                && value.bytes().all(|byte| byte.is_ascii_uppercase())
-        });
     let id = Uuid::now_v7();
     let mut wanted =
         free_harvest_id(conn, org.org_id, EntityType::Task, row.harvest_task_id).await?;
@@ -697,15 +689,14 @@ pub async fn resolve_task(
     // nothing; the next attempt leaves the number to the trigger.
     let api_id = loop {
         let inserted = sqlx::query_scalar!(
-        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, default_rate_currency, is_default, harvest_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
+        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, is_default, harvest_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org.org_id,
         name,
         row.task_billable_default,
         default_rate_cents,
         row.task_active,
-        rate_currency,
         row.task_is_default,
         wanted,
     )

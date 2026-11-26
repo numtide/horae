@@ -49,6 +49,22 @@ async fn task_api_rechecks_global_rate_access_independently_of_catalog(pool: PgP
     .unwrap();
     let uri = format!("/harvest/v2/tasks/{}", ids.task_id);
     assert_eq!(page(&app, &uri).await["default_hourly_rate"], 9.99);
+    // A template has no currency: two decimals even in a zero-decimal workspace.
+    sqlx::query!(
+        "UPDATE organizations SET default_currency = 'JPY' WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = 8050 WHERE id = $1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(page(&app, &uri).await["default_hourly_rate"], 80.5);
     sqlx::query!(
         "UPDATE tasks SET default_rate_cents = NULL WHERE id = $1",
         ids.task_id

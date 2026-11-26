@@ -30,10 +30,10 @@ pub struct TaskCatalogEntry {
     /// A common task: the new-project form adds it to the task list.
     pub is_default: bool,
     pub active: bool,
+    /// The rate template: hundredths with no currency, which a project applies
+    /// in its own currency.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rate_cents: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_rate_currency: Option<String>,
 }
 
 /// Rows and affordances share the same current authorization transaction.
@@ -44,8 +44,6 @@ pub struct TaskCatalogPage {
     pub can_edit: bool,
     pub can_read_rates: bool,
     pub can_edit_rates: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rate_currency: Option<String>,
     pub tasks: Vec<TaskCatalogEntry>,
     pub next_after: Option<TaskCursor>,
 }
@@ -56,7 +54,10 @@ pub struct TaskCatalogPage {
 pub enum TaskRateEdit {
     Preserve {},
     Clear {},
-    Set { amount_cents: i64, currency: String },
+    /// A rate template in hundredths, with no currency.
+    Set {
+        amount_cents: i64,
+    },
 }
 
 /// An org-level task (global catalog entry). Tasks are enabled per project via
@@ -83,11 +84,8 @@ mod tests {
             (json!({"action":"preserve"}), TaskRateEdit::Preserve {}),
             (json!({"action":"clear"}), TaskRateEdit::Clear {}),
             (
-                json!({"action":"set","amount_cents":0,"currency":"EUR"}),
-                TaskRateEdit::Set {
-                    amount_cents: 0,
-                    currency: "EUR".into(),
-                },
+                json!({"action":"set","amount_cents":8000}),
+                TaskRateEdit::Set { amount_cents: 8000 },
             ),
         ] {
             assert_eq!(
@@ -105,8 +103,9 @@ mod tests {
             json!({}),
             json!({"action":"unknown"}),
             json!({"action":"preserve","amount_cents":8000}),
-            json!({"action":"set","amount_cents":8000}),
-            json!({"action":"set","amount_cents":1.5,"currency":"EUR"}),
+            json!({"action":"set","amount_cents":8000,"currency":"EUR"}),
+            json!({"action":"set"}),
+            json!({"action":"set","amount_cents":1.5}),
         ] {
             assert!(
                 serde_json::from_value::<TaskRateEdit>(value.clone()).is_err(),

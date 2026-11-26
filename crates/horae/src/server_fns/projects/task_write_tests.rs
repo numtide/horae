@@ -37,10 +37,7 @@ async fn initial_task_rate_requires_global_financial_and_task_authority(pool: Pg
         .await;
         for rate in [
             TaskRateEdit::Clear {},
-            TaskRateEdit::Set {
-                amount_cents: 0,
-                currency: "EUR".into(),
-            },
+            TaskRateEdit::Set { amount_cents: 0 },
         ] {
             let result = create_catalog_task(
                 &pool,
@@ -76,7 +73,8 @@ async fn initial_task_rate_commits_with_service_payload(pool: PgPool) {
         PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]),
     )
     .await;
-    for amount in [0, 12345] {
+    // Zero is no rate.
+    for (amount, stored) in [(0, None), (8050, Some(8050))] {
         let (task, event) = create_catalog_task(
             &pool,
             ids.org_id,
@@ -86,25 +84,18 @@ async fn initial_task_rate_commits_with_service_payload(pool: PgPool) {
             false,
             &TaskRateEdit::Set {
                 amount_cents: amount,
-                currency: " eur ".into(),
             },
         )
         .await
         .unwrap();
-        assert_eq!(task.default_rate_cents, Some(amount));
-        assert_eq!(event.default_rate_cents, Some(amount));
+        assert_eq!(task.default_rate_cents, stored);
+        assert_eq!(event.default_rate_cents, stored);
         assert_eq!(event.id, task.id);
-        let row = sqlx::query!(
-            "SELECT default_rate_cents,default_rate_currency FROM tasks WHERE id=$1",
-            task.id
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(
-            (row.default_rate_cents, row.default_rate_currency.as_deref()),
-            (Some(amount), Some("EUR"))
-        );
+        let row = sqlx::query_scalar!("SELECT default_rate_cents FROM tasks WHERE id=$1", task.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(row, stored);
     }
     assert_eq!(
         sqlx::query_scalar!(
@@ -121,7 +112,7 @@ async fn initial_task_rate_commits_with_service_payload(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(pool: PgPool) {
+async fn initial_task_rate_rechecks_financial_authority_but_not_currency_after_wait(pool: PgPool) {
     for change_currency in [false, true] {
         let (ids, _) = fixture(
             &pool,
@@ -151,10 +142,7 @@ async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(
                 "Stale creation",
                 true,
                 false,
-                &TaskRateEdit::Set {
-                    amount_cents: 0,
-                    currency: "EUR".into(),
-                },
+                &TaskRateEdit::Set { amount_cents: 8000 },
             )
             .await
         });
@@ -184,12 +172,23 @@ async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(
         }
         hold.commit().await.unwrap();
         let result = pending.await.unwrap();
-        let expected = if change_currency { CONFLICT } else { FORBIDDEN };
-        assert!(
-            matches!(result, Err(ServerFnError::ServerError {code, ..}) if code == expected),
-            "{result:?}"
-        );
-        assert_eq!(task_count(&pool, ids.org_id).await, 1);
+        if change_currency {
+            // A template has no currency, so the change refuses nothing.
+            assert_eq!(result.unwrap().0.default_rate_cents, Some(8000));
+            assert_eq!(task_count(&pool, ids.org_id).await, 2);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(ServerFnError::ServerError {
+                        code: FORBIDDEN,
+                        ..
+                    })
+                ),
+                "{result:?}"
+            );
+            assert_eq!(task_count(&pool, ids.org_id).await, 1);
+        }
     }
 }
 

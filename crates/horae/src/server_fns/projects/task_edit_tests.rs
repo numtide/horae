@@ -6,15 +6,12 @@ use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::PgPool;
 
 fn set_rate(amount_cents: i64) -> TaskRateEdit {
-    TaskRateEdit::Set {
-        amount_cents,
-        currency: "EUR".into(),
-    }
+    TaskRateEdit::Set { amount_cents }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop(pool: PgPool) {
+async fn task_name_editor_preserves_the_rate_and_hides_it_even_on_noop(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Member,
@@ -22,7 +19,7 @@ async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop
     )
     .await;
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=8000,default_rate_currency=NULL WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=8000 WHERE id=$1",
         ids.task_id
     )
     .execute(&pool)
@@ -47,17 +44,14 @@ async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop
         if let Some(event) = event {
             assert_eq!(event.default_rate_cents, Some(8000));
         }
-        let saved = sqlx::query!(
-            "SELECT default_rate_cents,default_rate_currency FROM tasks WHERE id=$1",
+        let saved = sqlx::query_scalar!(
+            "SELECT default_rate_cents FROM tasks WHERE id=$1",
             ids.task_id
         )
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(
-            (saved.default_rate_cents, saved.default_rate_currency),
-            (Some(8000), None)
-        );
+        assert_eq!(saved, Some(8000));
     }
 }
 
@@ -74,7 +68,9 @@ async fn task_rate_edit_does_not_rewrite_project_overrides_or_time_history(pool:
         ids.project_id, ids.task_id).execute(&pool).await.unwrap();
     let entry_id = time_entry(&pool, &ids, EntryState::Open).await;
     for (rate, expected) in [
-        (set_rate(0), Some(0)),
+        (set_rate(8050), Some(8050)),
+        // Zero is no rate.
+        (set_rate(0), None),
         (set_rate(2500), Some(2500)),
         (TaskRateEdit::Preserve {}, Some(2500)),
         (TaskRateEdit::Clear {}, None),
@@ -128,7 +124,7 @@ async fn explicit_task_rate_noops_still_require_global_write_authority(pool: PgP
         let (ids, _) = fixture(&pool, BuiltInProfile::Administrator, grants).await;
         for (stored, edit) in [
             (None, TaskRateEdit::Clear {}),
-            (Some(0), set_rate(0)),
+            (None, set_rate(0)),
             (Some(8000), set_rate(8000)),
         ] {
             sqlx::query!(
@@ -177,7 +173,7 @@ async fn explicit_task_rate_noops_still_require_global_write_authority(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_edit_validates_currency_amount_name_and_foreign_targets_atomically(pool: PgPool) {
+async fn task_edit_validates_amount_name_and_foreign_targets_atomically(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Member,
@@ -188,15 +184,6 @@ async fn task_edit_validates_currency_amount_name_and_foreign_targets_atomically
     for (id, name, rate, code) in [
         (ids.task_id, "Negative", set_rate(-1), BAD_REQUEST),
         (ids.task_id, " ", TaskRateEdit::Preserve {}, CONFLICT),
-        (
-            ids.task_id,
-            "Wrong currency",
-            TaskRateEdit::Set {
-                amount_cents: 8000,
-                currency: "USD".into(),
-            },
-            CONFLICT,
-        ),
         (
             foreign.task_id,
             "Foreign",
@@ -292,7 +279,7 @@ async fn task_edit_observes_task_and_rate_revocation_after_organization_wait(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgPool) {
+async fn task_rate_edit_survives_a_workspace_currency_change(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Member,
@@ -319,7 +306,7 @@ async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgP
             ids.org_id,
             ids.user_id,
             ids.task_id,
-            "Stale currency",
+            "New currency",
             true,
             false,
             &set_rate(8000),
@@ -328,28 +315,18 @@ async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgP
     });
     wait_for_blocked(&pool, holder).await;
     hold.commit().await.unwrap();
-    let result = pending.await.unwrap();
-    assert!(
-        matches!(
-            result,
-            Err(ServerFnError::ServerError { code: CONFLICT, .. })
-        ),
-        "{result:?}"
-    );
+    // A template has no currency, so the change refuses nothing.
+    pending.await.unwrap().unwrap();
     let row = sqlx::query!(
-        "SELECT name,default_rate_cents,default_rate_currency FROM tasks WHERE id=$1",
+        "SELECT name,default_rate_cents FROM tasks WHERE id=$1",
         ids.task_id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(
-        (
-            row.name.as_str(),
-            row.default_rate_cents,
-            row.default_rate_currency
-        ),
-        ("Dev", None, None)
+        (row.name.as_str(), row.default_rate_cents),
+        ("New currency", Some(8000))
     );
 }
 

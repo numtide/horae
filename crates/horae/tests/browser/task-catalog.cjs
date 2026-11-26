@@ -37,8 +37,8 @@ let restoreSeededStates = () => {};
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     sql(`BEGIN;
-      INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
-        VALUES ('${task}','${actor.org_id}','Catalog browser task',true,8000,'USD');
+      INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents)
+        VALUES ('${task}','${actor.org_id}','Catalog browser task',true,8000);
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, ...grants])},false,'individual'); COMMIT;`);
     await page.goto(`${base}/`);
@@ -50,9 +50,11 @@ let restoreSeededStates = () => {};
       await actionsOf(r).click();
       await r.getByRole('menuitem', { name: item, exact: true }).click();
     };
-    await expect(row).toContainText('USD 80.00');
+    // A default rate is a template: no currency beside it, and a note says why.
     await expect(row.locator('.badge')).toHaveText('Active');
-    await expect(row.getByRole('cell', { name: 'USD 80.00 / h', exact: true })).toHaveCSS('white-space', 'nowrap');
+    await expect(row.getByRole('cell', { name: '80.00 / h', exact: true })).toHaveCSS('white-space', 'nowrap');
+    await expect(row).not.toContainText(/EUR|USD/);
+    await expect(page.locator('#tasks-rate-hint')).toContainText('each project uses them in its own currency');
     await expect(page.locator('.adm-nav')).toHaveCount(0);
     // Task reads without people or client reads: Organize offers Projects and Tasks only.
     const organize = page.locator('.app-sidebar .sidebar-section').filter({ hasText: 'Organize' }).locator('+ .sidebar-group .nav-item-label');
@@ -79,18 +81,21 @@ let restoreSeededStates = () => {};
       await creation.getByRole('button', { name: 'Save task', exact: true }).click();
       await expect(creation.getByRole('alert')).toHaveText('Enter a task name.');
       await creation.getByLabel('Task name', { exact: true }).fill(`Browser new task ${width}`);
-      await creation.getByLabel('Hourly rate (EUR)', { exact: true }).fill('12.345');
+      const creationRate = creation.locator('#task-rate');
+      await expect(creation.getByText('Default hourly rate', { exact: true })).toBeVisible();
+      await expect(creation).not.toContainText(/\((EUR|USD)\)/);
+      await creationRate.fill('80.505');
       await creation.getByRole('button', { name: 'Save task', exact: true }).click();
       await expect(creation.getByRole('alert')).toContainText('at most two decimal places');
       await expect(creation.getByLabel('Task name', { exact: true })).toHaveValue(`Browser new task ${width}`);
       if (evidence) await page.screenshot({ path: join(evidence, `task-create-validation-${width}.png`), fullPage: true });
-      await creation.getByLabel('Hourly rate (EUR)', { exact: true }).fill(width === 1440 ? '0' : '125.50');
+      // Zero is no rate.
+      await creationRate.fill(width === 1440 ? '0' : '125.50');
       await creation.getByRole('button', { name: 'Save task', exact: true }).click();
       await expect(creation).not.toBeVisible();
-      const created = JSON.parse(sql(`SELECT row_to_json(t) FROM (SELECT id,default_rate_cents,default_rate_currency FROM tasks WHERE org_id='${actor.org_id}' AND name='Browser new task ${width}') t`));
+      const created = JSON.parse(sql(`SELECT row_to_json(t) FROM (SELECT id,default_rate_cents FROM tasks WHERE org_id='${actor.org_id}' AND name='Browser new task ${width}') t`));
       createdTasks.push(created.id);
-      assert.equal(created.default_rate_cents, width === 1440 ? 0 : 12550);
-      assert.equal(created.default_rate_currency, 'EUR');
+      assert.equal(created.default_rate_cents, width === 1440 ? null : 12550);
       await expect(page.getByRole('row').filter({ hasText: `Browser new task ${width}` })).toHaveCount(1);
       // The menu is reachable from the keyboard: Enter opens it on its first item.
       const trigger = row.getByRole('button', { name: 'Actions for Catalog browser task', exact: true });
@@ -103,7 +108,7 @@ let restoreSeededStates = () => {};
       await page.keyboard.press('Enter');
       const dialog = page.getByRole('dialog', { name: 'Edit task', exact: true });
       await expect(dialog).toBeVisible();
-      await expect(dialog).toContainText('Current default: USD 80.00');
+      await expect(dialog).toContainText('Current default: 80.00 / h');
       if (evidence) await page.screenshot({ path: join(evidence, `task-editor-${width}.png`), fullPage: true });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
@@ -134,11 +139,20 @@ let restoreSeededStates = () => {};
     const dialog = page.getByRole('dialog', { name: 'Edit task', exact: true });
     await dialog.locator('#task-rate-action').click();
     await dialog.locator('#task-rate-action-options').getByRole('option', { name: 'Set a new rate', exact: true }).click();
-    await dialog.getByLabel('Hourly rate (EUR)', { exact: true }).fill('0');
+    await dialog.locator('#task-rate').fill('80.5');
     await dialog.getByRole('button', { name: 'Save task', exact: true }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(row).toContainText('EUR 0.00');
-    assert.equal(sql(`SELECT default_rate_cents || ':' || default_rate_currency FROM tasks WHERE id='${task}'`), '0:EUR');
+    await expect(row.getByRole('cell', { name: '80.50 / h', exact: true })).toBeVisible();
+    assert.equal(sql(`SELECT default_rate_cents FROM tasks WHERE id='${task}'`), '8050');
+    // Zero clears the rate.
+    await rowMenu(row, 'Edit');
+    await dialog.locator('#task-rate-action').click();
+    await dialog.locator('#task-rate-action-options').getByRole('option', { name: 'Set a new rate', exact: true }).click();
+    await dialog.locator('#task-rate').fill('0');
+    await dialog.getByRole('button', { name: 'Save task', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(row.getByRole('cell', { name: 'No rate', exact: true })).toBeVisible();
+    assert.equal(sql(`SELECT coalesce(default_rate_cents::text, 'none') FROM tasks WHERE id='${task}'`), 'none');
 
     authorize(['task_read_all', 'task_write_all']);
     await page.getByRole('button', { name: 'Refresh tasks', exact: true }).click();
@@ -149,16 +163,15 @@ let restoreSeededStates = () => {};
     await creation.getByLabel('Task name', { exact: true }).fill('Browser task without rate');
     await creation.getByRole('button', { name: 'Save task', exact: true }).click();
     await expect(creation).not.toBeVisible();
-    const withoutRate = JSON.parse(sql(`SELECT row_to_json(t) FROM (SELECT id,default_rate_cents,default_rate_currency FROM tasks WHERE org_id='${actor.org_id}' AND name='Browser task without rate') t`));
+    const withoutRate = JSON.parse(sql(`SELECT row_to_json(t) FROM (SELECT id,default_rate_cents FROM tasks WHERE org_id='${actor.org_id}' AND name='Browser task without rate') t`));
     createdTasks.push(withoutRate.id);
     assert.equal(withoutRate.default_rate_cents, null);
-    assert.equal(withoutRate.default_rate_currency, null);
     await rowMenu(row, 'Edit');
     await expect(dialog.locator('#task-rate-action')).toHaveCount(0);
     await dialog.getByLabel('Task name', { exact: true }).fill('Catalog browser renamed');
     await dialog.getByRole('button', { name: 'Save task', exact: true }).click();
     await expect(dialog).not.toBeVisible();
-    assert.equal(sql(`SELECT default_rate_cents || ':' || default_rate_currency FROM tasks WHERE id='${task}'`), '0:EUR');
+    assert.equal(sql(`SELECT coalesce(default_rate_cents::text, 'none') FROM tasks WHERE id='${task}'`), 'none');
     const renamed = page.getByRole('row').filter({ hasText: 'Catalog browser renamed' });
     // Archive and Restore are row actions; each still asks first.
     await rowMenu(renamed, 'Archive');

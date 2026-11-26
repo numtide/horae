@@ -331,6 +331,8 @@ pub struct TaskPayload {
     pub id: Uuid,
     pub name: String,
     pub billable_default: bool,
+    /// A rate template: hundredths with no currency, which a project applies
+    /// in its own currency.
     pub default_rate_cents: Option<i64>,
     pub active: bool,
 }

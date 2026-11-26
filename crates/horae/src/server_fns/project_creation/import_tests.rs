@@ -9,7 +9,6 @@ use crate::models::project_creation::{
     ProjectTaskInput, SecondTaxInput, TaskAccess, TaskSource,
 };
 use crate::testing::seed;
-use dioxus::prelude::ServerFnError;
 use horae_core::importers::harvest::types::{ImportMode, SourceKind, SourceRow};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::project::{BudgetMode, RateMode};
@@ -19,7 +18,7 @@ use uuid::Uuid;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: PgPool) {
+async fn imported_catalog_rate_is_a_template_for_every_currency(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let csv = format!(
         "Date,Client,Project,Task,Email,Hours,Billable?,Billable Rate,Currency\n\
@@ -56,16 +55,9 @@ async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: 
     save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &form)
         .await
         .unwrap();
-    let error = finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &form, false)
+    let project = finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &form, false)
         .await
-        .expect_err("USD catalog rate must not become an EUR project rate");
-    assert!(error.to_string().contains("explicit rate"), "{error}");
-    let mut corrected = form.clone();
-    corrected.tasks[0].rate = "0".into();
-    let project =
-        finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &corrected, false)
-            .await
-            .unwrap();
+        .unwrap();
     let rate = sqlx::query_scalar!(
         "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
         project,
@@ -74,9 +66,9 @@ async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: 
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(rate, Some(0));
+    assert_eq!(rate, Some(8000), "the template applies in EUR");
 
-    // The source USD amount is compatible with USD even in an EUR workspace.
+    // And in USD, for a task found by its name.
     let mut compatible = form;
     compatible.currency = Some("USD".into());
     compatible.tasks[0].source = TaskSource::New {
@@ -100,45 +92,14 @@ async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: 
     .unwrap();
     assert_eq!(rate, Some(8000));
 
-    // API catalog rates have no known denomination; guessing would establish
-    // a false unit, so a non-zero one requires an explicit project rate.
+    // A later template change reaches new projects only.
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents = 8000, default_rate_currency = NULL WHERE id = $1",
+        "UPDATE tasks SET default_rate_cents = 9000 WHERE id = $1",
         task.id,
     )
     .execute(&pool)
     .await
     .unwrap();
-    let draft = Uuid::now_v7();
-    save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &compatible)
-        .await
-        .unwrap();
-    for source in [
-        TaskSource::Existing { task_id: task.id },
-        TaskSource::New {
-            name: " imported task ".into(),
-        },
-    ] {
-        compatible.tasks[0].source = source;
-        let error =
-            finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &compatible, false)
-                .await
-                .unwrap_err();
-        let ServerFnError::ServerError {
-            details: Some(details),
-            ..
-        } = error
-        else {
-            panic!("expected a field-specific rejection");
-        };
-        assert_eq!(
-            details["field"],
-            serde_json::to_value(crate::models::project_creation::ProjectFormField::TaskRate(
-                compatible.tasks[0].id
-            ))
-            .unwrap()
-        );
-    }
     let rate = sqlx::query_scalar!(
         "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
         project,
@@ -156,12 +117,16 @@ async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: 
     // An imported Harvest 0 is stored as no rate. The task links without a
     // rate, so task billing falls back to the client's default rate.
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents = NULL, default_rate_currency = NULL WHERE id = $1",
+        "UPDATE tasks SET default_rate_cents = NULL WHERE id = $1",
         task.id,
     )
     .execute(&pool)
     .await
     .unwrap();
+    let draft = Uuid::now_v7();
+    save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &compatible)
+        .await
+        .unwrap();
     compatible.tasks[0].source = TaskSource::Existing { task_id: task.id };
     let rateless =
         finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &compatible, false)

@@ -30,7 +30,6 @@ pub struct TaskFields<'a> {
     pub task_is_default: bool,
     pub task_active: bool,
     pub billable_rate: Option<&'a str>,
-    pub rate_currency: Option<&'a str>,
     pub harvest_updated_at: Option<DateTime<Utc>>,
 }
 
@@ -72,7 +71,6 @@ impl<'a> From<&'a SourceRow> for TaskFields<'a> {
             task_is_default: false,
             task_active: true,
             billable_rate: row.billable_rate.as_deref(),
-            rate_currency: row.currency.as_deref(),
             harvest_updated_at: row.harvest_updated_at,
         }
     }

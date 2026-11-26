@@ -957,9 +957,8 @@ struct TaskRow {
     name: String,
     active: bool,
     billable_default: bool,
+    /// A rate template with no currency, written with two decimals.
     default_rate_cents: Option<i64>,
-    /// Unknown for some imported catalog rates; written with two decimals.
-    default_rate_currency: Option<String>,
 }
 
 fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
@@ -968,9 +967,7 @@ fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
         name: row.name.clone(),
         is_active: row.active,
         billable_by_default: row.billable_default,
-        default_hourly_rate: row
-            .default_rate_cents
-            .map(|cents| Amount::new(cents, row.default_rate_currency.as_deref().unwrap_or(""))),
+        default_hourly_rate: row.default_rate_cents.map(|cents| Amount::new(cents, "")),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.updated_at.to_rfc3339(),
     }
