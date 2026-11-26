@@ -23,7 +23,6 @@ fn catalog() -> CreationOptions {
             name: "Default task".into(),
             billable: true,
             default_rate_cents: None,
-            default_rate_currency: None,
         }],
         common_tasks: Vec::new(),
         people: vec![CreationPerson {

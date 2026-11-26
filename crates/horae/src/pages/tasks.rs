@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use horae_core::money::format_cents;
+use horae_core::money::RateTemplate;
 
 use crate::i18n::Tr;
 
@@ -137,21 +137,18 @@ pub fn TaskCatalog() -> Element {
         .and_then(|result| result.as_ref().ok())
         .and_then(|page| page.next_after.clone());
     let mut changing = use_signal(|| None::<activity::ActivityTarget>);
-    // The page the menus act on: who asks, and in which rate currency.
-    let context = current.and_then(|result| result.as_ref().ok()).map(|page| {
-        (
-            page.requester,
-            page.rate_currency.clone().filter(|_| page.can_edit_rates),
-        )
-    });
-    let requester_now = context.as_ref().map(|(requester, _)| *requester);
+    // The page the menus act on: who asks, and whether they may edit rates.
+    let context = current
+        .and_then(|result| result.as_ref().ok())
+        .map(|page| (page.requester, page.can_edit_rates));
+    let requester_now = context.map(|(requester, _)| requester);
     let on_edit = use_callback(move |task: crate::models::task::TaskCatalogEntry| {
-        if let Some((requester, rate_currency)) = context.clone() {
+        if let Some((requester, can_edit_rates)) = context {
             notice.set(None);
             selected.set(Some(editor::Selection {
                 task: Some(task),
                 requester,
-                rate_currency,
+                can_edit_rates,
             }));
         }
     });
@@ -181,7 +178,7 @@ pub fn TaskCatalog() -> Element {
                         button { id: "tasks-new", r#type: "button", class: "btn btn-primary",
                             onclick: {
                                 let selection = editor::Selection { task: None, requester: page.requester,
-                                    rate_currency: page.rate_currency.clone().filter(|_| page.can_edit_rates) };
+                                    can_edit_rates: page.can_edit_rates };
                                 move |_| { notice.set(None); selected.set(Some(selection.clone())); }
                             }, "New task"
                         }
@@ -221,6 +218,7 @@ pub fn TaskCatalog() -> Element {
                 Loading { label: "Loading tasks…" }
             } else if let Some(Ok(page)) = current {
                 if !page.can_edit { p { class: "text-sm text-secondary mb-3", "You have read-only access to tasks." } }
+                if page.can_read_rates { p { id: "tasks-rate-hint", class: "text-sm text-secondary mb-3", {tr.tasks_rate_template_hint()} } }
                 if page.tasks.is_empty() {
                     EmptyState { icon: "tasks", title: "No tasks match this filter", body: "Try another filter." }
                 } else {
@@ -236,7 +234,7 @@ pub fn TaskCatalog() -> Element {
                             thead { tr {
                                 th { scope: "col", "Task" }
                                 th { scope: "col", "Billable by default" }
-                                if page.can_read_rates { th { scope: "col", "Default hourly rate" } }
+                                if page.can_read_rates { th { scope: "col", {tr.tasks_rate_label()} } }
                                 th { scope: "col", "Status" }
                                 if page.can_edit { th { scope: "col", class: "text-right", "Actions" } }
                             } }
@@ -244,7 +242,7 @@ pub fn TaskCatalog() -> Element {
                                 tr { key: "{task.id}",
                                     td { "{task.name}" }
                                     td { if task.billable_default { "Yes" } else { "No" } }
-                                    if page.can_read_rates { td { class: "text-mono text-sm whitespace-nowrap", {rate_label(tr, task.default_rate_cents, task.default_rate_currency.as_deref())} } }
+                                    if page.can_read_rates { td { class: "text-mono text-sm whitespace-nowrap", {rate_label(tr, task.default_rate_cents)} } }
                                     td {
                                         if task.active {
                                             Badge { variant: "success", {tr.tasks_status_active()} }
@@ -286,15 +284,11 @@ pub fn TaskCatalog() -> Element {
     }
 }
 
-fn rate_label(tr: Tr, cents: Option<i64>, currency: Option<&str>) -> String {
-    match (cents, currency) {
-        (Some(cents), Some(currency)) => tr.tasks_rate_per_hour(format_cents(cents, currency)),
-        // Harvest task rates arrive without a currency, and none is invented.
-        // An empty code leaves the grouped amount after a leading space.
-        (Some(cents), None) => {
-            tr.tasks_rate_currency_not_set(format_cents(cents, "").trim_start().to_owned())
-        }
-        (None, _) => tr.tasks_rate_none(),
+/// A task's default rate is a template with no currency: "80.50 / h".
+fn rate_label(tr: Tr, cents: Option<i64>) -> String {
+    match cents.and_then(RateTemplate::from_hundredths) {
+        Some(template) => tr.tasks_rate_per_hour(template.format()),
+        None => tr.tasks_rate_none(),
     }
 }
 

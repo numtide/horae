@@ -115,6 +115,42 @@ pub fn format_cents_plain(cents: i64) -> String {
     )
 }
 
+/// A rate template, such as a task's default hourly rate: a positive number of
+/// hundredths with no currency. It is not money until [`RateTemplate::apply`]
+/// gives it a currency (Constitution I, "Rate templates"); never sum, compare
+/// or invoice it as money.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RateTemplate(i64);
+
+impl RateTemplate {
+    /// A typed template with at most two decimals (`"80.5"`, `"1,200.50"`).
+    /// Zero and negative values are refused: zero is no rate.
+    pub fn parse(s: &str) -> Result<Self, AmountError> {
+        Self::from_hundredths(parse_cents(s)?).ok_or_else(|| AmountError(s.to_owned()))
+    }
+
+    /// A stored template; `None` unless it is positive.
+    pub fn from_hundredths(hundredths: i64) -> Option<Self> {
+        (hundredths > 0).then_some(Self(hundredths))
+    }
+
+    pub fn hundredths(self) -> i64 {
+        self.0
+    }
+
+    /// Two decimals, no currency: `"80.50"`.
+    pub fn format(self) -> String {
+        format_cents_plain(self.0)
+    }
+
+    /// The rate this template becomes in `currency`, in that currency's
+    /// hundredths. Every currency is stored in hundredths and a rate keeps two
+    /// decimals in all of them, so the number is the same.
+    pub fn apply(self, _currency: &str) -> i64 {
+        self.0
+    }
+}
+
 /// An amount in major units with the currency's own number of decimals (ISO
 /// 4217), for wire formats such as the Harvest API: `JPY 1000`, `EUR 10.00`,
 /// `BHD 10.000`. Horae stores every currency in hundredths, so a zero-decimal
@@ -293,6 +329,43 @@ mod tests {
         assert_eq!(pad_to_currency("80.50", "JPY"), "80.50");
         assert_eq!(pad_to_currency("80", "JPY"), "80");
         assert_eq!(pad_to_currency("1.5", "KWD"), "1.50");
+    }
+
+    #[test]
+    fn rate_templates_parse_two_decimals_and_refuse_zero() {
+        for (typed, hundredths) in [
+            ("80", 8_000),
+            ("80.5", 8_050),
+            ("0.01", 1),
+            ("1,200.50", 120_050),
+        ] {
+            assert_eq!(
+                RateTemplate::parse(typed)
+                    .map(RateTemplate::hundredths)
+                    .ok(),
+                Some(hundredths),
+                "{typed}"
+            );
+        }
+        assert_eq!(
+            RateTemplate::parse("92233720368547758.07")
+                .map(RateTemplate::hundredths)
+                .ok(),
+            Some(i64::MAX)
+        );
+        for refused in ["80.505", "-1", "", "0", "0.00", "92233720368547758.08"] {
+            assert!(RateTemplate::parse(refused).is_err(), "{refused}");
+        }
+        assert_eq!(RateTemplate::from_hundredths(0), None);
+    }
+
+    #[test]
+    fn rate_templates_format_and_apply_the_same_number() {
+        let template = RateTemplate::parse("80.5").unwrap();
+        assert_eq!(template.format(), "80.50");
+        for currency in ["EUR", "JPY", "BHD"] {
+            assert_eq!(template.apply(currency), 8_050, "{currency}");
+        }
     }
 
     #[test]

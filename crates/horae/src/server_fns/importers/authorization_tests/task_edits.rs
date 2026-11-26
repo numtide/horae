@@ -42,7 +42,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             "equal_rate_still_requires_authority",
             BuiltInProfile::Administrator,
             vec![Permission::TaskWriteAll],
-            json!({"action":"set","amount_cents":8000,"currency":"EUR"}),
+            json!({"action":"set","amount_cents":8000}),
             StatusCode::FORBIDDEN,
             Some(8000),
         ),
@@ -53,7 +53,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 Permission::TaskWriteAll,
                 Permission::BillableRateWriteManaged,
             ],
-            json!({"action":"set","amount_cents":0,"currency":"EUR"}),
+            json!({"action":"set","amount_cents":0}),
             StatusCode::FORBIDDEN,
             Some(8000),
         ),
@@ -66,18 +66,26 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             None,
         ),
         (
-            "rate_writer_sets_zero",
+            "rate_writer_sets_zero_as_no_rate",
             BuiltInProfile::Member,
             vec![Permission::TaskWriteAll, Permission::BillableRateWriteAll],
-            json!({"action":"set","amount_cents":0,"currency":"EUR"}),
+            json!({"action":"set","amount_cents":0}),
             StatusCode::OK,
-            Some(0),
+            None,
+        ),
+        (
+            "rate_writer_sets_template",
+            BuiltInProfile::Member,
+            vec![Permission::TaskWriteAll, Permission::BillableRateWriteAll],
+            json!({"action":"set","amount_cents":8050}),
+            StatusCode::OK,
+            Some(8050),
         ),
         (
             "rate_grant_without_task_write",
             BuiltInProfile::Administrator,
             vec![Permission::BillableRateWriteAll],
-            json!({"action":"set","amount_cents":0,"currency":"EUR"}),
+            json!({"action":"set","amount_cents":0}),
             StatusCode::FORBIDDEN,
             Some(8000),
         ),
@@ -91,7 +99,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();
         sqlx::query!(
-            "UPDATE tasks SET default_rate_cents=8000,default_rate_currency='EUR' WHERE id=$1",
+            "UPDATE tasks SET default_rate_cents=8000 WHERE id=$1",
             ids.task_id
         )
         .execute(pool)
@@ -131,7 +139,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             }
         }
         let after = sqlx::query!(
-            "SELECT name,default_rate_cents,default_rate_currency FROM tasks WHERE id=$1",
+            "SELECT name,default_rate_cents FROM tasks WHERE id=$1",
             ids.task_id
         )
         .fetch_one(pool)
@@ -142,13 +150,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         } else {
             "Dev"
         };
-        let expected_currency = expected_rate.map(|_| "EUR");
-        if (
-            after.name.as_str(),
-            after.default_rate_cents,
-            after.default_rate_currency.as_deref(),
-        ) != (expected_name, expected_rate, expected_currency)
-        {
+        if (after.name.as_str(), after.default_rate_cents) != (expected_name, expected_rate) {
             failures.push(format!("{case}: unexpected stored state {after:?}"));
         }
     }

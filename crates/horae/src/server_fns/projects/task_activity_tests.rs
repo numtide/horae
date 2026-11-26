@@ -77,7 +77,7 @@ async fn activity_separates_session_rates_from_events_and_preserves_noops(pool: 
     )
     .await;
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=8000,default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=8000 WHERE id=$1",
         ids.task_id
     )
     .execute(&pool)
@@ -111,16 +111,15 @@ async fn activity_separates_session_rates_from_events_and_preserves_noops(pool: 
             };
             assert_eq!(payload.default_rate_cents, Some(8000));
         }
-        let saved = sqlx::query!("SELECT xmin::text AS version,default_rate_cents,default_rate_currency FROM tasks WHERE id=$1", ids.task_id)
-            .fetch_one(&pool).await.unwrap();
+        let saved = sqlx::query!(
+            "SELECT xmin::text AS version,default_rate_cents FROM tasks WHERE id=$1",
+            ids.task_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         assert_eq!(saved.version != before, changed);
-        assert_eq!(
-            (
-                saved.default_rate_cents,
-                saved.default_rate_currency.as_deref()
-            ),
-            (Some(8000), Some("EUR"))
-        );
+        assert_eq!(saved.default_rate_cents, Some(8000));
         let history = sqlx::query!(
             "SELECT minutes,billable,task_id FROM time_entries WHERE id=$1",
             entry

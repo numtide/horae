@@ -681,48 +681,7 @@ mod task {
     fn rate_edit(amount: Option<i64>) -> TaskRateEdit {
         amount.map_or(TaskRateEdit::Clear {}, |amount_cents| TaskRateEdit::Set {
             amount_cents,
-            currency: "EUR".into(),
         })
-    }
-
-    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-    async fn rate_edits_set_currency_without_relabelling_renames_or_noops(pool: PgPool) {
-        let ids = seed(&pool, BuiltInProfile::Administrator).await;
-        sqlx::query!(
-            "UPDATE tasks SET default_rate_cents = 8000 WHERE id = $1",
-            ids.task_id
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        for (name, rate, currency) in [
-            ("Renamed", TaskRateEdit::Preserve {}, None),
-            ("Renamed", TaskRateEdit::Preserve {}, None),
-            ("Renamed", rate_edit(Some(0)), Some("EUR")),
-            ("Again", TaskRateEdit::Preserve {}, Some("EUR")),
-            ("Again", TaskRateEdit::Clear {}, None),
-        ] {
-            update_task_record(
-                &pool,
-                ids.org_id,
-                ids.user_id,
-                ids.task_id,
-                name,
-                true,
-                false,
-                &rate,
-            )
-            .await
-            .unwrap();
-            let stored = sqlx::query_scalar!(
-                "SELECT default_rate_currency FROM tasks WHERE id = $1",
-                ids.task_id
-            )
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-            assert_eq!(stored.as_deref(), currency);
-        }
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -734,7 +693,6 @@ mod task {
         for (name, billable, rate) in [
             ("Renamed", true, None),
             ("Renamed", false, None),
-            ("Renamed", false, Some(0)),
             ("Renamed", false, Some(12050)),
             ("Renamed", false, None),
         ] {

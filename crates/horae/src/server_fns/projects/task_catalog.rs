@@ -180,7 +180,6 @@ mod tests {
             );
             assert!(page.can_edit && page.can_read_rates, "{profile:?}");
             assert_eq!(page.can_edit_rates, edits_rates, "{profile:?}");
-            assert_eq!(page.rate_currency.is_some(), edits_rates, "{profile:?}");
         }
     }
 

@@ -27,7 +27,7 @@ async fn visible_tasks(
              SELECT t.id,t.harvest_id,t.name,t.active,t.billable_default,
                     -- Harvest serves 0 for a task without a default rate; absent means hidden.
                     CASE WHEN $7 THEN COALESCE(t.default_rate_cents, 0) END default_rate_cents,
-                    t.default_rate_currency,t.created_at,t.updated_at
+                    t.created_at,t.updated_at
              FROM tasks t
              WHERE t.org_id=$1 AND $6
                AND ($2::boolean IS NULL OR t.active=$2)
@@ -49,7 +49,6 @@ async fn visible_tasks(
            SELECT totals.total AS "total!",totals.start AS "start!",t.id AS "uuid?",
                   t.harvest_id AS "id?",t.name AS "name?",
                   t.active AS "active?",t.billable_default AS "billable_default?",t.default_rate_cents,
-                  t.default_rate_currency,
                   t.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
                   t.updated_at AS "updated_at?: chrono::DateTime<chrono::Utc>"
            FROM totals LEFT JOIN page t ON true ORDER BY t.id DESC"#,
@@ -93,7 +92,6 @@ async fn visible_tasks(
                 .billable_default
                 .ok_or_else(|| internal("Missing task billing flag"))?,
             default_rate_cents: record.default_rate_cents,
-            default_rate_currency: record.default_rate_currency,
         });
     }
     Ok(Listed { total, start, rows })

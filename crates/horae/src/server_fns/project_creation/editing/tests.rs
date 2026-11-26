@@ -1222,23 +1222,35 @@ async fn editor_recovers_each_budget_scope_without_turning_absence_into_zero(poo
 /// A task without a default (an imported Harvest 0) links with no rate, so
 /// task billing falls back to the client's default rate.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool: PgPool) {
+async fn linked_task_applies_its_template_in_any_project_currency(pool: PgPool) {
     for (default, currency, rate, expected) in [
-        (Some(8000), None, "", None),
-        (Some(8000), Some("USD"), "", None),
-        (Some(8000), Some("EUR"), "", Some(Some(8000))),
-        (Some(8000), Some("USD"), "12.34", Some(Some(1234))),
-        (None, None, "", Some(None)),
+        (Some(8050), "EUR", "", Some(8050)),
+        // The editor saves only supported billing currencies, so no JPY here.
+        (Some(8050), "CHF", "", Some(8050)),
+        (Some(8050), "USD", "12.34", Some(1234)),
+        (None, "EUR", "", None),
     ] {
-        let (owner, original) = configured_fixture(&pool).await;
+        let (owner, mut original) = configured_fixture(&pool).await;
+        if currency != "EUR" {
+            sqlx::query!(
+                "UPDATE projects SET currency = $2 WHERE id = $1",
+                original.id,
+                currency
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            original = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
+                .await
+                .unwrap();
+        }
         let task_id = Uuid::now_v7();
         sqlx::query!(
-            "INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
-             VALUES ($1,$2,'Catalog default',true,$3,$4)",
+            "INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents)
+             VALUES ($1,$2,'Catalog default',true,$3)",
             task_id,
             owner.org_id,
             default,
-            currency,
         )
         .execute(&pool)
         .await
@@ -1262,22 +1274,8 @@ async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool
         .fetch_optional(&pool)
         .await
         .unwrap();
-        if let Some(expected) = expected {
-            result.unwrap();
-            assert_eq!(stored, Some(expected), "{default:?} {currency:?} {rate:?}");
-        } else {
-            assert!(
-                matches!(
-                    result,
-                    Err(ServerFnError::ServerError {
-                        code: BAD_REQUEST,
-                        ..
-                    })
-                ),
-                "{currency:?}: {result:?}"
-            );
-            assert_eq!(stored, None, "{currency:?}");
-        }
+        result.unwrap();
+        assert_eq!(stored, Some(expected), "{default:?} {currency} {rate:?}");
     }
 }
 
@@ -1295,8 +1293,8 @@ async fn added_task_links_inherit_default_rates_only_for_task_billing(pool: PgPo
         let (owner, original) = configured_fixture(&pool).await;
         let task_id = Uuid::now_v7();
         sqlx::query!(
-            "INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
-             VALUES ($1,$2,'Catalog default',true,8000,'EUR')",
+            "INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents)
+             VALUES ($1,$2,'Catalog default',true,8000)",
             task_id,
             owner.org_id,
         )

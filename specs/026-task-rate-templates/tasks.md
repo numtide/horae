@@ -66,19 +66,19 @@ Starts after Delivery 1 and the OAuth amendment (7.1.0) have merged.
 
 ## Phase 5: Setup
 
-- [ ] T019 Apply the approved text of `specs/026-task-rate-templates/constitution-amendment.md` to `.specify/memory/constitution.md` verbatim, as MINOR 7.1.0 → 7.2.0, with a Sync Impact Report; if 7.1.0 has not landed, stop and ask
-- [ ] T020 Check the next free migration number on master (one after Delivery 1's) and use it for `crates/server/migrations/NNNN_task_rate_templates.sql` in every later task
+- [X] T019 Apply the approved text of `specs/026-task-rate-templates/constitution-amendment.md` to `.specify/memory/constitution.md` verbatim, as MINOR 7.1.0 → 7.2.0, with a Sync Impact Report; if 7.1.0 has not landed, stop and ask
+- [X] T020 Check the next free migration number on master (one after Delivery 1's) and use it for `crates/server/migrations/NNNN_task_rate_templates.sql` in every later task
 
 ## Phase 6: Foundational (blocks every Delivery 2 story)
 
 The column drop breaks every query that names it, so the core type, the migration and the wire types
 come first.
 
-- [ ] T021 [P] Tests first in `crates/core/src/money.rs`: `RateTemplate::parse` accepts "80", "80.5", "0.01", "1,200.50", refuses "80.505", "-1", "" and "0" (R2); `format` gives "80.50"; `apply` returns the same hundredths for "EUR", "JPY" and "BHD"
-- [ ] T022 Implement `pub struct RateTemplate` (positive `i64` of hundredths; `parse`, `hundredths`, `format`, `apply(currency) -> i64`) in `crates/core/src/money.rs`; doc comments say a template is not money until applied (research R5)
-- [ ] T023 Write `crates/server/migrations/NNNN_task_rate_templates.sql`: clear zero rates (R2), keep every other number whatever its currency (R0, R3), drop `tasks.default_rate_currency`, replace `tasks_default_rate_cents_nonneg` with a `> 0` check, comment the column as a template in hundredths with no currency
-- [ ] T024 Migration test in `crates/server/src/db.rs` (`#[sqlx::test(migrator = "crate::db::MIGRATOR", …)]` stopping before and after the migration): task rates with the workspace currency, another currency, no currency and zero; assert numbers kept, zero cleared, column gone, every `project_tasks` row identical
-- [ ] T025 [P] Change the wire types in `crates/types/src/task.rs` and `crates/types/src/project_creation.rs` per data-model.md (drop `default_rate_currency`, `TaskCatalog::rate_currency`, the `currency` of `TaskRateEdit::Set`); swap the transport test cases per research R8; doc comments say template
+- [X] T021 [P] Tests first in `crates/core/src/money.rs`: `RateTemplate::parse` accepts "80", "80.5", "0.01", "1,200.50", refuses "80.505", "-1", "" and "0" (R2); `format` gives "80.50"; `apply` returns the same hundredths for "EUR", "JPY" and "BHD"
+- [X] T022 Implement `pub struct RateTemplate` (positive `i64` of hundredths; `parse`, `hundredths`, `format`, `apply(currency) -> i64`) in `crates/core/src/money.rs`; doc comments say a template is not money until applied (research R5)
+- [X] T023 Write `crates/server/migrations/NNNN_task_rate_templates.sql`: clear zero rates (R2), keep every other number whatever its currency (R0, R3), drop `tasks.default_rate_currency`, replace `tasks_default_rate_cents_nonneg` with a `> 0` check, comment the column as a template in hundredths with no currency
+- [X] T024 Migration test in `crates/server/src/db.rs` (`#[sqlx::test(migrator = "crate::db::MIGRATOR", …)]` stopping before and after the migration): task rates with the workspace currency, another currency, no currency and zero; assert numbers kept, zero cleared, column gone, every `project_tasks` row identical
+- [X] T025 [P] Change the wire types in `crates/types/src/task.rs` and `crates/types/src/project_creation.rs` per data-model.md (drop `default_rate_currency`, `TaskCatalog::rate_currency`, the `currency` of `TaskRateEdit::Set`); swap the transport test cases per research R8; doc comments say template
 
 **Checkpoint**: core and schema done; the workspace does not compile until the server phases drop
 the column from their queries.
@@ -89,13 +89,13 @@ the column from their queries.
 
 **Independent test**: quickstart.md "Applying templates".
 
-- [ ] T026 [P] [US1] Tests first in `crates/horae/src/server_fns/project_creation/tests.rs` and `crates/horae/src/server_fns/project_creation/editing/tests/catalog.rs`: a template of 80.50 added from New Project to EUR and USD projects billed by task rate (New Project accepts only `PROJECT_CURRENCIES`), and from the editor to an existing EUR project and to a JPY project inserted by the test fixture, gives a task rate of 8050 each; a project not billed by task rate gets no rate, as today; clearing an existing link's rate in the editor re-applies the template in a JPY project; a typed rate wins; no template gives no rate; changing the template later leaves the project rate; a manager without rate access gets the rate applied without seeing it
-- [ ] T027 [US1] In `crates/server/src/ops/projects/creation/finalize.rs` `save_tasks`, read the template only, apply it with `RateTemplate::apply(project currency)` when the typed rate is empty, and remove the "currency is unknown or incompatible" refusal
-- [ ] T028 [US1] Same in `crates/server/src/ops/projects/editor/associations.rs`: apply the template, remove "Enter an explicit task rate in the project currency."
-- [ ] T029 [P] [US1] Drop the currency from the reads and redaction in `crates/server/src/ops/projects/creation/options.rs`, `crates/server/src/ops/projects/editor/catalog.rs`, `crates/server/src/ops/projects/editor/projection.rs` and `crates/server/src/ops/projects/editor.rs`
-- [ ] T030 [US1] In `crates/horae/src/pages/new_project/tasks.rs` and `crates/horae/src/pages/new_project/draft.rs`, show the applied rate as the placeholder ("EUR 80.50 / h", from the template in the draft's currency) instead of "Enter rate" when currencies differ; confirm the project editor's task rows use the same component (`edit_return.rs`) and cover them too; new text in `crates/i18n/locales/en/horae.ftl`
-- [ ] T031 [P] [US1] Update `crates/horae/tests/new_project_screen.rs`, `crates/horae/src/pages/new_project/picker_tests.rs`, `crates/horae/src/server_fns/project_creation/import_tests.rs`, `editing/tests.rs` and `editing/tests/canonical_fields.rs` for the new types and the removed refusals
-- [ ] T032 [P] [US1] Update `crates/horae/tests/browser/project-task-rates.cjs` and `new-project-task-errors.cjs`: a cross-currency task fills its rate, the old error does not appear
+- [X] T026 [P] [US1] Tests first in `crates/horae/src/server_fns/project_creation/tests.rs` and `crates/horae/src/server_fns/project_creation/editing/tests/catalog.rs`: a template of 80.50 added from New Project to EUR and USD projects billed by task rate (New Project accepts only `PROJECT_CURRENCIES`), and from the editor to an existing EUR project and to a JPY project inserted by the test fixture, gives a task rate of 8050 each; a project not billed by task rate gets no rate, as today; clearing an existing link's rate in the editor re-applies the template in a JPY project; a typed rate wins; no template gives no rate; changing the template later leaves the project rate; a manager without rate access gets the rate applied without seeing it
+- [X] T027 [US1] In `crates/server/src/ops/projects/creation/finalize.rs` `save_tasks`, read the template only, apply it with `RateTemplate::apply(project currency)` when the typed rate is empty, and remove the "currency is unknown or incompatible" refusal
+- [X] T028 [US1] Same in `crates/server/src/ops/projects/editor/associations.rs`: apply the template, remove "Enter an explicit task rate in the project currency."
+- [X] T029 [P] [US1] Drop the currency from the reads and redaction in `crates/server/src/ops/projects/creation/options.rs`, `crates/server/src/ops/projects/editor/catalog.rs`, `crates/server/src/ops/projects/editor/projection.rs` and `crates/server/src/ops/projects/editor.rs`
+- [X] T030 [US1] In `crates/horae/src/pages/new_project/tasks.rs` and `crates/horae/src/pages/new_project/draft.rs`, show the applied rate as the placeholder ("EUR 80.50 / h", from the template in the draft's currency) instead of "Enter rate" when currencies differ; confirm the project editor's task rows use the same component (`edit_return.rs`) and cover them too; new text in `crates/i18n/locales/en/horae.ftl`
+- [X] T031 [P] [US1] Update `crates/horae/tests/new_project_screen.rs`, `crates/horae/src/pages/new_project/picker_tests.rs`, `crates/horae/src/server_fns/project_creation/import_tests.rs`, `editing/tests.rs` and `editing/tests/canonical_fields.rs` for the new types and the removed refusals
+- [X] T032 [P] [US1] Update `crates/horae/tests/browser/project-task-rates.cjs` and `new-project-task-errors.cjs`: a cross-currency task fills its rate, the old error does not appear
 
 **Checkpoint**: US1 works with the existing editor writing templates through the new types.
 
@@ -105,13 +105,13 @@ the column from their queries.
 
 **Independent test**: quickstart.md "Applying templates", steps 1 and 4; `task_catalog_ui`.
 
-- [ ] T033 [P] [US2] Tests first in `crates/horae/src/server_fns/projects/task_edit_tests.rs` and `task_write_tests.rs`: set 80.50, clear, preserve; a workspace currency change does not refuse a later edit; 0 is stored as no rate (R2); permissions unchanged
-- [ ] T034 [US2] In `crates/server/src/ops/projects/task_writes.rs`, make `authorize_rate` return the template only: keep the `BillableRateWriteAll` check, drop the workspace currency lookup and the "Task rate currency changed" refusal, store no rate for 0; drop the currency from the inserts and updates
-- [ ] T035 [P] [US2] Drop the currency from the catalog read in `crates/server/src/ops/projects/task_catalog.rs`
-- [ ] T036 [US2] In `crates/horae/src/pages/tasks/editor.rs`, label the field "Default hourly rate" with no currency, parse with `RateTemplate::parse`, show "Current default: 80.50 / h"; strings in `horae.ftl`
-- [ ] T037 [US2] In `crates/horae/src/pages/tasks.rs`, `rate_label` writes "80.50 / h" with the "each project's currency" note and "No rate"; remove PR 1's `tasks-rate-currency-not-set` from `horae.ftl` and add the new message
-- [ ] T038 [P] [US2] Update `crates/horae/tests/task_catalog_ui.rs`, `crates/horae/src/server_fns/projects/task_activity_tests.rs`, `mutation_tests.rs`, `crates/horae/src/server_fns/projects/task_catalog.rs` (its test asserts `page.rate_currency`), and `crates/horae/src/server_fns/importers/authorization_tests/{task_edits,task_writes,task_catalog,task_activity}.rs`
-- [ ] T039 [P] [US2] Update `crates/horae/tests/browser/task-catalog.cjs` and `task-read-permissions.cjs`: no currency next to a template; 80.505 refused; 0 clears the rate (R2)
+- [X] T033 [P] [US2] Tests first in `crates/horae/src/server_fns/projects/task_edit_tests.rs` and `task_write_tests.rs`: set 80.50, clear, preserve; a workspace currency change does not refuse a later edit; 0 is stored as no rate (R2); permissions unchanged
+- [X] T034 [US2] In `crates/server/src/ops/projects/task_writes.rs`, make `authorize_rate` return the template only: keep the `BillableRateWriteAll` check, drop the workspace currency lookup and the "Task rate currency changed" refusal, store no rate for 0; drop the currency from the inserts and updates
+- [X] T035 [P] [US2] Drop the currency from the catalog read in `crates/server/src/ops/projects/task_catalog.rs`
+- [X] T036 [US2] In `crates/horae/src/pages/tasks/editor.rs`, label the field "Default hourly rate" with no currency, parse with `RateTemplate::parse`, show "Current default: 80.50 / h"; strings in `horae.ftl`
+- [X] T037 [US2] In `crates/horae/src/pages/tasks.rs`, `rate_label` writes "80.50 / h" with the "each project's currency" note and "No rate"; remove PR 1's `tasks-rate-currency-not-set` from `horae.ftl` and add the new message
+- [X] T038 [P] [US2] Update `crates/horae/tests/task_catalog_ui.rs`, `crates/horae/src/server_fns/projects/task_activity_tests.rs`, `mutation_tests.rs`, `crates/horae/src/server_fns/projects/task_catalog.rs` (its test asserts `page.rate_currency`), and `crates/horae/src/server_fns/importers/authorization_tests/{task_edits,task_writes,task_catalog,task_activity}.rs`
+- [X] T039 [P] [US2] Update `crates/horae/tests/browser/task-catalog.cjs` and `task-read-permissions.cjs`: no currency next to a template; 80.505 refused; 0 clears the rate (R2)
 
 ## Phase 9: User Story 4 - Imports keep Harvest's number (P2)
 
@@ -119,11 +119,11 @@ the column from their queries.
 
 **Independent test**: quickstart.md "Imports and interfaces".
 
-- [ ] T040 [P] [US4] Tests first in `crates/server/src/importers/harvest/sync_tests.rs` and `sync_tests/checkpoints.rs`: API 80.5 → 8050, 0 and null → none; CSV new task with 75.00 USD → template 7500, no currency; CSV project-task rate in another currency still refused; a checkpoint JSON that contains `default_rate_currency` commits; a checkpoint holding `default_rate_cents = 0`, with and without `default_rate_currency`, commits and the task has no rate (FR-018)
-- [ ] T041 [US4] In `crates/server/src/importers/harvest/resolve.rs` `resolve_task`, drop `rate_currency` and the column from the insert, and drop the `rate_currency` that `crates/server/src/importers/harvest/resolve/fields.rs` feeds it; leave `ensure_project_task` as it is
-- [ ] T042 [US4] In `crates/server/src/importers/harvest/resolve/preview.rs`, drop `default_rate_currency` from the snapshot and restore queries, and restore the rate in `ParentSnapshot::restore` with `NULLIF(default_rate_cents, 0)` so an old zero passes the new `> 0` CHECK as no rate (research R4); replace `checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown` with a test that an old checkpoint restores the rate (research R4)
-- [ ] T043 [P] [US4] Check `crates/server/src/importers/harvest/parents.rs` still passes `rate_currency: None` and remove the field if nothing else uses it
-- [ ] T044 [P] [US4] Stop writing a task currency in `crates/server/src/seed.rs`
+- [X] T040 [P] [US4] Tests first in `crates/server/src/importers/harvest/sync_tests.rs` and `sync_tests/checkpoints.rs`: API 80.5 → 8050, 0 and null → none; CSV new task with 75.00 USD → template 7500, no currency; CSV project-task rate in another currency still refused; a checkpoint JSON that contains `default_rate_currency` commits; a checkpoint holding `default_rate_cents = 0`, with and without `default_rate_currency`, commits and the task has no rate (FR-018)
+- [X] T041 [US4] In `crates/server/src/importers/harvest/resolve.rs` `resolve_task`, drop `rate_currency` and the column from the insert, and drop the `rate_currency` that `crates/server/src/importers/harvest/resolve/fields.rs` feeds it; leave `ensure_project_task` as it is
+- [X] T042 [US4] In `crates/server/src/importers/harvest/resolve/preview.rs`, drop `default_rate_currency` from the snapshot and restore queries, and restore the rate in `ParentSnapshot::restore` with `NULLIF(default_rate_cents, 0)` so an old zero passes the new `> 0` CHECK as no rate (research R4); replace `checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown` with a test that an old checkpoint restores the rate (research R4)
+- [X] T043 [P] [US4] Check `crates/server/src/importers/harvest/parents.rs` still passes `rate_currency: None` and remove the field if nothing else uses it
+- [X] T044 [P] [US4] Stop writing a task currency in `crates/server/src/seed.rs`
 
 ## Phase 10: User Story 5 - Existing rates move without surprises (P2)
 
@@ -131,19 +131,19 @@ the column from their queries.
 
 **Independent test**: T024, T049, and quickstart.md "Before upgrading".
 
-- [ ] T045 [P] [US5] In `crates/harvest-api/src/lib.rs` (`TaskRow`, `task_row_to_harvest`) and `crates/harvest-api/src/task_reads.rs`, drop the currency; write the template with `Amount::new(cents, "")`
-- [ ] T046 [P] [US5] Update the task tests in `crates/harvest-api/src/pagination_tests/` for the unchanged shape and a JPY-workspace task written at two decimals
-- [ ] T047 [P] [US5] Run `cargo test -p horae-api openapi` without `UPDATE_OPENAPI`; `crates/api/openapi/v1.json` must not change
-- [ ] T048 [P] [US5] Update the doc comment of `TaskCreated::default_rate_cents` in `crates/server/src/plugin/event.rs`: a template in hundredths with no currency (FR-021); the shape does not change
-- [ ] T049 [US5] On a copy of a real database (`pg_dump` of a deployment, restored locally and `ANALYZE`d; ask the maintainer before taking the dump), record project-task rates, invoice totals and report totals before and after the migration; all must be equal, since the rounding shipped in Delivery 1
+- [X] T045 [P] [US5] In `crates/harvest-api/src/lib.rs` (`TaskRow`, `task_row_to_harvest`) and `crates/harvest-api/src/task_reads.rs`, drop the currency; write the template with `Amount::new(cents, "")`
+- [X] T046 [P] [US5] Update the task tests in `crates/harvest-api/src/pagination_tests/` for the unchanged shape and a JPY-workspace task written at two decimals
+- [X] T047 [P] [US5] Run `cargo test -p horae-api openapi` without `UPDATE_OPENAPI`; `crates/api/openapi/v1.json` must not change
+- [X] T048 [P] [US5] Update the doc comment of `TaskCreated::default_rate_cents` in `crates/server/src/plugin/event.rs`: a template in hundredths with no currency (FR-021); the shape does not change
+- [X] T049 [US5] On a copy of a real database (`pg_dump` of a deployment, restored locally and `ANALYZE`d; ask the maintainer before taking the dump), record project-task rates, invoice totals and report totals before and after the migration; all must be equal, since the rounding shipped in Delivery 1
 
 ## Phase 11: Delivery 2 polish
 
-- [ ] T050 [P] Mark spec 011's catalog denomination as superseded by 026 in `specs/011-new-project-screen/research.md`, `data-model.md`, `quickstart.md` and `tasks.md`, saying what stays (no guessed currency, project rates are copies) and what changes (research R10)
-- [ ] T051 [P] Update the "Unknown currency" notes in `crates/horae/src/pages/tasks.rs` doc comments and `AGENTS.md` only if they mention a task currency
-- [ ] T052 Regenerate `.sqlx/` (touch command and `cargo sqlx prepare --workspace -- --features server --all-targets`), then build offline; `rg -n "default_rate_currency|rate_currency" crates` must list nothing that refers to a task's currency; the expected leftovers are `task_rate_currency` (the project's currency in `types/project.rs` and `ops/projects/detail.rs`) and names about client rates, such as the test `finalization_rechecks_client_role_revision_and_rate_currency` if it still checks client rates only
-- [ ] T053 Run `cargo test -p horae-i18n` (unused messages), `cargo run -p horae-dioxus-lint`, clippy for `horae-server`, `horae-api`, `horae-harvest-api` and `horae --features server`
-- [ ] T054 `nix fmt` and `nix flake check`; write the PR body with the upgrade query from quickstart.md
+- [X] T050 [P] Mark spec 011's catalog denomination as superseded by 026 in `specs/011-new-project-screen/research.md`, `data-model.md`, `quickstart.md` and `tasks.md`, saying what stays (no guessed currency, project rates are copies) and what changes (research R10)
+- [X] T051 [P] Update the "Unknown currency" notes in `crates/horae/src/pages/tasks.rs` doc comments and `AGENTS.md` only if they mention a task currency
+- [X] T052 Regenerate `.sqlx/` (touch command and `cargo sqlx prepare --workspace -- --features server --all-targets`), then build offline; `rg -n "default_rate_currency|rate_currency" crates` must list nothing that refers to a task's currency; the expected leftovers are `task_rate_currency` (the project's currency in `types/project.rs` and `ops/projects/detail.rs`) and names about client rates, such as the test `finalization_rechecks_client_role_revision_and_rate_currency` if it still checks client rates only
+- [X] T053 Run `cargo test -p horae-i18n` (unused messages), `cargo run -p horae-dioxus-lint`, clippy for `horae-server`, `horae-api`, `horae-harvest-api` and `horae --features server`
+- [X] T054 `nix fmt` and `nix flake check`; write the PR body with the upgrade query from quickstart.md
 
 ## Dependencies
 

@@ -21,8 +21,7 @@ pub async fn selection(
     let tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default as billable,
-                CASE WHEN $3 THEN default_rate_cents END as default_rate_cents,
-                CASE WHEN $3 THEN default_rate_currency END as default_rate_currency FROM tasks
+                CASE WHEN $3 THEN default_rate_cents END as default_rate_cents FROM tasks
          WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
         org_id,
         task_ids,
@@ -107,8 +106,7 @@ pub async fn options(
     let mut tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default as billable,
-                CASE WHEN $4 THEN default_rate_cents END as default_rate_cents,
-                CASE WHEN $4 THEN default_rate_currency END as default_rate_currency FROM tasks
+                CASE WHEN $4 THEN default_rate_cents END as default_rate_cents FROM tasks
          WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0
          ORDER BY lower(name), id LIMIT 51 OFFSET $3",
         org_id,
@@ -123,8 +121,7 @@ pub async fn options(
     let common_tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default as billable,
-                CASE WHEN $2 THEN default_rate_cents END as default_rate_cents,
-                CASE WHEN $2 THEN default_rate_currency END as default_rate_currency FROM tasks
+                CASE WHEN $2 THEN default_rate_cents END as default_rate_cents FROM tasks
          WHERE org_id = $1 AND active AND is_default
          ORDER BY lower(name), id LIMIT 500",
         org_id,

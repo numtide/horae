@@ -180,7 +180,6 @@ fn catalog(edit: bool, rates: bool) -> TaskCatalogPage {
         can_edit: edit,
         can_read_rates: rates,
         can_edit_rates: edit && rates,
-        rate_currency: (edit && rates).then(|| "EUR".into()),
         tasks: vec![TaskCatalogEntry {
             id: Uuid::now_v7(),
             name: "A private task".into(),
@@ -188,7 +187,6 @@ fn catalog(edit: bool, rates: bool) -> TaskCatalogPage {
             is_default: false,
             active: true,
             default_rate_cents: rates.then_some(8000),
-            default_rate_currency: rates.then(|| "USD".into()),
         }],
         next_after: None,
     }
@@ -266,23 +264,25 @@ async fn an_archived_task_offers_restore_and_shows_an_archived_badge() {
 }
 
 #[tokio::test]
-async fn a_rate_shows_its_currency_or_says_it_has_none() {
-    for (cents, currency, shown) in [
-        (Some(8000), Some("USD"), "USD 80.00 / h"),
-        (Some(123_456), None, "1,234.56 / h · currency not set"),
-        (None, None, "No rate"),
+async fn a_rate_is_a_template_without_a_currency() {
+    for (cents, shown) in [
+        (Some(8050), "80.50 / h"),
+        (Some(123_456), "1234.56 / h"),
+        (None, "No rate"),
     ] {
         let probe = Probe::default();
         let reply = probe.reply();
         let mut ui = Harness::new(&probe);
         let mut page = catalog(false, true);
         page.tasks[0].default_rate_cents = cents;
-        page.tasks[0].default_rate_currency = currency.map(Into::into);
         reply.send(Ok(page)).unwrap();
         ui.settle();
         let html = ui.html();
         assert!(html.contains(&format!(">{shown}</td>")), "{html}");
-        assert!(!html.contains("Unknown currency"), "{html}");
+        assert!(
+            html.contains("each project uses them in its own currency"),
+            "{html}"
+        );
     }
 }
 
@@ -431,7 +431,7 @@ async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revo
         ui.form_event("task-edit-form", "submit", "");
         assert!(probe.creations.borrow().is_empty(), "{invalid}");
     }
-    ui.form_event("task-rate", "input", "0");
+    ui.form_event("task-rate", "input", "80.5");
     let (send, receive) = oneshot::channel();
     *probe.creation_reply.borrow_mut() = Some(receive);
     ui.form_event("task-edit-form", "submit", "");
@@ -442,10 +442,7 @@ async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revo
             "Exact initial rate".into(),
             true,
             false,
-            TaskRateEdit::Set {
-                amount_cents: 0,
-                currency: "EUR".into()
-            },
+            TaskRateEdit::Set { amount_cents: 8050 },
             requester,
         )]
     );
@@ -525,7 +522,7 @@ async fn a_refused_pin_reloads_as_the_account_now_signed_in() {
     reply.send(Ok(page)).unwrap();
     ui.settle();
     ui.click(&format!("tasks-edit-{id}"));
-    assert!(ui.html().contains("task-rate-action") && ui.html().contains("USD 80.00"));
+    assert!(ui.html().contains("task-rate-action") && ui.html().contains("80.00 / h"));
     let reply = probe.reply();
     ui.click("tasks-refresh");
     assert!(!ui.html().contains("task-name") && !ui.html().contains("A private task"));
@@ -681,7 +678,7 @@ async fn common_tasks_group_says_only_active_ones_join_new_projects() {
 }
 
 #[tokio::test]
-async fn financial_editor_sends_explicit_zero_in_current_currency_and_explicit_clear() {
+async fn financial_editor_sends_a_template_and_clears_for_zero_or_clear() {
     let probe = Probe::default();
     let reply = probe.reply();
     let mut ui = Harness::new(&probe);
@@ -691,25 +688,29 @@ async fn financial_editor_sends_explicit_zero_in_current_currency_and_explicit_c
     reply.send(Ok(page)).unwrap();
     ui.settle();
     ui.click(&format!("tasks-edit-{id}"));
+    assert!(ui.html().contains("Current default: 80.00 / h"));
     ui.click("task-rate-action-option-set");
-    ui.form_event("task-rate", "input", "0");
+    ui.form_event("task-rate", "input", "80.5");
     ui.form_event("task-edit-form", "submit", "");
     assert_eq!(
         probe.updates.borrow()[0],
         (
             id.to_string(),
-            TaskRateEdit::Set {
-                amount_cents: 0,
-                currency: "EUR".into()
-            },
+            TaskRateEdit::Set { amount_cents: 8050 },
             requester
         )
     );
+    // Zero is no rate.
+    ui.form_event("task-rate", "input", "0");
+    ui.form_event("task-edit-form", "submit", "");
     ui.click("task-rate-action-option-clear");
     ui.form_event("task-edit-form", "submit", "");
     assert_eq!(
-        probe.updates.borrow()[1],
-        (id.to_string(), TaskRateEdit::Clear {}, requester)
+        probe.updates.borrow()[1..],
+        [
+            (id.to_string(), TaskRateEdit::Clear {}, requester),
+            (id.to_string(), TaskRateEdit::Clear {}, requester)
+        ]
     );
 }
 

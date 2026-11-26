@@ -12,7 +12,7 @@ use super::RunCache;
 
 /// Restore cached parents and project/task links after a simulation rolls back.
 /// CSV occurrence counters and API entry provenance are retained separately.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(in crate::importers::harvest) struct ParentSnapshot {
     clients: Value,
     projects: Value,
@@ -56,7 +56,7 @@ impl ParentSnapshot {
             ).fetch_one(&mut *conn).await?,
             tasks: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default
+                   FROM (SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, active, is_default
                          FROM tasks WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &tasks,
             ).fetch_one(&mut *conn).await?,
@@ -150,9 +150,10 @@ impl ParentSnapshot {
             &self.projects, org_id,
         ).execute(&mut *conn).await?;
         sqlx::query!(
-            "INSERT INTO tasks (id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default)
-             -- Checkpoints saved before is_default existed lack the field.
-             SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, COALESCE(is_default, false)
+            "INSERT INTO tasks (id, org_id, harvest_id, name, billable_default, default_rate_cents, active, is_default)
+             -- Checkpoints saved before is_default existed lack the field, and
+             -- older ones may hold a zero rate, which is now no rate.
+             SELECT id, org_id, harvest_id, name, billable_default, NULLIF(default_rate_cents, 0), active, COALESCE(is_default, false)
              FROM jsonb_populate_recordset(NULL::tasks, $1) WHERE org_id = $2
              ON CONFLICT (id) DO NOTHING",
             &self.tasks,
@@ -266,9 +267,7 @@ mod tests {
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-    async fn checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown(
-        pool: sqlx::PgPool,
-    ) {
+    async fn old_checkpoints_restore_task_rates_as_templates(pool: sqlx::PgPool) {
         let ids = crate::testing::seed(
             &pool,
             horae_core::permissions::catalog::BuiltInProfile::Administrator,
@@ -277,35 +276,38 @@ mod tests {
         let task_id = Uuid::now_v7();
         let mut tx = pool.begin().await.unwrap();
         sqlx::query!(
-            "INSERT INTO tasks (id,org_id,name,default_rate_cents,default_rate_currency) VALUES ($1,$2,'Snapshot task',8000,'USD')",
+            "INSERT INTO tasks (id,org_id,name,default_rate_cents) VALUES ($1,$2,'Snapshot task',8000)",
             task_id, ids.org_id,
         ).execute(&mut *tx).await.unwrap();
         let mut cache = RunCache::default();
         cache.tasks.insert("Snapshot task".into(), task_id);
-        let mut snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
+        let captured = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
             .await
             .unwrap();
         tx.rollback().await.unwrap();
-        for currency in [Some("USD"), None] {
-            if currency.is_none() {
-                snapshot.tasks[0]
-                    .as_object_mut()
-                    .unwrap()
-                    .remove("default_rate_currency");
+        // Checkpoints saved before the upgrade carry a currency and may hold zero.
+        for (cents, currency, restored) in [
+            (8000, Some("USD"), Some(8000)),
+            (8000, None, Some(8000)),
+            (0, Some("EUR"), None),
+            (0, None, None),
+        ] {
+            let mut snapshot = captured.clone();
+            let task = snapshot.tasks[0].as_object_mut().unwrap();
+            task.insert("default_rate_cents".into(), cents.into());
+            if let Some(currency) = currency {
+                task.insert("default_rate_currency".into(), currency.into());
             }
             let mut tx = pool.begin().await.unwrap();
             snapshot.restore(&mut tx, ids.org_id).await.unwrap();
-            let row = sqlx::query!(
-                "SELECT default_rate_cents, default_rate_currency FROM tasks WHERE id = $1",
+            let rate = sqlx::query_scalar!(
+                "SELECT default_rate_cents FROM tasks WHERE id = $1",
                 task_id
             )
             .fetch_one(&mut *tx)
             .await
             .unwrap();
-            assert_eq!(
-                (row.default_rate_cents, row.default_rate_currency.as_deref()),
-                (Some(8000), currency)
-            );
+            assert_eq!(rate, restored, "{cents} {currency:?}");
             tx.rollback().await.unwrap();
         }
     }
