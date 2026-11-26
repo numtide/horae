@@ -433,39 +433,71 @@ mod tests {
         assert!(changed.entry > before.entry);
     }
 
-    /// `zero_task_rates` clears a zero rate without a currency, the Harvest
-    /// importer's "no rate", and keeps every other rate.
-    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-    async fn zero_task_rates_without_currency_become_no_rate(pool: sqlx::PgPool) {
+    /// `task_rate_templates` keeps every task rate's number whatever its
+    /// currency, clears zeros, drops the currency column and leaves project
+    /// task rates alone.
+    #[sqlx::test(migrations = false)]
+    async fn task_rate_templates_keep_numbers_and_clear_zeros(pool: sqlx::PgPool) {
+        let at = super::MIGRATOR
+            .iter()
+            .position(|migration| migration.description == "task rate templates")
+            .expect("the task_rate_templates migration");
+        let (before, templates) = super::MIGRATOR.migrations.split_at(at);
+        for migration in before {
+            sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        }
         let ids = crate::testing::seed_tenant(&pool).await;
         let rates = [
-            ("Imported zero", Some(0), None),
+            ("Workspace currency", Some(8050), Some("EUR")),
+            ("Other currency", Some(12000), Some("USD")),
+            ("Zero-decimal currency", Some(500), Some("JPY")),
+            ("No currency", Some(7500), None),
             ("Zero in EUR", Some(0), Some("EUR")),
-            ("Imported rate", Some(8000), None),
             ("No rate", None, None),
         ];
+        // The column is gone after the migration, so these are not checked macros.
         for (name, cents, currency) in rates {
-            sqlx::query!(
+            sqlx::query(
                 "INSERT INTO tasks (id, org_id, name, default_rate_cents, default_rate_currency)
                  VALUES ($1, $2, $3, $4, $5)",
-                uuid::Uuid::now_v7(),
-                ids.org_id,
-                name,
-                cents,
-                currency,
             )
+            .bind(uuid::Uuid::now_v7())
+            .bind(ids.org_id)
+            .bind(name)
+            .bind(cents)
+            .bind(currency)
             .execute(&pool)
             .await
             .unwrap();
         }
-        let repair = super::MIGRATOR
-            .iter()
-            .find(|migration| migration.description == "zero task rates")
-            .expect("the zero_task_rates migration");
-        sqlx::raw_sql(&repair.sql).execute(&pool).await.unwrap();
+        sqlx::query!(
+            "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
+             VALUES ($1, $2, true, 9000)",
+            ids.project_id,
+            ids.task_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let project_tasks = || async {
+            sqlx::query_scalar!(
+                r#"SELECT to_jsonb(pt)::text AS "row!" FROM project_tasks pt
+                    ORDER BY pt.project_id, pt.task_id"#
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+        };
+        let project_tasks_before = project_tasks().await;
+        assert!(!project_tasks_before.is_empty());
+
+        sqlx::raw_sql(&templates[0].sql)
+            .execute(&pool)
+            .await
+            .unwrap();
 
         let stored = sqlx::query!(
-            "SELECT name, default_rate_cents, default_rate_currency FROM tasks
+            "SELECT name, default_rate_cents FROM tasks
               WHERE org_id = $1 AND name <> 'Dev' ORDER BY id",
             ids.org_id,
         )
@@ -475,18 +507,32 @@ mod tests {
         assert_eq!(
             stored
                 .iter()
-                .map(|task| (
-                    task.name.as_str(),
-                    task.default_rate_cents,
-                    task.default_rate_currency.as_deref()
-                ))
+                .map(|task| (task.name.as_str(), task.default_rate_cents))
                 .collect::<Vec<_>>(),
             [
-                ("Imported zero", None, None),
-                ("Zero in EUR", Some(0), Some("EUR")),
-                ("Imported rate", Some(8000), None),
-                ("No rate", None, None),
+                ("Workspace currency", Some(8050)),
+                ("Other currency", Some(12000)),
+                ("Zero-decimal currency", Some(500)),
+                ("No currency", Some(7500)),
+                ("Zero in EUR", None),
+                ("No rate", None),
             ]
         );
+        let currency_column = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'tasks' AND column_name = 'default_rate_currency') AS "exists!""#
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(!currency_column);
+        assert_eq!(project_tasks().await, project_tasks_before);
+        let zero = sqlx::query!(
+            "UPDATE tasks SET default_rate_cents = 0 WHERE org_id = $1",
+            ids.org_id
+        )
+        .execute(&pool)
+        .await;
+        assert!(zero.is_err(), "a zero template is refused");
     }
 }

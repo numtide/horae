@@ -215,7 +215,7 @@ pub async fn load_project_form(
     // Resolve assigned identities, including archived records, independently
     // of the active catalog's search and pagination. They are not new choices.
     let tasks = sqlx::query!(
-        "SELECT t.id, t.name, t.active, pt.active AS link_active, t.billable_default, t.default_rate_cents, t.default_rate_currency
+        "SELECT t.id, t.name, t.active, pt.active AS link_active, t.billable_default, t.default_rate_cents
          FROM tasks t JOIN project_tasks pt ON pt.task_id = t.id
          WHERE pt.project_id = $1 AND t.org_id = $2 ORDER BY t.id",
         project_id, org_id,
@@ -237,7 +237,6 @@ pub async fn load_project_form(
             name: task.name,
             billable: task.billable_default,
             default_rate_cents: task.default_rate_cents,
-            default_rate_currency: task.default_rate_currency,
         })
         .collect();
     let people = sqlx::query!(

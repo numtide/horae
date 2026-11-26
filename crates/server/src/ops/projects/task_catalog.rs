@@ -145,14 +145,6 @@ pub async fn page(
     let can_edit = actor.has(Permission::TaskWriteAll);
     let can_read_rates = actor.has(Permission::BillableRateReadAll);
     let can_edit_rates = can_edit && actor.has(Permission::BillableRateWriteAll);
-    let rate_currency = if can_edit_rates {
-        Some(sqlx::query_scalar!(
-            "SELECT upper(btrim(default_currency)) AS \"currency!\" FROM organizations WHERE id=$1",
-            org_id,
-        ).fetch_one(&mut **tx).await?)
-    } else {
-        None
-    };
     let (active_only, archived_only) = (
         activity == TaskActivity::Active,
         activity == TaskActivity::Archived,
@@ -161,9 +153,7 @@ pub async fn page(
     let mut tasks = sqlx::query_as!(
         TaskCatalogEntry,
         "SELECT id,name,billable_default,is_default,active,
-                CASE WHEN $2 THEN default_rate_cents END AS default_rate_cents,
-                CASE WHEN $2 AND default_rate_cents IS NOT NULL
-                     THEN default_rate_currency END AS default_rate_currency
+                CASE WHEN $2 THEN default_rate_cents END AS default_rate_cents
          FROM tasks
          WHERE org_id=$1 AND (NOT $3 OR active) AND (NOT $4 OR NOT active)
            AND ($5::text IS NULL OR (NOT is_default,name,id) > (NOT $7::boolean,$5,$6::uuid))
@@ -193,7 +183,6 @@ pub async fn page(
         can_edit,
         can_read_rates,
         can_edit_rates,
-        rate_currency,
         tasks,
         next_after,
     })

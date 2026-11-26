@@ -346,10 +346,9 @@ pub struct CreationTask {
     pub id: Uuid,
     pub name: String,
     pub billable: bool,
+    /// The task's rate template: hundredths with no currency.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rate_cents: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_rate_currency: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

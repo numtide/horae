@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS \"rows!\"\n                   FROM (SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, active, is_default\n                         FROM tasks WHERE org_id = $1 AND id = ANY($2)) r",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rows!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "74dcabfc9e4924b4161fb2f18101741672276733c5946ce65d82395c597faead"
+}

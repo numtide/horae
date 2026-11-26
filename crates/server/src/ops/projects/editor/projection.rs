@@ -130,7 +130,6 @@ pub(super) async fn redact(
     for task in &mut project.selection.tasks {
         if !billable(RateAction::Read, BillableRateOwner::GlobalTask) {
             task.default_rate_cents = None;
-            task.default_rate_currency = None;
         }
     }
     for person in &mut project.selection.people {

@@ -589,7 +589,7 @@ async fn canonical_editor_cannot_save_after_switching_to_another_authorized_pers
 async fn canonical_task_rate_zero_reset_and_revoked_retry_remain_distinct(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=12345, default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=12345 WHERE id=$1",
         owner.task_id,
     )
     .execute(&pool)
@@ -856,7 +856,7 @@ async fn canonical_editor_without_rate_read_withholds_stored_task_rate(pool: PgP
     let (owner, original) = configured_fixture(&pool).await;
     assert_eq!(original.form.tasks[0].rate, "25.00");
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=12345, default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=12345 WHERE id=$1",
         owner.task_id,
     )
     .execute(&pool)
@@ -1223,7 +1223,7 @@ async fn canonical_editor_managed_rates_require_designation_and_withhold_catalog
 ) {
     let (owner, original) = configured_fixture(&pool).await;
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=12345, default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=12345 WHERE id=$1",
         owner.task_id,
     )
     .execute(&pool)
@@ -1266,7 +1266,6 @@ async fn canonical_editor_managed_rates_require_designation_and_withhold_catalog
         .find(|task| task.id == owner.task_id)
         .unwrap();
     assert_eq!(task.default_rate_cents, None);
-    assert_eq!(task.default_rate_currency, None);
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

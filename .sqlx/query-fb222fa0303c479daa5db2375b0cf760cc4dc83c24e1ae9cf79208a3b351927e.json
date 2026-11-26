@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM information_schema.columns\n                WHERE table_name = 'tasks' AND column_name = 'default_rate_currency') AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fb222fa0303c479daa5db2375b0cf760cc4dc83c24e1ae9cf79208a3b351927e"
+}
