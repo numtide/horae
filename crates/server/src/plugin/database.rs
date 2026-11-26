@@ -86,6 +86,7 @@ pub(super) async fn validate_connection(connection: &mut sqlx::PgConnection) -> 
                         'public.line_amount_cents(bigint,integer,text)'::regprocedure,
                         'public.invoice_portion_cents(numeric,integer,text,public.rounding_method)'::regprocedure,
                         'public.set_updated_at()'::regprocedure,
+                        'public.check_fee_amount_currency_step()'::regprocedure,
                         'public.effective_minutes(integer,integer,smallint,public.round_dir)'::regprocedure
                     ))
             )

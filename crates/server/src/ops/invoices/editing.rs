@@ -74,7 +74,7 @@ pub async fn load(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<InvoiceEditor,
             .collect(),
         subject: invoice.subject,
     };
-    let (review, _) = evaluate(&mut rows, &edit, rounding)?;
+    let (review, _) = evaluate(&mut rows, &edit, &invoice.currency, rounding)?;
     Ok(InvoiceEditor {
         edit,
         review,
@@ -90,19 +90,20 @@ pub async fn review(
     edit: &InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, OpError> {
     authorize_read(actor, PREPARE)?;
-    let (_, revision, rounding, mut rows) = snapshot(tx, actor.org_id(), id).await?;
+    let (invoice, revision, rounding, mut rows) = snapshot(tx, actor.org_id(), id).await?;
     if revision != edit.revision {
         return Err(OpError::conflict(
             "This invoice changed. Reload it before reviewing your edits.",
         ));
     }
-    let (review, _) = evaluate(&mut rows, edit, rounding)?;
+    let (review, _) = evaluate(&mut rows, edit, &invoice.currency, rounding)?;
     Ok(review)
 }
 
 fn evaluate(
     rows: &mut [balances::BalanceLine],
     edit: &InvoiceDraftEdit,
+    currency: &str,
     rounding: Rounding,
 ) -> Result<(InvoiceEditReview, Vec<i64>), OpError> {
     if edit.subject.chars().count() > 200 || edit.subject.contains('\0') {
@@ -136,6 +137,13 @@ fn evaluate(
             return Err(OpError::bad_input(
                 "An invoiced fee amount must be positive",
             ));
+        }
+        // An unchanged amount stays editable, even one stored before steps were enforced.
+        if fee.amount_cents != row.amount_cents {
+            crate::ops::projects::form::fee_step(fee.amount_cents, currency, "Fee amount")
+                .map_err(|error| {
+                    error.with_field(serde_json::json!({ "fee_line": fee.line_id }))
+                })?;
         }
         row.amount_cents = fee.amount_cents;
         row.description = fee.description.trim().to_owned();
@@ -241,7 +249,7 @@ pub async fn save(
         }
     } else {
         if revision != request.edit.revision { return Err(OpError::conflict("This invoice changed. Reload it before saving your edits.")); }
-        let (mut review, net) = evaluate(&mut rows, &request.edit, rounding)?;
+        let (mut review, net) = evaluate(&mut rows, &request.edit, &invoice.currency, rounding)?;
         review.fees.sort_by_key(|fee| fee.line_id);
         if review != canonical.review { return Err(OpError::conflict("Fee balances changed. Review the invoice again before saving.")); }
         let excess: Vec<_> = review.fees.iter().filter(|fee| fee.excess_cents > 0)

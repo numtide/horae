@@ -47,6 +47,20 @@ pub(crate) fn optional_amount(value: &str, field: &str) -> Result<Option<i64>, O
     Ok(Some(amount))
 }
 
+/// Refuses a fee that is not a whole number of `currency`'s unit (JPY 100.50):
+/// it would make an invoice whose total cannot be paid exactly. The database
+/// checks the same step.
+pub(crate) fn fee_step(amount: i64, currency: &str, field: &str) -> Result<i64, OpError> {
+    if amount % horae_core::money::amount_step(currency) == 0 {
+        Ok(amount)
+    } else {
+        Err(OpError::bad_input(format!(
+            "{field}: {} amounts have no decimal places",
+            currency.trim()
+        )))
+    }
+}
+
 pub(crate) fn optional_hours(value: &str) -> Result<Option<i64>, OpError> {
     if value.trim().is_empty() {
         return Ok(None);
@@ -327,6 +341,7 @@ pub fn validate_project_form(
                     .and_then(|value| {
                         value.ok_or_else(|| OpError::bad_input("Fixed fee amount is required"))
                     })
+                    .and_then(|amount| fee_step(amount, currency, "Fixed fee"))
                     .map_err(|error| with_field(error, ProjectFormField::FeeAmount))?;
                 if form.fee_mode == FeeMode::Single {
                     FeeSchedule::Single { amount_cents }
@@ -365,6 +380,7 @@ pub fn validate_project_form(
                         .and_then(|value| {
                             value.ok_or_else(|| OpError::bad_input("Milestone amount is required"))
                         })
+                        .and_then(|amount| fee_step(amount, currency, "Milestone fee"))
                         .map_err(|error| {
                             with_field(error, ProjectFormField::MilestoneAmount(item.id))
                         })?;
@@ -744,6 +760,42 @@ mod tests {
             ..Default::default()
         };
         assert_rejection_field(&empty, false, serde_json::json!("milestones"));
+    }
+
+    /// A fee is a whole number of its currency's unit: a JPY fee takes no
+    /// decimals, EUR and BHD fees take hundredths. The form offers only
+    /// two-decimal currencies, so the form itself is checked in EUR.
+    #[test]
+    fn fees_follow_the_currency_step() {
+        use crate::models::project_creation::MilestoneInput;
+        for (currency, amount) in [("JPY", 120_000), ("EUR", 120_050), ("BHD", 120_050)] {
+            assert_eq!(fee_step(amount, currency, "Fixed fee").unwrap(), amount);
+        }
+        assert_eq!(
+            fee_step(120_050, " JPY", "Fixed fee")
+                .unwrap_err()
+                .to_string(),
+            "Fixed fee: JPY amounts have no decimal places"
+        );
+        let milestone = Uuid::now_v7();
+        for fee_mode in [FeeMode::Single, FeeMode::Monthly, FeeMode::Milestones] {
+            let form = ProjectForm {
+                name: "Valid project".into(),
+                project_type: ProjectType::FixedFee,
+                fee_mode,
+                fee_amount: "1200.50".into(),
+                monthly_day: horae_core::project::MonthlyFeeDay::First,
+                milestones: vec![MilestoneInput {
+                    id: milestone,
+                    name: "Delivery".into(),
+                    due_on: "2026-09-01".into(),
+                    amount: "1200.50".into(),
+                }],
+                ..Default::default()
+            };
+            let validated = validate_project_form(&form, "EUR", false);
+            assert!(validated.is_ok(), "{fee_mode:?}: {:?}", validated.err());
+        }
     }
 
     fn assert_rejection_field(form: &ProjectForm, email: bool, expected: serde_json::Value) {

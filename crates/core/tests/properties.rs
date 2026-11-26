@@ -449,19 +449,25 @@ mod invoice {
         }
 
         /// Discounted line amounts add up to the invoice's discounted
-        /// subtotal, stay within 0..=gross, and each line's discount is within
-        /// one cent of its exact proportional share; the leftover cents go to
-        /// the largest remainders, earlier lines first on a tie. Catches a lost
-        /// or duplicated cent between the invoice header and its lines.
+        /// subtotal, stay within 0..=gross, and each line's discount is a
+        /// whole number of units within one unit of its exact proportional
+        /// share; the leftover units go to the largest remainders, earlier
+        /// lines first on a tie. The unit is the currency's step when every
+        /// line and the discount are on it, else a hundredth. Catches a lost or
+        /// duplicated cent between the invoice header and its lines, and a
+        /// zero-decimal line left with a fraction.
         #[test]
         fn discount_allocation_conserves_the_header_discount(
             gross in prop_oneof![
                 prop::collection::vec(0..=i64::MAX / 64, 0..64),
                 // Small, often equal lines tie on remainders, so the tie order counts.
                 prop::collection::vec(0..=20_i64, 0..16),
+                // Whole units, the lines a zero-decimal invoice has.
+                prop::collection::vec((0..=i64::MAX / 6_400).prop_map(|units| units * 100), 0..64),
+                prop::collection::vec((0..=20_i64).prop_map(|units| units * 100), 0..16),
             ],
             discount in percentage(),
-            (currency, _) in currency(),
+            (currency, step) in currency(),
             method in method(),
         ) {
             let rounding = Rounding::new(currency, method);
@@ -470,19 +476,26 @@ mod invoice {
             let header = invoice_amounts(subtotal, discount, Percentage::ZERO, Percentage::ZERO, rounding).unwrap();
             prop_assert_eq!(net.len(), gross.len());
             prop_assert_eq!(net.iter().sum::<i64>(), header.total_cents);
-            // (remainder, gets a leftover cent) per line, in source order.
+            let unit = if header.discount_cents % step == 0 && gross.iter().all(|g| g % step == 0) {
+                step
+            } else {
+                1
+            };
+            let (subtotal, discount) = (i128::from(subtotal / unit), i128::from(header.discount_cents / unit));
+            // (remainder, gets a leftover unit) per line, in source order.
             let mut lines = Vec::new();
             for (&net, &gross) in net.iter().zip(&gross) {
                 prop_assert!((0..=gross).contains(&net));
-                let share = i128::from(gross - net);
+                prop_assert_eq!((gross - net) % unit, 0);
+                let share = i128::from((gross - net) / unit);
                 if subtotal == 0 {
                     prop_assert_eq!(share, 0);
                     continue;
                 }
-                let exact = i128::from(gross) * i128::from(header.discount_cents);
-                prop_assert!((share * i128::from(subtotal) - exact).abs() < i128::from(subtotal));
-                let floor = exact / i128::from(subtotal);
-                lines.push((exact % i128::from(subtotal), share > floor));
+                let exact = i128::from(gross / unit) * discount;
+                prop_assert!((share * subtotal - exact).abs() < subtotal);
+                let floor = exact / subtotal;
+                lines.push((exact % subtotal, share > floor));
             }
             for (i, &(won, extra)) in lines.iter().enumerate() {
                 for (j, &(lost, missed)) in lines.iter().enumerate() {

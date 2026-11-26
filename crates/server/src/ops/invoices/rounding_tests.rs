@@ -472,19 +472,202 @@ async fn a_new_invoice_rounds_by_the_organization_method_in_whole_yen(pool: PgPo
             (expected, method),
             "{method:?} invoice"
         );
-        let contributions: i64 = sqlx::query_scalar!(
-            r#"SELECT sum(net_before_tax_cents)::bigint AS "sum!" FROM invoice_line_items
-               WHERE invoice_id = $1"#,
+        let mut contributions: Vec<i64> = sqlx::query_scalar!(
+            r#"SELECT net_before_tax_cents AS "net!" FROM invoice_line_items WHERE invoice_id = $1"#,
             invoice.invoice.id
         )
-        .fetch_one(&pool)
+        .fetch_all(&pool)
         .await
         .unwrap();
+        contributions.sort_unstable();
         assert_eq!(
-            contributions,
+            contributions.iter().sum::<i64>(),
             12400 - expected.0,
             "{method:?} line discounts"
         );
+        // The discount moves whole yen: JPY 3 and JPY 121 share JPY 12 or 13.
+        assert!(
+            contributions.iter().all(|net| net % 100 == 0),
+            "{method:?} {contributions:?}"
+        );
+    }
+}
+
+/// The seeded project billed as one fixed fee of `fee_cents`, starting on
+/// 2026-09-01, with its client and itself in `currency`.
+async fn fee_project_in(pool: &PgPool, currency: &str, fee_cents: i64) -> SeedIds {
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
+    sqlx::query!(
+        "UPDATE clients SET currency = $2 WHERE id = $1",
+        ids.client_id,
+        currency
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE projects SET currency = $2, project_type = 'fixed_fee', starts_on = '2026-09-01'
+         WHERE id = $1",
+        ids.project_id,
+        currency
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, fee_mode, fee_amount_cents)
+         VALUES ($1, $2, $3, $4, 'person', 'single', $5)",
+        Uuid::now_v7(),
+        ids.org_id,
+        ids.project_id,
+        ids.user_id,
+        fee_cents
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    ids
+}
+
+fn constraint(error: sqlx::Error) -> Option<String> {
+    error
+        .as_database_error()
+        .and_then(|error| error.constraint().map(str::to_owned))
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_database_keeps_fees_on_the_currency_step(pool: PgPool) {
+    const STEP: Option<&str> = Some("project_fee_amount_currency_step");
+    // Hundredths are fine where the currency has them.
+    for currency in ["EUR", "BHD"] {
+        fee_project_in(&pool, currency, 10_050).await;
+    }
+    let ids = fee_project_in(&pool, "JPY", 10_000).await;
+    let settings = sqlx::query!(
+        "UPDATE project_settings SET fee_amount_cents = 10050 WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(constraint(settings).as_deref(), STEP);
+    let milestone = sqlx::query!(
+        "INSERT INTO project_fee_milestones (id, org_id, project_id, name, due_on, amount_cents, position)
+         VALUES ($1, $2, $3, 'Delivery', '2026-09-01', 10050, 0)",
+        Uuid::now_v7(),
+        ids.org_id,
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(constraint(milestone).as_deref(), STEP);
+    let occurrence = sqlx::query!(
+        "INSERT INTO project_fee_occurrences (id, org_id, project_id, period_key, due_on, description, amount_cents, currency)
+         VALUES ($1, $2, $3, 'single', '2026-09-01', 'Fixed fee', 10050, 'JPY')",
+        Uuid::now_v7(),
+        ids.org_id,
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        constraint(occurrence).as_deref(),
+        Some("project_fee_occurrences_amount_currency_step")
+    );
+
+    // Switching a project to a zero-decimal currency rechecks its fees at the
+    // commit, so the editor may write the currency before the new fee.
+    let ids = fee_project_in(&pool, "EUR", 10_050).await;
+    let switched = sqlx::query!(
+        "UPDATE projects SET currency = 'JPY' WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(constraint(switched).as_deref(), STEP);
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE projects SET currency = 'JPY' WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE project_settings SET fee_amount_cents = 10000 WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_draft_editor_keeps_fee_lines_on_the_currency_step(pool: PgPool) {
+    for (currency, edited, refused) in [
+        ("JPY", 1_190_000, true),
+        ("EUR", 1_190_050, false),
+        ("BHD", 1_190_050, false),
+    ] {
+        let ids = fee_project_in(&pool, currency, 1_200_000).await;
+        let mut write = begin_write(&pool, &ids).await;
+        let generated = super::generate(
+            &mut write.tx,
+            &write.actor,
+            super::Generation {
+                client_id: ids.client_id,
+                period: ("2026-09-01".parse().unwrap(), day()),
+                project_ids: None,
+                overrides: None,
+                request: None,
+            },
+        )
+        .await;
+        let draft = write
+            .commit(generated, &Recorder::default())
+            .await
+            .unwrap()
+            .invoice
+            .id;
+        let caller = Caller::session(ids.org_id, ids.user_id);
+        let mut read = begin_read(&pool, caller).await.unwrap();
+        let editor = super::editing::load(&mut read.tx, &read.actor, draft).await;
+        let mut edit = read.finish(editor).await.unwrap().edit;
+        let line = edit.fees[0].line_id;
+        let review = |edit: crate::models::invoice::InvoiceDraftEdit| {
+            let pool = pool.clone();
+            async move {
+                let mut read = begin_read(&pool, caller).await.unwrap();
+                let review = super::editing::review(&mut read.tx, &read.actor, draft, &edit).await;
+                read.finish(review).await
+            }
+        };
+        // Whole units are fine everywhere; hundredths only where the currency has them.
+        edit.fees[0].amount_cents = edited;
+        assert!(review(edit.clone()).await.is_ok(), "{currency} {edited}");
+        edit.fees[0].amount_cents = 1_190_050;
+        let result = review(edit.clone()).await;
+        if refused {
+            let error = result.unwrap_err();
+            assert!(
+                matches!(error.kind(), crate::ops::OpError::Invalid { .. }),
+                "{error:?}"
+            );
+            assert_eq!(
+                error.detail().and_then(|detail| detail.field.clone()),
+                Some(serde_json::json!({ "fee_line": line }))
+            );
+            assert_eq!(
+                error.to_string(),
+                "Fee amount: JPY amounts have no decimal places"
+            );
+        } else {
+            assert!(result.is_ok(), "{currency}");
+        }
     }
 }
 
