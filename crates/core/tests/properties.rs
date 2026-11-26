@@ -347,9 +347,10 @@ mod money {
 mod invoice {
     use super::*;
     use horae_core::invoice::{
-        InvoiceAmountError, allocate_invoice_discount, invoice_amounts, line_amount_cents,
+        InvoiceAmountError, Rounding, allocate_invoice_discount, invoice_amounts, line_amount_cents,
     };
     use horae_core::project::Percentage;
+    use horae_core::types::RoundingMethod;
 
     fn percentage() -> impl Strategy<Value = Percentage> {
         (0..=10_000_u16).prop_map(|bps| Percentage::try_from(bps).unwrap())
@@ -359,41 +360,83 @@ mod invoice {
         Percentage::try_from(5_000).unwrap()
     }
 
-    /// `amount × bps / 10_000` rounded half up lies within half a cent:
-    /// `portion × 10_000 − amount × bps ∈ (−5_000, 5_000]`, a tie rounding up.
-    fn is_half_up_portion(portion: i64, amount: i64, percentage: Percentage) -> bool {
+    fn method() -> impl Strategy<Value = RoundingMethod> {
+        prop_oneof![
+            Just(RoundingMethod::HalfUp),
+            Just(RoundingMethod::Down),
+            Just(RoundingMethod::Up),
+        ]
+    }
+
+    /// A two-, zero- and three-decimal currency with its step in hundredths.
+    fn currency() -> impl Strategy<Value = (&'static str, i64)> {
+        prop_oneof![Just(("EUR", 1)), Just(("JPY", 100)), Just(("BHD", 1))]
+    }
+
+    /// `amount × bps / 10_000` rounded to a multiple of `step` on the side
+    /// `method` names: below it by less than a step (`Down`), above it by less
+    /// than a step (`Up`), or within half a step with a tie rounding up
+    /// (`HalfUp`). The error is in ten-thousandths of a hundredth.
+    fn is_rounded_portion(
+        portion: i64,
+        amount: i64,
+        percentage: Percentage,
+        (step, method): (i64, RoundingMethod),
+    ) -> bool {
+        let unit = 10_000 * i128::from(step);
         let error = i128::from(portion) * 10_000
             - i128::from(amount) * i128::from(percentage.basis_points());
-        (-4_999..=5_000).contains(&error)
+        portion % step == 0
+            && match method {
+                RoundingMethod::Down => -unit < error && error <= 0,
+                RoundingMethod::Up => 0 <= error && error < unit,
+                RoundingMethod::HalfUp => -unit / 2 < error && error <= unit / 2,
+            }
     }
 
     proptest! {
-        /// The discount and each tax are their exact share rounded half up, the
-        /// discount never exceeds the subtotal, and the total is exactly
-        /// subtotal − discount + taxes, or `Overflow` precisely when that does
-        /// not fit in `i64`.
+        /// The discount and each tax are their exact share rounded to the
+        /// currency's step by the method, the discount never exceeds the
+        /// subtotal (it is the whole subtotal when rounding would pass it), and
+        /// the total is exactly subtotal − discount + taxes, or `Overflow`
+        /// precisely when that does not fit in `i64`.
         #[test]
-        fn invoice_components_round_half_up_and_add_up(
+        fn invoice_components_round_to_the_step_and_add_up(
             (subtotal, discount, tax1, tax2) in prop_oneof![
                 (prop_oneof![Just(i64::MAX), 0..=i64::MAX, 0..=10_000_i64], percentage(), percentage(), percentage()),
                 // An odd subtotal at 50% is an exact half-cent tie, which must round up.
                 ((0..=i64::MAX / 2).prop_map(|k| 2 * k + 1), Just(half()), Just(half()), Just(half())),
+                // Whole units at 50% tie on half a unit in a zero-decimal currency.
+                ((0..=i64::MAX / 200).prop_map(|k| 100 * (2 * k + 1)), Just(half()), Just(half()), Just(half())),
             ],
+            (currency, step) in currency(),
+            method in method(),
         ) {
-            let half_up = |amount: i64, p: Percentage| {
-                (i128::from(amount) * i128::from(p.basis_points()) + 5_000) / 10_000
+            let rounding = Rounding::new(currency, method);
+            let reference = |amount: i64, p: Percentage| {
+                let exact = i128::from(amount) * i128::from(p.basis_points());
+                let unit = 10_000 * i128::from(step);
+                let bias = match method {
+                    RoundingMethod::Down => 0,
+                    RoundingMethod::HalfUp => unit / 2,
+                    RoundingMethod::Up => unit - 1,
+                };
+                (exact + bias) / unit * i128::from(step)
             };
-            let discount_cents = half_up(subtotal, discount);
+            let discount_cents = reference(subtotal, discount).min(i128::from(subtotal));
             let taxable = i128::from(subtotal) - discount_cents;
             let taxable_i64 = i64::try_from(taxable).unwrap();
-            let total = taxable + half_up(taxable_i64, tax1) + half_up(taxable_i64, tax2);
-            match invoice_amounts(subtotal, discount, tax1, tax2) {
+            let total = taxable + reference(taxable_i64, tax1) + reference(taxable_i64, tax2);
+            match invoice_amounts(subtotal, discount, tax1, tax2, rounding) {
                 Ok(a) => {
-                    prop_assert!(is_half_up_portion(a.discount_cents, subtotal, discount));
+                    prop_assert!(
+                        is_rounded_portion(a.discount_cents, subtotal, discount, (step, method))
+                            || a.discount_cents == subtotal
+                    );
                     prop_assert!((0..=subtotal).contains(&a.discount_cents));
                     let taxable = subtotal - a.discount_cents;
-                    prop_assert!(is_half_up_portion(a.tax1_cents, taxable, tax1));
-                    prop_assert!(is_half_up_portion(a.tax2_cents, taxable, tax2));
+                    prop_assert!(is_rounded_portion(a.tax1_cents, taxable, tax1, (step, method)));
+                    prop_assert!(is_rounded_portion(a.tax2_cents, taxable, tax2, (step, method)));
                     prop_assert_eq!(a.total_cents, taxable + a.tax1_cents + a.tax2_cents);
                 }
                 Err(err) => {
@@ -416,10 +459,13 @@ mod invoice {
                 prop::collection::vec(0..=20_i64, 0..16),
             ],
             discount in percentage(),
+            (currency, _) in currency(),
+            method in method(),
         ) {
-            let net = allocate_invoice_discount(&gross, discount).unwrap();
+            let rounding = Rounding::new(currency, method);
+            let net = allocate_invoice_discount(&gross, discount, rounding).unwrap();
             let subtotal: i64 = gross.iter().sum();
-            let header = invoice_amounts(subtotal, discount, Percentage::ZERO, Percentage::ZERO).unwrap();
+            let header = invoice_amounts(subtotal, discount, Percentage::ZERO, Percentage::ZERO, rounding).unwrap();
             prop_assert_eq!(net.len(), gross.len());
             prop_assert_eq!(net.iter().sum::<i64>(), header.total_cents);
             // (remainder, gets a leftover cent) per line, in source order.

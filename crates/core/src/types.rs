@@ -67,6 +67,18 @@ pub enum RoundDir {
     Nearest,
 }
 
+/// How an invoice's discount and taxes round to the currency's step. Signed
+/// amounts round by magnitude: `Down` is toward zero, `Up` away from zero, and
+/// `HalfUp` takes a half step away from zero.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoundingMethod {
+    #[default]
+    HalfUp,
+    Down,
+    Up,
+}
+
 // ── Display ───────────────────────────────────────────────────────────────────
 
 macro_rules! impl_display {
@@ -120,6 +132,12 @@ impl_display!(RoundDir,
     RoundDir::Up      => "up",
     RoundDir::Down    => "down",
     RoundDir::Nearest => "nearest",
+);
+
+impl_display!(RoundingMethod,
+    RoundingMethod::HalfUp => "half_up",
+    RoundingMethod::Down   => "down",
+    RoundingMethod::Up     => "up",
 );
 
 // ── FromStr ───────────────────────────────────────────────────────────────────
@@ -176,6 +194,12 @@ from_str!(RoundDir,
     "up"      => RoundDir::Up,
     "down"    => RoundDir::Down,
     "nearest" => RoundDir::Nearest,
+);
+
+from_str!(RoundingMethod,
+    "half_up" => RoundingMethod::HalfUp,
+    "down"    => RoundingMethod::Down,
+    "up"      => RoundingMethod::Up,
 );
 
 // ── sqlx Postgres support ─────────────────────────────────────────────────────
@@ -245,6 +269,12 @@ mod sqlx_impls {
         RoundDir::Nearest => "nearest",
     );
 
+    pg_enum!(RoundingMethod, "rounding_method",
+        RoundingMethod::HalfUp => "half_up",
+        RoundingMethod::Down   => "down",
+        RoundingMethod::Up     => "up",
+    );
+
     pg_enum!(ProjectType, "project_type",
         ProjectType::TimeAndMaterials => "time_and_materials",
         ProjectType::FixedFee         => "fixed_fee",
@@ -300,6 +330,19 @@ mod tests {
         ] {
             assert_eq!(status.to_string(), s);
             assert_eq!(s.parse::<InvoiceStatus>().unwrap(), status);
+        }
+    }
+
+    #[test]
+    fn rounding_method_wire_strings_match_db_enum() {
+        for (method, s) in [
+            (RoundingMethod::HalfUp, "half_up"),
+            (RoundingMethod::Down, "down"),
+            (RoundingMethod::Up, "up"),
+        ] {
+            assert_eq!(method.to_string(), s);
+            assert_eq!(s.parse::<RoundingMethod>().unwrap(), method);
+            assert_eq!(serde_json::to_value(method).unwrap(), s);
         }
     }
 }

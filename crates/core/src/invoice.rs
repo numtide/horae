@@ -1,4 +1,5 @@
 use crate::project::{Percentage, RateMode};
+use crate::types::RoundingMethod;
 
 /// Resolve an explicitly selected billing mode without changing legacy precedence.
 pub fn resolve_project_rate(
@@ -56,6 +57,7 @@ pub enum InvoiceAmountError {
 pub fn allocate_invoice_discount(
     gross_lines: &[i64],
     discount: Percentage,
+    rounding: Rounding,
 ) -> Result<Vec<i64>, InvoiceAmountError> {
     let subtotal = gross_lines.iter().try_fold(0_i64, |sum, &amount| {
         if amount < 0 {
@@ -66,8 +68,14 @@ pub fn allocate_invoice_discount(
     if subtotal == 0 {
         return Ok(vec![0; gross_lines.len()]);
     }
-    let discount_cents =
-        invoice_amounts(subtotal, discount, Percentage::ZERO, Percentage::ZERO)?.discount_cents;
+    let discount_cents = invoice_amounts(
+        subtotal,
+        discount,
+        Percentage::ZERO,
+        Percentage::ZERO,
+        rounding,
+    )?
+    .discount_cents;
     let mut remaining = discount_cents;
     let mut contributions = Vec::with_capacity(gross_lines.len());
     let mut remainders = Vec::with_capacity(gross_lines.len());
@@ -90,21 +98,58 @@ pub fn allocate_invoice_discount(
     Ok(contributions)
 }
 
-/// Apply the discount before independently rounded taxes, using exact minor units.
+/// How an invoice's discount and taxes round: to the step of its currency, in
+/// hundredths (100 for a zero-decimal currency, else 1), by `method`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rounding {
+    pub(crate) step: i64,
+    pub(crate) method: RoundingMethod,
+}
+
+impl Rounding {
+    /// `currency`'s step, as [`line_amount_cents`] picks it, with `method`.
+    pub fn new(currency: &str, method: RoundingMethod) -> Self {
+        let step = if crate::money::currency_decimals(currency) == 0 {
+            100
+        } else {
+            1
+        };
+        Self { step, method }
+    }
+
+    /// `percentage` of `amount`, rounded to the step. A signed amount rounds
+    /// by magnitude, so a negative one mirrors its positive. The SQL twin is
+    /// `invoice_portion_cents(numeric, integer, text, rounding_method)`.
+    fn portion(self, amount: i64, percentage: Percentage) -> Result<i64, InvoiceAmountError> {
+        let exact = i128::from(amount) * i128::from(percentage.basis_points());
+        let unit = 10_000 * i128::from(self.step);
+        let bias = match self.method {
+            RoundingMethod::Down => 0,
+            RoundingMethod::HalfUp => unit / 2,
+            RoundingMethod::Up => unit - 1,
+        };
+        i64::try_from((exact.abs() + bias) / unit * i128::from(self.step) * exact.signum())
+            .map_err(|_| InvoiceAmountError::Overflow)
+    }
+}
+
+/// Apply the discount before independently rounded taxes, using exact minor
+/// units. The discount and each tax round to the currency's step by the
+/// rounding method; the total is the exact sum of the rounded parts. A
+/// discount never exceeds the subtotal, which a subtotal off the step (a
+/// zero-decimal invoice with a fractional fee) could otherwise round it past.
 pub fn invoice_amounts(
     subtotal_cents: i64,
     discount: Percentage,
     tax1: Percentage,
     tax2: Percentage,
+    rounding: Rounding,
 ) -> Result<InvoiceAmounts, InvoiceAmountError> {
     if subtotal_cents < 0 {
         return Err(InvoiceAmountError::NegativeSubtotal);
     }
-    let portion = |amount: i64, percentage: Percentage| {
-        i64::try_from((i128::from(amount) * i128::from(percentage.basis_points()) + 5_000) / 10_000)
-            .map_err(|_| InvoiceAmountError::Overflow)
-    };
-    let discount_cents = portion(subtotal_cents, discount)?;
+    let portion = |amount, percentage| rounding.portion(amount, percentage);
+    let discount_cents = portion(subtotal_cents, discount)?.min(subtotal_cents);
     let taxable_cents = subtotal_cents - discount_cents;
     let tax1_cents = portion(taxable_cents, tax1)?;
     let tax2_cents = portion(taxable_cents, tax2)?;
@@ -191,6 +236,11 @@ pub(crate) fn line_amount_in_step(
 mod tests {
     use super::*;
 
+    const EUR: Rounding = Rounding {
+        step: 1,
+        method: RoundingMethod::HalfUp,
+    };
+
     #[test]
     fn only_a_sent_invoice_past_its_due_date_is_overdue() {
         use crate::types::InvoiceStatus::{Draft, Paid, Sent, Void};
@@ -205,7 +255,7 @@ mod tests {
 
     #[test]
     fn discounted_fee_contribution_leaves_discount_available() {
-        let net = allocate_invoice_discount(&[100_000], "10".parse().unwrap()).unwrap();
+        let net = allocate_invoice_discount(&[100_000], "10".parse().unwrap(), EUR).unwrap();
         assert_eq!(net, [90_000]);
         assert_eq!(100_000 - net[0], 10_000);
     }
@@ -213,11 +263,11 @@ mod tests {
     #[test]
     fn discount_allocation_uses_largest_remainder_then_stable_source_order() {
         assert_eq!(
-            allocate_invoice_discount(&[1, 3, 1], "20".parse().unwrap()).unwrap(),
+            allocate_invoice_discount(&[1, 3, 1], "20".parse().unwrap(), EUR).unwrap(),
             [1, 2, 1]
         );
         assert_eq!(
-            allocate_invoice_discount(&[1, 1, 1], "50".parse().unwrap()).unwrap(),
+            allocate_invoice_discount(&[1, 1, 1], "50".parse().unwrap(), EUR).unwrap(),
             [0, 0, 1]
         );
     }
@@ -225,23 +275,30 @@ mod tests {
     #[test]
     fn discount_allocation_handles_empty_zero_and_full_discounts() {
         let full = "100".parse().unwrap();
-        assert!(allocate_invoice_discount(&[], full).unwrap().is_empty());
-        assert_eq!(allocate_invoice_discount(&[0, 0], full).unwrap(), [0, 0]);
+        assert!(
+            allocate_invoice_discount(&[], full, EUR)
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
-            allocate_invoice_discount(&[1, 99, 0], Percentage::ZERO).unwrap(),
+            allocate_invoice_discount(&[0, 0], full, EUR).unwrap(),
+            [0, 0]
+        );
+        assert_eq!(
+            allocate_invoice_discount(&[1, 99, 0], Percentage::ZERO, EUR).unwrap(),
             [1, 99, 0]
         );
         assert_eq!(
-            allocate_invoice_discount(&[1, 99, 0], full).unwrap(),
+            allocate_invoice_discount(&[1, 99, 0], full, EUR).unwrap(),
             [0, 0, 0]
         );
     }
 
     #[test]
     fn discount_allocation_rejects_negative_lines_and_subtotal_overflow() {
-        assert!(allocate_invoice_discount(&[100, -1], Percentage::ZERO).is_err());
+        assert!(allocate_invoice_discount(&[100, -1], Percentage::ZERO, EUR).is_err());
         assert_eq!(
-            allocate_invoice_discount(&[i64::MAX, 1], Percentage::ZERO),
+            allocate_invoice_discount(&[i64::MAX, 1], Percentage::ZERO, EUR),
             Err(InvoiceAmountError::Overflow)
         );
     }
@@ -250,7 +307,7 @@ mod tests {
     fn discount_allocation_supports_maximum_representable_subtotal() {
         let half = "50".parse().unwrap();
         assert_eq!(
-            allocate_invoice_discount(&[i64::MAX - 1, 1], half).unwrap(),
+            allocate_invoice_discount(&[i64::MAX - 1, 1], half, EUR).unwrap(),
             [i64::MAX / 2, 0]
         );
     }
@@ -263,12 +320,13 @@ mod tests {
                     let gross = [a, b, c];
                     for bps in [0, 1, 2500, 3333, 5000, 9999, 10_000] {
                         let discount = Percentage::try_from(bps).unwrap();
-                        let net = allocate_invoice_discount(&gross, discount).unwrap();
+                        let net = allocate_invoice_discount(&gross, discount, EUR).unwrap();
                         let amounts = invoice_amounts(
                             a + b + c,
                             discount,
                             Percentage::ZERO,
                             Percentage::ZERO,
+                            EUR,
                         )
                         .unwrap();
                         assert_eq!(net.iter().sum::<i64>(), amounts.total_cents);
@@ -339,6 +397,7 @@ mod tests {
             "10".parse().unwrap(),
             "21".parse().unwrap(),
             "5".parse().unwrap(),
+            EUR,
         )
         .unwrap();
         assert_eq!(
@@ -356,33 +415,142 @@ mod tests {
     #[test]
     fn invoice_adjustments_round_components_half_up() {
         let half = "50".parse().unwrap();
-        let amounts = invoice_amounts(1, Percentage::ZERO, half, half).unwrap();
+        let amounts = invoice_amounts(1, Percentage::ZERO, half, half, EUR).unwrap();
         assert_eq!(
             (amounts.tax1_cents, amounts.tax2_cents, amounts.total_cents),
             (1, 1, 3)
         );
-        assert_eq!(invoice_amounts(1, half, half, half).unwrap().total_cents, 0);
+        assert_eq!(
+            invoice_amounts(1, half, half, half, EUR)
+                .unwrap()
+                .total_cents,
+            0
+        );
+    }
+
+    /// (discount, tax1, total) of `subtotal` with a 10% discount and 8% tax.
+    fn components(subtotal: i64, currency: &str, method: RoundingMethod) -> (i64, i64, i64) {
+        let amounts = invoice_amounts(
+            subtotal,
+            "10".parse().unwrap(),
+            "8".parse().unwrap(),
+            Percentage::ZERO,
+            Rounding::new(currency, method),
+        )
+        .unwrap();
+        (
+            amounts.discount_cents,
+            amounts.tax1_cents,
+            amounts.total_cents,
+        )
+    }
+
+    #[test]
+    fn a_zero_decimal_invoice_rounds_discount_and_taxes_to_whole_units() {
+        use RoundingMethod::{Down, HalfUp, Up};
+        // ¥12,345: discount ¥1,234.50, so taxable ¥11,110 (tax ¥888.80) or
+        // ¥11,111 (tax ¥888.88).
+        assert_eq!(
+            components(1_234_500, "JPY", HalfUp),
+            (123_500, 88_900, 1_199_900)
+        );
+        assert_eq!(
+            components(1_234_500, "JPY", Down),
+            (123_400, 88_800, 1_199_900)
+        );
+        assert_eq!(
+            components(1_234_500, "JPY", Up),
+            (123_500, 88_900, 1_199_900)
+        );
+    }
+
+    #[test]
+    fn two_and_three_decimal_invoices_round_to_hundredths() {
+        use RoundingMethod::{Down, HalfUp, Up};
+        // 123.45: discount 12.345, taxable 111.10 or 111.11, tax ≈ 8.888.
+        for currency in ["EUR", "BHD"] {
+            assert_eq!(components(12_345, currency, HalfUp), (1_235, 889, 11_999));
+            assert_eq!(components(12_345, currency, Down), (1_234, 888, 11_999));
+            assert_eq!(components(12_345, currency, Up), (1_235, 889, 11_999));
+        }
+    }
+
+    #[test]
+    fn rounding_methods_differ_on_a_half_step() {
+        use RoundingMethod::{Down, HalfUp, Up};
+        let half = |method| {
+            Rounding::new("JPY", method)
+                .portion(100, "50".parse().unwrap())
+                .unwrap()
+        };
+        assert_eq!([half(HalfUp), half(Down), half(Up)], [100, 0, 100]);
+        let below_half = |method| {
+            Rounding::new("JPY", method)
+                .portion(98, "50".parse().unwrap())
+                .unwrap()
+        };
+        assert_eq!(
+            [below_half(HalfUp), below_half(Down), below_half(Up)],
+            [0, 0, 100]
+        );
+    }
+
+    #[test]
+    fn negative_amounts_round_as_the_mirror_of_positive_ones() {
+        for currency in ["JPY", "EUR", "BHD"] {
+            for method in [
+                RoundingMethod::HalfUp,
+                RoundingMethod::Down,
+                RoundingMethod::Up,
+            ] {
+                let rounding = Rounding::new(currency, method);
+                for amount in [0, 1, 49, 50, 51, 99, 150, 12_345, 1_234_550] {
+                    for bps in [0_u16, 1, 800, 1_000, 5_000, 10_000] {
+                        let percentage = Percentage::try_from(bps).unwrap();
+                        assert_eq!(
+                            rounding.portion(-amount, percentage),
+                            rounding.portion(amount, percentage).map(|p| -p),
+                            "{currency} {method:?} {amount} {bps}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_discount_never_rounds_past_an_off_step_subtotal() {
+        // A fractional-yen fee makes ¥1.50; a full discount rounds up to ¥2.
+        let amounts = invoice_amounts(
+            150,
+            "100".parse().unwrap(),
+            "10".parse().unwrap(),
+            Percentage::ZERO,
+            Rounding::new("JPY", RoundingMethod::Up),
+        )
+        .unwrap();
+        assert_eq!((amounts.discount_cents, amounts.total_cents), (150, 0));
     }
 
     #[test]
     fn invoice_adjustments_reject_negative_subtotal_and_overflow() {
         let zero = Percentage::ZERO;
         assert_eq!(
-            invoice_amounts(-1, zero, zero, zero),
+            invoice_amounts(-1, zero, zero, zero, EUR),
             Err(InvoiceAmountError::NegativeSubtotal)
         );
         assert_eq!(
-            invoice_amounts(i64::MAX, zero, "1".parse().unwrap(), zero),
+            invoice_amounts(i64::MAX, zero, "1".parse().unwrap(), zero, EUR),
             Err(InvoiceAmountError::Overflow)
         );
         assert_eq!(
-            invoice_amounts(i64::MAX, zero, zero, zero)
+            invoice_amounts(i64::MAX, zero, zero, zero, EUR)
                 .unwrap()
                 .total_cents,
             i64::MAX
         );
         assert_eq!(
-            invoice_amounts(i64::MAX, "100".parse().unwrap(), zero, zero)
+            invoice_amounts(i64::MAX, "100".parse().unwrap(), zero, zero, EUR)
                 .unwrap()
                 .total_cents,
             0

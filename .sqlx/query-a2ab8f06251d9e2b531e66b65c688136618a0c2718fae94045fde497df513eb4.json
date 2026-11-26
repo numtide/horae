@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT discount_cents, tax1_cents, total_cents, rounding AS \"rounding: RoundingMethod\"\n           FROM invoices WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "discount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "tax1_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "rounding: RoundingMethod",
+        "type_info": {
+          "Custom": {
+            "name": "rounding_method",
+            "kind": {
+              "Enum": [
+                "half_up",
+                "down",
+                "up"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a2ab8f06251d9e2b531e66b65c688136618a0c2718fae94045fde497df513eb4"
+}

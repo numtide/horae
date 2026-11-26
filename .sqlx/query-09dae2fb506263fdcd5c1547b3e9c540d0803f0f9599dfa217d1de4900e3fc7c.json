@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET discount_bps = 1000, tax1_bps = 800 WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "09dae2fb506263fdcd5c1547b3e9c540d0803f0f9599dfa217d1de4900e3fc7c"
+}

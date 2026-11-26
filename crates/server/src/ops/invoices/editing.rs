@@ -1,4 +1,5 @@
-use horae_core::types::InvoiceStatus;
+use horae_core::invoice::Rounding;
+use horae_core::types::{InvoiceStatus, RoundingMethod};
 use uuid::Uuid;
 
 use super::{PREPARE, authorize_prepare, authorize_read, balances, defaults};
@@ -13,7 +14,7 @@ async fn snapshot(
     tx: &mut Tx,
     org_id: Uuid,
     id: Uuid,
-) -> Result<(Invoice, i64, Vec<balances::BalanceLine>), OpError> {
+) -> Result<(Invoice, i64, Rounding, Vec<balances::BalanceLine>), OpError> {
     super::refuse_imported(tx, org_id, id).await?;
     let invoice = super::fetch_invoice_metadata(&mut **tx, id, org_id)
         .await?
@@ -21,13 +22,19 @@ async fn snapshot(
     if invoice.status != InvoiceStatus::Draft {
         return Err(OpError::conflict("Only draft invoices can be edited"));
     }
-    let revision = sqlx::query_scalar!(
-        "SELECT edit_revision FROM invoices WHERE id=$1 AND org_id=$2",
+    // A draft keeps the method it was created with, whatever the setting says now.
+    let stored = sqlx::query!(
+        r#"SELECT edit_revision, rounding AS "rounding: RoundingMethod"
+           FROM invoices WHERE id=$1 AND org_id=$2"#,
         id,
         org_id
     )
     .fetch_one(&mut **tx)
     .await?;
+    let (revision, rounding) = (
+        stored.edit_revision,
+        Rounding::new(&invoice.currency, stored.rounding),
+    );
     let rows = balances::read_lines(tx, org_id, id).await?;
     if rows
         .iter()
@@ -38,14 +45,14 @@ async fn snapshot(
             "Invoice lines do not match its saved subtotal; editing is unavailable.",
         ));
     }
-    Ok((invoice, revision, rows))
+    Ok((invoice, revision, rounding, rows))
 }
 
 /// A draft's editable values and fee lines, reviewed against current fee
 /// balances.
 pub async fn load(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<InvoiceEditor, OpError> {
     authorize_read(actor, PREPARE)?;
-    let (invoice, revision, mut rows) = snapshot(tx, actor.org_id(), id).await?;
+    let (invoice, revision, rounding, mut rows) = snapshot(tx, actor.org_id(), id).await?;
     let edit = InvoiceDraftEdit {
         revision,
         defaults: InvoiceDefaults {
@@ -67,7 +74,7 @@ pub async fn load(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<InvoiceEditor,
             .collect(),
         subject: invoice.subject,
     };
-    let (review, _) = evaluate(&mut rows, &edit)?;
+    let (review, _) = evaluate(&mut rows, &edit, rounding)?;
     Ok(InvoiceEditor {
         edit,
         review,
@@ -83,19 +90,20 @@ pub async fn review(
     edit: &InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, OpError> {
     authorize_read(actor, PREPARE)?;
-    let (_, revision, mut rows) = snapshot(tx, actor.org_id(), id).await?;
+    let (_, revision, rounding, mut rows) = snapshot(tx, actor.org_id(), id).await?;
     if revision != edit.revision {
         return Err(OpError::conflict(
             "This invoice changed. Reload it before reviewing your edits.",
         ));
     }
-    let (review, _) = evaluate(&mut rows, edit)?;
+    let (review, _) = evaluate(&mut rows, edit, rounding)?;
     Ok(review)
 }
 
 fn evaluate(
     rows: &mut [balances::BalanceLine],
     edit: &InvoiceDraftEdit,
+    rounding: Rounding,
 ) -> Result<(InvoiceEditReview, Vec<i64>), OpError> {
     if edit.subject.chars().count() > 200 || edit.subject.contains('\0') {
         return Err(OpError::bad_input(
@@ -133,12 +141,12 @@ fn evaluate(
         row.description = fee.description.trim().to_owned();
     }
     let gross: Vec<_> = rows.iter().map(|row| row.amount_cents).collect();
-    let net = balances::allocate(&gross, edit.defaults.discount_bps)?;
+    let net = balances::allocate(&gross, edit.defaults.discount_bps, rounding)?;
     let subtotal = rows
         .iter()
         .try_fold(0_i64, |sum, row| sum.checked_add(row.amount_cents))
         .ok_or_else(|| OpError::conflict("Invoice amount exceeds the supported range"))?;
-    let amounts = defaults::amounts(&edit.defaults, subtotal)?;
+    let amounts = defaults::amounts(&edit.defaults, subtotal, rounding)?;
     let mut fees = Vec::with_capacity(edits.len());
     for (row, net_cents) in rows
         .iter()
@@ -225,7 +233,7 @@ pub async fn save(
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| OpError::not_found("Invoice not found"))?;
-    let (invoice, revision, mut rows) = snapshot(tx, org_id, id).await?;
+    let (invoice, revision, rounding, mut rows) = snapshot(tx, org_id, id).await?;
     if let Some(previous) = sqlx::query!("SELECT actor_id,invoice_id,completed_revision,payload FROM invoice_edit_requests WHERE id=$1 AND org_id=$2", request.request_id, org_id)
         .fetch_optional(&mut **tx).await? {
         if previous.actor_id != actor_id || previous.invoice_id != id || previous.payload != payload || previous.completed_revision != revision {
@@ -233,7 +241,7 @@ pub async fn save(
         }
     } else {
         if revision != request.edit.revision { return Err(OpError::conflict("This invoice changed. Reload it before saving your edits.")); }
-        let (mut review, net) = evaluate(&mut rows, &request.edit)?;
+        let (mut review, net) = evaluate(&mut rows, &request.edit, rounding)?;
         review.fees.sort_by_key(|fee| fee.line_id);
         if review != canonical.review { return Err(OpError::conflict("Fee balances changed. Review the invoice again before saving.")); }
         let excess: Vec<_> = review.fees.iter().filter(|fee| fee.excess_cents > 0)

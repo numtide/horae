@@ -684,6 +684,17 @@ invoices-settings-preview-routing = Routing
 invoices-settings-preview-account = Account
 invoices-settings-preview-line = { $label }: { $value }
 invoices-settings-preview-terms = Terms
+invoices-settings-rounding = Rounding
+invoices-settings-rounding-hint = How new invoices round their discount and taxes to the currency's smallest unit, such as whole yen or cents. Existing invoices keep the rounding they were created with.
+invoices-settings-rounding-loading = Loading the rounding setting…
+invoices-settings-rounding-what = the rounding setting
+invoices-settings-rounding-half-up = Nearest, halves up
+invoices-settings-rounding-half-up-hint = 12.345 becomes 12.35, and 12.344 becomes 12.34.
+invoices-settings-rounding-down = Down
+invoices-settings-rounding-down-hint = Never above the exact amount: 12.349 becomes 12.34.
+invoices-settings-rounding-up = Up
+invoices-settings-rounding-up-hint = Never below the exact amount: 12.341 becomes 12.35.
+invoices-settings-save-rounding = Save rounding
 
 ## Importers: connection
 

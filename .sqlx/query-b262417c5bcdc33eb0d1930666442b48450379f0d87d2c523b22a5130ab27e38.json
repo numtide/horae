@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM invoices WHERE number = 'JPY-1'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b262417c5bcdc33eb0d1930666442b48450379f0d87d2c523b22a5130ab27e38"
+}

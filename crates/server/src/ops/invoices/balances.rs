@@ -57,7 +57,11 @@ pub(super) async fn read_lines(
     .map_err(OpError::from)
 }
 
-pub(super) fn allocate(gross: &[i64], discount_bps: i16) -> Result<Vec<i64>, OpError> {
+pub(super) fn allocate(
+    gross: &[i64],
+    discount_bps: i16,
+    rounding: horae_core::invoice::Rounding,
+) -> Result<Vec<i64>, OpError> {
     if gross.len() > 20000 {
         return Err(OpError::conflict("Too many lines for one invoice"));
     }
@@ -65,6 +69,6 @@ pub(super) fn allocate(gross: &[i64], discount_bps: i16) -> Result<Vec<i64>, OpE
         .ok()
         .and_then(|bps| Percentage::try_from(bps).ok())
         .ok_or_else(|| OpError::bad_input("Discount must be between 0 and 100"))?;
-    horae_core::invoice::allocate_invoice_discount(gross, discount)
+    horae_core::invoice::allocate_invoice_discount(gross, discount, rounding)
         .map_err(|error| OpError::conflict(error.to_string()))
 }
