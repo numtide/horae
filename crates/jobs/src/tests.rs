@@ -328,15 +328,16 @@ async fn a_concurrency_key_admits_one_queued_or_running_job(pool: sqlx::PgPool) 
         Enqueued::Existing(id)
     );
 
-    // Two workers, one key: one job, so one of them runs it.
+    // Two workers, one key: one job, so one of them runs it. Either may win
+    // the claim, and only the winner may execute it.
     let registry = registry();
     let (left, right) = tokio::join!(
         claim_registered(&pool, &registry, "worker-a"),
         claim_registered(&pool, &registry, "worker-b"),
     );
-    let claimed: Vec<_> = [left.unwrap(), right.unwrap()]
+    let claimed: Vec<_> = [("worker-a", left.unwrap()), ("worker-b", right.unwrap())]
         .into_iter()
-        .flatten()
+        .filter_map(|(worker, job)| Some((worker, job?)))
         .collect();
     assert_eq!(claimed.len(), 1);
     assert_eq!(
@@ -344,12 +345,23 @@ async fn a_concurrency_key_admits_one_queued_or_running_job(pool: sqlx::PgPool) 
         Enqueued::Existing(id)
     );
 
-    let job = claimed.into_iter().next().unwrap();
-    execute(&pool, &registry, "worker-a", job).await.unwrap();
-    assert!(matches!(
-        enqueue(&pool, keyed()).await.unwrap(),
-        Enqueued::Created(next) if next != id
-    ));
+    let (worker, job) = claimed.into_iter().next().unwrap();
+    execute(&pool, &registry, worker, job).await.unwrap();
+    let outcomes: Vec<_> = attempts(&pool, id)
+        .await
+        .into_iter()
+        .map(|attempt| (attempt.attempt, attempt.outcome, attempt.error))
+        .collect();
+    assert_eq!(
+        row(&pool, id).await.status,
+        "succeeded",
+        "{worker} ran the job; attempts: {outcomes:?}"
+    );
+    let next = enqueue(&pool, keyed()).await.unwrap();
+    assert!(
+        matches!(next, Enqueued::Created(created) if created != id),
+        "{next:?}"
+    );
 }
 
 #[sqlx::test(migrator = "crate::MIGRATOR")]
