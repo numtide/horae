@@ -66,6 +66,7 @@ fn restore_opener_focus(opener: &str, fallback: &str) {
 pub fn ClientList(filter: ClientFilter) -> Element {
     let tr = crate::i18n::use_tr();
     let navigator = use_navigator();
+    let mut show_form = use_signal(|| false);
     // Management view: include inactive clients so managers can reactivate them.
     // The search box answers at once; the URL follows when typing pauses.
     let mut query = use_signal(|| filter.search.clone());
@@ -77,6 +78,10 @@ pub fn ClientList(filter: ClientFilter) -> Element {
     let asked = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(None::<String>)));
     use_effect(move || {
         let search = settled();
+        // An open editor holds navigation; the URL catches up once it closes.
+        if show_form() {
+            return;
+        }
         let Route::ClientList { filter: current } = dioxus::router::router().current::<Route>()
         else {
             return;
@@ -132,7 +137,6 @@ pub fn ClientList(filter: ClientFilter) -> Element {
         go(ClientFilter::cleared());
     });
 
-    let mut show_form = use_signal(|| false);
     // `Some(id)` while editing an existing client, `None` while creating.
     let mut editing_id = use_signal(|| None::<Uuid>);
     let mut action_error = use_signal(|| None::<String>);

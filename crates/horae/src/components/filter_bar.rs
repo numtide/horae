@@ -35,7 +35,8 @@ pub fn SearchField(id: &'static str, label: String, query: Signal<String>) -> El
                 oninput: move |event| query.set(event.value()),
                 // Text typed into the server-rendered field before hydration
                 // never reaches `query`, and every render rewrites `value`
-                // from `query`. Read the field now, before the next render.
+                // from `query`. Read the field now, before the next render; it
+                // differs from `query` (which may come from the URL) only if typed.
                 onmounted: move |_| {
                     let typed = document::eval(&format!(
                         "return document.getElementById({})?.value ?? '';",
@@ -43,8 +44,7 @@ pub fn SearchField(id: &'static str, label: String, query: Signal<String>) -> El
                     ));
                     async move {
                         if let Ok(typed) = typed.join::<String>().await
-                            && !typed.is_empty()
-                            && query.peek().is_empty()
+                            && typed != *query.peek()
                         {
                             query.set(typed);
                         }
