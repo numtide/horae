@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name, kind, every_secs, concurrency_key, priority, max_attempts,\n                      next_due_at AS \"next_due_at!\"\n                 FROM horae_job_schedules WHERE org_id = $1 ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "every_secs",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "concurrency_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "priority",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "max_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "next_due_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "67f288414a6b6250e4ad0133785ec6697637d937d042963d767ab25e77a5395c"
+}

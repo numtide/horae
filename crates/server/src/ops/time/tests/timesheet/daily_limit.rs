@@ -251,7 +251,7 @@ async fn a_legacy_entry_over_the_limit_can_change_anything_but_raise_its_minutes
     let f = fixture(&pool).await;
     let entry = f.entry(&pool).await;
     legacy_minutes(&pool, entry, 20_000).await;
-    // `scheduler::sweep` needs the app state; this is the column its claim sets.
+    // The long-timer sweep needs the app state; this is the column its claim sets.
     sqlx::query!(
         "UPDATE time_entries SET is_running=true, started_at=now(), notified_long_running_at=now()
          WHERE id=$1",

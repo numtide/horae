@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_job_schedules\n                (id, org_id, name, kind, payload, cadence, every_secs, local_time, weekday,\n                 zone_source, person_id, concurrency_key, priority, max_attempts,\n                 next_due_at)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,\n                   CASE WHEN $6 = 'every' THEN now() END)\n           ON CONFLICT (org_id, name) DO UPDATE\n              SET kind = EXCLUDED.kind, payload = EXCLUDED.payload,\n                  cadence = EXCLUDED.cadence, every_secs = EXCLUDED.every_secs,\n                  local_time = EXCLUDED.local_time, weekday = EXCLUDED.weekday,\n                  zone_source = EXCLUDED.zone_source, person_id = EXCLUDED.person_id,\n                  concurrency_key = EXCLUDED.concurrency_key, priority = EXCLUDED.priority,\n                  max_attempts = EXCLUDED.max_attempts,\n                  next_due_at = CASE\n                      WHEN (horae_job_schedules.cadence, horae_job_schedules.every_secs,\n                            horae_job_schedules.local_time, horae_job_schedules.weekday,\n                            horae_job_schedules.zone_source, horae_job_schedules.person_id)\n                           IS NOT DISTINCT FROM\n                           (EXCLUDED.cadence, EXCLUDED.every_secs, EXCLUDED.local_time,\n                            EXCLUDED.weekday, EXCLUDED.zone_source, EXCLUDED.person_id)\n                      THEN horae_job_schedules.next_due_at\n                      ELSE EXCLUDED.next_due_at END\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Int4",
+        "Time",
+        "Int2",
+        "Text",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9240f6f106dd444faf14aa8c6f35bfdb0f93a0efc5d8ee7ee2918a937d3b4be5"
+}

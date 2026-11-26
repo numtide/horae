@@ -83,6 +83,83 @@ pub(crate) async fn today_for_org(
     Ok(today_in(&zone, Utc::now()))
 }
 
+/// Before the organization's zone becomes `zone`: when it changes, its daily
+/// and weekly schedules read in that zone (directly, or through a person who
+/// follows it) are planned again, so the next firing is in the new zone.
+pub(crate) async fn replan_for_org_zone(
+    connection: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    zone: &str,
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE horae_job_schedules s SET next_due_at = NULL
+          WHERE s.org_id = $1 AND s.cadence <> 'every'
+            AND (SELECT timezone FROM organizations WHERE id = $1) IS DISTINCT FROM $2
+            AND (s.zone_source = 'organization'
+              OR (s.zone_source = 'person' AND EXISTS (
+                  SELECT 1 FROM users u WHERE u.id = s.person_id AND u.timezone IS NULL)))",
+        org_id,
+        zone,
+    )
+    .execute(connection)
+    .await?;
+    Ok(())
+}
+
+/// Before the person's own zone becomes `zone` (`None` follows the
+/// organization): as [`replan_for_org_zone`], for the person's schedules.
+pub(crate) async fn replan_for_person_zone(
+    connection: &mut sqlx::PgConnection,
+    user_id: Uuid,
+    zone: Option<&str>,
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        "UPDATE horae_job_schedules SET next_due_at = NULL
+          WHERE person_id = $1 AND cadence <> 'every'
+            AND (SELECT timezone FROM users WHERE id = $1) IS DISTINCT FROM $2",
+        user_id,
+        zone,
+    )
+    .execute(connection)
+    .await?;
+    Ok(())
+}
+
+/// The zones the job scheduler reads daily and weekly times in.
+pub struct Zones {
+    pool: sqlx::PgPool,
+}
+
+impl Zones {
+    pub fn new(pool: sqlx::PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl horae_jobs::ZoneResolver for Zones {
+    fn zone(
+        &self,
+        org_id: Uuid,
+        person_id: Option<Uuid>,
+    ) -> horae_jobs::BoxFuture<'_, anyhow::Result<Tz>> {
+        Box::pin(async move {
+            let name = match person_id {
+                Some(person_id) => person_zone(&self.pool, person_id).await?,
+                None => {
+                    sqlx::query_scalar!("SELECT timezone FROM organizations WHERE id = $1", org_id)
+                        .fetch_one(&self.pool)
+                        .await?
+                }
+            };
+            // As in `today_in`: a name the zone database no longer knows reads as UTC.
+            Ok(parse(&name).unwrap_or_else(|| {
+                tracing::warn!(%org_id, ?person_id, zone = %name, "unknown time zone; scheduling in UTC");
+                Tz::UTC
+            }))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

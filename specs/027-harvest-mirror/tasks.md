@@ -53,12 +53,12 @@ ______________________________________________________________________
 
 ## Phase 3: PR 3, scheduler with time zones (US9)
 
-- [ ] T023 [P] [US9] Tests first for the pure `next_due` in `crates/jobs/src/schedule.rs`: every N seconds; daily 09:00 Europe/Madrid across the March and October changes (02:30 on the spring day fires at 03:00, 02:30 on the autumn day fires once); weekly Monday 09:00 in America/New_York; a person zone
-- [ ] T024 [US9] Tests first: two schedulers started together, one runs; a firing missed for three slots enqueues one job; a firing is idempotent by `schedule:<id>:<due>`
-- [ ] T025 [US9] Migration: `horae_job_schedules` (data-model.md)
-- [ ] T026 [US9] `schedule.rs` (cadences, `next_due`) and `scheduler.rs` (leader by `pg_try_advisory_lock` on a dedicated connection, a 15 s tick, enqueue due firings, advance `next_due_at`); `ZoneResolver` implemented in the server from `timezone.rs`
-- [ ] T027 [US9] Move the long-timer sweep, budget sweep and OAuth cleanup from `crates/server/src/scheduler.rs` to three handlers and per-organization schedules (every 60 s), upserted at server start for every organization and by `init` (in Rust, so their ids are UUID v7); delete `scheduler.rs`
-- [ ] T028 [US9] Check that the sweeps' existing tests pass unchanged and that the long-timer event still fires at most once per timer
+- [X] T023 [P] [US9] Tests first for the pure `next_due` in `crates/jobs/src/schedule.rs`: every N seconds; daily 09:00 Europe/Madrid across the March and October changes (02:30 on the spring day fires at 03:00, 02:30 on the autumn day fires once); weekly Monday 09:00 in America/New_York; a person zone
+- [X] T024 [US9] Tests first: two schedulers started together, one runs; a firing missed for three slots enqueues one job; a firing is idempotent by `schedule:<id>:<due>`
+- [X] T025 [US9] Migration: `horae_job_schedules` (data-model.md)
+- [X] T026 [US9] `schedule.rs` (cadences, `next_due`) and `scheduler.rs` (leader by `pg_try_advisory_lock` on a dedicated connection, a 15 s tick, enqueue due firings, advance `next_due_at`); `ZoneResolver` implemented in the server from `timezone.rs`
+- [X] T027 [US9] Move the long-timer sweep, budget sweep and OAuth cleanup from `crates/server/src/scheduler.rs` to three handlers and per-organization schedules (every 60 s), upserted at server start for every organization and by `init` (in Rust, so their ids are UUID v7); delete `scheduler.rs`
+- [X] T028 [US9] Check that the sweeps' existing tests pass unchanged and that the long-timer event still fires at most once per timer
 - [ ] T029 [P] [US9] Optional: LISTEN/NOTIFY wake-up for workers beside the 2 s poll (research R-5)
 
 **Checkpoint**: US9 acceptance scenarios pass.

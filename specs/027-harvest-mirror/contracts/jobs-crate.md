@@ -96,7 +96,24 @@ pub async fn upsert_schedule(tx: &mut PgConnection, schedule: Schedule) -> anyho
 pub async fn set_schedule_enabled(tx: &mut PgConnection, org_id: Uuid, name: &str, enabled: bool) -> anyhow::Result<()>;
 pub async fn delete_schedule(tx: &mut PgConnection, org_id: Uuid, name: &str) -> anyhow::Result<()>;
 pub fn next_due(cadence: &Cadence, zone: Tz, after: DateTime<Utc>) -> DateTime<Utc>;   // pure
+pub async fn fire_due(pool: &PgPool, zones: &dyn ZoneResolver, now: DateTime<Utc>) -> anyhow::Result<usize>; // one leader tick
 ```
+
+The scheduler takes a connection out of the pool and holds
+`pg_try_advisory_lock(hashtextextended('horae.job-scheduler', 0))` on it; a follower asks again
+every tick, and the leader checks its connection still answers. The lock ends with the session, so a
+leader that dies is replaced at the next tick of another instance. `Scheduler::is_leader` reports
+the last tick's answer. The lock's connection sets `tcp_keepalives_idle=30`, `_interval=10` and
+`_count=3`, so PostgreSQL ends a vanished leader's session within about a minute. Each check on it is
+bounded by a tick, so a half-open connection is dropped instead of blocking the loop. A session
+advisory lock needs a session: behind PgBouncer, use session pooling, not transaction pooling.
+
+The server runs the sweeps on a worker of their own (`jobs::spawn_sweeps`) beside the import worker
+(`jobs::spawn`). A worker runs one job at a time, so a long import would otherwise delay them for as
+long as it runs. A worker's retention cleanup runs at most once a minute.
+
+A change to the organization's zone, or to a person's own zone, sets `next_due_at` to null on the
+daily and weekly schedules read in it, so they are planned again in the new zone.
 
 A job whose kind has no registered handler stays queued: the claim only selects kinds the worker's
 registry holds, so the job is never claimed, its attempts never grow and it is never failed. The

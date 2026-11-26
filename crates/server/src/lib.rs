@@ -12,7 +12,6 @@ pub mod notifications;
 pub mod ops;
 pub mod plugin;
 pub mod render;
-pub mod scheduler;
 pub mod seed;
 pub mod state;
 #[cfg(any(test, feature = "test-support"))]

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH due AS (\n             UPDATE time_entries te\n                SET notified_long_running_at = now()\n               FROM organizations o\n              WHERE o.id = te.org_id\n                AND te.is_running = true\n                AND te.notified_long_running_at IS NULL\n                AND te.started_at < now() - make_interval(mins => o.long_timer_minutes)\n           RETURNING te.id, te.org_id, te.user_id, te.project_id, te.task_id,\n                     te.spent_date, te.minutes, te.billable, te.notes, te.started_at\n           )\n           SELECT id, org_id, user_id, project_id, task_id,\n                  spent_date as \"spent_date: chrono::NaiveDate\",\n                  minutes, billable, notes,\n                  started_at as \"started_at!: chrono::DateTime<chrono::Utc>\",\n                  (EXTRACT(EPOCH FROM (now() - started_at)) / 60)::int as \"running_minutes!\"\n           FROM due",
+  "query": "WITH due AS (\n             UPDATE time_entries te\n                SET notified_long_running_at = now()\n               FROM organizations o\n              WHERE o.id = te.org_id\n                AND te.org_id = $1\n                AND te.is_running = true\n                AND te.notified_long_running_at IS NULL\n                AND te.started_at < now() - make_interval(mins => o.long_timer_minutes)\n           RETURNING te.id, te.org_id, te.user_id, te.project_id, te.task_id,\n                     te.spent_date, te.minutes, te.billable, te.notes, te.started_at\n           )\n           SELECT id, org_id, user_id, project_id, task_id,\n                  spent_date as \"spent_date: chrono::NaiveDate\",\n                  minutes, billable, notes,\n                  started_at as \"started_at!: chrono::DateTime<chrono::Utc>\",\n                  (EXTRACT(EPOCH FROM (now() - started_at)) / 60)::int as \"running_minutes!\"\n           FROM due",
   "describe": {
     "columns": [
       {
@@ -60,7 +60,9 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid"
+      ]
     },
     "nullable": [
       false,
@@ -76,5 +78,5 @@
       null
     ]
   },
-  "hash": "35a9712102123f3aad148fe7095b61f682fba274550e0b2395601ec8dfd0398f"
+  "hash": "d694678462caf9460113d9214958229ce55e8df084a50ab2caa41045d02b8043"
 }

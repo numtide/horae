@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"n!\" FROM horae_jobs\n                    WHERE org_id = $1 AND kind <> 'harvest_api_import' AND status = 'succeeded'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ef8ec40b809f497c1aac7921a38d1cac6100f1121484501536c327a2cfa58ccb"
+}

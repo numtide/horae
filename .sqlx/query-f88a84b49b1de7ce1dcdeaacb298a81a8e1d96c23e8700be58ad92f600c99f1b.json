@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name FROM horae_job_schedules WHERE org_id = $1 AND next_due_at IS NOT NULL ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f88a84b49b1de7ce1dcdeaacb298a81a8e1d96c23e8700be58ad92f600c99f1b"
+}

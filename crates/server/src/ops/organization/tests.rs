@@ -661,3 +661,79 @@ async fn the_zone_rechecks_authority_after_a_revocation_wait(pool: PgPool) {
     assert_forbidden(result, "revoked");
     assert_eq!(workspace_zone(&pool, ids.org_id).await, "UTC");
 }
+
+// ── A new zone replans the schedules read in it ──────────────────────────────
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_new_workspace_zone_replans_its_daily_schedules(pool: PgPool) {
+    let ids = seed(&pool, Administrator).await;
+    let nine = chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    for (name, cadence, zone) in [
+        (
+            "daily",
+            horae_jobs::Cadence::Daily(nine),
+            horae_jobs::ZoneSource::Organization,
+        ),
+        // The person has no zone of their own, so they follow the workspace.
+        (
+            "person",
+            horae_jobs::Cadence::Daily(nine),
+            horae_jobs::ZoneSource::Person(ids.user_id),
+        ),
+        (
+            "every",
+            horae_jobs::Cadence::Every(60),
+            horae_jobs::ZoneSource::Organization,
+        ),
+    ] {
+        horae_jobs::upsert_schedule(
+            &mut connection,
+            horae_jobs::Schedule {
+                org_id: ids.org_id,
+                name,
+                kind: "reminder",
+                payload: serde_json::json!({}),
+                cadence,
+                zone,
+                concurrency_key: None,
+                priority: 0,
+                max_attempts: 1,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let plan = || {
+        sqlx::query!(
+            "UPDATE horae_job_schedules SET next_due_at = now() + interval '1 hour' WHERE org_id = $1",
+            ids.org_id
+        )
+        .execute(&pool)
+    };
+    let planned = || {
+        sqlx::query_scalar!(
+            "SELECT name FROM horae_job_schedules WHERE org_id = $1 AND next_due_at IS NOT NULL ORDER BY name",
+            ids.org_id
+        )
+        .fetch_all(&pool)
+    };
+    plan().await.unwrap();
+    set_zone(&pool, ids.org_id, ids.user_id, "America/New_York")
+        .await
+        .unwrap();
+    assert_eq!(planned().await.unwrap(), ["every"]);
+
+    // Saving the same zone again keeps the plans.
+    plan().await.unwrap();
+    set_zone(&pool, ids.org_id, ids.user_id, "America/New_York")
+        .await
+        .unwrap();
+    assert_eq!(planned().await.unwrap(), ["daily", "every", "person"]);
+
+    // A person's own new zone replans only their schedules.
+    crate::timezone::replan_for_person_zone(&mut connection, ids.user_id, Some("Asia/Kolkata"))
+        .await
+        .unwrap();
+    assert_eq!(planned().await.unwrap(), ["daily", "every"]);
+}

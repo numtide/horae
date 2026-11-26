@@ -180,6 +180,7 @@ pub async fn set_timezone(tx: &mut Tx, actor: &Actor, timezone: &str) -> Result<
     let timezone = crate::timezone::parse(timezone)
         .ok_or_else(|| OpError::invalid("timezone", "Choose a time zone from the list"))?
         .name();
+    crate::timezone::replan_for_org_zone(tx, actor.org_id(), timezone).await?;
     sqlx::query!(
         "UPDATE organizations SET timezone = $2 WHERE id = $1",
         actor.org_id(),

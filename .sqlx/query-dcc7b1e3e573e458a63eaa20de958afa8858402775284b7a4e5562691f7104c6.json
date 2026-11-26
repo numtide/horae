@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO organizations (id, name) VALUES ($1, 'Scheduler test')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dcc7b1e3e573e458a63eaa20de958afa8858402775284b7a4e5562691f7104c6"
+}
