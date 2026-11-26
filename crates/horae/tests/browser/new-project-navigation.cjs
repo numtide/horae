@@ -59,7 +59,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     });
     await editor.locator('#np-name').fill('Pending creation draft');
     await expect.poll(() => !!release).toBe(true);
-    await blocked(() => page.locator('a.nav-item[href="/clients"]').click(), 'Pending creation draft');
+    await blocked(() => page.locator('a.nav-item[href^="/clients"]').click(), 'Pending creation draft');
     await blocked(() => page.evaluate(() => history.back()), 'Pending creation draft');
     await blocked(() => page.evaluate(() => history.replaceState(history.state, '', '/clients')), 'Pending creation draft');
     await blocked(() => page.evaluate(() => location.reload()), 'Pending creation draft', 'beforeunload');
@@ -70,7 +70,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(status).toContainText('Draft saved at');
     assert.equal(requests.length, 2, 'Changes during the pending write are saved serially');
     await page.unroute('**/api/save_project_draft*');
-    await page.locator('a.nav-item[href="/clients"]').click();
+    await page.locator('a.nav-item[href^="/clients"]').click();
     await expect(page).toHaveURL(/\/clients\??$/);
     await page.evaluate(() => history.back());
     await expect(editor.locator('#np-name')).toHaveValue('Newer edit during save');
@@ -85,7 +85,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await editor.locator('#np-name').fill('Committed draft without acknowledgement');
     await expect(status).toHaveText('Changes need attention');
     await blocked(() => page.evaluate(() => history.forward()), 'Committed draft without acknowledgement');
-    await blocked(() => page.locator('a.nav-item[href="/clients"]').click(), 'Committed draft without acknowledgement');
+    await blocked(() => page.locator('a.nav-item[href^="/clients"]').click(), 'Committed draft without acknowledgement');
     await blocked(() => page.evaluate(() => location.reload()), 'Committed draft without acknowledgement', 'beforeunload');
     await editor.locator('#np-name').fill('Latest recovered draft');
     await page.unroute('**/api/save_project_draft*');
@@ -139,7 +139,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await editor.getByRole('button', { name: 'Save project', exact: true }).click();
     await expect(status).toHaveText('Changes need attention');
     assert.equal(Number(sql('SELECT count(*) FROM projects')), Number(count) + 1);
-    await blocked(() => page.locator('a.nav-item[href="/clients"]').click(), 'Navigation guard creation fixture');
+    await blocked(() => page.locator('a.nav-item[href^="/clients"]').click(), 'Navigation guard creation fixture');
     await blocked(() => page.evaluate(() => history.back()), 'Navigation guard creation fixture');
     await blocked(() => page.evaluate(() => location.reload()), 'Navigation guard creation fixture', 'beforeunload');
     await page.unroute('**/api/finalize_project_draft*');

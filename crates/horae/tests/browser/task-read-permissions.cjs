@@ -43,7 +43,8 @@ let restoreSeededStates = () => {};
     rateFree(rows);
     await popover.locator('#timer-project').click();
     await popover.locator(`#timer-project-option-${project}`).click();
-    await expect(popover.locator('#timer-task-options').getByRole('option')).toHaveText(['Enabled scoped task']);
+    // The closed popover's options are hidden, so getByRole would skip them.
+    await expect(popover.locator('#timer-task-options [role="option"]')).toHaveText(['Enabled scoped task']);
     return rows;
   };
   try {

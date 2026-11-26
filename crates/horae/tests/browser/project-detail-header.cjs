@@ -125,7 +125,8 @@ const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
         await ready();
       }
       await page.locator('#np-cancel').click();
-      await expect(page).toHaveURL(destination);
+      // The list's empty filter query still renders its `?`.
+      await expect(page).toHaveURL(destination === `${base}/projects` ? /\/projects\??$/ : destination);
     };
     await cancelTo(editUrl, `${base}/projects/${project}`);
     await expect(title).toBeVisible();

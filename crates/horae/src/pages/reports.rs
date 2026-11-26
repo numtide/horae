@@ -342,7 +342,7 @@ fn FinancialReports() -> Element {
                 // Grouping switches the time report's view, so it is a Segmented.
                 if tab == "time" {
                     div { class: "flex-1" }
-                    div { class: "flex items-center gap-3",
+                    div { class: "flex flex-wrap items-center gap-3 min-w-0 max-w-full",
                         span { id: "report-group-label", class: "text-sm text-secondary", {tr.reports_group_by()} }
                         Segmented { label_id: Some("report-group-label".to_string()), items: groups.iter().map(|(_, label)| label.clone()).collect(),
                             active: groups.iter().find(|(value, _)| *value == group_by()).map(|(_, label)| label.clone()).unwrap_or_default(),
