@@ -53,6 +53,7 @@ action-restoring = Restoring…
 action-copy = Copy
 action-copied = Copied
 action-load-more = Load more
+action-clear-filters = Clear filters
 
 ## Common words
 
@@ -107,6 +108,12 @@ confirm-dialog-type-word = Type <word>{ $word }</word> to confirm
 bulk-bar-label = Actions for the selected rows
 bulk-bar-selected = { $count } selected
 bulk-bar-clear = Clear
+select-field-choose = Choose…
+# The picker's accessible names; the label is the field's name in lower or title case.
+select-field-choose-label = Choose { $label }
+select-field-search-label = Search { $label }
+select-field-search-placeholder = Search…
+select-field-loading = Loading choices…
 
 ## Settings
 
@@ -133,6 +140,8 @@ settings-profile-saving = Saving…
 settings-preferences-title = Preferences
 settings-theme-label = Theme
 settings-theme-hint = Choose how { -brand } looks on this device.
+settings-theme-dark = Dark
+settings-theme-light = Light
 
 settings-access-title = Your access
 settings-access-intro = What you can see and do in this workspace.
@@ -385,8 +394,15 @@ tasks-archived-notice = Task archived.
 tasks-restored-notice = Task restored to the catalog. Restore it in each project where needed.
 tasks-activity-failed = Could not confirm the change. Refresh tasks to check whether it was applied before retrying.
 tasks-access-changed = Your session or task permissions changed. Check your access before retrying.
+tasks-filter-active = Active tasks
+tasks-filter-archived = Archived tasks
+tasks-filter-all = All tasks
 tasks-status-active = Active
 tasks-status-archived = Archived
+tasks-rate-label = Default hourly rate
+tasks-rate-keep = Keep current rate
+tasks-rate-set = Set a new rate
+tasks-rate-clear = Clear default rate
 tasks-rate-none = No rate
 tasks-rate-per-hour = { $amount } / h
 # A default rate stored without a currency, such as one imported from Harvest.
@@ -400,6 +416,14 @@ clients-restore = Restore client
 clients-restoring = Restoring client…
 clients-archived-toast = { $name } archived
 clients-restored-toast = { $name } restored
+clients-form-currency = Currency
+clients-status-active = Active clients ({ $count })
+clients-status-archived = Archived clients ({ $count })
+clients-status-all = All clients ({ $count })
+clients-currency-any = All currencies
+clients-search-label = Search clients by name
+clients-none-match = No clients match your filters
+clients-none-match-hint = Try another name, status or currency.
 
 ## Invoices
 
@@ -771,6 +795,9 @@ people-profile-individual = Custom
 
 permissions-discard-title = Discard unsaved permission changes?
 permissions-discard-body = The changes in this form are lost. Saved permissions stay as they are.
+permissions-profile-label = Profile
+permissions-profile-current = Current configuration
+permissions-profile-custom = { $name } (custom profile)
 permissions-profile-delete-title = Delete this custom profile?
 permissions-profile-delete-pending = Deleting a custom profile. Confirm or go back in the dialog.
 permissions-profile-delete-hint = This does not save the person's draft. Reloading discards unsaved person changes.
@@ -846,8 +873,30 @@ audit-clear-filters = Clear filters
 
 reports-time-label = Time report
 reports-detailed-label = Detailed time report
+reports-from = From
+reports-to = To
+reports-client = Client
+reports-client-any = All clients
+reports-project = Project
+reports-project-any = All projects
+reports-teammate = Teammate
+reports-teammate-any = All teammates
+reports-tag-any = All tags
+reports-tag-named = Tag: { $name }
+reports-tag-unavailable = Selected tag unavailable
+reports-group-by = Group by
+reports-group-project = Project
+reports-group-client = Client
+reports-group-task = Task
+reports-group-person = Person
+reports-hours-all = All hours
+reports-hours-billable = Billable hours
+reports-hours-non-billable = Non-billable hours
+reports-active-projects-only = Active projects only
 
 ## New project
+
+new-project-client-currency = Currency
 
 ## Approvals
 
@@ -868,6 +917,23 @@ approvals-reopen-for = Reopen { $name }'s week
 projects-title = Projects
 projects-load-failed = Could not load projects
 projects-archive-failed = Could not archive the project. Try again, or refresh the page.
+projects-status-active = Active projects ({ $count })
+projects-status-budgeted = Budgeted projects ({ $count })
+projects-status-archived = Archived projects ({ $count })
+projects-client-any = All clients
+projects-tag-any = All tags
+projects-tag-named = Tag: { $name }
+projects-tag-unavailable = Selected tag unavailable
+projects-search-label = Search by project or client
+projects-none-match = No projects match your filters
+projects-none-match-hint = Try another search, client, tag or project status.
+
+## Timer
+
+timer-project = Project
+timer-task = Task
+timer-no-enabled-tasks = No enabled tasks
+timer-contexts-failed = Could not load projects and tasks: { $error }
 
 ## Timesheet
 

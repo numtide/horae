@@ -90,6 +90,10 @@ mod components {
 }
 
 /// The importer routes, as the app declares them.
+#[path = "../src/pages/projects/filter.rs"]
+#[allow(dead_code)]
+mod project_filter;
+
 mod route {
     use crate::importers::{
         ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
@@ -98,8 +102,11 @@ mod route {
     use dioxus::prelude::*;
     use uuid::Uuid;
 
+    pub use super::project_filter::ProjectFilter;
+
     #[component]
-    fn ProjectList() -> Element {
+    fn ProjectList(filter: ProjectFilter) -> Element {
+        let _ = filter;
         rsx! { "projects" }
     }
 
@@ -110,8 +117,8 @@ mod route {
 
     #[derive(Routable, Clone, PartialEq)]
     pub enum Route {
-        #[route("/projects")]
-        ProjectList {},
+        #[route("/projects?:..filter")]
+        ProjectList { filter: ProjectFilter },
         #[route("/people")]
         People {},
         #[route("/admin/importers")]

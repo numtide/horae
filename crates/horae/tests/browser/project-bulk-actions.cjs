@@ -98,7 +98,7 @@ if (!selectionOnly && !fixturesOnly) {
     console.log('PASS: keyboard selection, mixed/select-all states and Actions count');
 
     await all.click();
-    const search = page.getByRole('textbox', { name: 'Search by project or client' });
+    const search = page.getByRole('searchbox', { name: 'Search by project or client' });
     await search.fill('Bulk project 1');
     await expect(first).toHaveAttribute('aria-checked', 'false');
     await all.click();

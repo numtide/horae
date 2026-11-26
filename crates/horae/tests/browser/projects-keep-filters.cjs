@@ -70,7 +70,7 @@ const rows = [
       new MutationObserver(records => {
         for (const record of records) {
           for (const node of record.removedNodes) {
-            if (node.nodeType === 1 && (node.matches('.proj-search-input') || node.querySelector('.proj-search-input'))) {
+            if (node.nodeType === 1 && (node.matches('#projects-search') || node.querySelector('#projects-search'))) {
               window.__metrics.remounts++;
             }
           }
@@ -81,7 +81,7 @@ const rows = [
       }).observe(document.body, { childList: true, subtree: true });
     });
 
-    const search = page.getByRole('textbox', { name: 'Search by project or client' });
+    const search = page.getByRole('searchbox', { name: 'Search by project or client' });
     const clientTrigger = page.locator('button[aria-haspopup="listbox"]');
     const box = name => page.getByRole('checkbox', { name: `Select ${name}`, exact: true });
     const setChecked = async (name, on) => {

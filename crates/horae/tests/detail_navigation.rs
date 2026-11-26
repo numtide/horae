@@ -179,8 +179,10 @@ fn app(probe: Probe) -> Element {
 }
 
 mod route {
+    pub use super::clients::ClientFilter;
     pub use super::edit_return::EditReturn;
     pub use super::invoices::InvoiceFilter;
+    pub use super::projects::ProjectFilter;
     use super::*;
     use clients::{ClientDetail, ClientList};
     use invoices::{
@@ -192,8 +194,8 @@ mod route {
     #[derive(Clone, PartialEq, Routable)]
     pub enum Route {
         #[layout(Layout)]
-        #[route("/clients")]
-        ClientList {},
+        #[route("/clients?:..filter")]
+        ClientList { filter: ClientFilter },
         #[route("/clients/:id")]
         ClientDetail { id: Uuid },
         #[route("/invoices?:..filter")]
@@ -210,8 +212,8 @@ mod route {
         EditInvoice { id: Uuid },
         #[route("/invoices/:id")]
         InvoiceDetail { id: Uuid },
-        #[route("/projects")]
-        ProjectList {},
+        #[route("/projects?:..filter")]
+        ProjectList { filter: ProjectFilter },
         #[route("/projects/client/:client")]
         ProjectsForClient { client: String },
         #[route("/projects/new")]

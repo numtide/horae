@@ -33,6 +33,23 @@ pub fn SearchField(id: &'static str, label: String, query: Signal<String>) -> El
                 placeholder: label,
                 value: "{query}",
                 oninput: move |event| query.set(event.value()),
+                // Text typed into the server-rendered field before hydration
+                // never reaches `query`, and every render rewrites `value`
+                // from `query`. Read the field now, before the next render.
+                onmounted: move |_| {
+                    let typed = document::eval(&format!(
+                        "return document.getElementById({})?.value ?? '';",
+                        serde_json::json!(id)
+                    ));
+                    async move {
+                        if let Ok(typed) = typed.join::<String>().await
+                            && !typed.is_empty()
+                            && query.peek().is_empty()
+                        {
+                            query.set(typed);
+                        }
+                    }
+                },
             }
         }
     }

@@ -51,11 +51,15 @@ mod models {
 #[allow(dead_code)]
 #[path = "../src/components/badge.rs"]
 pub mod badge;
+#[path = "../src/components/combobox.rs"]
+pub mod combobox;
 #[allow(dead_code)]
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/debounce.rs"]
 pub mod debounce;
+#[path = "../src/components/filter_bar.rs"]
+pub mod filter_bar;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
@@ -64,6 +68,9 @@ pub mod form;
 mod i18n;
 #[path = "../src/components/icons.rs"]
 pub mod icons;
+#[allow(dead_code)]
+#[path = "../src/components/menu.rs"]
+pub mod menu;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
 #[allow(dead_code)]
@@ -75,7 +82,8 @@ pub mod table;
 pub mod today;
 mod components {
     pub use super::{
-        badge, controls, debounce, form, icons, page_header, screen_state, table, today,
+        badge, combobox, controls, debounce, filter_bar, form, icons, menu, page_header,
+        screen_state, table, today,
     };
 }
 #[path = "../src/pages/reports.rs"]
@@ -270,12 +278,7 @@ async fn type_date(dom: &mut VirtualDom, name: &str, value: &str) {
 }
 
 fn select_billability(dom: &mut VirtualDom, value: &str) {
-    event(
-        dom,
-        "report-billability",
-        "change",
-        Box::new(SerializedFormData::new(value.into(), vec![])),
-    );
+    click(dom, &format!("report-billability-{value}"));
 }
 
 fn report(allowed: TimeReportAccess, name: &str) -> time_report::TimeReportPage {
@@ -434,8 +437,9 @@ async fn billability_resets_both_pagers_and_binds_drilldown_and_downloads() {
     assert_eq!(query.client_ids, vec![id]);
     all.send(Ok(report(allowed, "All client time"))).unwrap();
     settle(&mut dom);
+    // Choosing the shown billability again loads nothing.
     let reads = probe.queries.borrow().len();
-    select_billability(&mut dom, "invalid");
+    select_billability(&mut dom, "all");
     assert_eq!(probe.queries.borrow().len(), reads);
     assert_eq!(
         dioxus::ssr::render(&dom).matches("billability=all").count(),

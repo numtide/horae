@@ -8,11 +8,12 @@ use uuid::Uuid;
 
 use crate::components::badge::Badge;
 use crate::components::confirm_dialog::ConfirmDialog;
-use crate::components::form::{FormGroup, Input, Select};
+use crate::components::form::{FormGroup, Input};
 use crate::components::menu::{MenuItem, RowActions};
 use crate::components::page_header::PageHeader;
 use crate::components::revealed_secret::RevealedSecret;
 use crate::components::screen_state::{EmptyState, LoadError};
+use crate::components::select_field::SelectField;
 use crate::components::table::{DataTable, NameCell, TableMessage, TableSkeleton};
 use crate::i18n::Tr;
 use crate::models::api_tokens::{ApiTokenRow, CreatedApiToken};
@@ -43,7 +44,7 @@ pub fn SettingsApiTokens() -> Element {
     let mut revoke_error = use_signal(|| None::<String>);
 
     let edit_name = use_callback(move |e: FormEvent| name.set(e.value()));
-    let pick_expiry = use_callback(move |e: FormEvent| expiry.set(e.value()));
+    let pick_expiry = use_callback(move |value: String| expiry.set(value));
     let on_revoke = use_callback(move |id: Uuid| {
         revoke_error.set(None);
         spawn(async move {
@@ -115,8 +116,8 @@ pub fn SettingsApiTokens() -> Element {
                     }
                 }
                 FormGroup { label: tr.api_tokens_expires(), id: "api-token-expiry",
-                    Select { id: "api-token-expiry", options: expiry_options, selected: expiry(),
-                        disabled: creating(), onchange: pick_expiry,
+                    SelectField { id: "api-token-expiry", label: tr.api_tokens_expires(), options: expiry_options, selected: expiry(),
+                        disabled: creating(), onselect: pick_expiry,
                     }
                 }
                 button { id: "api-token-create", r#type: "button", class: "btn btn-primary",

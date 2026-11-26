@@ -39,12 +39,15 @@ pub mod revealed_secret;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
+#[path = "../src/components/select_field.rs"]
+pub mod select_field;
 #[allow(dead_code)]
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
     pub use super::{
-        badge, confirm_dialog, form, icons, menu, page_header, revealed_secret, screen_state, table,
+        badge, confirm_dialog, form, icons, menu, page_header, revealed_secret, screen_state,
+        select_field, table,
     };
 }
 mod models {

@@ -96,7 +96,22 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
           && args.user_id === state.user;
       } catch { return false; }
     })));
-    const select = label => page.locator('.form-group', { has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) }).locator('select');
+    // Each filter is a Combobox; its options exist only while it is open.
+    const select = label => {
+      const id = `report-filter-${{ Client: 'client', Project: 'project', Teammate: 'teammate' }[label]}`;
+      return {
+        selectOption: async value => {
+          await page.locator(`#${id}`).click();
+          await page.locator(`[id="${id}-option-${value}"]`).click();
+        },
+        hasOption: async value => {
+          await page.locator(`#${id}`).click();
+          const count = await page.locator(`[id="${id}-option-${value}"]`).count();
+          await page.locator('.menu-overlay').click({ position: { x: 2, y: 2 } });
+          return count;
+        },
+      };
+    };
     const tab = name => page.getByRole('button', { name, exact: true });
     const link = format => page.getByRole('link', { name: `Export ${format}`, exact: true });
     const cells = locator => locator.evaluateAll(rows => rows.map(tr => [...tr.querySelectorAll('th, td')].map(td => td.innerText.trim())));
@@ -156,8 +171,8 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
     await ready;
     await verify(states[2]);
 
-    await expect(select('Project').locator(`option[value="${states[3].project}"]`)).toHaveCount(1);
-    await expect(select('Project').locator(`option[value="${projects[2][0]}"]`)).toHaveCount(0);
+    await expect.poll(() => select('Project').hasOption(states[3].project)).toBe(1);
+    assert.equal(await select('Project').hasOption(projects[2][0]), 0);
     ready = loaded(states[3]);
     await select('Project').selectOption(states[3].project);
     await ready;

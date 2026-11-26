@@ -3,6 +3,7 @@ use crate::components::{
     controls::Checkbox,
     form::{FormGroup, Input},
     modal::{Modal, ModalAction, ModalActions, ModalBody, ModalHeader},
+    select_field::SelectField,
 };
 use crate::models::task::{TaskCatalogEntry, TaskRateEdit};
 use horae_core::money::parse_cents;
@@ -70,6 +71,7 @@ fn TaskForm(
         }
         .to_string()
     });
+    let pick_rate_action = use_callback(move |value: String| rate_action.set(value));
     let mut amount = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let task_id = selection.task.as_ref().map(|task| task.id);
@@ -125,12 +127,14 @@ fn TaskForm(
                 if let Some(currency) = &selection.rate_currency {
                     if let Some(task) = &selection.task {
                         p { class: "text-sm text-secondary mt-3", "Current default: {rate_label(tr, task.default_rate_cents, task.default_rate_currency.as_deref())}" }
-                        FormGroup { id: "task-rate-action", label: "Default hourly rate",
-                            select { id: "task-rate-action", class: "form-select", disabled: busy(), value: rate_action(),
-                                onchange: move |event| rate_action.set(event.value()),
-                                option { value: "preserve", "Keep current rate" }
-                                option { value: "set", "Set a new rate" }
-                                option { value: "clear", "Clear default rate" }
+                        FormGroup { id: "task-rate-action", label: tr.tasks_rate_label(),
+                            SelectField { id: "task-rate-action", label: tr.tasks_rate_label(), disabled: busy(), selected: rate_action(),
+                                options: vec![
+                                    ("preserve".into(), tr.tasks_rate_keep()),
+                                    ("set".into(), tr.tasks_rate_set()),
+                                    ("clear".into(), tr.tasks_rate_clear()),
+                                ],
+                                onselect: pick_rate_action,
                             }
                         }
                     }

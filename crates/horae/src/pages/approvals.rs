@@ -10,6 +10,7 @@ use super::{Failure, loaded};
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
+use crate::components::filter_bar::FilterBar;
 use crate::components::page_header::PageHeader;
 use crate::components::screen_state::{EmptyState, NoAccess};
 use crate::components::session::{use_session, use_week_start};
@@ -223,28 +224,28 @@ pub fn Approvals(week: String) -> Element {
                             _ => None,
                         };
                         rsx! {
-                            div { class: "flex items-center gap-3 flex-wrap mb-4",
-                                div { class: "ts-pager",
-                                    {pager_step(adjacent(start, false, first), "prev", "Previous week", "←")}
-                                    span { class: "ts-pager-label",
-                                        span { class: "cur", if current { "This week" } else { "Week" } }
-                                        span { class: "ts-pager-range", "{period_label(start, end)}" }
+                            // The status stays a Segmented control: it switches views.
+                            FilterBar {
+                                filters: rsx! {
+                                    div { class: "ts-pager",
+                                        {pager_step(adjacent(start, false, first), "prev", "Previous week", "←")}
+                                        span { class: "ts-pager-label",
+                                            span { class: "cur", if current { "This week" } else { "Week" } }
+                                            span { class: "ts-pager-range", "{period_label(start, end)}" }
+                                        }
+                                        {pager_step(adjacent(start, true, first), "next", "Next week", "→")}
                                     }
-                                    {pager_step(adjacent(start, true, first), "next", "Next week", "→")}
-                                }
-                                if !current {
-                                    if let Some(current) = this_week {
-                                        Link { to: week_route(current), class: "btn btn-ghost btn-sm", "This week" }
+                                    if !current {
+                                        if let Some(current) = this_week {
+                                            Link { to: week_route(current), class: "btn btn-ghost btn-sm", "This week" }
+                                        }
                                     }
-                                }
-                            }
-
-                            div { class: "mb-6",
-                                Segmented {
-                                    items: vec!["Pending".to_string(), "Approved".to_string(), "All".to_string()],
-                                    active: status_label(),
-                                    onselect: move |v| status_label.set(v),
-                                }
+                                    Segmented {
+                                        items: vec!["Pending".to_string(), "Approved".to_string(), "All".to_string()],
+                                        active: status_label(),
+                                        onselect: move |v| status_label.set(v),
+                                    }
+                                },
                             }
 
                             if let Some(err) = &*action_error.read() {

@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 
 use crate::components::admin_shell::AdmLink;
 use crate::components::avatar::Avatar;
-use crate::components::form::{FormGroup, Select};
+use crate::components::controls::Segmented;
 use crate::components::page_header::PageHeader;
 use crate::components::session::use_session;
 use crate::components::sidebar::initials;
@@ -80,25 +80,25 @@ pub fn SettingsPreferences() -> Element {
         });
     });
 
-    let theme_options: Vec<(String, String)> = Theme::ALL
-        .iter()
-        .map(|t| (t.as_str().to_string(), t.label().to_string()))
-        .collect();
+    let label = move |t: Theme| match t {
+        Theme::Dark => tr.settings_theme_dark(),
+        Theme::Light => tr.settings_theme_light(),
+    };
+    let pick = use_callback(move |picked: String| {
+        let Some(picked) = Theme::ALL.into_iter().find(|t| label(*t) == picked) else {
+            return;
+        };
+        theme.set(picked);
+        document::eval(&format!("setHoraeTheme('{}')", picked.as_str()));
+    });
 
     rsx! {
         PageHeader { title: tr.settings_preferences_title() }
         section { class: "card max-w-form", aria_label: tr.settings_preferences_title(),
-            FormGroup { label: tr.settings_theme_label(), id: "theme", hint: tr.settings_theme_hint(),
-                Select {
-                    id: "theme",
-                    options: theme_options,
-                    selected: theme().as_str().to_string(),
-                    onchange: move |e: FormEvent| {
-                        let picked = Theme::from_str(&e.value());
-                        theme.set(picked);
-                        document::eval(&format!("setHoraeTheme('{}')", picked.as_str()));
-                    },
-                }
+            div { class: "form-group",
+                span { class: "form-label", id: "theme-label", {tr.settings_theme_label()} }
+                Segmented { label_id: Some("theme-label".to_string()), items: Theme::ALL.map(label).to_vec(), active: label(theme()), onselect: pick }
+                p { class: "form-hint", {tr.settings_theme_hint()} }
             }
         }
     }

@@ -4,11 +4,19 @@ use std::rc::Rc;
 use uuid::Uuid;
 
 use super::run_action;
+
+#[path = "projects/filter.rs"]
+mod filter;
+pub use filter::ProjectFilter;
+use filter::ProjectScope;
+
 use crate::components::back_link::BackLink;
 use crate::components::badge::Badge;
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::confirm_dialog::{ConfirmDialog, ConfirmTone};
 use crate::components::controls::Checkbox;
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
+use crate::components::filter_bar::{FilterBar, SearchField};
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem, RowActions};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
@@ -460,6 +468,16 @@ fn use_project_list(
     (catalog(), visible)
 }
 
+/// One change to the Projects list's filters.
+#[derive(Clone, PartialEq)]
+enum ProjectFilterEdit {
+    Scope(ProjectScope),
+    /// A client's id, or empty for every client.
+    Client(String),
+    Tag(Option<Uuid>),
+    Clear,
+}
+
 #[derive(Clone)]
 struct BulkProjectAction {
     activate: bool,
@@ -485,7 +503,9 @@ fn ClientProjectList(client: String) -> Element {
     });
     let retry = use_callback(move |_| context.restart());
     match &*context.read() {
-        Some(Ok(id)) => rsx! { ProjectList { initial_client: Some(*id) } },
+        Some(Ok(id)) => {
+            rsx! { ProjectList { filter: ProjectFilter { client: Some(*id), ..ProjectFilter::default() } } }
+        }
         Some(Err(error)) => rsx! {
             PageHeader { title: "Projects" }
             LoadError { error: error.clone(), what: "this client's projects", retry }
@@ -507,7 +527,7 @@ fn restore_project_list_focus() {
 }
 
 #[component]
-pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
+pub fn ProjectList(filter: ProjectFilter) -> Element {
     let mut binding = use_signal(|| None::<PermissionRequester>);
     // The last overview admitted under `binding`. It stays on screen while a
     // reload runs or after one fails, so the content below keeps its filters
@@ -516,7 +536,9 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     // requester), so filters, selection and auxiliary reads start afresh.
     let mut admitted = use_signal(|| None::<ProjectOverview>);
     let bulk_success = use_signal(|| None::<String>);
+    let navigator = use_navigator();
     let mut projects = use_resource(move || async move {
+        let previous = *binding.peek();
         let (result, _) = load_pinned(
             *binding.peek(),
             server_fns::get_project_overview,
@@ -532,6 +554,19 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
                 return Err(error);
             }
         };
+        // The filters in the URL belong to the previous account's list. The
+        // route is read in a task of its own, so this load does not rerun on
+        // navigation.
+        if previous.is_some_and(|previous| previous != response.requester) {
+            spawn(async move {
+                if matches!(dioxus::router::router().current::<Route>(), Route::ProjectList { filter } if filter != ProjectFilter::default())
+                {
+                    navigator.replace(Route::ProjectList {
+                        filter: ProjectFilter::default(),
+                    });
+                }
+            });
+        }
         binding.set(Some(response.requester));
         admitted.set(Some(response));
         Ok(())
@@ -548,7 +583,7 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
                     projects,
                     admitted,
                     bulk_success,
-                    initial_client,
+                    filter: filter.clone(),
                 }
             }
         };
@@ -603,7 +638,7 @@ fn access_denied(error: &ServerFnError) -> bool {
 
 #[component]
 fn ProjectListContent(
-    initial_client: Option<Uuid>,
+    filter: ProjectFilter,
     overview: ProjectOverview,
     mut projects: Resource<Result<(), ServerFnError>>,
     mut admitted: Signal<Option<ProjectOverview>>,
@@ -618,18 +653,81 @@ fn ProjectListContent(
         server_fns::list_project_budget_progress(Some(requester)).await
     });
 
+    let tr = crate::i18n::use_tr();
     let navigator = use_navigator();
     let action_error = use_signal(|| None::<String>);
 
-    // Filters over the loaded list (client-side; the design's status/client
-    // dropdowns and search all narrow the same set).
-    let mut query = use_signal(String::new);
+    // Filters over the loaded list (client-side; the status, client and tag
+    // menus and the search all narrow the same set). They follow the URL, and
+    // a pick changes them at once and then the URL.
+    let mut query = use_signal(|| filter.search.clone());
     // Status scope: "active" | "budgeted" (has a budget) | "archived" (inactive).
-    let mut scope = use_signal(|| "active".to_string());
+    let mut scope = use_signal(|| filter.scope.as_str().to_string());
     let mut client_filter =
-        use_signal(|| initial_client.map(|id| id.to_string()).unwrap_or_default());
-    let mut tag_filter = use_signal(|| None::<Uuid>);
+        use_signal(|| filter.client.map(|id| id.to_string()).unwrap_or_default());
+    let mut tag_filter = use_signal(|| filter.tag);
     let mut selected = use_signal(BTreeSet::<Uuid>::new);
+    let settled = use_debounced(query, SEARCH_DEBOUNCE);
+    // A selection covers only rows on screen, so a new search drops it.
+    use_effect(move || {
+        query.read();
+        if !selected.peek().is_empty() {
+            selected.write().clear();
+        }
+    });
+    // Only a settled search moves the URL, and only on the list's own route.
+    use_effect(move || {
+        let search = settled();
+        if let Route::ProjectList { filter: current } = dioxus::router::router().current::<Route>()
+            && search != current.search
+        {
+            navigator.replace(Route::ProjectList {
+                filter: ProjectFilter { search, ..current },
+            });
+        }
+    });
+    // Back, or a shared link, brings other filters: show them.
+    use_effect(use_reactive!(|filter| {
+        let scope_value = filter.scope.as_str();
+        let client_value = filter.client.map(|id| id.to_string()).unwrap_or_default();
+        let changed = *scope.peek() != scope_value
+            || *client_filter.peek() != client_value
+            || *tag_filter.peek() != filter.tag;
+        if changed {
+            selected.write().clear();
+            scope.set(scope_value.to_string());
+            client_filter.set(client_value);
+            tag_filter.set(filter.tag);
+        }
+        if filter.search != *settled.peek() && filter.search != *query.peek() {
+            query.set(filter.search);
+        }
+    }));
+    // Applies `edit` to the shown filters, then records them in the URL.
+    let apply = use_callback(move |edit: ProjectFilterEdit| {
+        selected.write().clear();
+        match edit {
+            ProjectFilterEdit::Scope(value) => scope.set(value.as_str().to_string()),
+            ProjectFilterEdit::Client(value) => client_filter.set(value),
+            ProjectFilterEdit::Tag(value) => tag_filter.set(value),
+            ProjectFilterEdit::Clear => {
+                query.set(String::new());
+                scope.set(ProjectScope::Active.as_str().to_string());
+                client_filter.set(String::new());
+                tag_filter.set(None);
+            }
+        }
+        let next = ProjectFilter {
+            scope: ProjectScope::ALL
+                .into_iter()
+                .find(|s| s.as_str() == *scope.peek())
+                .unwrap_or_default(),
+            client: client_filter.peek().parse().ok(),
+            tag: *tag_filter.peek(),
+            search: query.peek().clone(),
+        };
+        navigator.push(Route::ProjectList { filter: next });
+    });
     let retry_list = use_callback(move |_| {
         selected.write().clear();
         projects.restart();
@@ -694,9 +792,9 @@ fn ProjectListContent(
             .read()
             .iter()
             .find(|(tag, _)| *tag == id)
-            .map(|(_, name)| format!("Tag: {name}"))
-            .unwrap_or_else(|| "Selected tag unavailable".into()),
-        None => "All tags".into(),
+            .map(|(_, name)| tr.projects_tag_named(name))
+            .unwrap_or_else(|| tr.projects_tag_unavailable()),
+        None => tr.projects_tag_any(),
     };
     let selection: Vec<(Uuid, String)> = visible
         .read()
@@ -801,10 +899,14 @@ fn ProjectListContent(
         catalog.budgeted_count,
         catalog.archived_count,
     );
-    let scope_label = match scope().as_str() {
-        "budgeted" => format!("Budgeted projects ({budgeted_count})"),
-        "archived" => format!("Archived projects ({archived_count})"),
-        _ => format!("Active projects ({active_count})"),
+    let scope_now = ProjectScope::ALL
+        .into_iter()
+        .find(|s| s.as_str() == scope())
+        .unwrap_or_default();
+    let scope_label = |choice: ProjectScope| match choice {
+        ProjectScope::Active => tr.projects_status_active(active_count as i64),
+        ProjectScope::Budgeted => tr.projects_status_budgeted(budgeted_count as i64),
+        ProjectScope::Archived => tr.projects_status_archived(archived_count as i64),
     };
 
     if matches!(&*tags_res.read(), Some(Err(error)) if access_denied(error))
@@ -864,57 +966,39 @@ fn ProjectListContent(
                         onclick: move |_| export_open.set(true),
                         "Export"
                     }
-                    div { class: "proj-search flex items-center gap-2 py-2 px-3 bg-secondary border rounded-btn",
-                        span { class: "text-faint flex-none", aria_hidden: "true", "⌕" }
-                        input {
-                            class: "proj-search-input",
-                            r#type: "text",
-                            placeholder: "Search by project or client",
-                            aria_label: "Search by project or client",
-                            value: "{query}",
-                            oninput: move |e| { selected.write().clear(); query.set(e.value()); },
-                        }
-                    }
                 },
             }
 
-            div { class: "flex flex-wrap items-center gap-4 mb-5",
-                Menu { id: "project-scope-menu", label: "{scope_label}", trigger_class: "text-sm px-4",
-                    MenuItem {
-                        selected: scope() == "active",
-                        onclick: move |_| { selected.write().clear(); scope.set("active".to_string()); },
-                        "Active projects ({active_count})"
-                    }
-                    MenuItem {
-                        selected: scope() == "budgeted",
-                        onclick: move |_| { selected.write().clear(); scope.set("budgeted".to_string()); },
-                        "Budgeted projects ({budgeted_count})"
-                    }
-                    MenuItem {
-                        selected: scope() == "archived",
-                        onclick: move |_| { selected.write().clear(); scope.set("archived".to_string()); },
-                        "Archived projects ({archived_count})"
-                    }
-                }
-                div { class: "flex-1" }
-                if !tag_options.read().is_empty() || tag_filter().is_some() {
-                    Menu { id: "project-tag-menu", label: tag_label, trigger_class: "text-sm px-4",
-                        MenuItem { selected: tag_filter().is_none(), onclick: move |_| { selected.write().clear(); tag_filter.set(None); }, "All tags" }
-                        for (tag_id, tag_name) in tag_options() {
-                            MenuItem { key: "{tag_id}", selected: tag_filter() == Some(tag_id), disabled: !tags_ready,
-                                onclick: move |_| { selected.write().clear(); tag_filter.set(Some(tag_id)); }, "{tag_name}"
+            FilterBar {
+                filters: rsx! {
+                    Menu { id: "project-scope-menu", label: scope_label(scope_now), trigger_class: "text-sm px-4",
+                        for choice in ProjectScope::ALL {
+                            MenuItem { key: "{choice:?}", selected: scope_now == choice,
+                                onclick: move |_| apply.call(ProjectFilterEdit::Scope(choice)),
+                                {scope_label(choice)}
                             }
                         }
                     }
-                }
-                Combobox {
-                    trigger_class: "text-sm px-4",
-                    options: catalog.client_options.clone(),
-                    value: client_filter(),
-                    placeholder: "All clients",
-                    all_label: "All clients",
-                    onselect: move |v| { selected.write().clear(); client_filter.set(v); },
-                }
+                    Combobox {
+                        trigger_class: "text-sm px-4",
+                        options: catalog.client_options.clone(),
+                        value: client_filter(),
+                        placeholder: tr.projects_client_any(),
+                        all_label: tr.projects_client_any(),
+                        onselect: move |v| apply.call(ProjectFilterEdit::Client(v)),
+                    }
+                    if !tag_options.read().is_empty() || tag_filter().is_some() {
+                        Menu { id: "project-tag-menu", label: tag_label, trigger_class: "text-sm px-4",
+                            MenuItem { selected: tag_filter().is_none(), onclick: move |_| apply.call(ProjectFilterEdit::Tag(None)), {tr.projects_tag_any()} }
+                            for (tag_id, tag_name) in tag_options() {
+                                MenuItem { key: "{tag_id}", selected: tag_filter() == Some(tag_id), disabled: !tags_ready,
+                                    onclick: move |_| apply.call(ProjectFilterEdit::Tag(Some(tag_id))), "{tag_name}"
+                                }
+                            }
+                        }
+                    }
+                },
+                search: rsx! { SearchField { id: "projects-search", label: tr.projects_search_label(), query } },
             }
 
 
@@ -1000,19 +1084,14 @@ fn ProjectListContent(
                             rsx! {
                                 EmptyState {
                                     icon: "briefcase",
-                                    title: "No projects match your filters",
-                                    body: "Try another search, client, tag or project status.",
+                                    title: tr.projects_none_match(),
+                                    body: tr.projects_none_match_hint(),
                                     actions: rsx! {
                                         button {
+                                            id: "projects-clear-filters",
                                             class: "btn btn-secondary",
-                                            onclick: move |_| {
-                                                selected.write().clear();
-                                                query.set(String::new());
-                                                client_filter.set(String::new());
-                                                tag_filter.set(None);
-                                                scope.set("active".to_string());
-                                            },
-                                            "Reset filters"
+                                            onclick: move |_| apply.call(ProjectFilterEdit::Clear),
+                                            {tr.action_clear_filters()}
                                         }
                                     },
                                 }
@@ -1426,7 +1505,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div {
-            BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
+            BackLink { to: Route::ProjectList { filter: Default::default() }, label: "Back to Projects" }
             if !ready {
                 Loading { label: "Loading project details…" }
             } else if let Some(view) = view {

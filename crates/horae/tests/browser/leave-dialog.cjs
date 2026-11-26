@@ -59,7 +59,7 @@ assert.ok(database.searchParams.get('host')?.startsWith('/tmp/horae-browser.'));
     await stayOver(addRow, 'Discard unsaved timesheet changes?');
     await page.evaluate(() => history.back());
     await leave.getByRole('button', { name: 'Discard changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     assert.deepEqual(native, []);
     console.log('PASS: Back from an open Add a row asks over it; Escape keeps the row dialog, Discard leaves');
 
@@ -72,12 +72,13 @@ assert.ok(database.searchParams.get('host')?.startsWith('/tmp/horae-browser.'));
     await page.getByRole('menuitem', { name: 'Permissions…', exact: true }).click();
     await expect(editor.getByRole('button', { name: 'Review changes', exact: true })).toBeVisible();
     // An administrator's grants are not edited one by one: change the profile.
-    await editor.locator('#person-permissions-profile').selectOption('Member');
+    await editor.locator('#person-permissions-profile').click();
+    await editor.locator('#person-permissions-profile-options').getByRole('option', { name: 'Member', exact: true }).click();
     await expect(page.locator('[data-editor-kind="permissions"][data-editor-state="dirty"]')).toHaveCount(1);
     await stayOver(editor, 'Discard unsaved permission changes?');
     await page.evaluate(() => history.back());
     await leave.getByRole('button', { name: 'Discard changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await expect(editor).toHaveCount(0);
     assert.deepEqual(native, []);
     console.log('PASS: Back from the permission editor asks over it; Escape keeps the editor, Discard leaves');

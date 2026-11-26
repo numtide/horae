@@ -52,6 +52,8 @@ pub mod permission_description;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
+#[path = "../src/components/select_field.rs"]
+pub mod select_field;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/toast.rs"]
@@ -61,8 +63,8 @@ pub mod today;
 mod components {
     pub use super::{
         avatar, badge, button, confirm_dialog, controls, filter_bar, form, icons, menu, modal,
-        page_header, period_nav, permission_description, screen_state, session, table, toast,
-        today,
+        page_header, period_nav, permission_description, screen_state, select_field, session,
+        table, toast, today,
     };
 }
 pub use horae_types::{
@@ -611,7 +613,7 @@ impl Ui {
     }
 
     fn select_profile(&mut self, value: &str) {
-        self.form_event("person-permissions-profile", "change", value);
+        self.click(&format!("person-permissions-profile-option-{value}"));
     }
 
     fn form_event(&mut self, name: &str, event_name: &str, value: &str) {

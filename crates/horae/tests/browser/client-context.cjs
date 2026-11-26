@@ -33,7 +33,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
   const discard = async () => {
     await editor.getByRole('button', { name: 'Discard draft', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard draft', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
   };
   try {
     await page.goto(`${base}/auth/login`);
@@ -145,7 +145,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await expect(page).toHaveURL(`${base}/clients/${acme}`);
       await expect(page.getByRole('heading', { name: 'Acme Corp', exact: true })).toBeVisible();
       await page.goBack();
-      await expect(page).toHaveURL(`${base}/projects`);
+      await expect(page).toHaveURL(/\/projects\??$/);
     } finally {
       sql(`DELETE FROM assignments WHERE id = '${assignment}'`);
     }

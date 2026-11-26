@@ -214,6 +214,7 @@ fn families() -> Vec<Family> {
             "Sizing",
             &[
                 ("w-full", "width: 100%"),
+                ("w-auto", "width: auto"),
                 ("w-16", "width: var(--space-16)"),
                 ("w-24", "width: var(--space-24)"),
                 ("w-30", "width: var(--space-30)"),

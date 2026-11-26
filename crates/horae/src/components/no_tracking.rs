@@ -30,7 +30,7 @@ pub fn NoTrackingHint(
             {no_tracking_message(assignee.as_deref())}
             if own && can_manage {
                 " "
-                Link { to: Route::ProjectList {}, onclick: move |_| on_follow.call(()), "Open Projects" }
+                Link { to: Route::ProjectList { filter: Default::default() }, onclick: move |_| on_follow.call(()), "Open Projects" }
             }
         }
     }

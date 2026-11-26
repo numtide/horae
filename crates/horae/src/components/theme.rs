@@ -19,13 +19,6 @@ impl Theme {
         }
     }
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Theme::Dark => "Dark",
-            Theme::Light => "Light",
-        }
-    }
-
     /// Anything unrecognised — including the retired `pine` — reads as dark, so
     /// a stale value in a returning browser's storage resolves cleanly.
     pub fn from_str(s: &str) -> Theme {

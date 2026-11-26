@@ -16,6 +16,8 @@ pub mod button;
 pub mod confirm_dialog;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/filter_bar.rs"]
+pub mod filter_bar;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[allow(dead_code)]
@@ -32,9 +34,12 @@ pub mod page_header;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
+#[path = "../src/components/select_field.rs"]
+pub mod select_field;
 mod components {
     pub use super::{
-        badge, confirm_dialog, controls, form, icons, menu, modal, page_header, screen_state,
+        badge, confirm_dialog, controls, filter_bar, form, icons, menu, modal, page_header,
+        screen_state, select_field,
     };
 }
 pub use horae_types::{permission_editor, task};
@@ -352,7 +357,7 @@ async fn creation_without_rates_keeps_validation_input_and_refreshes_after_succe
     reply.send(Ok(page.clone())).unwrap();
     ui.settle();
     let archived = probe.reply();
-    ui.form_event("tasks-activity", "change", "archived");
+    ui.click("tasks-activity-archived");
     archived.send(Ok(page.clone())).unwrap();
     ui.settle();
     ui.click("tasks-new");
@@ -686,7 +691,7 @@ async fn financial_editor_sends_explicit_zero_in_current_currency_and_explicit_c
     reply.send(Ok(page)).unwrap();
     ui.settle();
     ui.click(&format!("tasks-edit-{id}"));
-    ui.form_event("task-rate-action", "change", "set");
+    ui.click("task-rate-action-option-set");
     ui.form_event("task-rate", "input", "0");
     ui.form_event("task-edit-form", "submit", "");
     assert_eq!(
@@ -700,7 +705,7 @@ async fn financial_editor_sends_explicit_zero_in_current_currency_and_explicit_c
             requester
         )
     );
-    ui.form_event("task-rate-action", "change", "clear");
+    ui.click("task-rate-action-option-clear");
     ui.form_event("task-edit-form", "submit", "");
     assert_eq!(
         probe.updates.borrow()[1],

@@ -227,7 +227,7 @@ pub(super) fn RunPanel(
                             }
                         }
                         div { class: "flex gap-3 flex-wrap",
-                            Link { to: Route::ProjectList {}, class: "btn btn-primary", "Go to projects" }
+                            Link { to: Route::ProjectList { filter: Default::default() }, class: "btn btn-primary", "Go to projects" }
                             if report.as_ref().is_some_and(|report| report.summary.people.created > 0) {
                                 Link { to: Route::People {}, class: "btn btn-secondary", "Review new people" }
                             }

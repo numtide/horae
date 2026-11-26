@@ -147,6 +147,10 @@ fn sheet_busy(html: &str) -> bool {
 }
 
 /// The routes the page links to.
+#[path = "../src/pages/projects/filter.rs"]
+#[allow(dead_code)]
+mod project_filter;
+
 mod route {
     use super::timesheet::{Anchor, CalSpan, Timesheet, ViewMode};
     use dioxus::prelude::*;
@@ -160,12 +164,15 @@ mod route {
             span: CalSpan,
             user: String,
         },
-        #[route("/projects")]
-        ProjectList {},
+        #[route("/projects?:..filter")]
+        ProjectList { filter: ProjectFilter },
     }
 
+    pub use super::project_filter::ProjectFilter;
+
     #[component]
-    fn ProjectList() -> Element {
+    fn ProjectList(filter: ProjectFilter) -> Element {
+        let _ = filter;
         rsx! {}
     }
 }

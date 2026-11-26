@@ -71,7 +71,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     assert.equal(requests.length, 2, 'Changes during the pending write are saved serially');
     await page.unroute('**/api/save_project_draft*');
     await page.locator('a.nav-item[href="/clients"]').click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await page.evaluate(() => history.back());
     await expect(editor.locator('#np-name')).toHaveValue('Newer edit during save');
     console.log('PASS: pending creation saves protect sidebar, Back, replacement, reload and full-document exits without losing newer edits');
@@ -99,7 +99,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     assert.equal(failed[0], failed[1], 'Retry must acknowledge the exact committed snapshot before saving newer input');
     await page.unroute('**/api/save_project_draft*');
     await page.evaluate(() => history.forward());
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await page.evaluate(() => history.back());
     await expect(editor.locator('#np-name')).toHaveValue('Latest recovered draft');
     console.log('PASS: a lost acknowledgement blocks Forward and exits until the identical retry and newer edits are acknowledged');
@@ -117,14 +117,14 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page).toHaveURL(`${base}/projects/new`);
     hold = false;
     release();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.unroute('**/api/save_project_draft*');
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(editor.locator('#np-name')).toHaveValue('Cancel preserves this draft');
     assert.equal(sql('SELECT count(*) FROM projects'), count, 'A creation draft is not an operational project');
     await editor.getByRole('button', { name: 'Discard draft', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard draft', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects`);
+    await expect(page).toHaveURL(/\/projects\??$/);
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(editor.locator('#np-name')).toHaveValue('');
     await editor.locator('#np-client').click();

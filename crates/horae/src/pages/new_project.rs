@@ -148,7 +148,7 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
             ProjectEditor { defaults: defaults.clone(), options: options.clone(), draft: draft.clone(), client_context: *client_context, on_reload: move |_| initial.restart() }
         },
         Some(Err(error)) => rsx! {
-            BackLink { to: Route::ProjectList {}, label: "Back to Projects" }
+            BackLink { to: Route::ProjectList { filter: Default::default() }, label: "Back to Projects" }
             PageHeader { title: "New project" }
             LoadError { error: error.clone(), what: "project settings", retry }
         },
@@ -162,7 +162,9 @@ pub fn edit_return_route(id: Uuid, return_to: EditReturn) -> Route {
     if return_to.returns_to(id) {
         Route::ProjectDetail { id }
     } else {
-        Route::ProjectList {}
+        Route::ProjectList {
+            filter: Default::default(),
+        }
     }
 }
 
@@ -303,7 +305,7 @@ fn ProjectEditor(
     #[props(default)] generation: Uuid,
     #[props(default)] on_unavailable: EventHandler<Uuid>,
     /// Where an edit is left without saving; creation always leaves to Projects.
-    #[props(default = Route::ProjectList {})]
+    #[props(default = Route::ProjectList { filter: Default::default() })]
     exit: Route,
 ) -> Element {
     let invalidated = use_signal(|| false);
@@ -486,7 +488,13 @@ fn ProjectEditor(
                     }
                     Some(Intent::Leave) => {
                         intent.set(None);
-                        leave_project_editor(navigator, Route::ProjectList {}).await;
+                        leave_project_editor(
+                            navigator,
+                            Route::ProjectList {
+                                filter: Default::default(),
+                            },
+                        )
+                        .await;
                     }
                     Some(Intent::Discard) => {
                         if revision > 0 {
@@ -495,7 +503,13 @@ fn ProjectEditor(
                                 .map_err(|error| error.to_string())?;
                         }
                         intent.set(None);
-                        leave_project_editor(navigator, Route::ProjectList {}).await;
+                        leave_project_editor(
+                            navigator,
+                            Route::ProjectList {
+                                filter: Default::default(),
+                            },
+                        )
+                        .await;
                     }
                     Some(Intent::Save) | None => {}
                 }

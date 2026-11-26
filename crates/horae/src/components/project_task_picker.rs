@@ -1,7 +1,11 @@
 use dioxus::prelude::*;
 
+use crate::components::select_field::SelectField;
 use crate::models::{Project, Task};
 use crate::server_fns;
+
+/// A task option that cannot be picked: the project has no enabled task.
+const NO_TASKS: &str = "none";
 
 /// New-time selectors share the server's eligibility view. Editing keeps the
 /// existing, read-only identity even when its context has since been archived.
@@ -13,7 +17,15 @@ pub fn ProjectTaskPicker(
     tasks: Resource<Result<Vec<Task>, ServerFnError>>,
     #[props(default = false)] disabled: bool,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let contexts = use_resource(|| async move { server_fns::list_time_entry_contexts().await });
+    let project_query = use_signal(String::new);
+    let task_query = use_signal(String::new);
+    let pick_project = use_callback(move |value: String| {
+        project.set(value);
+        task.set(String::new());
+    });
+    let pick_task = use_callback(move |value: String| task.set(value));
     use_effect(move || {
         if disabled {
             return;
@@ -56,50 +68,76 @@ pub fn ProjectTaskPicker(
         .or_else(|| project_read.as_ref().and_then(|r| r.as_ref().err()))
         .or_else(|| task_read.as_ref().and_then(|r| r.as_ref().err()));
 
+    // Editing shows only the entry's own project and task.
+    let project_options: Vec<(String, String)> = if disabled {
+        let name = project_list
+            .and_then(|ps| ps.iter().find(|p| Some(p.id) == selected_project))
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| project.cloned());
+        vec![(project(), name)]
+    } else {
+        match (project_list, available) {
+            (Some(projects), Some(contexts)) => projects
+                .iter()
+                .filter(|p| contexts.iter().any(|c| c.project_id == p.id))
+                .map(|p| (p.id.to_string(), p.name.clone()))
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+    let task_options: Vec<(String, String)> = if disabled {
+        let selected_task = task.read().parse().ok();
+        let name = task_list
+            .and_then(|ts| ts.iter().find(|t| Some(t.id) == selected_task))
+            .map(|t| t.name.clone())
+            .unwrap_or_else(|| task.cloned());
+        vec![(task(), name)]
+    } else {
+        match (task_list, available) {
+            (Some(tasks), Some(contexts)) => {
+                let enabled: Vec<(String, String)> = tasks
+                    .iter()
+                    .filter(|t| {
+                        contexts
+                            .iter()
+                            .any(|c| Some(c.project_id) == selected_project && c.task_id == t.id)
+                    })
+                    .map(|t| (t.id.to_string(), t.name.clone()))
+                    .collect();
+                if enabled.is_empty() && selected_project.is_some() {
+                    vec![(NO_TASKS.to_owned(), tr.timer_no_enabled_tasks())]
+                } else {
+                    enabled
+                }
+            }
+            _ => Vec::new(),
+        }
+    };
+
     rsx! {
         if let Some(error) = error {
-            div { class: "alert alert-danger", role: "alert", "Could not load projects and tasks: {error}" }
+            div { class: "alert alert-danger", role: "alert", {tr.timer_contexts_failed(error.to_string())} }
         }
-        select {
-            class: "form-select",
-            "aria-label": "Project",
-            value: "{project}",
+        label { class: "sr-only", r#for: "timer-project", {tr.timer_project()} }
+        SelectField {
+            id: "timer-project",
+            label: tr.timer_project(),
+            options: project_options,
+            selected: project(),
+            query: (!disabled).then_some(project_query),
             disabled: disabled || available.is_none(),
-            onchange: move |e| { project.set(e.value()); task.set(String::new()); },
-            if disabled {
-                option { value: "{project}",
-                    {project_list.and_then(|ps| ps.iter().find(|p| Some(p.id) == selected_project)).map(|p| p.name.clone()).unwrap_or_else(&*project)}
-                }
-            } else {
-                option { value: "", "Select project…" }
-                if let (Some(projects), Some(contexts)) = (project_list, available) {
-                    for p in projects.iter().filter(|p| contexts.iter().any(|c| c.project_id == p.id)) {
-                        option { value: "{p.id}", "{p.name}" }
-                    }
-                }
-            }
+            onselect: pick_project,
         }
-        select {
-            class: "form-select",
-            "aria-label": "Task",
-            value: "{task}",
+        label { class: "sr-only", r#for: "timer-task", {tr.timer_task()} }
+        SelectField {
+            id: "timer-task",
+            label: tr.timer_task(),
+            options: task_options,
+            selected: task(),
+            query: (!disabled).then_some(task_query),
+            disabled_values: vec![NO_TASKS.to_owned()],
             disabled: disabled || available.is_none() || selected_project.is_none(),
-            onchange: move |e| task.set(e.value()),
-            if disabled {
-                option { value: "{task}",
-                    {task_list.and_then(|ts| ts.iter().find(|t| Some(t.id) == task.read().parse().ok())).map(|t| t.name.clone()).unwrap_or_else(&*task)}
-                }
-            } else {
-                option { value: "", "Select task…" }
-                if let (Some(tasks), Some(contexts)) = (task_list, available) {
-                    for t in tasks.iter().filter(|t| contexts.iter().any(|c| Some(c.project_id) == selected_project && c.task_id == t.id)) {
-                        option { value: "{t.id}", "{t.name}" }
-                    }
-                    if selected_project.is_some() && !contexts.iter().any(|c| Some(c.project_id) == selected_project) {
-                        option { value: "", "No enabled tasks" }
-                    }
-                }
-            }
+            onselect: pick_task,
         }
     }
 }

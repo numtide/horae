@@ -93,26 +93,3 @@ pub fn Textarea(
         }
     }
 }
-
-/// A select built from `(value, label)` option pairs; the option matching
-/// `selected` is pre-selected.
-#[component]
-pub fn Select(
-    options: Vec<(String, String)>,
-    #[props(default)] id: String,
-    #[props(default)] selected: String,
-    #[props(default)] disabled: bool,
-    #[props(default)] onchange: EventHandler<FormEvent>,
-) -> Element {
-    rsx! {
-        select {
-            class: "form-select",
-            id: if !id.is_empty() { "{id}" },
-            disabled,
-            onchange: move |e| onchange.call(e),
-            for (value , label) in options {
-                option { value: "{value}", selected: value == selected, "{label}" }
-            }
-        }
-    }
-}

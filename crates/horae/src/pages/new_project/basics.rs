@@ -3,7 +3,7 @@ use horae_core::project::PROJECT_CURRENCIES;
 use uuid::Uuid;
 
 use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
-use crate::components::form::{FormGroup, Input, Select, Textarea};
+use crate::components::form::{FormGroup, Input, Textarea};
 use crate::components::modal::{Modal, ModalAction, ModalBody, ModalHeader};
 use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
@@ -345,6 +345,7 @@ fn NewClientDialog(
     on_dismiss: EventHandler<()>,
     on_created: EventHandler<CreationClient>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let mut name = use_signal(String::new);
     let mut selected_currency = use_signal(|| currency.clone());
     let mut rate = use_signal(String::new);
@@ -381,8 +382,8 @@ fn NewClientDialog(
                     FormGroup { label: "Client name", id: "np-new-client-name",
                         Input { id: "np-new-client-name", value: name(), disabled: busy(), oninput: move |event: FormEvent| name.set(event.value()) }
                     }
-                    FormGroup { label: "Currency", id: "np-new-client-currency",
-                        Select { id: "np-new-client-currency", disabled: busy(), options: PROJECT_CURRENCIES.iter().map(|currency| (currency.to_string(), currency.to_string())).collect(), selected: selected_currency(), onchange: move |event: FormEvent| selected_currency.set(event.value()) }
+                    FormGroup { label: tr.new_project_client_currency(), id: "np-new-client-currency",
+                        SelectField { id: "np-new-client-currency", label: tr.new_project_client_currency(), disabled: busy(), options: PROJECT_CURRENCIES.iter().map(|currency| (currency.to_string(), currency.to_string())).collect(), selected: selected_currency(), onselect: move |value: String| selected_currency.set(value) }
                     }
                     FormGroup { label: "Default hourly rate", id: "np-new-client-rate", hint: "Optional. Zero is a valid rate.",
                         Input { id: "np-new-client-rate", value: rate(), disabled: busy(), oninput: move |event: FormEvent| rate.set(event.value()) }

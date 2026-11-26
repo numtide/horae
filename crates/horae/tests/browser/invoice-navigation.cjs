@@ -25,7 +25,7 @@ const prepare = `${base}/invoices/new/client/${acme}`;
     native.push(`${dialog.type()}: ${dialog.message()}`);
     await dialog.dismiss();
   });
-  const sidebar = page.locator('a.nav-item[href="/clients"]');
+  const sidebar = page.locator('a.nav-item[href^="/clients"]');
   const po = page.getByLabel('PO number', { exact: true });
   const discard = page.getByRole('dialog', { name: 'Discard unsaved invoice changes?', exact: true });
   // Step 2 through the app, as a person reaches it, with its preview loaded.
@@ -49,7 +49,7 @@ const prepare = `${base}/invoices/new/client/${acme}`;
     // The preview fills the values in, but nothing was changed: leave freely.
     await open();
     await sidebar.click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await expect(discard).toHaveCount(0);
     assert.deepEqual(native, []);
     console.log('PASS: an untouched new invoice leaves through the sidebar without a prompt');
@@ -65,7 +65,7 @@ const prepare = `${base}/invoices/new/client/${acme}`;
     await expect(po).toHaveValue('Unsaved PO');
     await sidebar.click();
     await discard.getByRole('button', { name: 'Discard changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
     assert.deepEqual(native, []);
     console.log('PASS: a changed new invoice asks in the app before leaving; keep stays, discard leaves');
@@ -79,7 +79,7 @@ const prepare = `${base}/invoices/new/client/${acme}`;
     await expect(po).toHaveValue('Unsaved PO');
     await sidebar.click();
     await discard.getByRole('button', { name: 'Discard changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     // Discarding on a back navigation goes back after all.
     await open();
     await po.fill('Unsaved PO');
@@ -101,17 +101,17 @@ const prepare = `${base}/invoices/new/client/${acme}`;
         history.go = go;
         go(delta);
         document.querySelector('[data-editor-state]').setAttribute('data-editor-leaving', '');
-        queueMicrotask(() => document.querySelector('a.nav-item[href="/clients"]').click());
+        queueMicrotask(() => document.querySelector('a.nav-item[href^="/clients"]').click());
       };
       history.back();
     });
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
     await page.evaluate(() => history.back());
     await expect(page).toHaveURL(prepare);
     await expect(page.getByRole('heading', { name: 'New invoice', exact: true })).toBeVisible();
     await page.evaluate(() => history.forward());
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
     // The dialog the rejected Back opened closed when the app moved on.
     await expect(discard).toHaveCount(0);
@@ -143,7 +143,7 @@ const prepare = `${base}/invoices/new/client/${acme}`;
     await page.setViewportSize({ width: 1440, height: 900 });
     await sidebar.click();
     await discard.getByRole('button', { name: 'Discard changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     console.log('PASS: the leave dialog opens on Keep editing; Escape and the backdrop stay, keeping focus and scroll');
 
     // What counts as a change: projects and the period, and changing them back
@@ -175,7 +175,7 @@ const prepare = `${base}/invoices/new/client/${acme}`;
     await pick(preset.trim());
     await expect(clean).toHaveCount(1);
     await sidebar.click();
-    await expect(page).toHaveURL(`${base}/clients`);
+    await expect(page).toHaveURL(/\/clients\??$/);
     assert.deepEqual(native, []);
     console.log('PASS: ticking a project or changing the period asks; changing it back does not');
 
