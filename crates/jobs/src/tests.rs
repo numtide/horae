@@ -117,6 +117,32 @@ impl Handler for Long {
     }
 }
 
+/// A kind only an upgraded worker knows.
+struct Newer;
+
+impl Handler for Newer {
+    fn kind(&self) -> &'static str {
+        "newer_kind"
+    }
+
+    fn policy(&self) -> RetryPolicy {
+        RetryPolicy::default()
+    }
+
+    fn run<'a>(
+        &'a self,
+        _ctx: &'a JobContext,
+        _payload: serde_json::Value,
+    ) -> BoxFuture<'a, Result<Completed, JobError>> {
+        Box::pin(async {
+            Ok(Completed {
+                report: serde_json::json!({}),
+                processed_count: 0,
+            })
+        })
+    }
+}
+
 fn registry() -> Registry {
     let mut registry = Registry::default();
     registry.register(Echo).register(Long);
@@ -240,16 +266,42 @@ async fn permanent_handler_error_fails_the_job_with_its_kind(pool: sqlx::PgPool)
 }
 
 #[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn a_kind_without_a_handler_stays_queued(pool: sqlx::PgPool) {
+async fn a_kind_without_a_handler_stays_queued_until_a_worker_has_one(pool: sqlx::PgPool) {
     let org_id = org(&pool).await;
-    let id = insert_job(&pool, org_id, "newer_kind", serde_json::json!({}), 1).await;
+    let newer = insert_job(&pool, org_id, "newer_kind", serde_json::json!({}), 5).await;
+    let behind = enqueue(&pool, request(org_id, "echo")).await.unwrap().id();
+    assert_eq!(run_next(&pool, "old-worker").await, behind);
     assert!(
-        claim_registered(&pool, &registry(), "worker")
+        claim_registered(&pool, &registry(), "old-worker")
             .await
             .unwrap()
             .is_none()
     );
-    // Not even an exhausted one is failed: a newer server may know the kind.
+    let waiting = sqlx::query!(
+        "SELECT status, attempts FROM horae_jobs WHERE id = $1",
+        newer
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((waiting.status.as_str(), waiting.attempts), ("queued", 0));
+
+    let mut upgraded = Registry::default();
+    upgraded.register(Newer);
+    let job = claim_registered(&pool, &upgraded, "new-worker")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.id, newer);
+    execute(&pool, &upgraded, "new-worker", job).await.unwrap();
+    assert_eq!(row(&pool, newer).await.status, "succeeded");
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn an_exhausted_job_of_a_kind_without_a_handler_is_not_failed(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = insert_job(&pool, org_id, "newer_kind", serde_json::json!({}), 1).await;
+    // A newer server may know the kind and fail or finish it itself.
     sqlx::query!("UPDATE horae_jobs SET attempts = 1 WHERE id = $1", id)
         .execute(&pool)
         .await

@@ -40,16 +40,16 @@ ______________________________________________________________________
 
 ## Phase 2: PR 2, concurrency key, heartbeat, retries, delay, priority (US9)
 
-- [ ] T013 [US9] Tests first in `crates/jobs`: a second enqueue with the same concurrency key returns `Existing`; once the first job finishes a new one is created; the key is per organization and kind
-- [ ] T014 [P] [US9] Tests first: a running job whose heartbeat stops is claimable after its stale limit and not before; a job whose heartbeat continues past 10 minutes is never claimed by another worker
-- [ ] T015 [P] [US9] Tests first: a policy of 5 attempts, 10 s, ×2, 10 min gives delays 10, 20, 40, 80 s; a permanent error ends the job at once; each attempt has a row in `horae_job_attempts` with its outcome and error
-- [ ] T016 [P] [US9] Tests first: a job with `run_at` in the future is not claimed before it; a higher priority is claimed first; a job whose kind has no registered handler stays queued with zero attempts while a registered kind behind it is claimed, and is claimed once a worker with that handler starts (contracts/jobs-crate.md)
-- [ ] T017 [US9] Migration: `concurrency_key`, `priority`, `heartbeat_at`, `stale_after_secs`, the partial unique index and `horae_job_attempts` (data-model.md)
-- [ ] T018 [US9] `enqueue_in` with `Enqueue` and `Enqueued`; `pg_try_advisory_xact_lock` on the key's hash inside the claim transaction (research R-5)
-- [ ] T019 [US9] Heartbeat in the existing lease monitor: write `heartbeat_at` and renew `lease_until` to `heartbeat_at + stale_after_secs` every 15 s; drop the fixed 300 s lease
-- [ ] T020 [US9] Retry delays from the kind's `RetryPolicy`; the import kinds keep today's curve and `HORAE_JOB_MAX_ATTEMPTS` (contracts/jobs-crate.md)
-- [ ] T021 [US9] Attempts rows written at claim and at finish; `interrupted` for a reclaimed attempt
-- [ ] T022 [US9] Claim order `priority DESC, available_at, created_at`, restricted to the kinds in the worker's registry (`kind = ANY($n)`), so an unregistered kind stays queued; log each such kind once per worker start; regenerate `.sqlx/`; spec 005/006 tests still pass
+- [x] T013 [US9] Tests first in `crates/jobs`: a second enqueue with the same concurrency key returns `Existing`; once the first job finishes a new one is created; the key is per organization and kind
+- [x] T014 [P] [US9] Tests first: a running job whose heartbeat stops is claimable after its stale limit and not before; a job whose heartbeat continues past its stale limit (a 15 s limit, run for 20 s in real time while another worker polls) is never claimed by another worker. Claims never look at a job's age, only at the lease the heartbeat renews, so running longer does not change the result
+- [x] T015 [P] [US9] Tests first: a policy of 5 attempts, 10 s, ×2, 10 min gives delays 10, 20, 40, 80 s; a permanent error ends the job at once; each attempt has a row in `horae_job_attempts` with its outcome and error
+- [x] T016 [P] [US9] Tests first: a job with `run_at` in the future is not claimed before it; a higher priority is claimed first; a job whose kind has no registered handler stays queued with zero attempts while a registered kind behind it is claimed, and is claimed once a worker with that handler starts (contracts/jobs-crate.md)
+- [x] T017 [US9] Migration: `concurrency_key`, `priority`, `heartbeat_at`, `stale_after_secs`, the partial unique index and `horae_job_attempts` (data-model.md)
+- [x] T018 [US9] `enqueue_in` with `Enqueue` and `Enqueued` (`max_attempts` required); the insert uses `ON CONFLICT DO NOTHING` and finds the conflicting job by a lookup bounded to three tries. No advisory lock at claim: the partial unique index already admits one queued or running job per key (research R-5)
+- [x] T019 [US9] Heartbeat in the existing lease monitor: write `heartbeat_at` and renew `lease_until` to `heartbeat_at + stale_after_secs` every 15 s (four times per stale limit when that is shorter); the claim writes `stale_after_secs` from the handler, clamped to 15..3600; drop the fixed 300 s lease
+- [x] T020 [US9] Retry delays from the kind's `RetryPolicy`; the import kinds keep today's curve (2 s, ×2, 300 s) and `HORAE_JOB_MAX_ATTEMPTS` (contracts/jobs-crate.md)
+- [x] T021 [US9] Attempts rows written at claim and at finish; `interrupted` for a reclaimed attempt
+- [x] T022 [US9] Claim order `priority DESC, available_at, created_at`, restricted to the kinds in the worker's registry (`kind = ANY($n)`), so an unregistered kind stays queued; log each such kind once per worker start; regenerate `.sqlx/`; spec 005/006 tests still pass
 
 ## Phase 3: PR 3, scheduler with time zones (US9)
 

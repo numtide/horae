@@ -12,7 +12,7 @@ Column types follow the baseline's conventions. Migration numbers are taken when
 | `concurrency_key` | text, null | At most one queued or running job per `(org_id, kind, concurrency_key)` |
 | `priority` | smallint, default 0 | Claimed highest first, then `available_at`, then `created_at` |
 | `heartbeat_at` | timestamptz, null | Written every 15 s while running |
-| `stale_after_secs` | integer, default 60 | Set from the kind's handler at enqueue; `CHECK (stale_after_secs BETWEEN 15 AND 3600)` |
+| `stale_after_secs` | integer, default 60 | Set at each claim from the claiming worker's handler, clamped to 15..3600; `CHECK (stale_after_secs BETWEEN 15 AND 3600)` |
 
 New index: `UNIQUE (org_id, kind, concurrency_key) WHERE concurrency_key IS NOT NULL AND status IN ('queued', 'running')`.
 
