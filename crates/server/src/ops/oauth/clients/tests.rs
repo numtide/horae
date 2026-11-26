@@ -16,7 +16,7 @@ fn public_app(name: &str) -> NewClient {
         name: name.into(),
         kind: ClientKind::Public,
         redirect_uris: vec!["com.example.app:/callback".into()],
-        scopes: ScopeSet::of(&[Scope::TimeWrite]),
+        scopes: names(&[Scope::TimeWrite]),
     }
 }
 
@@ -25,8 +25,15 @@ fn confidential_app(name: &str) -> NewClient {
         name: name.into(),
         kind: ClientKind::Confidential,
         redirect_uris: vec!["https://app.example.com/callback".into()],
-        scopes: ScopeSet::of(&[Scope::CatalogRead]),
+        scopes: names(&[Scope::CatalogRead]),
     }
+}
+
+fn names(scopes: &[Scope]) -> Vec<String> {
+    scopes
+        .iter()
+        .map(|scope| scope.as_str().to_owned())
+        .collect()
 }
 
 async fn register_as(
@@ -267,8 +274,12 @@ async fn registration_validates_its_input(pool: PgPool) {
     let error = register_as(&pool, &admin, loopback).await.unwrap_err();
     assert_eq!(field(error), Some("redirect_uris"));
     let mut no_scopes = public_app("App");
-    no_scopes.scopes = ScopeSet::EMPTY;
+    no_scopes.scopes = Vec::new();
     let error = register_as(&pool, &admin, no_scopes).await.unwrap_err();
+    assert_eq!(field(error), Some("scopes"));
+    let mut unknown = public_app("App");
+    unknown.scopes = vec!["time:delete".into()];
+    let error = register_as(&pool, &admin, unknown).await.unwrap_err();
     assert_eq!(field(error), Some("scopes"));
     assert_eq!(list_as(&pool, &admin).await.unwrap().len(), 1);
 }
@@ -283,7 +294,7 @@ async fn two_apps_cannot_share_a_name(pool: PgPool) {
         register_as(&pool, &admin, confidential_app("Widget"))
             .await
             .unwrap_err(),
-        OpError::conflict(NAME_TAKEN)
+        OpError::conflict(NAME_TAKEN).with_field("name")
     );
 }
 
@@ -314,7 +325,7 @@ async fn only_an_administrator_manages_apps(pool: PgPool) {
         let changes = ClientChanges {
             name: "Renamed".into(),
             redirect_uris: app.redirect_uris.clone(),
-            scopes: app.scopes,
+            scopes: names(&app.scopes.iter().collect::<Vec<_>>()),
         };
         forbidden(update_as(&pool, &person, app.id, changes).await.map(drop));
     }
@@ -349,7 +360,7 @@ async fn updating_changes_name_uris_and_scopes(pool: PgPool) {
             "com.example.app:/callback".into(),
             "http://127.0.0.1/callback".into(),
         ],
-        scopes: ScopeSet::of(&[Scope::CatalogRead]),
+        scopes: names(&[Scope::CatalogRead]),
     };
     let updated = update_as(&pool, &admin, app.id, changes).await.unwrap();
     assert_eq!(updated.name, "Widget 2");
@@ -364,20 +375,35 @@ async fn updating_changes_name_uris_and_scopes(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn the_built_in_client_keeps_its_fixed_fields_and_cannot_be_deleted(pool: PgPool) {
+async fn the_built_in_client_can_only_be_enabled_or_disabled(pool: PgPool) {
     let admin = seed(&pool, BuiltInProfile::Administrator).await;
     let android = built_in(&list_as(&pool, &admin).await.unwrap()).clone();
     let moved = ClientChanges {
         name: android.name.clone(),
         redirect_uris: vec!["com.example.evil:/callback".into()],
-        scopes: android.scopes,
+        scopes: names(&Scope::ALL),
     };
-    assert_eq!(
-        update_as(&pool, &admin, android.id, moved)
-            .await
-            .unwrap_err(),
-        OpError::conflict(BUILT_IN_FIXED)
-    );
+    let renamed = ClientChanges {
+        name: "Horae mobile".into(),
+        redirect_uris: android.redirect_uris.clone(),
+        scopes: names(&Scope::ALL),
+    };
+    let narrowed = ClientChanges {
+        name: android.name.clone(),
+        redirect_uris: android.redirect_uris.clone(),
+        scopes: names(&[Scope::TimeRead]),
+    };
+    for changes in [moved, renamed, narrowed] {
+        assert_eq!(
+            update_as(&pool, &admin, android.id, changes)
+                .await
+                .unwrap_err(),
+            OpError::conflict(BUILT_IN_FIXED)
+        );
+    }
+    let unchanged = built_in(&list_as(&pool, &admin).await.unwrap()).clone();
+    assert_eq!(unchanged.name, BUILT_IN_NAME);
+    assert_eq!(unchanged.scopes, android.scopes);
     assert_eq!(
         delete_as(&pool, &admin, android.id).await.unwrap_err(),
         OpError::conflict(BUILT_IN_KEPT)
@@ -388,15 +414,6 @@ async fn the_built_in_client_keeps_its_fixed_fields_and_cannot_be_deleted(pool: 
             .unwrap_err(),
         OpError::conflict(PUBLIC_NO_SECRET)
     );
-    // Its name and scopes may change; its id, kind and URIs stay.
-    let renamed = ClientChanges {
-        name: "Horae mobile".into(),
-        redirect_uris: android.redirect_uris.clone(),
-        scopes: ScopeSet::of(&[Scope::TimeRead]),
-    };
-    let updated = update_as(&pool, &admin, android.id, renamed).await.unwrap();
-    assert_eq!(updated.client_id, BUILT_IN_CLIENT_ID);
-    assert_eq!(updated.name, "Horae mobile");
     let enabled = set_enabled_as(&pool, &admin, android.id, true)
         .await
         .unwrap();

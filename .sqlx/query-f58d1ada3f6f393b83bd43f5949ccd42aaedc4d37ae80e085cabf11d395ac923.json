@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT g.id, c.id AS app_id, c.name AS app_name, c.client_id,\n                  c.built_in AS app_built_in, g.user_id, u.name AS person_name, g.scopes,\n                  g.approved_at AS \"approved_at: DateTime<Utc>\",\n                  g.last_used_at AS \"last_used_at: DateTime<Utc>\",\n                  g.expires_at AS \"expires_at: DateTime<Utc>\"\n           FROM oauth_grants g\n           JOIN oauth_clients c ON c.id = g.client_id\n           JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id\n           WHERE g.org_id = $1\n             AND ($2::uuid IS NULL OR g.user_id = $2)\n             AND ($3::uuid IS NULL OR g.client_id = $3)\n             AND g.revoked_at IS NULL AND g.expires_at > now()\n           ORDER BY g.approved_at DESC, g.id DESC",
+  "query": "SELECT g.id, c.id AS app_id, c.name AS app_name, c.client_id,\n                  c.built_in AS app_built_in, g.user_id, u.name AS person_name, u.email AS person_email,\n                  g.scopes, g.approved_at AS \"approved_at: DateTime<Utc>\",\n                  g.last_used_at AS \"last_used_at: DateTime<Utc>\",\n                  g.expires_at AS \"expires_at: DateTime<Utc>\"\n           FROM oauth_grants g\n           JOIN oauth_clients c ON c.id = g.client_id\n           JOIN users u ON u.org_id = g.org_id AND u.id = g.user_id\n           WHERE g.org_id = $1\n             AND ($2::uuid IS NULL OR g.user_id = $2)\n             AND ($3::uuid IS NULL OR g.client_id = $3)\n             AND g.revoked_at IS NULL AND g.expires_at > now()\n           ORDER BY g.approved_at DESC, g.id DESC",
   "describe": {
     "columns": [
       {
@@ -40,21 +40,26 @@
       },
       {
         "ordinal": 7,
+        "name": "person_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "scopes",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "approved_at: DateTime<Utc>",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "last_used_at: DateTime<Utc>",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "expires_at: DateTime<Utc>",
         "type_info": "Timestamptz"
       }
@@ -76,9 +81,10 @@
       false,
       false,
       false,
+      false,
       true,
       false
     ]
   },
-  "hash": "b9d3d3fdab88de5daa4667536df4020f2021707d15818d1ca31ac1effc2ad74d"
+  "hash": "f58d1ada3f6f393b83bd43f5949ccd42aaedc4d37ae80e085cabf11d395ac923"
 }

@@ -5,6 +5,7 @@ pub mod client;
 pub mod invoice;
 pub mod jobs;
 pub mod oauth;
+pub mod oauth_apps;
 pub mod organization;
 pub mod own_permissions;
 pub mod people;

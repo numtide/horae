@@ -5,7 +5,7 @@ use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
 use crate::models::permission_audit::AuditFilter;
 use crate::pages::{
-    admin::{AdminApiTokens, WorkspacePlugins, WorkspaceSettings},
+    admin::{AdminApiTokens, AdminApp, AdminApps, WorkspacePlugins, WorkspaceSettings},
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
@@ -135,6 +135,10 @@ pub enum Route {
     PermissionAudit { filter: AuditFilter },
     #[route("/admin/api-tokens")]
     AdminApiTokens {},
+    #[route("/admin/apps")]
+    AdminApps {},
+    #[route("/admin/apps/:id")]
+    AdminApp { id: Uuid },
     #[end_layout]
     // My settings opens on its first subpage, which old links also reach.
     #[redirect("/settings", || Route::SettingsProfile {})]
@@ -192,6 +196,7 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
                     | Route::HarvestRuns {}
                     | Route::HarvestRun { .. }
             )
+            | (Route::AdminApps {}, Route::AdminApp { .. })
     ) || std::mem::discriminant(current) == std::mem::discriminant(to)
 }
 

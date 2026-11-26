@@ -34,6 +34,8 @@ pub mod menu;
 pub mod modal;
 #[path = "../src/components/page_header.rs"]
 pub mod page_header;
+#[path = "../src/components/revealed_secret.rs"]
+pub mod revealed_secret;
 #[allow(dead_code)]
 #[path = "../src/components/screen_state.rs"]
 pub mod screen_state;
@@ -41,7 +43,9 @@ pub mod screen_state;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{badge, confirm_dialog, form, icons, menu, page_header, screen_state, table};
+    pub use super::{
+        badge, confirm_dialog, form, icons, menu, page_header, revealed_secret, screen_state, table,
+    };
 }
 mod models {
     pub use horae_types::api_tokens;

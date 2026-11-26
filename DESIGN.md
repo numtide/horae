@@ -198,7 +198,7 @@ Status:
 
 - `AppLayout` (`layout.rs`) is the signed-in shell: the sidebar, its resize handle, the mobile navigation toggle and the `main` region that renders the route. It provides the session, the running timer and the person's UTC offset to everything below it. The router mounts it with `#[layout(AppLayout)]`; pages never render it. No props. See [Layout](#layout).
 - `Sidebar` (`sidebar.rs`) is the left rail: brand, `TimerWidget`, the navigation sections the person may open, `VersionInfo` for administrators and the account menu. Only `AppLayout` renders it. Props: `collapsed: Signal<bool>`, `on_navigate`. See [Sidebar](#sidebar-srccomponentssidebarrs).
-- `AdminShell` (`admin_shell.rs`) wraps the Workspace and Data sections (Settings, Plugins, API tokens, Importers, Audit log) with their subnavigation and checks that the person may open the section. The router mounts it with `#[layout(AdminShell)]`. No props. People is a main screen outside it (see [People](#people)). It sets no maximum width (see Form width in [Layout](#layout)).
+- `AdminShell` (`admin_shell.rs`) wraps the Workspace and Data sections (Settings, Plugins, API tokens, Apps, Importers, Audit log) with their subnavigation and checks that the person may open the section. The router mounts it with `#[layout(AdminShell)]`. No props. People is a main screen outside it (see [People](#people)). It sets no maximum width (see Form width in [Layout](#layout)).
 - `PageHeader` (`page_header.rs`) and `BackLink` (`back_link.rs`) draw the top of every screen. Props of `PageHeader`: `title`, `title_id` (makes the heading a focus target), `leading`, `context`, `meta`, `actions`. See [Page header](#page-header-srccomponents).
 - `NavItem` (`nav.rs`) is a rail row with an optional text icon. Today it is a `button` with an `onclick` and draws a trailing dot on the active row, so the rail renders its own `Link`s with the same `nav-item` classes instead, and `NavItem` only appears in the gallery. When a screen starts using it, it must take a `Route` and navigate with `Link` (see [Component Conventions](#component-conventions)), and drop the dot, which [Sidebar](#sidebar-srccomponentssidebarrs) no longer has. Props today: `label`, `icon`, `active`, `onclick`.
 - `NavIcon` (`icons.rs`) draws one of the 16px stroked glyphs (`timesheet`, `clients`, `projects`, `arrow-left`, `chevron-down`, `pencil`, `info` and the rest) in `currentColor`. Use it for every icon these names cover rather than a text glyph. An unknown name renders nothing. Props: `name`, `class`.
@@ -535,6 +535,8 @@ Routes of the Dioxus router (`crates/horae/src/route.rs`). Sign-in lives outside
 | `/admin/importers/harvest/runs/:id` | `HarvestRun` | One import run |
 | `/admin/audit?kind&person&period` | `PermissionAudit` | Permission audit log, its filters in the query (see [Audit log](#audit-log)) |
 | `/admin/api-tokens` | `AdminApiTokens` | Every API token created in the workspace, with revocation |
+| `/admin/apps` | `AdminApps` | OAuth apps people can allow to use their account (see [Apps](#apps)) |
+| `/admin/apps/:id` | `AdminApp` | One app: details, actions and its authorizations |
 | `/settings/profile` | `SettingsProfile` | My settings: name, email, sign-in and time zone (see [My settings](#my-settings)); `/settings` redirects here |
 | `/settings/preferences` | `SettingsPreferences` | My settings: theme |
 | `/settings/api-tokens` | `SettingsApiTokens` | My settings: the person's own API tokens |
@@ -609,6 +611,17 @@ My settings is split into subpages in a side menu, the way the admin shell is (`
 ### Workspace settings
 
 Workspace settings (`/admin/workspace`) is one form of at most `--width-form` with one Primary ("Save changes"), holding only the settings Horae stores (today the workspace time zone). Installed plugins have their own page beside it in the Workspace subnavigation (`/admin/plugins`), open to the same people: a table of name, version, status and hooks, or the full-width `EmptyState` when none is installed. Only plugins that loaded are listed. A plugin is loaded by the server installation (`HORAE_PLUGINS_DIR`, read at startup), not chosen by a person, so it is not a personal setting. How to install one is operator documentation and goes in `docs/`, not in the interface (see the copy convention in the [Glossary](#glossary)).
+
+### Apps
+
+Apps (`/admin/apps`) sit in the Workspace subnavigation after API tokens, open to administrators. They are the OAuth apps people can allow to use their account (spec 024).
+
+- **List.** One `DataTable`: the app with a secondary line (its type in words, "Installed on devices" or "Runs on a server", then the start of its client id), the access in short words ("Time, projects", "Time (read)"), an Enabled or Disabled badge and People, the count of active authorizations, then the row's ⋮ menu. Five columns, so the list fits the admin panel at 1280px. The name column has the shared name width (`name-table`), and the whole row opens the app (`row-link`). Scope codes such as `time:read` never appear; the approval page, My settings and this page share the scope sentences of the catalog. Horae's own Android app always comes first. "Register app" is the page's Primary.
+- **Actions.** The row menu and the app page's "Actions" menu hold Edit…, Replace secret… (an app that runs on a server only), Enable or Disable, then Delete… last as a danger item. Horae's own app has only Enable or Disable: it cannot be edited or deleted. Disabling takes effect at once and can be undone, so it has no confirmation; replacing a secret and deleting confirm through `ConfirmDialog` in the danger tone.
+- **Not ready.** When the operator has not set the public address, a warning notice says that apps cannot connect yet and that registering still works. It never names a setting or a variable.
+- **Register and edit** share one `Modal`: name, type (radios with their consequence; fixed once registered), redirect addresses one per line, and the access as checkboxes with the scope sentences. Choosing to add and change time entries also ticks seeing them. The server validates the addresses, and its message sits under the field it names.
+- **Secret.** An app that runs on a server gets its secret once, after registering or replacing it, in the one-time reveal API tokens use (`RevealedSecret`), with its client id and one button, "I've stored it", the only way to close it (not Escape, not a click beside it). A new app's page opens after it; an app installed on devices goes straight to its page.
+- **App page** (`/admin/apps/:id`): a back link to Apps, the name with its status badge, a card of details (client id with Copy, type, redirect addresses, access in sentences, who registered it and when), then its authorizations: person with email, access, allowed on, last used, and "Revoke…" in each row's ⋮ menu through `ConfirmDialog` (danger tone).
 
 ### Audit log
 

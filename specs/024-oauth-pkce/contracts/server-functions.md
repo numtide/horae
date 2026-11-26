@@ -1,7 +1,8 @@
 # Contract: server functions and pages (PRs C, D, F)
 
 Mutations from the web app go through these server functions, which call `ops::oauth`
-(constitution IV). They live in `crates/horae/src/server_fns/oauth.rs`. Errors map `OpError` to the
+(constitution IV). They live in `crates/horae/src/server_fns/oauth.rs`, and the administration's
+in `oauth_apps.rs` beside it. Errors map `OpError` to the
 named status constants, as elsewhere.
 
 ## Approval (PR C)
@@ -49,20 +50,22 @@ audit log (C-4).
 | Server function | Who | Input | Output | Errors |
 | --- | --- | --- | --- | --- |
 | `list_oauth_apps()` | administrator | | `Vec<AppRow>` | `FORBIDDEN` |
+| `get_oauth_app(id)` | administrator | | `AppRow` | `FORBIDDEN`; `NOT_FOUND` |
+| `oauth_apps_can_connect()` | signed-in person | | whether `HORAE_PUBLIC_URL` is set | |
 | `create_oauth_app(new)` | administrator | name, kind, redirect URIs, scopes | `CreatedApp` (secret once for confidential) | `BAD_REQUEST` with the field on invalid input |
-| `update_oauth_app(id, changes)` | administrator | name, redirect URIs, scopes | `AppRow` | `BAD_REQUEST`; `CONFLICT` for a built-in client's fixed fields |
+| `update_oauth_app(id, changes)` | administrator | name, redirect URIs, scopes | `AppRow` | `BAD_REQUEST`; `CONFLICT` for the built-in client and for a name another app has (field `name`) |
 | `set_oauth_app_enabled(id, enabled)` | administrator | | `AppRow` | |
 | `replace_oauth_app_secret(id)` | administrator | | the new secret once | `CONFLICT` for a public client |
 | `delete_oauth_app(id)` | administrator | | | `CONFLICT` for the built-in client |
 | `list_oauth_app_grants(id)` | administrator | | `Vec<GrantRow>` | |
-| `revoke_oauth_grant(id)` | administrator | | the row | |
+| `revoke_oauth_grant(id)` | administrator | | nothing; the page reloads the list | |
 
 Narrowing an app's scopes does not change existing grants; their tokens keep the scopes approved
 until revoked. Removing a redirect URI does not affect issued tokens.
 
 Pages (admin shell, after "API tokens"):
 
-- `AdminApps` at `/admin/apps`: a table of apps (name, type, scopes, status, active authorizations),
+- `AdminApps` at `/admin/apps`: a table of apps (name with its type under it, scopes, status, active authorizations as People),
   a Primary "Register app" button, the built-in Android client first with an Enable/Disable action.
   When `HORAE_PUBLIC_URL` is unset, a notice explains that apps cannot connect until the operator
   sets it.

@@ -50,6 +50,8 @@ action-edit = Edit
 action-archive = Archive
 action-restore = Restore
 action-restoring = Restoring…
+action-copy = Copy
+action-copied = Copied
 action-load-more = Load more
 
 ## Common words
@@ -197,6 +199,100 @@ workspace-plugin-version = v{ $version }
 workspace-access-failed = Could not verify workspace access
 workspace-access-failed-hint = Try again, or sign in again if it keeps failing.
 
+## Apps
+
+apps-title = Apps
+apps-intro = Apps that people can allow to use their { -brand } account. Each person approves an app once; they can revoke it from My settings, and you can revoke it here.
+apps-register = Register app
+apps-not-ready-title = Apps can’t connect yet
+apps-not-ready-body = This { -brand } doesn’t know its public address, so it can’t send people back to their apps. Whoever runs this server needs to set it; you can register apps meanwhile.
+apps-table-label = Apps
+apps-loading = Loading apps…
+apps-what = the apps
+apps-column-app = App
+apps-column-access = Access
+apps-column-status = Status
+# The count of people with an active authorization of the app.
+apps-column-people = People
+apps-kind-public = Installed on devices
+apps-kind-confidential = Runs on a server
+# The access an app may ask for, in short words. `time` is `write`, `read` or
+# `none`; `catalog` is `yes` or `no`.
+apps-access = { $time ->
+    [write] { $catalog ->
+        [yes] Time, projects
+       *[no] Time
+    }
+    [read] { $catalog ->
+        [yes] Time (read), projects
+       *[no] Time (read)
+    }
+   *[none] Projects
+}
+apps-status-enabled = Enabled
+apps-status-disabled = Disabled
+apps-open = Open
+apps-edit = Edit…
+apps-replace-secret = Replace secret…
+apps-enable = Enable
+apps-disable = Disable
+apps-delete = Delete…
+apps-change-failed = Could not change the app. Try again.
+apps-register-title = Register app
+apps-edit-title = Edit app
+apps-name = Name
+apps-name-hint = People see it when they approve the app.
+apps-type = Type
+apps-type-fixed-hint = The type cannot change once the app is registered.
+apps-kind-public-option = Installed on people’s devices
+apps-kind-public-hint = Phones and desktop apps. No secret; protected by PKCE.
+apps-kind-confidential-option = Runs on a server
+apps-kind-confidential-hint = Gets a secret you store on that server.
+apps-redirects = Redirect addresses
+apps-redirects-hint = One per line. { -brand } only sends people back to these.
+apps-scopes = Access it can ask for
+apps-scope-write-hint = Includes seeing them.
+apps-save = Save
+apps-saving = Saving…
+apps-registering = Registering…
+apps-save-failed = Could not save the app. Try again.
+apps-secret-registered-title = { $name } is registered
+apps-secret-replaced-title = New secret for { $name }
+apps-secret-body = Store this secret on the server that runs the app. { -brand } shows it only now; if it is lost, replace it from the app’s page.
+apps-client-id = Client id
+apps-secret = Secret
+apps-secret-done = I’ve stored it
+apps-copy-client-id = Copy client id
+apps-copy-secret = Copy secret
+apps-replace-title = Replace the secret of { $name }?
+apps-replace-body = The current secret stops working at once. The app cannot connect until its server has the new one.
+apps-replace-confirm = Replace secret
+apps-delete-title = Delete { $name }?
+apps-delete-body = Everyone who allowed it loses access at once, and their authorizations are deleted. This cannot be undone.
+apps-delete-confirm = Delete app
+apps-back = Back to Apps
+apps-loading-app = Loading app…
+apps-what-app = this app
+apps-details-label = App details
+apps-kind-confidential-detail = Runs on a server (has a secret)
+apps-registered = Registered
+apps-registered-by = { $date } by { $name }
+apps-authorizations-title = Authorizations
+apps-authorizations-count = { $count } active
+apps-authorizations-loading = Loading authorizations…
+apps-authorizations-what = the authorizations
+apps-column-person = Person
+apps-column-allowed = Allowed on
+apps-column-last-used = Last used
+apps-never = Never
+apps-authorizations-empty = Nobody has allowed this app yet
+apps-authorizations-empty-hint = People who allow it appear here, and you can revoke their access.
+apps-revoke = Revoke…
+apps-revoke-title = Revoke { $name }’s access?
+apps-revoke-body = The app loses access to { $name }’s account at once. They can allow it again later.
+apps-revoke-confirm = Revoke
+apps-revoke-failed = Could not revoke the authorization. Try again.
+
 ## API tokens
 
 api-tokens-title = API tokens
@@ -229,10 +325,7 @@ api-tokens-expiry-year = 1 year
 api-tokens-expiry-never = No expiry
 api-tokens-harvest-account = Clients of the Harvest API v2 work with these tokens at /harvest/v2. When they ask for an account ID, use <id>{ $id }</id>.
 api-tokens-secret-label = New token
-api-tokens-copy = Copy
 api-tokens-copy-label = Copy token
-api-tokens-copied = Copied
-api-tokens-copied-label = Token copied
 api-tokens-column-name = Name
 api-tokens-column-owner = Owner
 api-tokens-column-created = Created
