@@ -497,10 +497,11 @@ mod invoice {
             prop_assert_eq!(sum % step, 0);
         }
 
-        /// Stored hundredths and ISO 4217 minor units round-trip whenever a
-        /// conversion succeeds, and a conversion fails only when the amount is
-        /// inexact or out of range; a silent rounding or a wrong factor would
-        /// break the round trip.
+        /// Each conversion succeeds with exactly the currency's factor (÷100
+        /// for zero decimals, ×10 for three, ×1 otherwise), round-trips, and
+        /// fails only when the amount is inexact or out of range. Asserting the
+        /// factor catches one that is wrong in both directions, which a round
+        /// trip alone would not.
         #[test]
         fn iso_minor_units_round_trip_or_refuse(
             amount in prop_oneof![any::<i64>(), -1_000_000..=1_000_000_i64],
@@ -514,13 +515,19 @@ mod invoice {
             };
             let exact = i128::from(amount) % down == 0 && i64::try_from(i128::from(amount) * up / down).is_ok();
             match to_iso_minor(amount, currency) {
-                Ok(minor) => prop_assert_eq!(from_iso_minor(minor, currency), Ok(amount)),
+                Ok(minor) => {
+                    prop_assert_eq!(i128::from(minor), i128::from(amount) * up / down);
+                    prop_assert_eq!(from_iso_minor(minor, currency), Ok(amount));
+                }
                 Err(_) => prop_assert!(!exact),
             }
             // The write direction is the same factor, the other way round.
             let fits = i128::from(amount) % up == 0 && i64::try_from(i128::from(amount) * down / up).is_ok();
             match from_iso_minor(amount, currency) {
-                Ok(stored) => prop_assert_eq!(to_iso_minor(stored, currency), Ok(amount)),
+                Ok(stored) => {
+                    prop_assert_eq!(i128::from(stored), i128::from(amount) * down / up);
+                    prop_assert_eq!(to_iso_minor(stored, currency), Ok(amount));
+                }
                 Err(_) => prop_assert!(!fits),
             }
         }

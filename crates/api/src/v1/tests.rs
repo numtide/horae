@@ -30,24 +30,76 @@ fn openapi_snapshot_is_current() {
     );
 }
 
-/// Money-looking properties that are deliberately neither a `Money` nor a
-/// `Rate`, each with why. Empty: every amount and price uses its one
-/// convention.
+/// Money-looking properties or parameters that are deliberately neither a
+/// `Money` nor a `Rate`, each with why: a full path as the failure prints it,
+/// or a bare name that exempts that name everywhere. Empty: every amount and
+/// price uses its one convention.
 const NOT_MONEY: &[&str] = &[];
 
-/// The schemas a property named `name`, described as `description`, must
-/// refer to: `Rate` for a price per hour, `Money` for an amount, either for a
-/// description that only mentions money, and none when it is not money.
+fn exempts(allowed: &str, path: &str) -> bool {
+    path == allowed || path.rsplit(['.', '?']).next() == Some(allowed)
+}
+
+/// The schemas a property or parameter named `name`, described as
+/// `description`, must be: `Rate` for a price per hour, `Money` for an amount,
+/// either for a description that only mentions money, and none when it is not
+/// money.
 fn money_schemas(name: &str, description: &str) -> &'static [&'static str] {
     const RATE_WORDS: &[&str] = &["rate", "price"];
     const AMOUNT_WORDS: &[&str] = &[
-        "amount", "cost", "total", "cents", "minor", "fee", "tax", "discount", "subtotal",
-        "balance", "money",
+        "amount",
+        "cost",
+        "total",
+        "cents",
+        "minor",
+        "fee",
+        "tax",
+        "discount",
+        "subtotal",
+        "balance",
+        "money",
+        "budget",
+        "spent",
+        "spend",
+        "remaining",
+        "revenue",
+        "paid",
+        "due",
     ];
-    // An identifier (`tax_id`) is never an amount, whatever it names.
-    let identifier = name == "id" || name.ends_with("_id");
-    let has = |words: &[&str]| !identifier && name.split('_').any(|word| words.contains(&word));
-    if has(RATE_WORDS) {
+    // What such a name ends in when it is something else about the money: an
+    // identifier (`tax_id`), a label (`second_tax_name`), a count or a share
+    // (`discount_bp`), a duration (`budget_minutes`), a kind or a moment
+    // (`budget_kind`, `paid_at`, `due_on`).
+    const NOT_AN_AMOUNT: &[&str] = &[
+        "id",
+        "name",
+        "note",
+        "notes",
+        "description",
+        "percent",
+        "bp",
+        "bps",
+        "count",
+        "minutes",
+        "hours",
+        "kind",
+        "mode",
+        "type",
+        "at",
+        "on",
+        "date",
+    ];
+    // A tax or discount rate is a percentage, not a price per hour.
+    const PERCENTAGE_OF: &[&str] = &["tax", "discount"];
+    let words: Vec<&str> = name.split('_').collect();
+    let last = words.last().copied().unwrap_or_default();
+    if name == "id" || (words.len() > 1 && NOT_AN_AMOUNT.contains(&last)) {
+        return &[];
+    }
+    let has = |list: &[&str]| words.iter().any(|word| list.contains(word));
+    if RATE_WORDS.contains(&last) && has(PERCENTAGE_OF) {
+        &[]
+    } else if has(RATE_WORDS) {
         &["Rate"]
     } else if has(AMOUNT_WORDS) {
         &["Money"]
@@ -61,29 +113,65 @@ fn money_schemas(name: &str, description: &str) -> &'static [&'static str] {
     }
 }
 
-fn refers_to(schema: &Value, target: &str) -> bool {
-    match schema {
-        Value::Object(fields) => {
-            fields.get("$ref") == Some(&json!(format!("#/components/schemas/{target}")))
-                || fields.values().any(|child| refers_to(child, target))
+/// Whether `schema` is `target` itself: a `$ref` to it, possibly beside a
+/// description, a nullable or `allOf` wrapper whose only non-null member is
+/// one, or an array of them. A `$ref` elsewhere in the subtree does not count,
+/// so `oneOf: [Money, integer]` is not a `Money`.
+fn is_schema(schema: &Value, target: &str) -> bool {
+    if schema.get("$ref") == Some(&json!(format!("#/components/schemas/{target}"))) {
+        return true;
+    }
+    for wrapper in ["allOf", "oneOf", "anyOf"] {
+        if let Some(Value::Array(members)) = schema.get(wrapper) {
+            let mut members = members
+                .iter()
+                .filter(|member| member.get("type") != Some(&json!("null")));
+            return match (members.next(), members.next()) {
+                (Some(only), None) => is_schema(only, target),
+                _ => false,
+            };
         }
-        Value::Array(items) => items.iter().any(|child| refers_to(child, target)),
-        _ => false,
+    }
+    schema.get("type") == Some(&json!("array"))
+        && schema
+            .get("items")
+            .is_some_and(|items| is_schema(items, target))
+}
+
+/// Records whether the money-looking `name` at `path` is a schema it must be.
+fn check(found: &mut Vec<(String, bool)>, path: String, name: &str, schema: &Value) {
+    let description = schema["description"].as_str().unwrap_or_default();
+    // A flag (`tax_exempt`) is never an amount.
+    if schema.get("type") == Some(&json!("boolean")) {
+        return;
+    }
+    let allowed = money_schemas(name, description);
+    if !allowed.is_empty() {
+        let conforms = allowed.iter().any(|target| is_schema(schema, target));
+        found.push((path, conforms));
     }
 }
 
-/// Every property under `node` that looks like money, with the path to it,
-/// and whether it refers to a schema it must.
+/// Every property and parameter under `node` that looks like money, with the
+/// path to it, and whether it is a schema it must be.
 fn money_properties(node: &Value, path: &str, found: &mut Vec<(String, bool)>) {
     match node {
         Value::Object(fields) => {
             if let Some(Value::Object(properties)) = fields.get("properties") {
                 for (name, schema) in properties {
-                    let description = schema["description"].as_str().unwrap_or_default();
-                    let allowed = money_schemas(name, description);
-                    if !allowed.is_empty() {
-                        let conforms = allowed.iter().any(|target| refers_to(schema, target));
-                        found.push((format!("{path}.{name}"), conforms));
+                    check(found, format!("{path}.{name}"), name, schema);
+                }
+            }
+            if let Some(Value::Array(parameters)) = fields.get("parameters") {
+                for parameter in parameters {
+                    if let Some(name) = parameter["name"].as_str() {
+                        let mut schema = parameter["schema"].clone();
+                        if let (Value::Object(fields), Some(text)) =
+                            (&mut schema, parameter["description"].as_str())
+                        {
+                            fields.insert("description".into(), json!(text));
+                        }
+                        check(found, format!("{path}?{name}"), name, &schema);
                     }
                 }
             }
@@ -116,7 +204,7 @@ fn every_amount_in_the_document_is_money_or_a_rate() {
     let stray: Vec<&String> = found
         .iter()
         .filter(|(path, conforms)| {
-            !conforms && !NOT_MONEY.iter().any(|allowed| path.ends_with(allowed))
+            !conforms && !NOT_MONEY.iter().any(|allowed| exempts(allowed, path))
         })
         .map(|(path, _)| path)
         .collect();
@@ -138,8 +226,82 @@ fn rate_words_ask_for_a_rate_and_amount_words_for_money() {
     assert_eq!(money_schemas("unit_price", ""), ["Rate"]);
     assert_eq!(money_schemas("budget_amount", ""), ["Money"]);
     assert_eq!(money_schemas("subtotal", ""), ["Money"]);
-    assert_eq!(money_schemas("tax_id", ""), [] as [&str; 0]);
+    assert_eq!(money_schemas("budget", ""), ["Money"]);
+    assert_eq!(money_schemas("remaining_budget", ""), ["Money"]);
+    assert_eq!(money_schemas("min_amount", ""), ["Money"]);
     assert_eq!(money_schemas("note", "In cents"), ["Money", "Rate"]);
+    let none: [&str; 0] = [];
+    for not_money in [
+        "id",
+        "tax_id",
+        "second_tax_name",
+        "tax_rate",
+        "discount_rate",
+        "budget_minutes",
+        "budget_kind",
+        "paid_at",
+        "rate_mode",
+    ] {
+        assert_eq!(money_schemas(not_money, ""), none, "{not_money}");
+    }
+}
+
+#[test]
+fn only_the_schema_itself_or_its_nullable_wrapper_counts() {
+    let money = json!({ "$ref": "#/components/schemas/Money" });
+    assert!(is_schema(&money, "Money"));
+    assert!(is_schema(
+        &json!({ "oneOf": [{ "type": "null" }, money] }),
+        "Money"
+    ));
+    assert!(is_schema(&json!({ "allOf": [money] }), "Money"));
+    assert!(is_schema(
+        &json!({ "type": "array", "items": money }),
+        "Money"
+    ));
+    assert!(!is_schema(
+        &json!({ "oneOf": [money, { "type": "integer" }] }),
+        "Money"
+    ));
+    assert!(!is_schema(&json!({ "type": "integer" }), "Money"));
+    assert!(!is_schema(&money, "Rate"));
+}
+
+#[test]
+fn the_walk_checks_parameters_and_nested_properties() {
+    let document = json!({
+        "paths": { "/x": { "get": { "parameters": [
+            { "name": "min_amount", "in": "query", "schema": { "type": "integer" } },
+            { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+        ] } } },
+        "components": { "schemas": { "X": { "properties": {
+            "budget": { "type": "integer" },
+            "hourly_rate": { "$ref": "#/components/schemas/Rate" },
+            "tax_exempt": { "type": "boolean" },
+        } } } },
+    });
+    let mut found = Vec::new();
+    money_properties(&document, "", &mut found);
+    found.sort();
+    assert_eq!(
+        found,
+        [
+            ("/components/schemas/X.budget".to_owned(), false),
+            ("/components/schemas/X.hourly_rate".to_owned(), true),
+            ("/paths//x/get?min_amount".to_owned(), false),
+        ]
+    );
+}
+
+#[test]
+fn an_exemption_names_a_whole_property_not_a_suffix() {
+    assert!(exempts("rate", "/components/schemas/X.rate"));
+    assert!(exempts("rate", "/paths/~1x/get?rate"));
+    assert!(!exempts("rate", "/components/schemas/X.hourly_rate"));
+    assert!(exempts(
+        "/components/schemas/X.hourly_rate",
+        "/components/schemas/X.hourly_rate"
+    ));
 }
 
 #[test]

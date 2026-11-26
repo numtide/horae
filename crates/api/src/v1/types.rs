@@ -4,7 +4,9 @@
 //! shapes cannot reach the API unnoticed.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use horae_core::money::{MinorUnitsError, from_iso_minor, rate_decimal, to_iso_minor};
+use horae_core::money::{
+    MinorUnitsError, from_iso_minor, is_iso_currency, rate_decimal, to_iso_minor,
+};
 use horae_core::permissions::oauth::Scope;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -57,9 +59,28 @@ impl Money {
         })
     }
 
-    /// The hundredths to store for a received amount, or a 422 naming
-    /// `field` when storage cannot hold it exactly.
-    pub fn to_stored(&self, field: &str) -> Result<i64, Problem> {
+    /// The hundredths to store for a received amount on a record kept in
+    /// `record_currency`, or a 422 naming `field`. The currency must be that
+    /// record's, written as an uppercase ISO 4217 code: `jpy` would otherwise
+    /// read as a two-decimal currency and store ¥80 for ¥8000. The amount must
+    /// also be one storage holds exactly.
+    pub fn to_stored(&self, field: &str, record_currency: &str) -> Result<i64, Problem> {
+        if !is_iso_currency(&self.currency) {
+            return Err(Problem::invalid(
+                field,
+                format!("{:?} is not an ISO 4217 currency code", self.currency),
+            ));
+        }
+        if self.currency != record_currency.trim() {
+            return Err(Problem::invalid(
+                field,
+                format!(
+                    "the currency must be {}, not {}",
+                    record_currency.trim(),
+                    self.currency
+                ),
+            ));
+        }
         from_iso_minor(self.amount_minor, &self.currency).map_err(|error| {
             Problem::invalid(
                 field,
@@ -615,13 +636,33 @@ mod tests {
     fn a_received_amount_is_stored_in_hundredths_or_refused_naming_its_field() {
         let money = |value| serde_json::from_value::<Money>(value).unwrap();
         let bhd = money(json!({ "amount_minor": 10_500, "currency": "BHD" }));
-        assert_eq!(bhd.to_stored("budget_amount"), Ok(1_050));
+        assert_eq!(bhd.to_stored("budget_amount", "BHD"), Ok(1_050));
         let jpy = money(json!({ "amount_minor": 8_000, "currency": "JPY" }));
-        assert_eq!(jpy.to_stored("budget_amount"), Ok(800_000));
-        let problem = money(json!({ "amount_minor": 10_505, "currency": "BHD" }))
-            .to_stored("budget_amount")
-            .unwrap_err();
+        assert_eq!(jpy.to_stored("budget_amount", "JPY"), Ok(800_000));
+        let inexact = money(json!({ "amount_minor": 10_505, "currency": "BHD" }));
+        let problem = inexact.to_stored("budget_amount", "BHD").unwrap_err();
         assert_eq!(problem.status(), StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(problem.field.as_deref(), Some(&json!("budget_amount")));
+    }
+
+    /// A lowercase or unknown code, or another currency than the record's,
+    /// is refused before any amount is converted.
+    #[test]
+    fn a_received_amount_must_be_in_the_records_iso_currency() {
+        let money = |currency: &str| {
+            serde_json::from_value::<Money>(json!({ "amount_minor": 8_000, "currency": currency }))
+                .unwrap()
+        };
+        for (currency, record) in [("jpy", "JPY"), ("XYZ", "XYZ"), ("EUR", "JPY")] {
+            let problem = money(currency)
+                .to_stored("budget_amount", record)
+                .unwrap_err();
+            assert_eq!(
+                problem.status(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "{currency}"
+            );
+            assert_eq!(problem.field.as_deref(), Some(&json!("budget_amount")));
+        }
     }
 }
