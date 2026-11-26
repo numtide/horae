@@ -13,12 +13,14 @@ use crate::{config::JobPolicy, state::AppState};
 mod lease;
 pub mod outbox;
 pub mod report;
+mod sweeps;
 pub use horae_jobs::outbox::{
     OutboxEvent, claim_outbox, enqueue_outbox, mark_outbox_delivered, mark_outbox_failed,
     stop_outbox_delivery,
 };
 pub use horae_jobs::{ConcurrencyKeyHeld, Worker, cancel};
 pub use lease::JobLease;
+pub use sweeps::{ensure_all_schedules, ensure_schedules};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value")]
@@ -624,7 +626,9 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
                     WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind
                       AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as
              FROM horae_jobs
+            -- The sweeps (`sweeps::SWEEPS`), a run a minute, are not history.
             WHERE org_id = $1
+              AND kind NOT IN ('long_timer_sweep', 'budget_alert_sweep', 'oauth_cleanup')
               AND ($3::uuid IS NULL OR (created_at, id) < (
                   SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1
               ))
@@ -741,9 +745,17 @@ pub async fn retry_in(
     Ok(result.rows_affected() == 1)
 }
 
-/// The durable worker, running the import kinds.
+/// The durable worker, running the import kinds and the sweeps.
 pub fn spawn(state: &AppState) -> Worker {
     horae_jobs::spawn(state.db.clone(), registry(state))
+}
+
+/// The scheduler, enqueuing what the stored schedules are due for.
+pub fn spawn_scheduler(state: &AppState) -> horae_jobs::Scheduler {
+    horae_jobs::spawn_scheduler(
+        state.db.clone(),
+        std::sync::Arc::new(crate::timezone::Zones::new(state.db.clone())),
+    )
 }
 
 fn registry(state: &AppState) -> Registry {
@@ -757,6 +769,7 @@ fn registry(state: &AppState) -> Registry {
             state: state.clone(),
             kind: "harvest_csv_import",
         });
+    sweeps::register(&mut registry, state);
     #[cfg(test)]
     registry.register(ImportJob {
         state: state.clone(),

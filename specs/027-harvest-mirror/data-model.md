@@ -60,14 +60,20 @@ any open attempt of a finished job. At most one attempt per job is open (a parti
 | `zone_source` | text | `utc`, `organization`, `person` |
 | `person_id` | uuid, null | Required when `zone_source = 'person'`; FK `(org_id, person_id)` to `users` |
 | `concurrency_key` | text, null | Passed to each job |
+| `priority` | smallint | Passed to each job, from the kind's table below |
+| `max_attempts` | integer | Passed to each job, from the kind's policy |
 | `enabled` | boolean | |
-| `next_due_at` | timestamptz | The next firing, in UTC |
+| `next_due_at` | timestamptz, null | The next firing, in UTC; null until the scheduler plans it |
 | `last_fired_at` | timestamptz, null | |
 
-Checks tie the nullable columns to `cadence` and `zone_source`. A firing enqueues with idempotency
-key `schedule:<id>:<next_due_at as RFC 3339>`, then sets `next_due_at` to the first due time after
-now. A daily time that does not exist on a spring-forward day fires at the first instant after the
-gap; a repeated autumn time fires once, at its first occurrence.
+Checks tie the nullable columns to `cadence` and `zone_source`. The leader picks the schedules due
+within its next tick (15 s), enqueues each with idempotency key
+`schedule:<id>:<next_due_at as RFC 3339>` and `run_at = next_due_at`, then sets `next_due_at` to the
+first due time after the later of the firing and now, so slots missed while no instance led fire
+once. A new `every` schedule is due at once; a new daily or weekly one, or one whose cadence or zone
+changed or that was enabled again, has a null `next_due_at`, which the scheduler plans without firing,
+since only it resolves zones. A daily time that does not exist on a spring-forward day fires at the
+first instant after the gap; a repeated autumn time fires once, at its first occurrence.
 
 ### `horae_outbox` (existing; moves into the crate unchanged)
 

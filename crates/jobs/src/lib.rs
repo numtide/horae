@@ -1,5 +1,6 @@
 //! Durable PostgreSQL-backed background jobs: the queue and its worker, the
-//! transactional outbox and the jobs' report chunks.
+//! scheduler and its stored schedules, the transactional outbox and the jobs'
+//! report chunks.
 //!
 //! The queue is intentionally small and application-owned: Horae's UUIDv7 and
 //! organization invariants apply to queue rows just like every other table.
@@ -16,9 +17,15 @@ use uuid::Uuid;
 mod lease;
 pub mod outbox;
 pub mod report;
+mod schedule;
+mod scheduler;
 mod worker;
 
 pub use lease::{Interrupted, JobContext};
+pub use schedule::{
+    Cadence, Schedule, ZoneSource, delete_schedule, next_due, set_schedule_enabled, upsert_schedule,
+};
+pub use scheduler::{Scheduler, ZoneResolver, fire_due, spawn_scheduler};
 #[cfg(any(test, feature = "test-support"))]
 pub use worker::{ClaimedJob, claim, claim_for_test, execute, run_worker};
 pub use worker::{Worker, claim_registered, run_claimed, spawn};

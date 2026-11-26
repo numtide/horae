@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, org_id, kind, payload, cadence, every_secs,\n                      local_time AS \"local_time: NaiveTime\", weekday,\n                      zone_source, person_id, concurrency_key, priority, max_attempts,\n                      next_due_at AS \"next_due_at: DateTime<Utc>\"\n                 FROM horae_job_schedules\n                WHERE enabled AND (next_due_at IS NULL OR next_due_at <= $1)\n                  AND id <> ALL($2)\n                ORDER BY next_due_at NULLS FIRST\n                LIMIT 1\n                  FOR UPDATE SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "cadence",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "every_secs",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "local_time: NaiveTime",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 7,
+        "name": "weekday",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 8,
+        "name": "zone_source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "person_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "concurrency_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "priority",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "max_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "next_due_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "32529a9593b403f5eb584b7d9ae39461f0f91a94a04d521d346955d3bcdedac6"
+}

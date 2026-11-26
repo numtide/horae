@@ -270,17 +270,22 @@ pub(crate) async fn enqueue_alerts(
 
 /// Recover checks missed between a committed mutation and its best-effort task,
 /// and evaluate a fresh monthly period even when no entry was edited.
-/// Check every alerting project, each in its own workspace's period at `now`.
-pub(crate) async fn sweep(pool: &sqlx::PgPool, now: DateTime<Utc>) -> anyhow::Result<()> {
+/// Check every alerting project of the organization, in its period at `now`.
+pub(crate) async fn sweep(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    now: DateTime<Utc>,
+) -> anyhow::Result<()> {
     let mut after = Uuid::nil();
     loop {
         let projects = sqlx::query!(
             "SELECT ps.project_id, ps.org_id, o.timezone FROM project_settings ps
              JOIN projects p ON p.id = ps.project_id AND p.org_id = ps.org_id
              JOIN organizations o ON o.id = ps.org_id
-             WHERE ps.alert_enabled AND p.active AND ps.project_id > $1
+             WHERE ps.org_id = $2 AND ps.alert_enabled AND p.active AND ps.project_id > $1
              ORDER BY ps.project_id LIMIT 100",
             after,
+            org_id,
         )
         .fetch_all(pool)
         .await?;

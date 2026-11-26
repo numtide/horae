@@ -96,7 +96,14 @@ pub async fn upsert_schedule(tx: &mut PgConnection, schedule: Schedule) -> anyho
 pub async fn set_schedule_enabled(tx: &mut PgConnection, org_id: Uuid, name: &str, enabled: bool) -> anyhow::Result<()>;
 pub async fn delete_schedule(tx: &mut PgConnection, org_id: Uuid, name: &str) -> anyhow::Result<()>;
 pub fn next_due(cadence: &Cadence, zone: Tz, after: DateTime<Utc>) -> DateTime<Utc>;   // pure
+pub async fn fire_due(pool: &PgPool, zones: &dyn ZoneResolver, now: DateTime<Utc>) -> anyhow::Result<usize>; // one leader tick
 ```
+
+The scheduler takes a connection out of the pool and holds
+`pg_try_advisory_lock(hashtextextended('horae.job-scheduler', 0))` on it; a follower asks again
+every tick, and the leader checks its connection still answers. The lock ends with the session, so a
+leader that dies is replaced at the next tick of another instance. `Scheduler::is_leader` reports
+the last tick's answer.
 
 A job whose kind has no registered handler stays queued: the claim only selects kinds the worker's
 registry holds, so the job is never claimed, its attempts never grow and it is never failed. The

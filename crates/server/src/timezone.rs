@@ -83,6 +83,38 @@ pub(crate) async fn today_for_org(
     Ok(today_in(&zone, Utc::now()))
 }
 
+/// The zones the job scheduler reads daily and weekly times in.
+pub struct Zones {
+    pool: sqlx::PgPool,
+}
+
+impl Zones {
+    pub fn new(pool: sqlx::PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl horae_jobs::ZoneResolver for Zones {
+    fn zone(
+        &self,
+        org_id: Uuid,
+        person_id: Option<Uuid>,
+    ) -> horae_jobs::BoxFuture<'_, anyhow::Result<Tz>> {
+        Box::pin(async move {
+            let name = match person_id {
+                Some(person_id) => person_zone(&self.pool, person_id).await?,
+                None => {
+                    sqlx::query_scalar!("SELECT timezone FROM organizations WHERE id = $1", org_id)
+                        .fetch_one(&self.pool)
+                        .await?
+                }
+            };
+            // As in `today_in`: a name the zone database no longer knows reads as UTC.
+            Ok(parse(&name).unwrap_or(Tz::UTC))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

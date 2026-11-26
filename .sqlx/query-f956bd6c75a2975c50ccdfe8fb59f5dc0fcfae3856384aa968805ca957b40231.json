@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_job_schedules\n              SET enabled = $3,\n                  next_due_at = CASE WHEN enabled = $3 THEN next_due_at END\n            WHERE org_id = $1 AND name = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f956bd6c75a2975c50ccdfe8fb59f5dc0fcfae3856384aa968805ca957b40231"
+}

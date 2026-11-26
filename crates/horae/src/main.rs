@@ -10,8 +10,7 @@ mod cli;
 pub(crate) use horae_server::testing;
 #[cfg(feature = "server")]
 pub(crate) use horae_server::{
-    auth, config, db, importers, init, jobs, notifications, ops, plugin, scheduler, seed, state,
-    timezone,
+    auth, config, db, importers, init, jobs, notifications, ops, plugin, seed, state, timezone,
 };
 
 mod app;
@@ -289,8 +288,9 @@ fn main() -> anyhow::Result<()> {
                 let v1 = horae_api::v1::V1State::new(pool.clone(), &cfg.api)
                     .with_app(state::global_state().await);
 
-                // Start the background poller for forgotten timers (US3).
-                scheduler::spawn(state::global_state().await);
+                // Every organization's sweeps (forgotten timers, budget alerts,
+                // OAuth cleanup), which the scheduler then enqueues.
+                jobs::ensure_all_schedules(&pool).await?;
 
                 // Session middleware (Postgres-backed, idempotent migrate).
                 let session_layer =
@@ -338,9 +338,11 @@ fn main() -> anyhow::Result<()> {
                 let worker = jobs::spawn(state::global_state().await);
                 let outbox = jobs::outbox::spawn(state::global_state().await);
                 let mail = notifications::spawn(state::global_state().await);
+                let scheduler = jobs::spawn_scheduler(state::global_state().await);
                 let stop_worker = worker.stop_sender();
                 let stop_outbox = outbox.stop_sender();
                 let stop_mail = mail.stop_sender();
+                let stop_scheduler = scheduler.stop_sender();
                 tracing::info!("Listening on {addr}");
                 let server_result = axum::serve(listener, router)
                     .with_graceful_shutdown(async move {
@@ -348,17 +350,20 @@ fn main() -> anyhow::Result<()> {
                         stop_worker.send_replace(true);
                         stop_outbox.send_replace(true);
                         stop_mail.send_replace(true);
+                        stop_scheduler.send_replace(true);
                     })
                     .await;
                 let grace = std::time::Duration::from_secs(30);
-                let (worker_result, outbox_result, mail_result) = tokio::join!(
+                let (worker_result, outbox_result, mail_result, scheduler_result) = tokio::join!(
                     worker.shutdown(grace),
                     outbox.shutdown(grace),
-                    mail.shutdown(grace)
+                    mail.shutdown(grace),
+                    scheduler.shutdown(grace)
                 );
                 worker_result?;
                 outbox_result?;
                 mail_result?;
+                scheduler_result?;
                 server_result?;
                 anyhow::Ok(())
             })?;

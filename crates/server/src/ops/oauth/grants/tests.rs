@@ -240,7 +240,9 @@ async fn cleanup_deletes_what_can_no_longer_be_used(pool: PgPool) {
     let expired_long_ago = grant(&pool, &admin, app_id).await;
     age(&pool, expired_long_ago, "expires", "25 hours").await;
 
-    crate::ops::oauth::delete_expired(&pool).await.unwrap();
+    crate::ops::oauth::delete_expired(&pool, admin.org_id)
+        .await
+        .unwrap();
 
     assert_eq!(rows(&pool, old_credentials).await, [1, 0, 0, 1]);
     assert_eq!(rows(&pool, recent_credentials).await, [1, 1, 1, 1]);
