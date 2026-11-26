@@ -25,7 +25,7 @@ reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. H
 "crates/horae/src/pages/new_project/tasks.rs" = 6
 "crates/horae/src/pages/new_project/team.rs" = 6
 "crates/horae/src/pages/projects.rs" = 12
-"crates/horae/src/pages/reports.rs" = 5
+"crates/horae/src/pages/reports.rs" = 4
 "crates/horae/src/pages/reports/scoped.rs" = 5
 "crates/horae/src/pages/tasks.rs" = 2
 "crates/horae/src/pages/tasks/editor.rs" = 4
@@ -35,7 +35,6 @@ reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. H
 
 ["dioxus/resource-gate"]
 reason = "Predates the check; each needs its own first-load gate and aria-busy fix (horae-application.md section 3), one per PR."
-"crates/horae/src/pages/admin/permission_editor/subjects.rs" = 1
 "crates/horae/src/pages/admin/permission_editor/templates.rs" = 1
 "crates/horae/src/pages/clients/detail.rs" = 1
 "crates/horae/src/pages/clients/form.rs" = 1

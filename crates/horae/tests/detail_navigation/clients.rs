@@ -292,8 +292,10 @@ async fn rate_reader_sees_rate_without_management_or_invoices() {
     for prefix in ["/projects/new/client/", "/invoices/new/client/"] {
         assert!(!html.contains(prefix), "{html}");
     }
+    // The session's grant starts the invoice read beside the view; the view
+    // withholds invoices, so none show.
     assert!(!html.contains("Invoices"), "{html}");
-    assert!(probe.client_invoice_requests.borrow().is_empty());
+    assert_eq!(probe.client_invoice_requests.borrow().len(), 1);
     assert_eq!(*probe.client_view_requests.borrow(), [None]);
     // Project context stays reachable without client management.
     assert!(html.contains("href=\"/projects/client/"), "{html}");
@@ -313,6 +315,7 @@ async fn detail_distinguishes_restricted_from_unset_rate() {
     ] {
         let probe = detail(Probe {
             reader: true,
+            member: true,
             ..Probe::default()
         });
         let id = Uuid::from_u128(1);
@@ -343,6 +346,7 @@ async fn detail_distinguishes_restricted_from_unset_rate() {
 async fn hidden_or_missing_client_detail_reveals_no_identity() {
     let probe = detail(Probe {
         reader: true,
+        member: true,
         ..Probe::default()
     });
     respond(
