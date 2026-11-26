@@ -37,7 +37,7 @@ an addition (022 FR-050).
 | Route | Scope |
 | --- | --- |
 | `/company`, `/users/me` | any |
-| `/users/me/project_assignments`, `/projects`, `/projects/{id}`, `/clients`, `/clients/{id}`, `/tasks`, `/tasks/{id}`, `/users` | `catalog:read` |
+| `/users/me/project_assignments`, `/projects`, `/projects/{id}`, `/clients`, `/clients/{id}`, `/tasks`, `/tasks/{id}`, `/users`, and the empty lists of kinds Horae lacks (`/expenses`, `/roles`, …) | `catalog:read` |
 | `GET /time_entries`, `GET /time_entries/{id}` | `time:read` |
 | `POST /time_entries`, `PATCH`/`DELETE /time_entries/{id}`, `PATCH /time_entries/{id}/stop`, `PATCH /time_entries/{id}/restart` | `time:write` |
 

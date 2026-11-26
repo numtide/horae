@@ -556,8 +556,8 @@ async fn configured_budget_sweep_recovers_missed_checks_without_duplicates(pool:
     let ids = configured(&pool).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     let now = "2026-09-01T12:00:00Z".parse().unwrap();
-    sweep(&pool, now).await.unwrap();
-    sweep(&pool, now).await.unwrap();
+    sweep(&pool, ids.org_id, now).await.unwrap();
+    sweep(&pool, ids.org_id, now).await.unwrap();
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM project_budget_notifications")
             .fetch_one(&pool)
@@ -579,7 +579,7 @@ async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: Pg
     .await
     .unwrap();
     // 22:30 UTC on 31 August is already 00:30 on 1 September in Madrid.
-    sweep(&pool, "2026-08-31T22:30:00Z".parse().unwrap())
+    sweep(&pool, ids.org_id, "2026-08-31T22:30:00Z".parse().unwrap())
         .await
         .unwrap();
     assert_eq!(

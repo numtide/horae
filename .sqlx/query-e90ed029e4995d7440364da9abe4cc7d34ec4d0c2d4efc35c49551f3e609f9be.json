@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_job_schedules SET next_due_at = now() + interval '1 hour' WHERE org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e90ed029e4995d7440364da9abe4cc7d34ec4d0c2d4efc35c49551f3e609f9be"
+}

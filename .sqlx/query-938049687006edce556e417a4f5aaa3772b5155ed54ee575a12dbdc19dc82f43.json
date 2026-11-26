@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_job_attempts SET outcome = 'interrupted' WHERE job_id = $1 AND outcome IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "938049687006edce556e417a4f5aaa3772b5155ed54ee575a12dbdc19dc82f43"
+}

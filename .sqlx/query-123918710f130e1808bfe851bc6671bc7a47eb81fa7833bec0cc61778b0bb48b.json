@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_job_attempts (id, org_id, job_id, attempt, worker_id, started_at)\n           SELECT $1, $2, $3, COALESCE(max(attempt), 0) + 1, $4, now()\n             FROM horae_job_attempts WHERE job_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "123918710f130e1808bfe851bc6671bc7a47eb81fa7833bec0cc61778b0bb48b"
+}

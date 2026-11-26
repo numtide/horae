@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH done AS (\n                 UPDATE horae_jobs\n                    SET status = 'succeeded', report = $1, processed_count = $2, total_count = $2,\n                        lease_until = NULL, worker_id = NULL, claim_token = NULL, checkpoint = NULL,\n                        heartbeat_at = NULL,\n                        finished_at = clock_timestamp(), updated_at = clock_timestamp()\n                  WHERE id = $3 AND org_id = $4 AND claim_token = $5\n                    AND status = 'running' AND NOT cancellation_requested\n                    AND lease_until > clock_timestamp()\n              RETURNING id\n               ), attempt AS (\n                 UPDATE horae_job_attempts a\n                    SET outcome = 'succeeded', finished_at = clock_timestamp()\n                   FROM done WHERE a.job_id = done.id AND a.outcome IS NULL\n               )\n               SELECT count(*) AS \"count!\" FROM done",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Int8",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e734a75574c89c0f802349b5c2a9e5092a4ee82f0ebaa97590a3597b2bfc01e5"
+}

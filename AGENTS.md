@@ -80,12 +80,14 @@ cargo test -p horae-core                        # pure domain unit tests (no DB,
 cargo test -p horae-types                       # serde contracts of the UI↔server types (no DB)
 cargo test -p horae-i18n                        # the catalog's build checks and the unused-message test (no DB)
 nix develop .#kani -c cargo kani -p horae-core  # bounded proofs behind cfg(kani); Linux only, see below
-DATABASE_URL=… cargo test -p horae-server               # backend tests: ops, jobs, importers, … (need Postgres with CREATEDB)
+DATABASE_URL=… cargo test -p horae-jobs                 # the queue: claim, lease fencing, worker, outbox (need Postgres with CREATEDB)
+DATABASE_URL=… cargo test -p horae-server               # backend tests: ops, import jobs, importers, … (need Postgres with CREATEDB)
 DATABASE_URL=… cargo test -p horae-api                  # HTTP routes: /api/v1, exports, import error downloads, /auth/*
 DATABASE_URL=… cargo test -p horae-harvest-api          # the Harvest-compatible API and its switch
 DATABASE_URL=… cargo test -p horae --features server     # server functions, CLI, UI and integration tests
 DATABASE_URL=… cargo test -p horae --features server <name>   # a single test
 UPDATE_OPENAPI=1 cargo test -p horae-api openapi        # rewrite crates/api/openapi/v1.json after changing /api/v1
+cargo clippy -p horae-jobs --all-targets
 cargo clippy -p horae-server --all-targets
 cargo clippy -p horae-api --all-targets
 cargo clippy -p horae-harvest-api --all-targets
@@ -127,7 +129,7 @@ At compile time, macros need either `DATABASE_URL` pointing to a live DB with mi
 After changing any `query!`/`query_as!`/`query_scalar!` macro or migration, regenerate the cache:
 
 ```sh
-touch crates/server/src/lib.rs crates/api/src/lib.rs crates/harvest-api/src/lib.rs crates/horae/src/main.rs crates/horae/tests/*.rs
+touch crates/jobs/src/lib.rs crates/server/src/lib.rs crates/api/src/lib.rs crates/harvest-api/src/lib.rs crates/horae/src/main.rs crates/horae/tests/*.rs
 cargo sqlx prepare --workspace -- --features server --all-targets   # requires live DB with migrations applied
 git add .sqlx/                                        # commit the updated cache
 ```
@@ -150,7 +152,9 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 **One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. The server-only module `cli` is `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
 
-**The backend is the `server` crate (`horae-server`, `crates/server/`)**: `ops`, `db`, `state`, `config`, `plugin`, `jobs`, `importers`, `notifications`, `timezone`, `render`, `init`, `seed`, `scheduler`, the OIDC backend (`auth::oidc`) and the migrations (`crates/server/migrations/`). It is a lib with no Dioxus or Axum dependency. `crates/horae/src/main.rs` re-exports its modules (`pub(crate) use horae_server::{ops, db, …}`), so the app keeps naming them `crate::ops::…`; what the app uses is `pub` there. Its test fixtures (`testing`) are behind `cfg(any(test, feature = "test-support"))`, and `horae` enables `test-support` as a dev-dependency.
+**The backend is the `server` crate (`horae-server`, `crates/server/`)**: `ops`, `db`, `state`, `config`, `plugin`, `jobs`, `importers`, `notifications`, `timezone`, `render`, `init`, `seed`, the OIDC backend (`auth::oidc`) and the migrations (`crates/server/migrations/`). It is a lib with no Dioxus or Axum dependency. `crates/horae/src/main.rs` re-exports its modules (`pub(crate) use horae_server::{ops, db, …}`), so the app keeps naming them `crate::ops::…`; what the app uses is `pub` there. Its test fixtures (`testing`) are behind `cfg(any(test, feature = "test-support"))`, and `horae` enables `test-support` as a dev-dependency.
+
+**The durable queue is the `jobs` crate (`horae-jobs`, `crates/jobs/`)**: enqueue (`enqueue_in`, with concurrency keys, a delay and a priority), claim, the heartbeat that keeps the lease and its fenced writes (`JobContext`), per-kind retry policies and the attempts record (`horae_job_attempts`), the worker loop, cancellation, retention of finished jobs, the payload envelope, the scheduler (`horae_job_schedules`: every N seconds, or daily or weekly at a local time in UTC, the organization's or a person's zone; one leader by a session advisory lock; each firing enqueued once by `schedule:<id>:<due>`), the transactional outbox (`outbox`) and the report chunk storage (`report`). It depends on sqlx, tokio, serde, serde_json, chrono, chrono-tz, uuid, anyhow, thiserror and tracing, and it knows no job kind. A kind is a `Handler` registered in a `Registry`, with its `RetryPolicy` and stale limit; a worker claims only the kinds it has handlers for, and leaves the others queued: the server's `jobs::spawn` registers the two Harvest import kinds, and `jobs::spawn_sweeps` runs the three sweeps on a worker of their own so a long import does not delay them (forgotten timers, budget alerts, OAuth cleanup; `jobs/sweeps.rs`, scheduled per organization every minute by `jobs::ensure_schedules` at server start, in `init` and in `seed`), and `jobs::spawn_scheduler` resolves zones through `timezone::Zones`. The import kinds' payloads, enqueue, preview commit, status projections, retry and account-generation checks stay in `horae-server`'s `jobs` module. The server re-exports the crate's items there (`crate::jobs::claim_outbox`, `crate::jobs::cancel`, …), and `jobs::JobLease` wraps `JobContext` with the import checks. Migrations stay in `crates/server/migrations/`; the crate's tests read them through its own `MIGRATOR`. Its `test-support` feature exposes `claim` (any kind), `execute` and `claim_for_test` to the server's tests.
 
 **The HTTP surfaces are the `api` crate (`horae-api`, `crates/api/`)**: the public API `/api/v1` (`v1`: thin utoipa handlers over the shared operations, authenticated by personal access tokens, errors as `application/problem+json`, signed list cursors; its OpenAPI document is generated from the handlers and snapshotted in `crates/api/openapi/v1.json`, and `v1.baseline.json` is the published contract), `/health`, the CSV/XLSX/PDF exports (`exports`), the import error download (`import_errors`), the Harvest OAuth callback (`harvest_oauth`), the session and the `/auth/*` routes (`auth`). It is a lib with Axum and no Dioxus; it sits between `horae-server` and `horae`. `horae_api::router(RouterOptions)` returns all its routes, and it exports `make_session_layer`, `login_redirect_guard` and `session` for the binary and the server functions. `LoginAssets` is how `horae` passes the icon URLs its `asset!` macros resolve. Like `horae`, it re-exports the `horae-server` modules it uses, so its code names them `crate::ops::…`. Its `test-support` feature exposes the workbook readers and the CSV helper that `horae`'s tests use.
 

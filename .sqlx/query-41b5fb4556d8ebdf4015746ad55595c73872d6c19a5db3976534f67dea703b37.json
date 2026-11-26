@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_job_schedules s SET next_due_at = NULL\n          WHERE s.org_id = $1 AND s.cadence <> 'every'\n            AND (SELECT timezone FROM organizations WHERE id = $1) IS DISTINCT FROM $2\n            AND (s.zone_source = 'organization'\n              OR (s.zone_source = 'person' AND EXISTS (\n                  SELECT 1 FROM users u WHERE u.id = s.person_id AND u.timezone IS NULL)))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "41b5fb4556d8ebdf4015746ad55595c73872d6c19a5db3976534f67dea703b37"
+}

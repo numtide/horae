@@ -176,3 +176,20 @@ async fn seeded_api_token_authenticates_as_the_demo_administrator(pool: PgPool) 
         .expect("the written token authenticates");
     assert_eq!((caller.org_id, caller.user_id), (ORG_ID, ADMIN_ID));
 }
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial]
+async fn seed_schedules_the_demo_organizations_sweeps(pool: PgPool) {
+    run(&pool).await.unwrap();
+    let names = sqlx::query_scalar!(
+        "SELECT name FROM horae_job_schedules WHERE org_id = $1 ORDER BY name",
+        ORG_ID
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        names,
+        ["budget_alert_sweep", "long_timer_sweep", "oauth_cleanup"]
+    );
+}

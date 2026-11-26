@@ -93,6 +93,7 @@ pub async fn update(
                 .ok_or_else(|| OpError::invalid("timezone", "Choose a time zone from the list"))
         })
         .transpose()?;
+    crate::timezone::replan_for_person_zone(tx, actor.id(), timezone).await?;
     sqlx::query!(
         "UPDATE users SET name = $3, timezone = $4 WHERE id = $1 AND org_id = $2",
         actor.id(),

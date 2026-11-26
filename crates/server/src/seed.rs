@@ -292,6 +292,10 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         .await?;
     }
 
+    // The server may already run (the dev stack seeds after it starts); its
+    // scheduler picks these up at its next tick.
+    crate::jobs::ensure_schedules(&mut tx, ORG_ID).await?;
+
     tx.commit().await?;
     tracing::info!("Seed complete.");
     Ok(())

@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT idempotency_key AS \"key!\", available_at AS \"available_at: DateTime<Utc>\", priority, max_attempts\n             FROM horae_jobs ORDER BY created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "available_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "priority",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "max_attempts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5578b64e70b4dd212db66ec5219afd49eb5ff74a2f8de18548554af6bea1fde1"
+}

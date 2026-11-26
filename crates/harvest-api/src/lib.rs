@@ -1,7 +1,7 @@
 // A Harvest API v2 subset, mounted at /harvest/v2 with the alias /v2.
 // `/api/` belongs to Horae's own API (spec 022 FR-052), so Harvest has no alias
-// there. Integer ids and exact decimals; personal access tokens or, for reads
-// only, the session cookie (`auth`). Time entries are also written
+// there. Integer ids and exact decimals; personal access tokens, OAuth access
+// tokens within their scopes or, for reads only, the session cookie (`auth`). Time entries are also written
 // (`time_entry_writes`). The contract is
 // specs/021-harvest-api-compat/contracts/harvest-api-v2.md.
 
@@ -20,6 +20,8 @@ mod user_access;
 
 #[cfg(test)]
 mod api_tests;
+#[cfg(test)]
+mod oauth_tests;
 #[cfg(test)]
 mod pagination_tests;
 #[cfg(test)]
@@ -41,7 +43,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use auth::AuthUser;
+use auth::{AuthUser, RouteScope};
 use errors::ApiError;
 use horae_harvest::v2::compat::*;
 use ids::Kind;
@@ -102,35 +104,51 @@ fn router(db: PgPool, limiter: Arc<RateLimiter>) -> Router {
     serve(test_state(db, limiter))
 }
 
-fn serve(v1: V1State) -> Router {
+/// Every route, with the scope an OAuth token needs to read it ([`RouteScope`];
+/// writes need `time:write`).
+fn routes() -> impl Iterator<Item = (&'static str, RouteScope, MethodRouter<HarvestState>)> {
+    use RouteScope::{Any, Catalog, Time};
     use time_entry_writes as writes;
-    let routes: [(&str, MethodRouter<HarvestState>); 14] = [
-        ("/company", get(company::company)),
-        ("/users/me", get(users_me)),
+    let routes: [(&str, RouteScope, MethodRouter<HarvestState>); 14] = [
+        ("/company", Any, get(company::company)),
+        ("/users/me", Any, get(users_me)),
         (
             "/users/me/project_assignments",
+            Catalog,
             get(project_assignments::mine),
         ),
-        ("/time_entries", get(list_time_entries).post(writes::create)),
+        (
+            "/time_entries",
+            Time,
+            get(list_time_entries).post(writes::create),
+        ),
         (
             "/time_entries/{id}",
+            Time,
             get(get_time_entry)
                 .patch(writes::update)
                 .delete(writes::delete),
         ),
-        ("/time_entries/{id}/stop", patch(writes::stop)),
-        ("/time_entries/{id}/restart", patch(writes::restart)),
-        ("/projects", get(list_projects)),
-        ("/projects/{id}", get(get_project)),
-        ("/clients", get(list_clients)),
-        ("/clients/{id}", get(get_client)),
-        ("/tasks", get(list_tasks)),
-        ("/tasks/{id}", get(get_task)),
-        ("/users", get(list_users)),
+        ("/time_entries/{id}/stop", Time, patch(writes::stop)),
+        ("/time_entries/{id}/restart", Time, patch(writes::restart)),
+        ("/projects", Catalog, get(list_projects)),
+        ("/projects/{id}", Catalog, get(get_project)),
+        ("/clients", Catalog, get(list_clients)),
+        ("/clients/{id}", Catalog, get(get_client)),
+        ("/tasks", Catalog, get(list_tasks)),
+        ("/tasks/{id}", Catalog, get(get_task)),
+        ("/users", Catalog, get(list_users)),
     ];
-    let absent = absent::KINDS.map(|(path, kind)| (path, absent::list(kind)));
+    // The kinds Horae lacks answer an empty list to any caller with catalog
+    // access, the closest of the three scopes.
+    let absent = absent::KINDS.map(|(path, kind)| (path, Catalog, absent::list(kind)));
+    routes.into_iter().chain(absent)
+}
+
+fn serve(v1: V1State) -> Router {
     let mut api = Router::new();
-    for (path, handler) in routes.into_iter().chain(absent) {
+    for (path, scope, handler) in routes() {
+        let handler = handler.layer(axum::Extension(scope));
         // A `.json` suffix is served like the bare path (FR-026). Ids drop it
         // themselves (`ids::resolve`), so only paths ending in a fixed segment
         // need a twin.

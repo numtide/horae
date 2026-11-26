@@ -47,7 +47,9 @@ perSystem.self.default.overrideAttrs (old: {
     # Database creation and migrations share one PostgreSQL instance and disk;
     # large CPU budgets must not turn fixture setup into unbounded I/O contention.
     database_test_threads=$((NIX_BUILD_CORES < 8 ? NIX_BUILD_CORES : 8))
-    # horae-server: the backend's own tests (operations, jobs, importers, …).
+    # horae-jobs: the durable queue, its worker and the outbox.
+    cargo test -p horae-jobs -- --test-threads "$database_test_threads"
+    # horae-server: the backend's own tests (operations, import jobs, importers, …).
     cargo test -p horae-server -- --test-threads "$database_test_threads"
     # horae-api: the HTTP routes (exports, import error downloads, /auth/*).
     cargo test -p horae-api -- --test-threads "$database_test_threads"

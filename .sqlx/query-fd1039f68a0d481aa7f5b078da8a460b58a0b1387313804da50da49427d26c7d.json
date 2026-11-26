@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n                SET heartbeat_at = now() - $2::int * interval '1 second',\n                    lease_until = now() - $2::int * interval '1 second' + stale_after_secs * interval '1 second'\n              WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd1039f68a0d481aa7f5b078da8a460b58a0b1387313804da50da49427d26c7d"
+}

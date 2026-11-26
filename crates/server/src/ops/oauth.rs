@@ -90,7 +90,7 @@ pub(crate) fn generate_client_id() -> String {
     )
 }
 
-/// Deletes what can no longer be used or recognised:
+/// Deletes, in the organization, what can no longer be used or recognised:
 ///
 /// - authorizations that ended (revoked or expired) over a day ago, with
 ///   every code and token issued under them;
@@ -100,23 +100,30 @@ pub(crate) fn generate_client_id() -> String {
 /// A used refresh token stays until its authorization ends: presenting it
 /// again must end the authorization however long after (FR-043), because
 /// each rotation restarts the idle expiry of the token that replaced it.
-pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64, sqlx::Error> {
+pub async fn delete_expired(pool: &sqlx::PgPool, org_id: uuid::Uuid) -> Result<u64, sqlx::Error> {
     let grants = sqlx::query!(
-        "DELETE FROM oauth_grants
-         WHERE revoked_at < now() - interval '1 day' OR expires_at < now() - interval '1 day'"
+        "DELETE FROM oauth_grants WHERE org_id = $1
+           AND (revoked_at < now() - interval '1 day' OR expires_at < now() - interval '1 day')",
+        org_id,
     )
     .execute(pool)
     .await?;
-    let codes = sqlx::query!("DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'")
-        .execute(pool)
-        .await?;
-    let tokens =
-        sqlx::query!("DELETE FROM oauth_access_tokens WHERE expires_at < now() - interval '1 day'")
-            .execute(pool)
-            .await?;
+    let codes = sqlx::query!(
+        "DELETE FROM oauth_codes WHERE org_id = $1 AND expires_at < now() - interval '1 day'",
+        org_id,
+    )
+    .execute(pool)
+    .await?;
+    let tokens = sqlx::query!(
+        "DELETE FROM oauth_access_tokens WHERE org_id = $1 AND expires_at < now() - interval '1 day'",
+        org_id,
+    )
+    .execute(pool)
+    .await?;
     let refresh = sqlx::query!(
         "DELETE FROM oauth_refresh_tokens
-         WHERE used_at IS NULL AND idle_expires_at < now() - interval '1 day'"
+         WHERE org_id = $1 AND used_at IS NULL AND idle_expires_at < now() - interval '1 day'",
+        org_id,
     )
     .execute(pool)
     .await?;

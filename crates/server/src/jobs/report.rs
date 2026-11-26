@@ -2,13 +2,14 @@
 
 use anyhow::Context;
 use horae_core::importers::harvest::types::ImportReport;
+use horae_jobs::{Interrupted, report::append_chunk};
 use sqlx::PgConnection;
-use uuid::Uuid;
 
-use super::{JobLease, lease::Interrupted};
+use super::JobLease;
+
+pub use horae_jobs::report::{CHUNK_BYTES, chunks};
 
 pub(crate) const REPORT_BYTES: usize = 16 * 1024;
-pub const CHUNK_BYTES: usize = 64 * 1024;
 
 mod summary;
 pub(crate) use summary::summarize;
@@ -45,9 +46,9 @@ impl JobLease {
                  AND status = 'running' AND NOT cancellation_requested
                  AND lease_until > clock_timestamp()
                FOR UPDATE"#,
-            self.id,
-            self.org_id,
-            self.token,
+            self.id(),
+            self.org_id(),
+            self.token(),
         )
         .fetch_optional(&mut *connection)
         .await?;
@@ -63,7 +64,7 @@ impl JobLease {
                 chunk.extend_from_slice(&bytes[..count]);
                 bytes = &bytes[count..];
                 if chunk.len() == CHUNK_BYTES {
-                    append_report_chunk(connection, self.id, self.org_id, sequence, &chunk).await?;
+                    append_chunk(connection, self.id(), self.org_id(), sequence, &chunk).await?;
                     sequence = sequence
                         .checked_add(1)
                         .context("report archive is too large")?;
@@ -72,7 +73,7 @@ impl JobLease {
             }
         }
         if !chunk.is_empty() {
-            append_report_chunk(connection, self.id, self.org_id, sequence, &chunk).await?;
+            append_chunk(connection, self.id(), self.org_id(), sequence, &chunk).await?;
             sequence = sequence
                 .checked_add(1)
                 .context("report archive is too large")?;
@@ -86,60 +87,4 @@ impl JobLease {
         );
         Ok(())
     }
-}
-
-async fn append_report_chunk(
-    connection: &mut PgConnection,
-    job_id: Uuid,
-    org_id: Uuid,
-    sequence: i64,
-    body: &[u8],
-) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"INSERT INTO horae_job_report_error_chunks (id, job_id, org_id, sequence, body)
-               VALUES ($1, $2, $3, $4, $5)"#,
-        Uuid::now_v7(),
-        job_id,
-        org_id,
-        sequence,
-        body,
-    )
-    .execute(connection)
-    .await?;
-    Ok(())
-}
-
-/// A fixed-size read at a captured report boundary, never the archive's live end.
-pub async fn chunks<'e, E: sqlx::PgExecutor<'e>>(
-    exec: E,
-    org_id: Uuid,
-    job_id: Uuid,
-    next: i64,
-    end: i64,
-) -> anyhow::Result<Vec<Vec<u8>>> {
-    anyhow::ensure!(next >= 0 && end >= next, "invalid report archive range");
-    let rows = sqlx::query!(
-        r#"SELECT sequence, body FROM horae_job_report_error_chunks
-           WHERE job_id = $1 AND org_id = $2 AND sequence >= $3 AND sequence < $4
-           ORDER BY sequence LIMIT 16"#,
-        job_id,
-        org_id,
-        next,
-        end,
-    )
-    .fetch_all(exec)
-    .await?;
-    anyhow::ensure!(
-        rows.len() as i64 == (end - next).min(16),
-        "report archive is incomplete"
-    );
-    let mut output = Vec::with_capacity(rows.len());
-    for (offset, row) in rows.into_iter().enumerate() {
-        anyhow::ensure!(
-            row.sequence == next + offset as i64,
-            "report archive is incomplete"
-        );
-        output.push(row.body);
-    }
-    Ok(output)
 }

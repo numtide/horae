@@ -59,6 +59,7 @@ pub async fn run(
     .execute(&mut *tx)
     .await?;
     provisioning::provision(&mut tx, org_id, user_id, BuiltInProfile::Administrator).await?;
+    crate::jobs::ensure_schedules(&mut tx, org_id).await?;
 
     tx.commit().await?;
 
