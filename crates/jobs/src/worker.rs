@@ -5,7 +5,10 @@ use sqlx::PgPool;
 use tokio::sync::watch;
 use uuid::Uuid;
 
-use crate::{Completed, Handler, Interrupted, JobContext, JobError, LEASE, POLL, Registry};
+use crate::{Completed, Handler, Interrupted, JobContext, JobError, POLL, Registry, RetryPolicy};
+
+/// `horae_job_attempts.error` holds at most this many bytes.
+const ATTEMPT_ERROR_BYTES: usize = 4096;
 
 pub struct Worker {
     stop: watch::Sender<bool>,
@@ -62,6 +65,9 @@ pub fn spawn(pool: PgPool, registry: Registry) -> Worker {
 
 pub async fn run_worker(pool: &PgPool, registry: &Registry, mut stop: watch::Receiver<bool>) {
     let worker_id = Uuid::now_v7().to_string();
+    if let Err(error) = warn_unknown_kinds(pool, registry).await {
+        tracing::warn!(%error, "durable job kinds could not be listed");
+    }
     while !*stop.borrow() && stop.has_changed().is_ok() {
         if let Err(error) = registry.cleanup(pool).await {
             tracing::warn!(%error, "durable job cleanup failed");
@@ -71,7 +77,7 @@ pub async fn run_worker(pool: &PgPool, registry: &Registry, mut stop: watch::Rec
         }
         // Finish an in-flight claim instead of dropping a query which may
         // already have assigned a lease in PostgreSQL.
-        match claim(pool, &worker_id).await {
+        match claim_registered(pool, registry, &worker_id).await {
             Ok(Some(job)) => {
                 if let Err(error) = execute(pool, registry, &worker_id, job).await {
                     tracing::warn!(%error, "durable job failed");
@@ -88,60 +94,155 @@ pub async fn run_worker(pool: &PgPool, registry: &Registry, mut stop: watch::Rec
     }
 }
 
+/// Jobs of a kind this worker has no handler for stay queued, so a server in
+/// a rolling upgrade leaves a newer server's jobs alone. Logged once per start.
+async fn warn_unknown_kinds(pool: &PgPool, registry: &Registry) -> anyhow::Result<()> {
+    let (kinds, _) = registry.claimable();
+    let unknown = sqlx::query_scalar!(
+        r#"SELECT DISTINCT kind FROM horae_jobs
+            WHERE status IN ('queued', 'running') AND kind <> ALL($1::text[])"#,
+        &kinds,
+    )
+    .fetch_all(pool)
+    .await?;
+    for kind in unknown {
+        tracing::warn!(%kind, "durable jobs of a kind without a handler stay queued");
+    }
+    Ok(())
+}
+
 pub struct ClaimedJob {
     pub id: Uuid,
     pub org_id: Uuid,
     pub kind: String,
     pub payload: serde_json::Value,
     pub claim_token: Uuid,
+    pub attempt: i32,
+    pub stale_after: Duration,
 }
 
+/// Claims the next job of a kind the registry runs, renewing its stale limit
+/// from the handler.
+pub async fn claim_registered(
+    pool: &PgPool,
+    registry: &Registry,
+    worker_id: &str,
+) -> anyhow::Result<Option<ClaimedJob>> {
+    let (kinds, stale) = registry.claimable();
+    claim_kinds(pool, worker_id, Some(&kinds), &stale).await
+}
+
+/// Claims the next job of any kind, keeping its stored stale limit.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn claim(pool: &PgPool, worker_id: &str) -> anyhow::Result<Option<ClaimedJob>> {
+    claim_kinds(pool, worker_id, None, &[]).await
+}
+
+/// `kinds` limits the claim to those kinds (all when `None`), and
+/// `stale_secs[i]` is the stale limit of `kinds[i]`.
+async fn claim_kinds(
+    pool: &PgPool,
+    worker_id: &str,
+    kinds: Option<&[String]>,
+    stale_secs: &[i32],
+) -> anyhow::Result<Option<ClaimedJob>> {
+    // An attempt whose worker died before finishing ends as `interrupted`,
+    // whether its job ends here or is claimed again below.
     sqlx::query!(
-        r#"UPDATE horae_jobs
-              SET status = CASE WHEN cancellation_requested THEN 'cancelled' ELSE 'failed' END,
-                  lease_until = NULL, worker_id = NULL, claim_token = NULL,
-                  finished_at = now(), updated_at = now(),
-                  last_error = CASE WHEN cancellation_requested THEN NULL
-                      ELSE COALESCE(last_error, 'Job attempt limit reached after interruption') END
-            WHERE (attempts >= max_attempts OR cancellation_requested)
-              AND (status = 'queued' OR (status = 'running' AND lease_until < now()))"#
+        r#"WITH ended AS (
+             UPDATE horae_jobs
+                SET status = CASE WHEN cancellation_requested THEN 'cancelled' ELSE 'failed' END,
+                    lease_until = NULL, worker_id = NULL, claim_token = NULL,
+                    finished_at = now(), updated_at = now(),
+                    last_error = CASE WHEN cancellation_requested THEN NULL
+                        ELSE COALESCE(last_error, 'Job attempt limit reached after interruption') END
+              WHERE (attempts >= max_attempts OR cancellation_requested)
+                AND (status = 'queued' OR (status = 'running' AND lease_until < now()))
+                AND ($1::text[] IS NULL OR kind = ANY($1))
+          RETURNING id
+           )
+           UPDATE horae_job_attempts a SET outcome = 'interrupted'
+             FROM ended WHERE a.job_id = ended.id AND a.outcome IS NULL"#,
+        kinds,
     )
     .execute(pool)
     .await?;
     let claim_token = Uuid::now_v7();
+    let mut tx = pool.begin().await?;
     let row = sqlx::query!(
         r#"WITH candidate AS (
-             SELECT id
+             SELECT id,
+                    COALESCE((SELECT k.secs FROM unnest($3::text[], $4::int[]) AS k(kind, secs)
+                               WHERE k.kind = horae_jobs.kind), stale_after_secs) AS stale
                FROM horae_jobs
               WHERE attempts < max_attempts AND NOT cancellation_requested
+                AND ($3::text[] IS NULL OR kind = ANY($3))
                 AND ((status = 'queued' AND available_at <= now())
                   OR (status = 'running' AND lease_until < now()))
-              ORDER BY available_at, created_at
+              ORDER BY priority DESC, available_at, created_at
               FOR UPDATE SKIP LOCKED
               LIMIT 1
            )
            UPDATE horae_jobs j
               SET status = 'running', attempts = j.attempts + 1,
-                  lease_until = now() + $1::int * interval '1 second', worker_id = $2,
-                  claim_token = $3,
+                  stale_after_secs = candidate.stale, heartbeat_at = now(),
+                  lease_until = now() + candidate.stale * interval '1 second',
+                  worker_id = $1, claim_token = $2,
                   started_at = COALESCE(j.started_at, now()), updated_at = now()
              FROM candidate
             WHERE j.id = candidate.id
-        RETURNING j.id, j.org_id, j.kind, j.payload"#,
-        LEASE.as_secs() as i32,
+        RETURNING j.id, j.org_id, j.kind, j.payload, j.attempts, j.stale_after_secs"#,
         worker_id,
         claim_token,
+        kinds,
+        stale_secs,
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
-    Ok(row.map(|r| ClaimedJob {
-        id: r.id,
-        org_id: r.org_id,
-        kind: r.kind,
-        payload: r.payload,
+    let Some(row) = row else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+    // A reclaimed job's previous attempt lost its worker.
+    sqlx::query!(
+        "UPDATE horae_job_attempts SET outcome = 'interrupted' WHERE job_id = $1 AND outcome IS NULL",
+        row.id,
+    )
+    .execute(&mut *tx)
+    .await?;
+    // Numbered across manual retries, which restart the job's attempt budget.
+    sqlx::query!(
+        r#"INSERT INTO horae_job_attempts (id, org_id, job_id, attempt, worker_id, started_at)
+           SELECT $1, $2, $3, COALESCE(max(attempt), 0) + 1, $4, now()
+             FROM horae_job_attempts WHERE job_id = $3"#,
+        Uuid::now_v7(),
+        row.org_id,
+        row.id,
+        worker_id,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(Some(ClaimedJob {
+        id: row.id,
+        org_id: row.org_id,
+        kind: row.kind,
+        payload: row.payload,
         claim_token,
+        attempt: row.attempts,
+        stale_after: Duration::from_secs(row.stale_after_secs.unsigned_abs().into()),
     }))
+}
+
+fn context(job: &ClaimedJob, stop: watch::Receiver<bool>) -> JobContext {
+    JobContext {
+        id: job.id,
+        org_id: job.org_id,
+        token: job.claim_token,
+        attempt: job.attempt,
+        stale_after: job.stale_after,
+        stop,
+    }
 }
 
 pub async fn execute(
@@ -151,27 +252,25 @@ pub async fn execute(
     job: ClaimedJob,
 ) -> anyhow::Result<()> {
     let (stop, receiver) = watch::channel(false);
-    let ctx = JobContext {
-        id: job.id,
-        org_id: job.org_id,
-        token: job.claim_token,
-        stop: receiver,
-    };
+    let ctx = context(&job, receiver);
+    let handler = registry.get(&job.kind);
+    let policy = handler.map(Handler::policy).unwrap_or_default();
     let work = async {
-        let (handler, payload) = start(pool, registry, worker_id, &job).await?;
+        let payload = start(pool, worker_id, &job).await?;
+        let handler =
+            handler.with_context(|| format!("no handler for durable job kind {}", job.kind))?;
         handler.run(&ctx, payload).await
     };
-    run_claimed(pool, &ctx, stop, work).await
+    run_claimed(pool, &ctx, &policy, stop, work).await
 }
 
-/// Marks the attempt started and finds its handler, failing the attempt like
-/// any other error when the payload or the kind is unknown.
-async fn start<'r>(
+/// Marks the attempt started and opens its payload, failing the attempt like
+/// any other error when the payload cannot be read.
+async fn start(
     pool: &PgPool,
-    registry: &'r Registry,
     worker_id: &str,
     job: &ClaimedJob,
-) -> anyhow::Result<(&'r dyn Handler, serde_json::Value)> {
+) -> anyhow::Result<serde_json::Value> {
     // Every kind starts in phase `importing`, as when the queue ran only imports.
     let started = sqlx::query!(
         r#"UPDATE horae_jobs SET phase = 'importing', updated_at = now()
@@ -187,16 +286,15 @@ async fn start<'r>(
     if started.rows_affected() != 1 {
         return Err(Interrupted.into());
     }
-    let payload = crate::decode_payload(job.payload.clone())?;
-    let handler = registry
-        .get(&job.kind)
-        .with_context(|| format!("no handler for durable job kind {}", job.kind))?;
-    Ok((handler, payload))
+    crate::decode_payload(job.payload.clone())
 }
 
+/// Runs `work` beside the heartbeat and records its outcome; a failure is
+/// retried after `policy`'s delay while attempts remain.
 pub async fn run_claimed(
     pool: &PgPool,
     ctx: &JobContext,
+    policy: &RetryPolicy,
     stop: watch::Sender<bool>,
     work: impl Future<Output = Result<Completed, JobError>>,
 ) -> anyhow::Result<()> {
@@ -224,37 +322,64 @@ pub async fn run_claimed(
             if !completed {
                 // A handler that completed inside its own transaction already
                 // finished the job. Otherwise a concurrent cancellation still needs ack.
-                fail_claimed(pool, ctx, &anyhow::Error::from(Interrupted).into()).await?;
+                fail_claimed(pool, ctx, policy, &anyhow::Error::from(Interrupted).into()).await?;
             }
         }
-        Err(error) => fail_claimed(pool, ctx, &error).await?,
+        Err(error) => fail_claimed(pool, ctx, policy, &error).await?,
     }
     Ok(())
 }
 
-async fn fail_claimed(pool: &PgPool, ctx: &JobContext, error: &JobError) -> anyhow::Result<()> {
+async fn fail_claimed(
+    pool: &PgPool,
+    ctx: &JobContext,
+    policy: &RetryPolicy,
+    error: &JobError,
+) -> anyhow::Result<()> {
+    let message = error.error.to_string();
+    let delay = i32::try_from(policy.delay(ctx.attempt).as_secs()).unwrap_or(i32::MAX);
     sqlx::query!(
-        r#"UPDATE horae_jobs
-              SET status = CASE WHEN cancellation_requested THEN 'cancelled'
-                                WHEN $5 OR attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
-                  available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
-                  finished_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts THEN now() ELSE NULL END,
-                  lease_until = NULL, worker_id = NULL, claim_token = NULL,
-                  last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,
-                  error_kind = CASE WHEN cancellation_requested THEN NULL ELSE $6 END,
-                  updated_at = now()
-            WHERE id = $2 AND org_id = $3 AND claim_token = $4 AND status = 'running'
-              AND lease_until > clock_timestamp()"#,
-        error.error.to_string(),
+        r#"WITH failed AS (
+             UPDATE horae_jobs
+                SET status = CASE WHEN cancellation_requested THEN 'cancelled'
+                                  WHEN $5 OR attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+                    available_at = now() + $7::int * interval '1 second',
+                    finished_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts THEN now() ELSE NULL END,
+                    lease_until = NULL, worker_id = NULL, claim_token = NULL, heartbeat_at = NULL,
+                    last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,
+                    error_kind = CASE WHEN cancellation_requested THEN NULL ELSE $6 END,
+                    updated_at = now()
+              WHERE id = $2 AND org_id = $3 AND claim_token = $4 AND status = 'running'
+                AND lease_until > clock_timestamp()
+          RETURNING id, status
+           )
+           UPDATE horae_job_attempts a
+              SET finished_at = now(),
+                  outcome = CASE failed.status WHEN 'queued' THEN 'retrying' ELSE failed.status END,
+                  error = CASE WHEN failed.status = 'cancelled' THEN NULL ELSE $8 END
+             FROM failed
+            WHERE a.job_id = failed.id AND a.outcome IS NULL"#,
+        message,
         ctx.id,
         ctx.org_id,
         ctx.token,
         error.permanent,
         error.error_kind,
+        delay,
+        truncate(&message, ATTEMPT_ERROR_BYTES),
     )
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// `text` cut to at most `bytes` bytes, on a character boundary.
+pub(crate) fn truncate(text: &str, bytes: usize) -> &str {
+    let mut end = text.len().min(bytes);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
 }
 
 /// Claims the next job without running it, for tests that drive an attempt by hand.
@@ -262,13 +387,5 @@ async fn fail_claimed(pool: &PgPool, ctx: &JobContext, error: &JobError) -> anyh
 pub async fn claim_for_test(pool: &PgPool) -> (JobContext, watch::Sender<bool>) {
     let job = claim(pool, "test-worker").await.unwrap().unwrap();
     let (stop, receiver) = watch::channel(false);
-    (
-        JobContext {
-            id: job.id,
-            org_id: job.org_id,
-            token: job.claim_token,
-            stop: receiver,
-        },
-        stop,
-    )
+    (context(&job, receiver), stop)
 }

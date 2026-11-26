@@ -4,7 +4,7 @@
 
 use anyhow::Context;
 use horae_core::importers::harvest::types::{ImportMode, ImportReport, SourceKind, SyncScope};
-use horae_jobs::{BoxFuture, Completed, JobContext, JobError, Registry};
+use horae_jobs::{BoxFuture, Completed, JobContext, JobError, Registry, RetryPolicy};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -749,9 +749,22 @@ struct ImportJob {
     kind: &'static str,
 }
 
+/// The imports keep the queue's original curve. Each job stops at the
+/// `max_attempts` stored when it was queued (`HORAE_JOB_MAX_ATTEMPTS`).
+fn import_policy(policy: JobPolicy) -> RetryPolicy {
+    RetryPolicy {
+        max_attempts: policy.max_attempts,
+        ..RetryPolicy::default()
+    }
+}
+
 impl horae_jobs::Handler for ImportJob {
     fn kind(&self) -> &'static str {
         self.kind
+    }
+
+    fn policy(&self) -> RetryPolicy {
+        import_policy(self.state.job_policy)
     }
 
     fn run<'a>(
@@ -908,7 +921,8 @@ pub async fn run_claimed(
             })
             .map_err(job_error)
     };
-    horae_jobs::run_claimed(pool, lease, stop, work).await
+    let policy = import_policy(JobPolicy::default());
+    horae_jobs::run_claimed(pool, lease, &policy, stop, work).await
 }
 
 #[cfg(any(test, feature = "test-support"))]

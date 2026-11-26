@@ -42,11 +42,24 @@ async fn insert_job(
     id
 }
 
+/// 5 attempts, 10 s, ×2, at most 10 minutes.
+const ECHO_POLICY: RetryPolicy = RetryPolicy {
+    max_attempts: 5,
+    first_delay: Duration::from_secs(10),
+    multiplier: 2,
+    max_delay: Duration::from_secs(600),
+};
+
+/// Echoes its payload; `"fail"` fails permanently and `"flaky"` transiently.
 struct Echo;
 
 impl Handler for Echo {
     fn kind(&self) -> &'static str {
         "echo"
+    }
+
+    fn policy(&self) -> RetryPolicy {
+        ECHO_POLICY
     }
 
     fn run<'a>(
@@ -62,6 +75,9 @@ impl Handler for Echo {
                     error_kind: Some("forbidden"),
                 });
             }
+            if payload == "flaky" {
+                return Err(anyhow::anyhow!("try again").into());
+            }
             Ok(Completed {
                 report: serde_json::json!({ "echo": payload }),
                 processed_count: 3,
@@ -70,10 +86,114 @@ impl Handler for Echo {
     }
 }
 
+/// Runs until cancelled, with the shortest stale limit.
+struct Long;
+
+impl Handler for Long {
+    fn kind(&self) -> &'static str {
+        "long"
+    }
+
+    fn policy(&self) -> RetryPolicy {
+        RetryPolicy {
+            max_attempts: 1,
+            ..RetryPolicy::default()
+        }
+    }
+
+    fn stale_after(&self) -> Duration {
+        Duration::from_secs(15)
+    }
+
+    fn run<'a>(
+        &'a self,
+        ctx: &'a JobContext,
+        _payload: serde_json::Value,
+    ) -> BoxFuture<'a, Result<Completed, JobError>> {
+        Box::pin(async move {
+            let stopped = ctx.run(std::future::pending::<anyhow::Result<()>>()).await;
+            Err(stopped.unwrap_err().into())
+        })
+    }
+}
+
 fn registry() -> Registry {
     let mut registry = Registry::default();
-    registry.register(Echo);
+    registry.register(Echo).register(Long);
     registry
+}
+
+/// Queues `request` in a transaction of its own.
+async fn enqueue(pool: &sqlx::PgPool, request: Enqueue<'_>) -> Result<Enqueued, EnqueueError> {
+    let mut tx = pool.begin().await.unwrap();
+    let enqueued = enqueue_in(&mut tx, request).await?;
+    tx.commit().await.unwrap();
+    Ok(enqueued)
+}
+
+fn request<'a>(org_id: Uuid, kind: &'a str) -> Enqueue<'a> {
+    Enqueue {
+        org_id,
+        kind,
+        payload: serde_json::json!("hello"),
+        idempotency_key: None,
+        concurrency_key: None,
+        run_at: None,
+        priority: 0,
+        max_attempts: ECHO_POLICY.max_attempts,
+    }
+}
+
+/// Seconds from now until the job may be claimed.
+async fn wait_secs(pool: &sqlx::PgPool, id: Uuid) -> f64 {
+    sqlx::query_scalar!(
+        r#"SELECT EXTRACT(EPOCH FROM available_at - now())::float8 AS "secs!" FROM horae_jobs WHERE id = $1"#,
+        id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+struct Attempt {
+    attempt: i32,
+    outcome: Option<String>,
+    error: Option<String>,
+    finished: bool,
+}
+
+async fn attempts(pool: &sqlx::PgPool, id: Uuid) -> Vec<Attempt> {
+    sqlx::query_as!(
+        Attempt,
+        r#"SELECT attempt, outcome, error, finished_at IS NOT NULL AS "finished!"
+             FROM horae_job_attempts WHERE job_id = $1 ORDER BY attempt"#,
+        id
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+/// Claims and runs the next job as the worker would.
+async fn run_next(pool: &sqlx::PgPool, worker: &str) -> Uuid {
+    let registry = registry();
+    let job = claim_registered(pool, &registry, worker)
+        .await
+        .unwrap()
+        .unwrap();
+    let id = job.id;
+    execute(pool, &registry, worker, job).await.unwrap();
+    id
+}
+
+async fn make_available(pool: &sqlx::PgPool, id: Uuid) {
+    sqlx::query!(
+        "UPDATE horae_jobs SET available_at = now() WHERE id = $1",
+        id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 struct Row {
@@ -120,17 +240,392 @@ async fn permanent_handler_error_fails_the_job_with_its_kind(pool: sqlx::PgPool)
 }
 
 #[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn a_kind_without_a_handler_fails_its_attempt(pool: sqlx::PgPool) {
+async fn a_kind_without_a_handler_stays_queued(pool: sqlx::PgPool) {
     let org_id = org(&pool).await;
-    let id = insert_job(&pool, org_id, "unknown_kind", serde_json::json!({}), 1).await;
-    let job = claim(&pool, "worker").await.unwrap().unwrap();
-    execute(&pool, &registry(), "worker", job).await.unwrap();
+    let id = insert_job(&pool, org_id, "newer_kind", serde_json::json!({}), 1).await;
+    assert!(
+        claim_registered(&pool, &registry(), "worker")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    // Not even an exhausted one is failed: a newer server may know the kind.
+    sqlx::query!("UPDATE horae_jobs SET attempts = 1 WHERE id = $1", id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    claim_registered(&pool, &registry(), "worker")
+        .await
+        .unwrap();
+    assert_eq!(row(&pool, id).await.status, "queued");
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_concurrency_key_admits_one_queued_or_running_job(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let keyed = || Enqueue {
+        concurrency_key: Some("sweep"),
+        ..request(org_id, "echo")
+    };
+    let first = enqueue(&pool, keyed()).await.unwrap();
+    let Enqueued::Created(id) = first else {
+        panic!("first enqueue created nothing: {first:?}");
+    };
+    assert_eq!(
+        enqueue(&pool, keyed()).await.unwrap(),
+        Enqueued::Existing(id)
+    );
+
+    // Two workers, one key: one job, so one of them runs it.
+    let registry = registry();
+    let (left, right) = tokio::join!(
+        claim_registered(&pool, &registry, "worker-a"),
+        claim_registered(&pool, &registry, "worker-b"),
+    );
+    let claimed: Vec<_> = [left.unwrap(), right.unwrap()]
+        .into_iter()
+        .flatten()
+        .collect();
+    assert_eq!(claimed.len(), 1);
+    assert_eq!(
+        enqueue(&pool, keyed()).await.unwrap(),
+        Enqueued::Existing(id)
+    );
+
+    let job = claimed.into_iter().next().unwrap();
+    execute(&pool, &registry, "worker-a", job).await.unwrap();
+    assert!(matches!(
+        enqueue(&pool, keyed()).await.unwrap(),
+        Enqueued::Created(next) if next != id
+    ));
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_concurrency_key_belongs_to_one_organization_and_kind(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let other_org = org(&pool).await;
+    for (org_id, kind) in [(org_id, "echo"), (org_id, "long"), (other_org, "echo")] {
+        let enqueued = enqueue(
+            &pool,
+            Enqueue {
+                concurrency_key: Some("sweep"),
+                ..request(org_id, kind)
+            },
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(enqueued, Enqueued::Created(_)),
+            "{kind}: {enqueued:?}"
+        );
+    }
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_concurrent_enqueue_waits_and_returns_the_job_holding_the_key(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let mut first = pool.begin().await.unwrap();
+    let created = enqueue_in(
+        &mut first,
+        Enqueue {
+            concurrency_key: Some("pass"),
+            ..request(org_id, "echo")
+        },
+    )
+    .await
+    .unwrap();
+    let second = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            enqueue(
+                &pool,
+                Enqueue {
+                    concurrency_key: Some("pass"),
+                    ..request(org_id, "echo")
+                },
+            )
+            .await
+            .unwrap()
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        !second.is_finished(),
+        "the second insert waits for the first"
+    );
+    first.commit().await.unwrap();
+    assert_eq!(second.await.unwrap(), Enqueued::Existing(created.id()));
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn an_idempotency_key_returns_its_job_or_conflicts_on_another_payload(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let keyed = |payload| Enqueue {
+        idempotency_key: Some("request-1"),
+        payload,
+        ..request(org_id, "echo")
+    };
+    let created = enqueue(&pool, keyed(serde_json::json!("a"))).await.unwrap();
+    assert_eq!(
+        enqueue(&pool, keyed(serde_json::json!("a"))).await.unwrap(),
+        Enqueued::Existing(created.id())
+    );
+    assert!(matches!(
+        enqueue(&pool, keyed(serde_json::json!("b"))).await,
+        Err(EnqueueError::Conflict)
+    ));
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_delayed_job_waits_for_its_time(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = enqueue(
+        &pool,
+        Enqueue {
+            run_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
+            ..request(org_id, "echo")
+        },
+    )
+    .await
+    .unwrap()
+    .id();
+    assert!(
+        claim_registered(&pool, &registry(), "worker")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    make_available(&pool, id).await;
+    assert_eq!(run_next(&pool, "worker").await, id);
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_higher_priority_is_claimed_first(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let low = enqueue(
+        &pool,
+        Enqueue {
+            priority: -1,
+            ..request(org_id, "echo")
+        },
+    )
+    .await
+    .unwrap()
+    .id();
+    let normal = enqueue(&pool, request(org_id, "echo")).await.unwrap().id();
+    let high = enqueue(
+        &pool,
+        Enqueue {
+            priority: 10,
+            ..request(org_id, "echo")
+        },
+    )
+    .await
+    .unwrap()
+    .id();
+    let mut order = Vec::new();
+    for _ in 0..3 {
+        order.push(run_next(&pool, "worker").await);
+    }
+    assert_eq!(order, [high, normal, low]);
+}
+
+#[test]
+fn retry_delays_grow_by_the_multiplier_up_to_the_maximum() {
+    let delays: Vec<_> = (1..=8)
+        .map(|attempt| ECHO_POLICY.delay(attempt).as_secs())
+        .collect();
+    assert_eq!(delays, [10, 20, 40, 80, 160, 320, 600, 600]);
+    assert_eq!(ECHO_POLICY.delay(i32::MAX), Duration::from_secs(600));
+}
+
+#[test]
+fn the_default_policy_keeps_the_original_curve() {
+    let delays: Vec<_> = (1..=10)
+        .map(|attempt| RetryPolicy::default().delay(attempt).as_secs())
+        .collect();
+    assert_eq!(delays, [2, 4, 8, 16, 32, 64, 128, 256, 300, 300]);
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn failed_attempts_back_off_by_policy_and_stop_at_the_limit(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = enqueue(
+        &pool,
+        Enqueue {
+            payload: serde_json::json!("flaky"),
+            max_attempts: 3,
+            ..request(org_id, "echo")
+        },
+    )
+    .await
+    .unwrap()
+    .id();
+    for expected in [10.0, 20.0] {
+        run_next(&pool, "worker").await;
+        assert_eq!(row(&pool, id).await.status, "queued");
+        let wait = wait_secs(&pool, id).await;
+        assert!(
+            (wait - expected).abs() < 2.0,
+            "waits {wait}s, not {expected}s"
+        );
+        make_available(&pool, id).await;
+    }
+    run_next(&pool, "worker").await;
     let failed = row(&pool, id).await;
     assert_eq!(failed.status, "failed");
-    assert_eq!(
-        failed.last_error.as_deref(),
-        Some("no handler for durable job kind unknown_kind")
+    assert_eq!(failed.last_error.as_deref(), Some("try again"));
+    assert!(
+        claim_registered(&pool, &registry(), "worker")
+            .await
+            .unwrap()
+            .is_none()
     );
+
+    let recorded = attempts(&pool, id).await;
+    let outcomes: Vec<_> = recorded.iter().map(|a| a.outcome.as_deref()).collect();
+    assert_eq!(
+        outcomes,
+        [Some("retrying"), Some("retrying"), Some("failed")]
+    );
+    assert!(
+        recorded
+            .iter()
+            .all(|a| a.finished && a.error.as_deref() == Some("try again"))
+    );
+    assert_eq!(
+        recorded.iter().map(|a| a.attempt).collect::<Vec<_>>(),
+        [1, 2, 3]
+    );
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_permanent_error_ends_the_job_at_its_first_attempt(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = enqueue(
+        &pool,
+        Enqueue {
+            payload: serde_json::json!("fail"),
+            ..request(org_id, "echo")
+        },
+    )
+    .await
+    .unwrap()
+    .id();
+    run_next(&pool, "worker").await;
+    assert_eq!(row(&pool, id).await.status, "failed");
+    let recorded = attempts(&pool, id).await;
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].outcome.as_deref(), Some("failed"));
+    assert_eq!(recorded[0].error.as_deref(), Some("refused"));
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_succeeded_attempt_is_recorded(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = enqueue(&pool, request(org_id, "echo")).await.unwrap().id();
+    run_next(&pool, "worker").await;
+    let recorded = attempts(&pool, id).await;
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].outcome.as_deref(), Some("succeeded"));
+    assert!(recorded[0].finished);
+    assert_eq!(recorded[0].error, None);
+}
+
+#[test]
+fn attempt_errors_are_cut_on_a_character_boundary() {
+    let text = "é".repeat(3000);
+    let cut = worker::truncate(&text, 4096);
+    assert_eq!(cut.len(), 4096);
+    assert_eq!(worker::truncate(&text[..6], 5), "éé");
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_job_whose_heartbeat_stopped_is_claimable_after_its_stale_limit(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = enqueue(&pool, request(org_id, "echo")).await.unwrap().id();
+    let registry = registry();
+    let first = claim_registered(&pool, &registry, "dead-worker")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first.stale_after, Duration::from_secs(60));
+
+    // The last heartbeat 30 s ago: within the stale limit.
+    let beat = |secs: i32| {
+        sqlx::query!(
+            "UPDATE horae_jobs
+                SET heartbeat_at = now() - $2::int * interval '1 second',
+                    lease_until = now() - $2::int * interval '1 second' + stale_after_secs * interval '1 second'
+              WHERE id = $1",
+            id,
+            secs,
+        )
+        .execute(&pool)
+    };
+    beat(30).await.unwrap();
+    assert!(
+        claim_registered(&pool, &registry, "worker")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    beat(61).await.unwrap();
+    let second = claim_registered(&pool, &registry, "worker")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(second.id, id);
+    assert_ne!(second.claim_token, first.claim_token);
+    execute(&pool, &registry, "worker", second).await.unwrap();
+
+    let recorded = attempts(&pool, id).await;
+    let outcomes: Vec<_> = recorded.iter().map(|a| a.outcome.as_deref()).collect();
+    assert_eq!(outcomes, [Some("interrupted"), Some("succeeded")]);
+    assert!(!recorded[0].finished, "nobody saw the dead attempt end");
+}
+
+/// Runs for longer than its stale limit, in real time.
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn a_job_whose_heartbeat_continues_is_never_claimed_again(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = enqueue(&pool, request(org_id, "long")).await.unwrap().id();
+    let registry = std::sync::Arc::new(registry());
+    let job = claim_registered(&pool, &registry, "busy-worker")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.stale_after, Duration::from_secs(15));
+    let running = tokio::spawn({
+        let (pool, registry) = (pool.clone(), registry.clone());
+        async move { execute(&pool, &registry, "busy-worker", job).await }
+    });
+    let started = tokio::time::Instant::now();
+    while started.elapsed() < Duration::from_secs(20) {
+        assert!(
+            claim_registered(&pool, &registry, "idle-worker")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    let beat = sqlx::query_scalar!(
+        r#"SELECT heartbeat_at > started_at + interval '15 seconds' AS "later!"
+             FROM horae_jobs WHERE id = $1"#,
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(beat, "the heartbeat kept moving past the stale limit");
+
+    assert!(cancel(&pool, org_id, id).await.unwrap());
+    running.await.unwrap().unwrap();
+    assert_eq!(row(&pool, id).await.status, "cancelled");
+    let recorded = attempts(&pool, id).await;
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].outcome.as_deref(), Some("cancelled"));
 }
 
 #[test]
@@ -197,7 +692,7 @@ async fn expired_lease_cannot_renew_or_commit_using_an_old_transaction_timestamp
             .await
             .unwrap()
     );
-    assert!(lease.renew(&pool).await.is_err());
+    assert!(lease.heartbeat(&pool).await.is_err());
     tx.rollback().await.unwrap();
 }
 

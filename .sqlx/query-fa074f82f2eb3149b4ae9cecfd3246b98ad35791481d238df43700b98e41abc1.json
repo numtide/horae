@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n                  SET heartbeat_at = clock_timestamp(),\n                      lease_until = clock_timestamp() + stale_after_secs * interval '1 second',\n                      updated_at = clock_timestamp()\n                WHERE id = $1 AND org_id = $2 AND claim_token = $3\n                  AND status = 'running' AND NOT cancellation_requested\n                  AND lease_until > clock_timestamp()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa074f82f2eb3149b4ae9cecfd3246b98ad35791481d238df43700b98e41abc1"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT heartbeat_at > started_at + interval '15 seconds' AS \"later!\"\n             FROM horae_jobs WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "later!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "51d4d54b50e6f6fb4aa817e25b03354ad81661cc77d6d857743ce0c325ebd05b"
+}
