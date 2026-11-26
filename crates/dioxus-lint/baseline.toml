@@ -10,7 +10,6 @@ reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. H
 "crates/horae/src/pages/admin/permission_editor.rs" = 9
 "crates/horae/src/pages/admin/permission_editor/recovery.rs" = 1
 "crates/horae/src/pages/admin/permission_editor/templates.rs" = 1
-"crates/horae/src/pages/approvals.rs" = 1
 "crates/horae/src/pages/clients.rs" = 7
 "crates/horae/src/pages/clients/detail.rs" = 4
 "crates/horae/src/pages/clients/form.rs" = 6

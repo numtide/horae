@@ -41,6 +41,19 @@ const FORBIDDEN: u16 = 403;
 const NOT_FOUND: u16 = 404;
 const CONFLICT: u16 = 409;
 const PROFILE_FIELD: &str = "person-permissions-profile";
+
+/// A built-in profile's value in the profile picker; it is part of an
+/// option's id, so it has no spaces.
+fn profile_key(profile: BuiltInProfile) -> &'static str {
+    match profile {
+        BuiltInProfile::Member => "member",
+        BuiltInProfile::ProjectManager => "project_manager",
+        BuiltInProfile::PeopleAdmin => "people_admin",
+        BuiltInProfile::Accounting => "accounting",
+        BuiltInProfile::ExecutiveManager => "executive_manager",
+        BuiltInProfile::Administrator => "administrator",
+    }
+}
 const REVIEW_BUTTON: &str = "permission-review";
 const SAVE_BUTTON: &str = "permission-save";
 const CREATE_TEMPLATE_BUTTON: &str = "permission-template-create";
@@ -298,7 +311,7 @@ fn PermissionForm(
             restored.map(|restored| state.set(restored))
         } else if let Some(profile) = BuiltInProfile::ALL
             .iter()
-            .find(|p| profile_label(**p) == value)
+            .find(|p| profile_key(**p) == value)
             .copied()
         {
             state.write().choose_builtin(profile)
@@ -403,7 +416,7 @@ fn PermissionForm(
     let administrator = snapshot.administrator();
     let selection_key = match snapshot.action {
         ProfileAction::Edit => "current".to_owned(),
-        ProfileAction::BuiltIn { profile } => profile_label(profile).to_owned(),
+        ProfileAction::BuiltIn { profile } => profile_key(profile).to_owned(),
         ProfileAction::Template { id, .. } => id.to_string(),
     };
     let (primary, secondary) = if reload_required() || unavailable() {
@@ -473,7 +486,7 @@ fn PermissionForm(
                 SelectField { id: PROFILE_FIELD, label: tr.permissions_profile_label(),
                     selected: selection_key, disabled: frozen,
                     options: std::iter::once(("current".to_string(), tr.permissions_profile_current()))
-                        .chain(BuiltInProfile::ALL.iter().map(|profile| (profile_label(*profile).to_string(), profile_label(*profile).to_string())))
+                        .chain(BuiltInProfile::ALL.iter().map(|profile| (profile_key(*profile).to_string(), profile_label(*profile).to_string())))
                         .chain(snapshot.editor.templates.iter().map(|template| (template.id.to_string(), tr.permissions_profile_custom(&template.name))))
                         .collect(),
                     onselect: pick_profile,

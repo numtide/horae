@@ -675,20 +675,24 @@ fn ProjectListContent(
             selected.write().clear();
         }
     });
-    // Only a settled search moves the URL, and only on the list's own route.
-    // Each search asks once: a navigation guard can hold the replace, and
-    // asking again on every route update would never end.
-    let asked = use_hook(|| Rc::new(std::cell::RefCell::new(None::<String>)));
+    // Only a newly settled search moves the URL, once. Reading the route
+    // subscribes this effect to it, so a route change alone (Back to an older
+    // search) must do nothing. On `/projects/client/:client` the search stays
+    // out of the URL, which has no query: replacing it with `/projects?…`
+    // would remount the list while the person types. The next filter pick
+    // moves there, search included.
+    let acted = use_hook(|| Rc::new(std::cell::RefCell::new(filter.search.clone())));
     use_effect(move || {
         let search = settled();
+        if *acted.borrow() == search {
+            return;
+        }
         let Route::ProjectList { filter: current } = dioxus::router::router().current::<Route>()
         else {
             return;
         };
-        if search == current.search {
-            *asked.borrow_mut() = None;
-        } else if asked.borrow().as_ref() != Some(&search) {
-            *asked.borrow_mut() = Some(search.clone());
+        *acted.borrow_mut() = search.clone();
+        if search != current.search {
             navigator.replace(Route::ProjectList {
                 filter: ProjectFilter { search, ..current },
             });
@@ -712,8 +716,10 @@ fn ProjectListContent(
         }
     }));
     // Applies `edit` to the shown filters, then records them in the URL.
+    let shown = filter.clone();
     let apply = use_callback(move |edit: ProjectFilterEdit| {
         selected.write().clear();
+        let clearing = edit == ProjectFilterEdit::Clear;
         match edit {
             ProjectFilterEdit::Scope(value) => scope.set(value.as_str().to_string()),
             ProjectFilterEdit::Client(value) => client_filter.set(value),
@@ -734,7 +740,20 @@ fn ProjectListContent(
             tag: *tag_filter.peek(),
             search: query.peek().clone(),
         };
-        navigator.push(Route::ProjectList { filter: next });
+        // A pick of what is already shown adds no history entry. A search
+        // still settling reaches the URL by itself, so only "Clear filters"
+        // compares it.
+        let unchanged = if clearing {
+            next == shown
+        } else {
+            ProjectFilter {
+                search: shown.search.clone(),
+                ..next.clone()
+            } == shown
+        };
+        if !unchanged {
+            navigator.push(Route::ProjectList { filter: next });
+        }
     });
     let retry_list = use_callback(move |_| {
         selected.write().clear();

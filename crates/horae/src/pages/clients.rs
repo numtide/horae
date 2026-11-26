@@ -71,25 +71,22 @@ pub fn ClientList(filter: ClientFilter) -> Element {
     // The search box answers at once; the URL follows when typing pauses.
     let mut query = use_signal(|| filter.search.clone());
     let settled = use_debounced(query, SEARCH_DEBOUNCE);
-    // Only a settled search moves the URL. The filter is read from the
-    // router at that moment, so Back to another search is never undone.
-    // Each search asks once: the editor's navigation guard can hold the
-    // replace, and asking again on every route update would never end.
-    let asked = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(None::<String>)));
+    // Only a newly settled search moves the URL, once. Reading the route
+    // subscribes this effect to it, so a route change alone (Back to an older
+    // search, or an editor's guard holding the replace) must do nothing.
+    let acted = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(filter.search.clone())));
     use_effect(move || {
         let search = settled();
         // An open editor holds navigation; the URL catches up once it closes.
-        if show_form() {
+        if show_form() || *acted.borrow() == search {
             return;
         }
         let Route::ClientList { filter: current } = dioxus::router::router().current::<Route>()
         else {
             return;
         };
-        if search == current.search {
-            *asked.borrow_mut() = None;
-        } else if asked.borrow().as_ref() != Some(&search) {
-            *asked.borrow_mut() = Some(search.clone());
+        *acted.borrow_mut() = search.clone();
+        if search != current.search {
             navigator.replace(Route::ClientList {
                 filter: ClientFilter { search, ..current },
             });

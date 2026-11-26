@@ -901,6 +901,9 @@ new-project-client-currency = Currency
 ## Approvals
 
 approvals-approve-all = Approve all
+approvals-view-pending = Pending
+approvals-view-approved = Approved
+approvals-view-all = All
 approvals-awaiting = { $count ->
     [one] { $count } timesheet awaiting your approval
    *[other] { $count } timesheets awaiting your approval

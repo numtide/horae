@@ -239,13 +239,21 @@ fn InvoicesTable(invoices: Invoices, filter: InvoiceFilter, retry: Callback<()>)
     // The search box answers at once; the URL follows when typing pauses.
     let mut query = use_signal(|| filter.search.clone());
     let settled = use_debounced(query, SEARCH_DEBOUNCE);
-    // Only a settled search moves the URL. The filter is read from the
-    // router at that moment, so Back to another search is never undone.
+    // Only a newly settled search moves the URL, once. Reading the route
+    // subscribes this effect to it, so a route change alone (Back to an older
+    // search) must do nothing.
+    let acted = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(filter.search.clone())));
     use_effect(move || {
         let search = settled();
-        if let Route::InvoiceList { filter: current } = dioxus::router::router().current::<Route>()
-            && search != current.search
-        {
+        if *acted.borrow() == search {
+            return;
+        }
+        let Route::InvoiceList { filter: current } = dioxus::router::router().current::<Route>()
+        else {
+            return;
+        };
+        *acted.borrow_mut() = search.clone();
+        if search != current.search {
             navigator.replace(Route::InvoiceList {
                 filter: InvoiceFilter { search, ..current },
             });
