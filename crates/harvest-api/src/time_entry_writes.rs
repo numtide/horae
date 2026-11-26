@@ -197,7 +197,7 @@ async fn write(
 ) -> Result<TimesheetChange, ApiError> {
     if matches!(user.channel, Channel::Session) {
         return Err(ApiError::unauthorized(
-            "Writes need a personal access token; the session cookie only reads",
+            "Writes need an access token; the session cookie only reads",
         ));
     }
     let mut write = ops::begin(&state.0.pool, user.caller()).await?;
