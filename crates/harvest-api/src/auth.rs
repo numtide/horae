@@ -94,16 +94,15 @@ where
             .and_then(|value| value.to_str().ok())
             .and_then(horae_api::token::bearer);
         let query_token = query.access_token.as_deref().filter(|t| !t.is_empty());
-        let token = match (header_token, query_token) {
-            (Some(token), _) => token,
-            // D-5: an OAuth token in a URL ends up in logs and histories.
-            (None, Some(token)) if token.starts_with(ops::oauth::ACCESS_TOKEN_PREFIX) => {
-                return Err(ApiError::invalid_token(
-                    "OAuth access tokens go in the Authorization header",
-                ));
-            }
-            (None, Some(token)) => token,
-            (None, None) => return by_session(parts, &db).await,
+        // D-5: an OAuth token in a URL ends up in logs and histories. It is
+        // refused even beside a header token, so the client learns of it.
+        if query_token.is_some_and(|token| token.starts_with(ops::oauth::ACCESS_TOKEN_PREFIX)) {
+            return Err(ApiError::invalid_token(
+                "OAuth access tokens go in the Authorization header",
+            ));
+        }
+        let Some(token) = header_token.or(query_token) else {
+            return by_session(parts, &db).await;
         };
         let account = parts
             .headers

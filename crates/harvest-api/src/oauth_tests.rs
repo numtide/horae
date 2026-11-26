@@ -230,6 +230,8 @@ async fn reads_answer_as_the_personal_token_when_the_scopes_cover_them(pool: PgP
                     _ => {
                         assert_eq!(status, *personal_status, "{context}");
                         // Scopes never let through a row the person may not see.
+                        // A subset, not equality: an administrator's app token is
+                        // not an administrator (FR-061), so it can see fewer rows.
                         if let Some(key) = rows {
                             let theirs = row_ids(personal_body, key);
                             for id in row_ids(&body, key) {
@@ -262,6 +264,65 @@ async fn a_time_read_token_lists_the_persons_time(pool: PgPool) {
     let (status, _, me) = send(&app, get("/harvest/v2/users/me", &secret)).await;
     assert_eq!(status, StatusCode::OK, "{me}");
     assert_eq!(me["id"], api_id(&pool, "user", member.user_id).await);
+}
+
+/// FR-060: a member's `catalog:read` token sees the projects and tasks they
+/// track on, as their personal token does, though it cannot write time.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_catalog_read_token_lists_the_persons_trackable_pairs(pool: PgPool) {
+    let org = org(&pool).await;
+    let app = router(pool.clone(), limiter());
+    let (_, member) = &org.people[2];
+    let (personal, _) = token(&pool, member).await;
+    let secret = oauth_token(&pool, &org.app, member, ScopeSet::of(&[Scope::CatalogRead])).await;
+    let uri = "/harvest/v2/users/me/project_assignments";
+
+    let (_, _, expected) = send(&app, get(uri, &personal)).await;
+    let (status, _, listed) = send(&app, get(uri, &secret)).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    assert_eq!(listed, expected);
+    let project = api_id(&pool, "project", member.project_id).await;
+    let task = api_id(&pool, "task", member.task_id).await;
+    let assignment = &listed["project_assignments"][0];
+    assert_eq!(assignment["project"]["id"], project, "{listed}");
+    assert_eq!(
+        assignment["task_assignments"][0]["task"]["id"], task,
+        "{listed}"
+    );
+}
+
+/// A HEAD is a read and a `.json` path is its bare path, for scopes as for
+/// everything else.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn head_and_json_paths_need_the_same_scopes(pool: PgPool) {
+    let org = org(&pool).await;
+    let app = router(pool.clone(), limiter());
+    let (_, member) = &org.people[2];
+    let catalog = oauth_token(&pool, &org.app, member, ScopeSet::of(&[Scope::CatalogRead])).await;
+    let time = oauth_token(&pool, &org.app, member, ScopeSet::of(&[Scope::TimeRead])).await;
+    let body = entry_body(&pool, member, json!({ "hours": 1 })).await;
+
+    let (status, headers, _) =
+        send(&app, request("HEAD", "/v2/time_entries", &catalog, None)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        headers[header::WWW_AUTHENTICATE],
+        r#"Bearer error="insufficient_scope", scope="time:read""#
+    );
+    assert_eq!(
+        send(&app, request("HEAD", "/v2/time_entries.json", &time, None))
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let (status, headers, body) = send(
+        &app,
+        request("POST", "/v2/time_entries.json", &time, Some(&body)),
+    )
+    .await;
+    assert_insufficient_scope(status, &headers, &body, Scope::TimeWrite);
+    let (status, headers, body) = send(&app, get("/v2/projects.json", &time)).await;
+    assert_insufficient_scope(status, &headers, &body, Scope::CatalogRead);
 }
 
 /// An administrator's app token never makes an administrator (FR-061).
@@ -387,9 +448,16 @@ async fn the_query_parameter_refuses_oauth_tokens(pool: PgPool) {
     let secret = oauth_token(&pool, &org.app, member, all_scopes()).await;
     let (personal, _) = token(&pool, member).await;
 
-    for token in [secret.as_str(), "horae_oat_unknown"] {
+    // Refused alone, and beside a valid header token of either kind.
+    let tokens = [secret.as_str(), "horae_oat_unknown"];
+    let headers = [None, Some(secret.as_str()), Some(personal.as_str())];
+    for (token, header_token) in tokens.into_iter().flat_map(|t| headers.map(|h| (t, h))) {
         let uri = format!("/harvest/v2/users/me?access_token={token}");
-        let request = Request::builder().uri(&uri).body(Body::empty()).unwrap();
+        let mut request = Request::builder().uri(&uri);
+        if let Some(header_token) = header_token {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {header_token}"));
+        }
+        let request = request.body(Body::empty()).unwrap();
         let (status, headers, body) = send(&app, request).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
         assert_eq!(
@@ -516,14 +584,17 @@ async fn every_route_names_a_scope(pool: PgPool) {
     let (_, admin) = &org.people[0];
     let secret = oauth_token(&pool, &org.app, admin, all_scopes()).await;
 
-    for (path, _, _) in routes() {
+    let paths = routes().flat_map(|(path, _, _)| {
         let path = path.replace("{id}", "999999");
-        for method in ["GET", "POST", "PATCH", "DELETE"] {
-            let (status, _, body) = send(
-                &app,
-                request(method, &format!("/harvest/v2{path}"), &secret, None),
-            )
-            .await;
+        // The `.json` twins `serve` adds beside fixed paths.
+        let twin = (!path.ends_with("999999")).then(|| format!("/v2{path}.json"));
+        [Some(format!("/harvest/v2{path}")), twin]
+            .into_iter()
+            .flatten()
+    });
+    for path in paths {
+        for method in ["GET", "HEAD", "POST", "PATCH", "DELETE"] {
+            let (status, _, body) = send(&app, request(method, &path, &secret, None)).await;
             assert_ne!(body["error"], "insufficient_scope", "{method} {path}");
             assert_ne!(
                 status,
