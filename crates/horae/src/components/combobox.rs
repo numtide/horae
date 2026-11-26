@@ -80,7 +80,8 @@ pub fn Combobox(
     }
 
     rsx! {
-        div { class: "menu-anchor",
+        // A long chosen name wraps inside the trigger instead of widening the page.
+        div { class: "menu-anchor max-w-full",
             if let (Some(id), Some(name)) = (&id, &name) {
                 span { id: "{id}-name", class: "sr-only", "{name}" }
             }
@@ -88,7 +89,7 @@ pub fn Combobox(
                 r#type: "button",
                 id: id.clone(),
                 aria_labelledby: id.as_ref().filter(|_| name.is_some()).map(|id| format!("{id}-name {id}")),
-                class: "btn btn-secondary btn-sm {trigger_class}",
+                class: "btn btn-secondary btn-sm max-w-full {trigger_class}",
                 disabled,
                 "aria-haspopup": "listbox",
                 "aria-expanded": "{open}",
