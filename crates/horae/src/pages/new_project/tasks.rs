@@ -31,6 +31,7 @@ pub(super) fn Tasks(
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
+    let tr = crate::i18n::use_tr();
     let inactive_ids = use_signal(|| inactive_ids);
     let mut query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
@@ -154,7 +155,7 @@ pub(super) fn Tasks(
                 if form.read().rate_mode == RateMode::Legacy {
                     p { class: "form-hint mt-0", "Task rates override person and project rates. Blank uses the existing rate hierarchy; zero is an explicit rate. Rates are not converted." }
                 } else if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
-                    p { class: "form-hint mt-0", "Blank rates inherit a compatible catalog rate, then the client's default. Unknown or different catalog currencies require an explicit rate. Rates are not converted." }
+                    p { class: "form-hint mt-0", {tr.new_project_task_rate_hint()} }
                 }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
                 div { class: "flex flex-wrap items-center gap-3", aria_busy: pending,

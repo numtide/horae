@@ -143,7 +143,8 @@ fn TaskForm(
                         }
                     }
                     if rate_action() == "set" {
-                        FormGroup { id: "task-rate", label: tr.tasks_rate_label(),
+                        // An existing task also has the rate action select, named for the rate.
+                        FormGroup { id: "task-rate", label: if task_id.is_some() { tr.tasks_rate_amount_label() } else { tr.tasks_rate_label() },
                             Input { id: "task-rate", value: amount(), disabled: busy(), oninput: move |event: FormEvent| amount.set(event.value()) }
                         }
                         p { class: "form-hint", {tr.tasks_rate_template_hint()} }

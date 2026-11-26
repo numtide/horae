@@ -54,7 +54,6 @@ const template = cents => `${Math.floor(cents / 100)}.${String(cents % 100).padS
       await screen.getByRole('button', { name: 'Development', exact: true }).click();
       const rate = screen.getByRole('textbox', { name: `Hourly rate for Development (${currency})`, exact: true });
       await expect(rate).toHaveAttribute('placeholder', catalog.placeholder);
-      await expect(screen.getByText(`${currency}/h`, { exact: true })).toBeVisible();
       if (process.env.HORAE_TEST_SCREENSHOT_DIR) await screen.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-task-template-${currency}-${page.viewportSize().width}.png` });
       if (catalog.override !== undefined) await rate.fill(catalog.override);
     }

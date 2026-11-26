@@ -522,7 +522,7 @@ async fn a_refused_pin_reloads_as_the_account_now_signed_in() {
     reply.send(Ok(page)).unwrap();
     ui.settle();
     ui.click(&format!("tasks-edit-{id}"));
-    assert!(ui.html().contains("task-rate-action") && ui.html().contains("USD 80.00"));
+    assert!(ui.html().contains("task-rate-action") && ui.html().contains("80.00 / h"));
     let reply = probe.reply();
     ui.click("tasks-refresh");
     assert!(!ui.html().contains("task-name") && !ui.html().contains("A private task"));

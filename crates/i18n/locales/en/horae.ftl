@@ -406,6 +406,7 @@ tasks-rate-clear = Clear default rate
 tasks-rate-none = No rate
 tasks-rate-per-hour = { $amount } / h
 tasks-rate-current = Current default: { $rate }
+tasks-rate-amount-label = New hourly rate
 # A task's default rate is a template with no currency.
 tasks-rate-template-hint = Default rates have no currency: each project uses them in its own currency.
 tasks-rate-optional-hint = Optional. Leave blank or enter 0 for no default rate.
@@ -900,6 +901,7 @@ reports-active-projects-only = Active projects only
 ## New project
 
 new-project-client-currency = Currency
+new-project-task-rate-hint = A blank rate uses the task's default rate in this project's currency, then the client's default.
 
 ## Approvals
 
