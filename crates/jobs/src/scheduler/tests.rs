@@ -133,7 +133,9 @@ async fn one_of_two_schedulers_leads_and_the_other_takes_over_when_it_dies(pool:
 async fn two_schedulers_enqueue_each_firing_once(pool: sqlx::PgPool) {
     let org_id = org(&pool).await;
     let id = schedule(&pool, org_id, Cadence::Every(60), ZoneSource::Utc).await;
-    let now = Utc::now();
+    // Mid-minute, so the next slot is beyond the lookahead.
+    let now: DateTime<Utc> = "2026-05-01T12:00:30Z".parse().unwrap();
+    set_next_due_at(&pool, id, "2026-05-01T12:00:00Z".parse().unwrap()).await;
     let (a, b) = tokio::join!(fire_due(&pool, &Zones, now), fire_due(&pool, &Zones, now));
     assert_eq!(a.unwrap() + b.unwrap(), 1);
     assert_eq!(jobs(&pool).await.len(), 1);
@@ -276,6 +278,8 @@ async fn a_disabled_schedule_never_fires_and_skips_what_it_missed(pool: sqlx::Pg
         .await
         .unwrap();
     assert_eq!(next_due_at(&pool, id).await, None);
-    assert_eq!(fire_due(&pool, &Zones, Utc::now()).await.unwrap(), 0);
+    // Mid-minute, so the slot it is planned for is beyond the lookahead.
+    let now: DateTime<Utc> = "2026-05-01T12:00:30Z".parse().unwrap();
+    assert_eq!(fire_due(&pool, &Zones, now).await.unwrap(), 0);
     assert!(jobs(&pool).await.is_empty());
 }

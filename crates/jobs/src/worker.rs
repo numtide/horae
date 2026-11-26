@@ -10,6 +10,8 @@ use crate::{Completed, Handler, Interrupted, JobContext, JobError, POLL, Registr
 /// `horae_job_attempts.error` holds at most this many bytes.
 const ATTEMPT_ERROR_BYTES: usize = 4096;
 
+const CLEANUP_EVERY: Duration = Duration::from_secs(60);
+
 pub struct Worker {
     stop: watch::Sender<bool>,
     task: tokio::task::JoinHandle<()>,
@@ -68,9 +70,14 @@ pub async fn run_worker(pool: &PgPool, registry: &Registry, mut stop: watch::Rec
     if let Err(error) = warn_unknown_kinds(pool, registry).await {
         tracing::warn!(%error, "durable job kinds could not be listed");
     }
+    // Retention scans the jobs table, so it runs once a minute, not before every claim.
+    let mut cleaned: Option<std::time::Instant> = None;
     while !*stop.borrow() && stop.has_changed().is_ok() {
-        if let Err(error) = registry.cleanup(pool).await {
-            tracing::warn!(%error, "durable job cleanup failed");
+        if cleaned.is_none_or(|at| at.elapsed() >= CLEANUP_EVERY) {
+            cleaned = Some(std::time::Instant::now());
+            if let Err(error) = registry.cleanup(pool).await {
+                tracing::warn!(%error, "durable job cleanup failed");
+            }
         }
         if *stop.borrow() || stop.has_changed().is_err() {
             break;

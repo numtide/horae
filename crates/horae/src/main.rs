@@ -338,8 +338,10 @@ fn main() -> anyhow::Result<()> {
                 let worker = jobs::spawn(state::global_state().await);
                 let outbox = jobs::outbox::spawn(state::global_state().await);
                 let mail = notifications::spawn(state::global_state().await);
+                let sweeps = jobs::spawn_sweeps(state::global_state().await);
                 let scheduler = jobs::spawn_scheduler(state::global_state().await);
                 let stop_worker = worker.stop_sender();
+                let stop_sweeps = sweeps.stop_sender();
                 let stop_outbox = outbox.stop_sender();
                 let stop_mail = mail.stop_sender();
                 let stop_scheduler = scheduler.stop_sender();
@@ -348,19 +350,22 @@ fn main() -> anyhow::Result<()> {
                     .with_graceful_shutdown(async move {
                         shutdown_signal().await;
                         stop_worker.send_replace(true);
+                        stop_sweeps.send_replace(true);
                         stop_outbox.send_replace(true);
                         stop_mail.send_replace(true);
                         stop_scheduler.send_replace(true);
                     })
                     .await;
                 let grace = std::time::Duration::from_secs(30);
-                let (worker_result, outbox_result, mail_result, scheduler_result) = tokio::join!(
+                let (worker_result, sweeps_result, outbox_result, mail_result, scheduler_result) = tokio::join!(
                     worker.shutdown(grace),
+                    sweeps.shutdown(grace),
                     outbox.shutdown(grace),
                     mail.shutdown(grace),
                     scheduler.shutdown(grace)
                 );
                 worker_result?;
+                sweeps_result?;
                 outbox_result?;
                 mail_result?;
                 scheduler_result?;

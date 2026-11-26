@@ -626,9 +626,11 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
                     WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind
                       AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as
              FROM horae_jobs
-            -- The sweeps (`sweeps::SWEEPS`), a run a minute, are not history.
+            -- The sweeps (`sweeps::SWEEPS`) run every minute: only the ones that
+            -- failed or were cancelled are worth listing.
             WHERE org_id = $1
-              AND kind NOT IN ('long_timer_sweep', 'budget_alert_sweep', 'oauth_cleanup')
+              AND NOT (kind IN ('long_timer_sweep', 'budget_alert_sweep', 'oauth_cleanup')
+                       AND status IN ('queued', 'running', 'succeeded'))
               AND ($3::uuid IS NULL OR (created_at, id) < (
                   SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1
               ))
@@ -745,9 +747,15 @@ pub async fn retry_in(
     Ok(result.rows_affected() == 1)
 }
 
-/// The durable worker, running the import kinds and the sweeps.
+/// The durable worker, running the import kinds.
 pub fn spawn(state: &AppState) -> Worker {
     horae_jobs::spawn(state.db.clone(), registry(state))
+}
+
+/// A worker of its own for the sweeps, so that a long import, which holds
+/// [`spawn`]'s worker for as long as it runs, does not delay them.
+pub fn spawn_sweeps(state: &AppState) -> Worker {
+    horae_jobs::spawn(state.db.clone(), sweeps::registry(state))
 }
 
 /// The scheduler, enqueuing what the stored schedules are due for.
@@ -769,7 +777,6 @@ fn registry(state: &AppState) -> Registry {
             state: state.clone(),
             kind: "harvest_csv_import",
         });
-    sweeps::register(&mut registry, state);
     #[cfg(test)]
     registry.register(ImportJob {
         state: state.clone(),

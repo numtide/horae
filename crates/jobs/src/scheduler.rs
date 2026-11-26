@@ -17,7 +17,7 @@ use tokio::sync::watch;
 use uuid::Uuid;
 
 use crate::{
-    BoxFuture, Enqueue, EnqueueError, Worker,
+    BoxFuture, Enqueue, EnqueueError, Enqueued, Worker,
     schedule::{Cadence, next_due},
 };
 
@@ -91,41 +91,71 @@ pub(crate) fn spawn_ticking(
 
 /// Whether this instance leads after this tick. `lock` is the dedicated
 /// connection: the leader checks it still answers, a follower asks for the
-/// lock on it again. A connection that fails is dropped, ending its session.
+/// lock on it again. A connection that fails, or does not answer within a
+/// tick, is dropped, ending its session.
 async fn lead(pool: &PgPool, lock: &mut Option<PgConnection>, leading: bool) -> bool {
     if lock.is_none() {
-        match pool.acquire().await {
-            Ok(connection) => *lock = Some(connection.detach()),
-            Err(error) => {
+        match tokio::time::timeout(TICK, connect(pool)).await {
+            Ok(Ok(connection)) => *lock = Some(connection),
+            Ok(Err(error)) => {
                 tracing::warn!(%error, "job scheduler could not connect");
+                return false;
+            }
+            Err(_) => {
+                tracing::warn!("job scheduler timed out connecting");
                 return false;
             }
         }
     }
     let connection = lock.as_mut().expect("connected above");
-    let result = if leading {
-        sqlx::query!("SELECT 1 AS one")
+    // Nothing releases the lock but the session's end, so a leader whose
+    // connection answers still holds it.
+    let check = async {
+        if leading {
+            sqlx::query!("SELECT 1 AS one")
+                .fetch_one(&mut *connection)
+                .await
+                .map(|_| true)
+        } else {
+            sqlx::query_scalar!(
+                r#"SELECT pg_try_advisory_lock(hashtextextended('horae.job-scheduler', 0)) AS "locked!""#
+            )
             .fetch_one(&mut *connection)
             .await
-            .map(|_| true)
-    } else {
-        sqlx::query_scalar!(
-            r#"SELECT pg_try_advisory_lock(hashtextextended('horae.job-scheduler', 0)) AS "locked!""#
-        )
-        .fetch_one(&mut *connection)
-        .await
+        }
     };
-    result.unwrap_or_else(|error| {
-        tracing::warn!(%error, "job scheduler lost its connection");
-        *lock = None;
-        false
-    })
+    match tokio::time::timeout(TICK, check).await {
+        Ok(Ok(leads)) => leads,
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "job scheduler lost its connection");
+            *lock = None;
+            false
+        }
+        Err(_) => {
+            // A half-open connection blocks instead of failing.
+            tracing::warn!("job scheduler connection stopped answering");
+            *lock = None;
+            false
+        }
+    }
+}
+
+/// A connection of the lock's own, outside the pool. Its keepalives let
+/// PostgreSQL end the session, and so release the lock, within about a minute
+/// of its peer vanishing, instead of the two hours of the default settings.
+async fn connect(pool: &PgPool) -> sqlx::Result<PgConnection> {
+    let options = pool.connect_options().as_ref().clone().options([
+        ("tcp_keepalives_idle", "30"),
+        ("tcp_keepalives_interval", "10"),
+        ("tcp_keepalives_count", "3"),
+    ]);
+    sqlx::ConnectOptions::connect(&options).await
 }
 
 /// Enqueues every enabled schedule due by `now` plus a tick, each once, and
 /// plans its next firing after `now`: a schedule that missed several slots
 /// while no instance led fires once. A schedule not planned yet is planned
-/// without firing. Returns the firings enqueued.
+/// without firing. Returns the jobs it created.
 pub async fn fire_due(
     pool: &PgPool,
     zones: &dyn ZoneResolver,
@@ -184,7 +214,9 @@ pub async fn fire_due(
                     )
                     .await;
                     match enqueued {
-                        Ok(_) => fired += 1,
+                        Ok(Enqueued::Created(_)) => fired += 1,
+                        // Enqueued before, or folded into the job holding its concurrency key.
+                        Ok(Enqueued::Existing(_)) => {}
                         // The schedule's payload changed after this firing was enqueued.
                         Err(EnqueueError::Conflict) => {
                             tracing::warn!(schedule_id = %id, "scheduled firing already enqueued with another payload");

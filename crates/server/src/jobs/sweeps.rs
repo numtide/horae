@@ -34,13 +34,15 @@ const POLICY: RetryPolicy = RetryPolicy {
     max_delay: std::time::Duration::ZERO,
 };
 
-pub(super) fn register(registry: &mut Registry, state: &AppState) {
+pub(super) fn registry(state: &AppState) -> Registry {
+    let mut registry = Registry::default();
     for (kind, _, _) in SWEEPS {
         registry.register(Sweep {
             state: state.clone(),
             kind,
         });
     }
+    registry
 }
 
 /// Stores the organization's sweep schedules. Storing them again keeps when
@@ -69,7 +71,8 @@ pub async fn ensure_schedules(connection: &mut PgConnection, org_id: Uuid) -> an
 /// [`ensure_schedules`] for every organization, at server start.
 pub async fn ensure_all_schedules(pool: &PgPool) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
-    let orgs = sqlx::query_scalar!("SELECT id FROM organizations")
+    // In id order, so two instances starting together lock rows in the same order.
+    let orgs = sqlx::query_scalar!("SELECT id FROM organizations ORDER BY id")
         .fetch_all(&mut *tx)
         .await?;
     for org_id in orgs {
