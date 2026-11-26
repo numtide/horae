@@ -354,8 +354,8 @@ async fn creation_options_offer_active_common_tasks_of_this_organization_only(po
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let (common, archived) = (Uuid::now_v7(), Uuid::now_v7());
     sqlx::query!(
-        "INSERT INTO tasks (id,org_id,name,billable_default,is_default,active,default_rate_cents,default_rate_currency)
-         VALUES ($1,$3,'Meetings',false,true,true,4000,'EUR'), ($2,$3,'Old common',true,true,false,NULL,NULL)",
+        "INSERT INTO tasks (id,org_id,name,billable_default,is_default,active,default_rate_cents)
+         VALUES ($1,$3,'Meetings',false,true,true,4000), ($2,$3,'Old common',true,true,false,NULL)",
         common,
         archived,
         ids.org_id
@@ -1509,7 +1509,7 @@ async fn finalized_task_links_inherit_default_rates_only_for_task_billing(pool: 
     use horae_core::types::ProjectType;
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=8000, default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=8000 WHERE id=$1",
         ids.task_id
     )
     .execute(&pool)
@@ -1577,6 +1577,78 @@ async fn finalized_task_links_inherit_default_rates_only_for_task_billing(pool: 
     }
 }
 
+/// A task's default rate is a template: New Project applies it in the
+/// project's currency, whichever it is, and a typed rate wins.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn finalized_task_links_apply_the_template_in_any_currency(pool: PgPool) {
+    use crate::models::project_creation::{ProjectTaskInput, TaskAccess, TaskSource};
+    use horae_core::project::RateMode;
+    use horae_core::types::ProjectType;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents=8050 WHERE id=$1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (currency, typed, expected) in
+        [("EUR", "", 8050), ("USD", "", 8050), ("USD", "12.34", 1234)]
+    {
+        let form = ProjectForm {
+            client_id: Some(ids.client_id),
+            name: format!("{currency} {typed}"),
+            currency: Some(currency.into()),
+            project_type: ProjectType::TimeAndMaterials,
+            rate_mode: RateMode::Task,
+            tasks: vec![ProjectTaskInput {
+                id: Uuid::now_v7(),
+                source: TaskSource::Existing {
+                    task_id: ids.task_id,
+                },
+                billable: true,
+                rate: typed.into(),
+                budget: String::new(),
+                access: TaskAccess::Everyone,
+            }],
+            ..Default::default()
+        };
+        let draft = Uuid::now_v7();
+        super::save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &form)
+            .await
+            .unwrap();
+        let project =
+            super::finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &form, false)
+                .await
+                .unwrap();
+        let rate = sqlx::query_scalar!(
+            "SELECT rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+            project,
+            ids.task_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rate, Some(expected), "{currency} {typed:?}");
+    }
+    // A later change to the template leaves the project's rate alone.
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents=9000 WHERE id=$1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let kept = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM project_tasks WHERE task_id=$1 AND rate_cents=8050"#,
+        ids.task_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(kept, 2);
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn creation_catalogs_show_billable_rates_only_to_rate_readers(pool: PgPool) {
     use crate::models::project_creation::CreationSearch;
@@ -1589,7 +1661,7 @@ async fn creation_catalogs_show_billable_rates_only_to_rate_readers(pool: PgPool
     .await
     .unwrap();
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents = 7000, default_rate_currency = 'EUR', is_default = true
+        "UPDATE tasks SET default_rate_cents = 7000, is_default = true
          WHERE id = $1",
         ids.task_id
     )
@@ -1634,14 +1706,12 @@ async fn creation_catalogs_show_billable_rates_only_to_rate_readers(pool: PgPool
             .unwrap()
             .unwrap();
         let task_rate = reads.then_some(7000);
-        let task_currency = reads.then(|| "EUR".to_owned());
         for task in [
             &options.tasks[0],
             &options.common_tasks[0],
             &selected.tasks[0],
         ] {
             assert_eq!(task.default_rate_cents, task_rate, "{profile:?}");
-            assert_eq!(task.default_rate_currency, task_currency, "{profile:?}");
         }
         for person in [&options.people[0], &selected.people[0]] {
             assert_eq!(

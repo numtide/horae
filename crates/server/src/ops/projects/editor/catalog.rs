@@ -87,8 +87,7 @@ pub async fn read(
     let mut tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default AS billable,
-           CASE WHEN $4 THEN default_rate_cents END AS default_rate_cents,
-           CASE WHEN $4 THEN default_rate_currency END AS default_rate_currency
+           CASE WHEN $4 THEN default_rate_cents END AS default_rate_cents
          FROM tasks WHERE org_id=$1 AND active AND strpos(lower(name), lower($2)) > 0
          ORDER BY lower(name), id LIMIT 51 OFFSET $3",
         org_id,

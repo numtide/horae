@@ -1,5 +1,26 @@
 <!--
 Sync Impact Report
+- Version change: 7.1.0 → 7.2.0
+- Bump rationale: MINOR. Principle I gains materially expanded guidance: a rate template (a
+  task's default hourly rate) is an integer at two decimals with no currency, and is not money
+  until applied to something with a currency. No principle is removed or redefined. Approved by
+  the maintainer on 2026-11-23 (specs/026-task-rate-templates/constitution-amendment.md, applied
+  verbatim).
+- Modified principles:
+  - I. Exactness: a "Rate templates (not money)" paragraph after "Decimal wire formats (not an
+    exception)"; the rationale gains one sentence.
+- Added sections: none
+- Removed sections: none
+- Templates checked:
+  - .specify/templates/plan-template.md: Constitution Check takes its gates from this file ✅ (no change)
+  - .specify/templates/spec-template.md, tasks-template.md: no principle-driven change ✅
+  - AGENTS.md: domain invariants name integer money; templates are covered by this file ✅ (no change)
+  - README.md: links the constitution only ✅ (no change)
+- Follow-up: Principle I's "minor units (cents)" wording, to be fixed in a later PATCH outside
+  spec 026 (the maintainer's decision of 2026-11-23).
+-->
+<!--
+Sync Impact Report (7.1.0)
 - Version change: 7.0.0 → 7.1.0
 - Bump rationale: MINOR. Principle IV's "Token-authenticated APIs" clause gains one bounded
   exception: the OAuth2 token and revocation endpoints may redeem codes and refresh tokens and
@@ -239,11 +260,27 @@ input when they carry more. Totals are computed in integers before conversion; t
 values are never summed, compared or stored. Floating point remains forbidden for these
 conversions.
 
+**Rate templates (not money)**: a rate template, such as a task's default hourly rate, is an
+integer at a fixed scale of two decimals with no currency. It is not money until it is applied to
+something that has a currency, such as a project, where it becomes a rate of the same number in
+that currency. A template MUST NOT be summed, reported, invoiced, compared with money or given a
+currency by any other route, and a currency MUST NOT be guessed for it. Amounts computed from an
+applied rate are money and follow the rules above, rounded once, half up, to the currency's
+precision. A rate, whether applied from a template or typed, keeps two decimals in every currency,
+even where the currency has fewer (JPY 80.50 per hour); only amounts computed from a rate round to
+the currency's precision. A currency's precision is one whole unit for a currency with no decimals
+and one hundredth for every other currency, the finest unit Horae stores. An interface that writes
+such a rate as a decimal, such as the Harvest-compatible API, writes its two decimals; this does not
+breach the decimal wire formats rule above.
+
 **Rationale**: Billing and invoicing are financial operations; floating-point accumulation produces
 rounding drift that corrupts totals and erodes trust. Integer representation makes correctness verifiable.
 The XLSX library's numeric-cell API takes an `f64`, so the value is converted at that call; most
 n/60 values have no exact finite representation. Users need hours they can sum in a spreadsheet.
 Confining the conversion to that last call keeps every Horae calculation in integers.
+A task is shared by projects billed in different currencies, so its default rate cannot carry one
+currency without being wrong for the others; keeping it apart from money until it is applied
+keeps both exact.
 
 ### II. Domain Purity
 
@@ -380,4 +417,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 7.1.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-23
+**Version**: 7.2.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-26

@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, billable_default as billable,\n                CASE WHEN $4 THEN default_rate_cents END as default_rate_cents FROM tasks\n         WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0\n         ORDER BY lower(name), id LIMIT 51 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "e90c3eebc678ffcbd4e75fec3a98e18ac2192e674590a64132629cef7679fa00"
+}

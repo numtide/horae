@@ -5,6 +5,7 @@ use crate::models::project_creation::{
 };
 use crate::plugin::AppEvent;
 use crate::plugin::event::AssignmentPayload;
+use horae_core::money::RateTemplate;
 use horae_core::permissions::rates::RateEdit;
 use std::collections::HashSet;
 
@@ -321,9 +322,20 @@ async fn save_tasks(
                 ProjectFormField::Task(task.id),
             ));
         }
-        let catalog = sqlx::query!("SELECT active, default_rate_cents, default_rate_currency FROM tasks WHERE id=$1 AND org_id=$2 FOR SHARE", task_id, org_id)
-            .fetch_optional(&mut **tx).await.map_err(storage)?
-            .ok_or_else(|| with_field(OpError::not_found("Task not found"), ProjectFormField::Task(task.id)))?;
+        let catalog = sqlx::query!(
+            "SELECT active, default_rate_cents FROM tasks WHERE id=$1 AND org_id=$2 FOR SHARE",
+            task_id,
+            org_id
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(storage)?
+        .ok_or_else(|| {
+            with_field(
+                OpError::not_found("Task not found"),
+                ProjectFormField::Task(task.id),
+            )
+        })?;
         if !catalog.active && previous != Some(task) {
             return Err(with_field(
                 OpError::conflict(
@@ -346,20 +358,10 @@ async fn save_tasks(
         .map_err(|error| with_field(error, ProjectFormField::TaskRate(task.id)))?;
         let reset_rate = !unchanged.contains(&ProtectedProjectField::TaskRate(task.id));
         if before.configured && task_rates && reset_rate && rate.is_none() {
-            if catalog.default_rate_cents.is_some()
-                && !catalog
-                    .default_rate_currency
-                    .as_deref()
-                    .is_some_and(|currency| {
-                        currency.eq_ignore_ascii_case(super::save::project_currency(before))
-                    })
-            {
-                return Err(with_field(
-                    OpError::bad_input("Enter an explicit task rate in the project currency."),
-                    ProjectFormField::TaskRate(task.id),
-                ));
-            }
-            rate = catalog.default_rate_cents;
+            rate = catalog
+                .default_rate_cents
+                .and_then(RateTemplate::from_hundredths)
+                .map(|template| template.apply(super::save::project_currency(before)));
         }
         let billable = if previous.is_some_and(|previous| previous.billable == task.billable) {
             task.billable

@@ -405,8 +405,11 @@ tasks-rate-set = Set a new rate
 tasks-rate-clear = Clear default rate
 tasks-rate-none = No rate
 tasks-rate-per-hour = { $amount } / h
-# A default rate stored without a currency, such as one imported from Harvest.
-tasks-rate-currency-not-set = { $amount } / h · currency not set
+tasks-rate-current = Current default: { $rate }
+# A task's default rate is a template with no currency.
+tasks-rate-template-hint = Default rates have no currency: each project uses them in its own currency.
+tasks-rate-optional-hint = Optional. Leave blank or enter 0 for no default rate.
+tasks-rate-invalid = Enter a positive rate with at most two decimal places, or 0 for no rate.
 
 ## Clients
 

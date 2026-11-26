@@ -11,10 +11,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.ok(database.searchParams.get('host')?.startsWith('/tmp/'));
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const task = JSON.parse(sql("SELECT row_to_json(t) FROM (SELECT t.id, t.default_rate_cents, t.default_rate_currency, o.default_currency FROM tasks t JOIN organizations o ON o.id = t.org_id WHERE t.name = 'Development' AND o.name = 'Demo Org') t"));
+const task = JSON.parse(sql("SELECT row_to_json(t) FROM (SELECT t.id, t.default_rate_cents, o.default_currency FROM tasks t JOIN organizations o ON o.id = t.org_id WHERE t.name = 'Development' AND o.name = 'Demo Org') t"));
 assert.equal(task.default_currency, 'EUR');
-assert.equal(task.default_rate_currency, 'EUR');
 assert.ok(task.default_rate_cents > 0);
+// A task's default rate is a template with no currency, shown with two decimals.
+const template = cents => `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -53,18 +54,11 @@ assert.ok(task.default_rate_cents > 0);
       await screen.getByRole('button', { name: 'Development', exact: true }).click();
       const rate = screen.getByRole('textbox', { name: `Hourly rate for Development (${currency})`, exact: true });
       await expect(rate).toHaveAttribute('placeholder', catalog.placeholder);
-      if (catalog.override !== undefined) {
-        await screen.getByRole('button', { name: 'Save project', exact: true }).click();
-        await expect(screen.getByRole('alert')).toContainText('currency is unknown or incompatible');
-        await expect(rate).toBeFocused();
-        await expect(rate).toHaveValue('');
-        await expect(rate).toHaveAttribute('aria-invalid', 'true');
-        await rate.fill(catalog.override);
-      }
+      await expect(screen.getByText(`${currency}/h`, { exact: true })).toBeVisible();
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR) await screen.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-task-template-${currency}-${page.viewportSize().width}.png` });
+      if (catalog.override !== undefined) await rate.fill(catalog.override);
     }
-    await expect(screen.locator('header').getByRole('status')).toContainText(
-      catalog?.override !== undefined ? 'Changes need attention' : 'Draft saved at'
-    );
+    await expect(screen.locator('header').getByRole('status')).toContainText('Draft saved at');
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
     await expect(page.getByRole('region', { name: 'Project details', exact: true })).toContainText(`Task rate browser ${mode} ${currency}`);
@@ -171,12 +165,9 @@ assert.ok(task.default_rate_cents > 0);
       await screen.getByRole('button', { name: 'Development', exact: true }).click();
       const rate = screen.getByRole('textbox', { name: 'Hourly rate for Development (USD)', exact: true });
       await expect(rate).toBeVisible();
+      // The EUR workspace's task template applies in this USD project.
+      await expect(rate).toHaveAttribute('placeholder', template(task.default_rate_cents));
       const save = screen.getByRole('button', { name: 'Save changes', exact: true });
-      await save.click();
-      await expect(screen.getByRole('alert')).toContainText('Enter an explicit task rate in the project currency');
-      await expect(rate).toBeFocused();
-      await expect(rate).toHaveAttribute('aria-invalid', 'true');
-      assert.equal(storedRate(id), '');
       await rate.fill('-1');
       await save.click();
       await expect(screen.getByRole('alert')).toBeVisible();
@@ -268,19 +259,20 @@ assert.ok(task.default_rate_cents > 0);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/${id}`);
     assert.equal(storedRate(id), String(task.default_rate_cents));
-    for (const [source, amount, currency, placeholder, override, expected] of [
-      ['USD', 8000, 'USD', '80.00', undefined, '8000'],
-      [null, 0, 'EUR', 'Enter rate', '0', '0'],
-      ['USD', 8000, 'EUR', 'Enter rate', '8.25', '825'],
+    for (const [amount, currency, placeholder, override, expected] of [
+      [8050, 'USD', '80.50', undefined, '8050'],
+      [8050, 'GBP', '80.50', undefined, '8050'],
+      [8050, 'EUR', '80.50', '8.25', '825'],
+      ['NULL', 'EUR', 'Inherit', undefined, ''],
     ]) {
-      sql(`UPDATE tasks SET default_rate_cents = ${amount}, default_rate_currency = ${source === null ? 'NULL' : `'${source}'`} WHERE id = '${task.id}'`);
+      sql(`UPDATE tasks SET default_rate_cents = ${amount} WHERE id = '${task.id}'`);
       const project = await createProject('Task', currency, undefined, { placeholder, override });
       assert.equal(storedRate(project), expected);
     }
-    sql(`UPDATE tasks SET default_rate_cents = ${task.default_rate_cents}, default_rate_currency = '${task.default_rate_currency}' WHERE id = '${task.id}'`);
+    sql(`UPDATE tasks SET default_rate_cents = ${task.default_rate_cents} WHERE id = '${task.id}'`);
     await readsFinished();
     assert.deepEqual(errors, []);
-    console.log('PASS: New Project task rates and editor capabilities preserve configured/legacy modes, source currencies, unknown/zero recovery, scoped budgets and keyboard recovery across three widths');
+    console.log('PASS: New Project task rates and editor capabilities preserve configured/legacy modes, apply task templates in any currency, scoped budgets and keyboard recovery across three widths');
   } catch (error) {
     console.error(error);
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });

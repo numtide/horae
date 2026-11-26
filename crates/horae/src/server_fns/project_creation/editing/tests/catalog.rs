@@ -49,7 +49,7 @@ async fn editor_catalog_withholds_defaults_without_their_financial_authority(poo
     .await
     .unwrap();
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=876543, default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=876543 WHERE id=$1",
         ids.task_id
     )
     .execute(&pool)
@@ -61,7 +61,6 @@ async fn editor_catalog_withholds_defaults_without_their_financial_authority(poo
     assert_eq!(catalog.tasks[0].id, ids.task_id);
     assert_eq!(catalog.clients[0].default_rate_cents, None);
     assert_eq!(catalog.tasks[0].default_rate_cents, None);
-    assert_eq!(catalog.tasks[0].default_rate_currency, None);
     let payload = serde_json::to_string(&catalog).unwrap();
     assert!(!payload.contains("987654") && !payload.contains("876543"));
     assert!(!payload.contains("people") && !payload.contains("previous_code"));
@@ -78,7 +77,7 @@ async fn editor_catalog_requires_project_write_not_the_rate_grant_alone(pool: Pg
     )
     .await;
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=876543, default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=876543 WHERE id=$1",
         ids.task_id
     )
     .execute(&pool)
@@ -86,10 +85,6 @@ async fn editor_catalog_requires_project_write_not_the_rate_grant_alone(pool: Pg
     .unwrap();
     let catalog = read(&pool, &ids, context(&ids)).await.unwrap();
     assert_eq!(catalog.tasks[0].default_rate_cents, Some(876543));
-    assert_eq!(
-        catalog.tasks[0].default_rate_currency.as_deref(),
-        Some("EUR")
-    );
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(PermissionSelection::new(&[Permission::BillableRateReadAll])).unwrap(),
     )
@@ -200,7 +195,7 @@ async fn editor_catalog_managed_scope_needs_designation_but_never_opens_global_r
     sqlx::query!("INSERT INTO project_management_assignments (id,org_id,manager_id,project_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, ids.project_id)
         .execute(&pool).await.unwrap();
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents=876543, default_rate_currency='EUR' WHERE id=$1",
+        "UPDATE tasks SET default_rate_cents=876543 WHERE id=$1",
         ids.task_id
     )
     .execute(&pool)
@@ -208,7 +203,6 @@ async fn editor_catalog_managed_scope_needs_designation_but_never_opens_global_r
     .unwrap();
     let catalog = read(&pool, &ids, context(&ids)).await.unwrap();
     assert_eq!(catalog.tasks[0].default_rate_cents, None);
-    assert_eq!(catalog.tasks[0].default_rate_currency, None);
     assert!(matches!(
         read(
             &pool,

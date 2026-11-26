@@ -8,6 +8,7 @@
 //! `Shared` gate, and [`set_active`] with `AccessChange`: tracking writers
 //! hold the shared gate until their entry is inserted.
 
+use horae_core::money::RateTemplate;
 use horae_core::permissions::catalog::Permission;
 use horae_core::permissions::rates::RateEdit;
 use uuid::Uuid;
@@ -54,18 +55,17 @@ pub async fn create(
     let name = details.name()?;
     authorize(actor)?;
     let org_id = actor.org_id();
-    let (amount, currency) = authorize_rate(tx, actor, &details.rate).await?;
+    let amount = authorize_rate(actor, &details.rate)?;
     let task = sqlx::query_as!(
         Task,
-        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency, is_default)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, is_default)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
         Uuid::now_v7(),
         org_id,
         name,
         details.billable_default,
         amount,
-        currency,
         details.is_default,
     )
     .fetch_one(&mut **tx)
@@ -90,20 +90,18 @@ pub async fn update(
     let name = details.name()?;
     authorize(actor)?;
     let org_id = actor.org_id();
-    let (amount, currency) = authorize_rate(tx, actor, &details.rate).await?;
+    let amount = authorize_rate(actor, &details.rate)?;
     let preserve = matches!(details.rate, TaskRateEdit::Preserve {});
     let before = lock(tx, org_id, task_id).await?;
     let task = sqlx::query_as!(
         Task,
         "UPDATE tasks
-            SET name = $3, billable_default = $4, is_default = $8,
-                default_rate_cents = CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
-                default_rate_currency = CASE WHEN $5 THEN default_rate_currency ELSE $7 END
+            SET name = $3, billable_default = $4, is_default = $7,
+                default_rate_cents = CASE WHEN $5 THEN default_rate_cents ELSE $6 END
           WHERE id = $1 AND org_id = $2
-            AND (name, billable_default, is_default, default_rate_cents, default_rate_currency)
-                IS DISTINCT FROM ($3, $4, $8,
-                    CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
-                    CASE WHEN $5 THEN default_rate_currency ELSE $7 END)
+            AND (name, billable_default, is_default, default_rate_cents)
+                IS DISTINCT FROM ($3, $4, $7,
+                    CASE WHEN $5 THEN default_rate_cents ELSE $6 END)
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
         task_id,
         org_id,
@@ -111,7 +109,6 @@ pub async fn update(
         details.billable_default,
         preserve,
         amount,
-        currency,
         details.is_default,
     )
     .fetch_optional(&mut **tx)
@@ -237,46 +234,26 @@ fn redact_rate(actor: &Actor, mut task: Task) -> Task {
 /// The rate and currency to store, refused without `BillableRateWriteAll`
 /// unless the rate is left as it is. A new rate is in the organization's
 /// currency, which must still be the one the form showed.
-async fn authorize_rate(
-    tx: &mut Tx,
-    actor: &Actor,
-    rate: &TaskRateEdit,
-) -> Result<(Option<i64>, Option<String>), OpError> {
+/// The template to store: `None` for preserve, clear and a zero, which is no
+/// rate.
+fn authorize_rate(actor: &Actor, rate: &TaskRateEdit) -> Result<Option<i64>, OpError> {
     let intent = match rate {
         TaskRateEdit::Preserve {} => RateEdit::Unchanged,
         TaskRateEdit::Clear {} => RateEdit::Reset,
-        TaskRateEdit::Set { amount_cents, .. } => RateEdit::Set(*amount_cents),
+        TaskRateEdit::Set { amount_cents } => RateEdit::Set(*amount_cents),
     };
     intent
         .authorize(actor.has(Permission::BillableRateWriteAll))
         .map_err(|_| {
             OpError::forbidden("Current global billable-rate editing authority is required")
         })?;
-    let TaskRateEdit::Set {
-        amount_cents,
-        currency,
-    } = rate
-    else {
-        return Ok((None, None));
+    let TaskRateEdit::Set { amount_cents } = rate else {
+        return Ok(None);
     };
     if *amount_cents < 0 {
         return Err(OpError::bad_input("Task rate must not be negative"));
     }
-    let current = sqlx::query_scalar!(
-        "SELECT upper(btrim(default_currency)) AS \"currency!\" FROM organizations WHERE id=$1",
-        actor.org_id()
-    )
-    .fetch_one(&mut **tx)
-    .await?;
-    if current.len() != 3
-        || !current.bytes().all(|byte| byte.is_ascii_uppercase())
-        || !currency.trim().eq_ignore_ascii_case(&current)
-    {
-        return Err(OpError::conflict(
-            "Task rate currency changed. Reload the task and enter its rate again",
-        ));
-    }
-    Ok((Some(*amount_cents), Some(current)))
+    Ok(RateTemplate::from_hundredths(*amount_cents).map(RateTemplate::hundredths))
 }
 
 /// Locks the task, shared between detail edits and status changes, including

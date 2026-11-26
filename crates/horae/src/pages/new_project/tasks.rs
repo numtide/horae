@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::models::project_creation::ProtectedProjectField;
 use dioxus::prelude::*;
-use horae_core::money::format_cents_plain;
+use horae_core::money::{RateTemplate, format_cents_plain};
 use horae_core::project::{BudgetMode, RateMode};
 use horae_core::types::ProjectType;
 use uuid::Uuid;
@@ -261,16 +261,14 @@ fn TaskRow(
         })
         .unwrap_or_else(|| "project currency".into());
     let billable_project = form.read().project_type != ProjectType::NonBillable;
+    // The rate an empty field saves: the task's template in the project's
+    // currency, shown beside the "{currency}/h" suffix.
     let rate_placeholder = match catalog
         .as_ref()
-        .and_then(|task| task.default_rate_cents.map(|amount| (task, amount)))
+        .and_then(|task| task.default_rate_cents)
+        .and_then(RateTemplate::from_hundredths)
     {
-        Some((task, amount))
-            if task.default_rate_currency.as_deref() == Some(currency.as_str()) =>
-        {
-            format_cents_plain(amount)
-        }
-        Some(_) => "Enter rate".into(),
+        Some(template) => format_cents_plain(template.apply(&currency)),
         None => "Inherit".into(),
     };
     rsx! {

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tasks (id,org_id,name,default_rate_cents) VALUES ($1,$2,'Snapshot task',8000)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d5746c96acaa679688112f7d35dffdc0219dacda325c577cf52addadccf53094"
+}

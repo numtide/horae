@@ -138,7 +138,7 @@ async fn check_initial_rate(pool: &PgPool, api: &Api) {
     let body = json!({
         "name":"Initial rate", "billable_default":true, "is_default":false,
         "expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id},
-        "rate":{"action":"set","amount_cents":0,"currency":"EUR"}
+        "rate":{"action":"set","amount_cents":0}
     });
     assert_eq!(
         api.call("create_task", body.clone(), Some(&cookie), false)
@@ -174,12 +174,7 @@ async fn check_initial_rate(pool: &PgPool, api: &Api) {
         ),
         (
             "rate",
-            json!({"action":"set","amount_cents":0,"currency":"USD"}),
-            StatusCode::CONFLICT,
-        ),
-        (
-            "rate",
-            json!({"action":"set","amount_cents":-1,"currency":"EUR"}),
+            json!({"action":"set","amount_cents":-1}),
             StatusCode::BAD_REQUEST,
         ),
     ] {
@@ -203,17 +198,14 @@ async fn check_initial_rate(pool: &PgPool, api: &Api) {
     );
 
     let created = api.json("create_task", body.clone(), &cookie).await;
-    assert_eq!(created["default_rate_cents"], json!(0));
+    // Zero is no rate.
+    assert!(created.get("default_rate_cents").is_none());
     let id: Uuid = serde_json::from_value(created["id"].clone()).unwrap();
-    let stored = sqlx::query!(
-        "SELECT default_rate_cents,default_rate_currency FROM tasks WHERE id=$1",
-        id
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap();
-    assert_eq!(stored.default_rate_cents, Some(0));
-    assert_eq!(stored.default_rate_currency.as_deref(), Some("EUR"));
+    let stored = sqlx::query_scalar!("SELECT default_rate_cents FROM tasks WHERE id=$1", id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(stored, None);
 
     let mut visible = body;
     visible["rate"]["amount_cents"] = json!(12345);

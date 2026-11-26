@@ -6,13 +6,13 @@ use crate::components::{
     select_field::SelectField,
 };
 use crate::models::task::{TaskCatalogEntry, TaskRateEdit};
-use horae_core::money::parse_cents;
+use horae_core::money::{RateTemplate, parse_cents};
 
 #[derive(Clone, PartialEq)]
 pub(super) struct Selection {
     pub task: Option<TaskCatalogEntry>,
     pub requester: PermissionRequester,
-    pub rate_currency: Option<String>,
+    pub can_edit_rates: bool,
 }
 
 #[component]
@@ -76,7 +76,7 @@ fn TaskForm(
     let mut error = use_signal(|| None::<String>);
     let task_id = selection.task.as_ref().map(|task| task.id);
     let requester = selection.requester;
-    let currency = selection.rate_currency.clone();
+    let can_edit_rates = selection.can_edit_rates;
     let primary = ModalAction::submit(
         if busy() { "Saving…" } else { "Save task" },
         "task-edit-form",
@@ -93,11 +93,15 @@ fn TaskForm(
             if name.read().trim().is_empty() { error.set(Some("Enter a task name.".into())); return; }
             let rate = match rate_action.read().as_str() {
                 "set" if task_id.is_none() && amount.read().trim().is_empty() => TaskRateEdit::Preserve {},
-                "clear" if currency.is_some() => TaskRateEdit::Clear {},
-                "set" if currency.is_some() => {
-                    let Ok(cents) = parse_cents(&amount.read()) else { error.set(Some("Enter a rate with at most two decimal places.".into())); return; };
-                    if cents < 0 { error.set(Some("The hourly rate cannot be negative.".into())); return; }
-                    TaskRateEdit::Set { amount_cents: cents, currency: currency.clone().unwrap_or_default() }
+                "clear" if can_edit_rates => TaskRateEdit::Clear {},
+                "set" if can_edit_rates => {
+                    let typed = amount.read();
+                    match RateTemplate::parse(&typed) {
+                        Ok(template) => TaskRateEdit::Set { amount_cents: template.hundredths() },
+                        // Zero is no rate.
+                        Err(_) if parse_cents(&typed).is_ok_and(|cents| cents == 0) => TaskRateEdit::Clear {},
+                        Err(_) => { error.set(Some(tr.tasks_rate_invalid())); return; }
+                    }
                 }
                 _ => TaskRateEdit::Preserve {},
             };
@@ -124,9 +128,9 @@ fn TaskForm(
                     }
                 }
                 p { class: "form-hint", "Changes to defaults apply when adding the task to projects; existing project settings stay unchanged." }
-                if let Some(currency) = &selection.rate_currency {
+                if can_edit_rates {
                     if let Some(task) = &selection.task {
-                        p { class: "text-sm text-secondary mt-3", "Current default: {rate_label(tr, task.default_rate_cents, task.default_rate_currency.as_deref())}" }
+                        p { class: "text-sm text-secondary mt-3", {tr.tasks_rate_current(rate_label(tr, task.default_rate_cents))} }
                         FormGroup { id: "task-rate-action", label: tr.tasks_rate_label(),
                             SelectField { id: "task-rate-action", label: tr.tasks_rate_label(), disabled: busy(), selected: rate_action(),
                                 options: vec![
@@ -139,10 +143,11 @@ fn TaskForm(
                         }
                     }
                     if rate_action() == "set" {
-                        FormGroup { id: "task-rate", label: "Hourly rate ({currency})",
+                        FormGroup { id: "task-rate", label: tr.tasks_rate_label(),
                             Input { id: "task-rate", value: amount(), disabled: busy(), oninput: move |event: FormEvent| amount.set(event.value()) }
                         }
-                        if task_id.is_none() { p { class: "form-hint", "Optional. Leave blank for no default rate; enter 0 for a zero rate." } }
+                        p { class: "form-hint", {tr.tasks_rate_template_hint()} }
+                        if task_id.is_none() { p { class: "form-hint", {tr.tasks_rate_optional_hint()} } }
                     }
                 }
         }
