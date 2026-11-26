@@ -493,8 +493,9 @@ h1, h2, h3, h4, h5, h6 {
   width: 10px; height: 10px; border-radius: 2px; background: var(--color-danger);
 }
 
-/* Start popover, in the top layer. Anchored just under the Start-timer button,
-   whose position is fixed by the static brand + button above it. */
+/* Start popover, in the top layer. These coordinates are the fallback for
+   browsers without anchor positioning: just under the expanded rail's button.
+   The anchored placement and the scroll limit follow the mobile rules below. */
 .sidebar-timer-pop {
   position: fixed; inset: auto; top: 121px; left: var(--space-4); margin: 0;
   width: 340px; max-width: calc(100vw - 2 * var(--space-4));
@@ -785,10 +786,24 @@ h1, h2, h3, h4, h5, h6 {
   }
   .app-shell.mobile-open > .app-sidebar { display: flex; }
   .sidebar-collapse, .sidebar-resize, .resize-overlay { display: none; }
+  .sidebar-timer-pop { top: var(--space-4); }
+}
+/* The Start panel scrolls on a short viewport, so Start timer stays in reach;
+   its pickers are popovers of their own, so the scroll clips none of them.
+   After .menu, whose overflow: hidden would otherwise win. */
+.sidebar-timer-pop { max-height: calc(100dvh - 121px - var(--space-4)); overflow-y: auto; }
+@media (max-width: 768px) {
+  .sidebar-timer-pop { max-height: calc(100dvh - 2 * var(--space-4)); }
+}
+/* Anchored to its invoker, the Start-timer button, in the expanded rail, the
+   collapsed rail and the mobile navigation alike. The percentage resolves
+   against the area below the button. */
+@supports (position-area: bottom) {
   .sidebar-timer-pop {
-    top: var(--space-4);
-    max-height: calc(100dvh - 2 * var(--space-4));
-    overflow-y: auto;
+    top: auto; left: auto; margin-top: var(--space-2);
+    position-area: bottom span-right;
+    position-try-fallbacks: flip-block;
+    max-height: calc(100% - var(--space-2) - var(--space-4));
   }
 }
 

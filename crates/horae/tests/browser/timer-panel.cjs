@@ -84,6 +84,50 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await expect(panel).toBeHidden();
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
     console.log('PASS: a click beside the panel closes it');
+
+    // The panel opens under its trigger, whatever the rail's state.
+    const underTrigger = async label => {
+      await trigger.click();
+      await expect(panel.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+      const found = await page.evaluate(() => {
+        const button = document.getElementById('sidebar-timer-trigger').getBoundingClientRect();
+        const box = document.getElementById('sidebar-timer-pop').getBoundingClientRect();
+        return { triggerBottom: button.bottom, triggerLeft: button.left, top: box.top, left: box.left };
+      });
+      assert.ok(found.top >= found.triggerBottom && found.top - found.triggerBottom <= 16
+        && Math.abs(found.left - found.triggerLeft) <= 4, `${label}: ${JSON.stringify(found)}`);
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
+    };
+    const sidebar = page.locator('.app-sidebar');
+    await underTrigger('expanded rail');
+    await sidebar.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+    await expect(sidebar).toHaveCSS('width', '68px');
+    await underTrigger('collapsed rail');
+    await sidebar.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+    await expect(sidebar).toHaveCSS('width', '264px');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+    await expect(trigger).toBeVisible();
+    await underTrigger('mobile navigation');
+    await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+    console.log('PASS: the panel opens under its trigger in the expanded rail, the collapsed rail and on mobile');
+
+    // A short desktop viewport: the panel scrolls, so Start timer stays in reach.
+    await page.setViewportSize({ width: 1024, height: 420 });
+    await trigger.click();
+    const start = panel.getByRole('button', { name: 'Start timer', exact: true });
+    await expect(start).toBeAttached();
+    const bounds = await panel.evaluate(el => ({ bottom: el.getBoundingClientRect().bottom, height: innerHeight, scrolls: el.scrollHeight > el.clientHeight }));
+    assert.ok(bounds.bottom <= bounds.height && bounds.scrolls, JSON.stringify(bounds));
+    await start.scrollIntoViewIfNeeded();
+    const reachable = await start.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { bottom: r.bottom, height: innerHeight, hit: el.contains(hit) };
+    });
+    assert.ok(reachable.hit && reachable.bottom <= reachable.height, JSON.stringify(reachable));
+    console.log('PASS: on a 1024x420 viewport the panel scrolls and Start timer is reachable');
     assert.deepEqual(errors, []);
   } catch (error) {
     console.error({ url: page.url(), errors });
