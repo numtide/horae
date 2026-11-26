@@ -353,6 +353,71 @@ async fn a_concurrency_key_admits_one_queued_or_running_job(pool: sqlx::PgPool) 
 }
 
 #[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn cancelling_a_running_job_releases_its_concurrency_key(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let keyed = || Enqueue {
+        concurrency_key: Some("pass"),
+        ..request(org_id, "echo")
+    };
+    let cancelling = enqueue(&pool, keyed()).await.unwrap().id();
+    let job = claim_registered(&pool, &registry(), "worker")
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(cancel(&pool, org_id, cancelling).await.unwrap());
+    assert_eq!(row(&pool, cancelling).await.status, "running");
+
+    let next = enqueue(&pool, keyed()).await.unwrap();
+    assert!(
+        matches!(next, Enqueued::Created(id) if id != cancelling),
+        "{next:?}"
+    );
+    // The cancelling attempt can no longer write, so it ends as cancelled.
+    execute(&pool, &registry(), "worker", job).await.unwrap();
+    assert_eq!(row(&pool, cancelling).await.status, "cancelled");
+    assert_eq!(row(&pool, next.id()).await.status, "queued");
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn the_concurrency_key_index_refuses_a_second_holder(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let insert = || {
+        sqlx::query!(
+            "INSERT INTO horae_jobs (id, org_id, kind, payload, concurrency_key)
+             VALUES ($1, $2, 'echo', '{}', 'pass')",
+            Uuid::now_v7(),
+            org_id,
+        )
+        .execute(&pool)
+    };
+    insert().await.unwrap();
+    let refused = insert().await.unwrap_err();
+    assert!(is_concurrency_key_conflict(&refused), "{refused}");
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
+async fn cleanup_closes_an_attempt_its_finished_job_outlived(pool: sqlx::PgPool) {
+    let org_id = org(&pool).await;
+    let id = enqueue(&pool, request(org_id, "echo")).await.unwrap().id();
+    claim_registered(&pool, &registry(), "new-worker")
+        .await
+        .unwrap()
+        .unwrap();
+    // An older binary finishes the job without touching its attempts.
+    sqlx::query!(
+        "UPDATE horae_jobs SET status = 'succeeded', finished_at = now() WHERE id = $1",
+        id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    cleanup(&pool).await.unwrap();
+    let recorded = attempts(&pool, id).await;
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].outcome.as_deref(), Some("interrupted"));
+}
+
+#[sqlx::test(migrator = "crate::MIGRATOR")]
 async fn a_concurrency_key_belongs_to_one_organization_and_kind(pool: sqlx::PgPool) {
     let org_id = org(&pool).await;
     let other_org = org(&pool).await;

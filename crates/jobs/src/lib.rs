@@ -60,8 +60,9 @@ impl From<anyhow::Error> for JobError {
 /// When a kind's failed attempts are tried again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetryPolicy {
-    /// Attempts in total, the first included. What enqueuers store as the
-    /// job's `max_attempts`, which is what the worker stops at.
+    /// Attempts in total, the first included: the value enqueuers pass as
+    /// [`Enqueue::max_attempts`]. The worker never reads it; it stops at the
+    /// job's stored `max_attempts`.
     pub max_attempts: i32,
     pub first_delay: Duration,
     pub multiplier: u32,
@@ -226,8 +227,27 @@ pub enum EnqueueError {
     Database(#[from] sqlx::Error),
 }
 
+/// Another job of the same organization, kind and concurrency key is queued
+/// or running, so this one cannot be queued again.
+#[derive(Debug, thiserror::Error)]
+#[error("another job with the same concurrency key is queued or running")]
+pub struct ConcurrencyKeyHeld;
+
+/// Whether `error` is the concurrency key's unique index refusing a row.
+pub fn is_concurrency_key_conflict(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|error| error.constraint())
+        == Some("horae_jobs_concurrency_key_idx")
+}
+
 /// Queues a job inside the caller's transaction, so it exists only if the
 /// caller's change commits.
+///
+/// Written for READ COMMITTED, PostgreSQL's default. Under REPEATABLE READ or
+/// SERIALIZABLE a concurrent enqueue of the same key fails with a
+/// serialization error, and a job committed after the caller's snapshot is
+/// not found, which ends in [`EnqueueError::Contended`].
 pub async fn enqueue_in(
     connection: &mut PgConnection,
     request: Enqueue<'_>,
@@ -284,7 +304,7 @@ pub async fn enqueue_in(
             let existing = sqlx::query_scalar!(
                 r#"SELECT id FROM horae_jobs
                     WHERE org_id = $1 AND kind = $2 AND concurrency_key = $3
-                      AND status IN ('queued', 'running')"#,
+                      AND status IN ('queued', 'running') AND NOT cancellation_requested"#,
                 request.org_id,
                 request.kind,
                 key,
@@ -323,8 +343,19 @@ pub async fn cancel<'e, E: sqlx::PgExecutor<'e>>(
     Ok(result.rows_affected() == 1)
 }
 
-/// Deletes finished jobs after 30 days.
+/// Deletes finished jobs after 30 days, and closes attempts their job
+/// outlived.
 pub async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {
+    // A worker without attempt records (an older binary during a rolling
+    // upgrade) can finish a job whose open attempt another worker began.
+    sqlx::query!(
+        r#"UPDATE horae_job_attempts a SET outcome = 'interrupted'
+             FROM horae_jobs j
+            WHERE a.job_id = j.id AND a.outcome IS NULL
+              AND j.status IN ('succeeded', 'failed', 'cancelled')"#
+    )
+    .execute(pool)
+    .await?;
     sqlx::query!(
         r#"DELETE FROM horae_jobs
             WHERE status IN ('succeeded', 'failed', 'cancelled')

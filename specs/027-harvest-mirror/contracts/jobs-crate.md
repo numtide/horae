@@ -33,6 +33,21 @@ pub async fn enqueue_in(tx: &mut PgConnection, request: Enqueue<'_>) -> Result<E
   `RequestConflict` is today.
 - If the job holding the key finishes between the insert and the lookup, the insert is tried
   again, at most three times; then enqueue returns `EnqueueError::Contended`.
+- A job whose cancellation was requested gives its key up at once, even while its handler winds
+  down: enqueue then creates a new job. The cancelling attempt cannot write anything any more,
+  because every fence checks `NOT cancellation_requested`.
+- Manual retry (`horae-server`'s `retry_in`) refuses a job whose key another queued or running job
+  holds, with `ConcurrencyKeyHeld` (409 through `ops`), and maps the index's unique violation to
+  the same error when the holder appears after the check. `is_concurrency_key_conflict` tells that
+  violation apart.
+
+Known limits:
+
+- `enqueue_in` assumes READ COMMITTED, PostgreSQL's default. Under REPEATABLE READ or
+  SERIALIZABLE a concurrent enqueue of the same key fails with a serialization error, and a job
+  committed after the caller's snapshot is not found (ending in `Contended`).
+- A running job whose lease expired with its attempts used up keeps its key until the next claim
+  pass fails it (every 2 s while a worker runs). Enqueue returns that job meanwhile.
 
 ## Handlers
 
@@ -60,7 +75,15 @@ A claim writes the job's `stale_after_secs` from the claiming worker's handler, 
 queued or running job per key, so a claim cannot start a second job for a key, and the claim
 token and the heartbeat fence the run.
 
+Attempt rows open at claim and close when the attempt ends. An attempt whose worker died ends as
+`interrupted` when its job is reclaimed or failed, and the worker's cleanup also closes, as
+`interrupted`, any open attempt of a finished job (an older binary in a rolling upgrade finishes
+jobs without touching attempts). Attempts are numbered from the first row the table has for the
+job, so a job that was running when the migration ran starts its history at attempt 1.
+
 The delay before attempt `k + 1` is `min(first_delay × multiplier^(k-1), max_delay)`.
+`RetryPolicy::max_attempts` is the value enqueuers pass; the worker stops at the job's stored
+`max_attempts`.
 `RetryPolicy::default()` is 5 attempts, 2 s, ×2, 300 s: the curve the queue ran before policies.
 
 ## Worker and scheduler

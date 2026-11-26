@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM horae_jobs\n                    WHERE org_id = $1 AND kind = $2 AND concurrency_key = $3\n                      AND status IN ('queued', 'running')",
+  "query": "SELECT id FROM horae_jobs\n                    WHERE org_id = $1 AND kind = $2 AND concurrency_key = $3\n                      AND status IN ('queued', 'running') AND NOT cancellation_requested",
   "describe": {
     "columns": [
       {
@@ -20,5 +20,5 @@
       false
     ]
   },
-  "hash": "68035482228f652854f9bcb515feba0c3abbac97694c49ef6abd882e2ec60448"
+  "hash": "48be4409862181b3279bce54b325082fc79e96eb87b30cf2d4e47aae3891e9f1"
 }

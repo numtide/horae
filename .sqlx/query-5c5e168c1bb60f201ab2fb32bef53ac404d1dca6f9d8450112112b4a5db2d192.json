@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_job_attempts a SET outcome = 'interrupted'\n             FROM horae_jobs j\n            WHERE a.job_id = j.id AND a.outcome IS NULL\n              AND j.status IN ('succeeded', 'failed', 'cancelled')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5c5e168c1bb60f201ab2fb32bef53ac404d1dca6f9d8450112112b4a5db2d192"
+}

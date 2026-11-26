@@ -152,7 +152,7 @@ async fn claim_kinds(
         r#"WITH ended AS (
              UPDATE horae_jobs
                 SET status = CASE WHEN cancellation_requested THEN 'cancelled' ELSE 'failed' END,
-                    lease_until = NULL, worker_id = NULL, claim_token = NULL,
+                    lease_until = NULL, worker_id = NULL, claim_token = NULL, heartbeat_at = NULL,
                     finished_at = now(), updated_at = now(),
                     last_error = CASE WHEN cancellation_requested THEN NULL
                         ELSE COALESCE(last_error, 'Job attempt limit reached after interruption') END
@@ -343,7 +343,8 @@ async fn fail_claimed(
              UPDATE horae_jobs
                 SET status = CASE WHEN cancellation_requested THEN 'cancelled'
                                   WHEN $5 OR attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
-                    available_at = now() + $7::int * interval '1 second',
+                    available_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts
+                                        THEN available_at ELSE now() + $7::int * interval '1 second' END,
                     finished_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts THEN now() ELSE NULL END,
                     lease_until = NULL, worker_id = NULL, claim_token = NULL, heartbeat_at = NULL,
                     last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,

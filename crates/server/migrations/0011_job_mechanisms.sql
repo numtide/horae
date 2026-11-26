@@ -8,9 +8,13 @@ ALTER TABLE horae_jobs
     ADD COLUMN stale_after_secs integer NOT NULL DEFAULT 60
         CONSTRAINT horae_jobs_stale_after_secs_check CHECK (stale_after_secs BETWEEN 15 AND 3600);
 
--- At most one queued or running job per organization, kind and key.
+-- At most one queued or running job per organization, kind and key. A job
+-- whose cancellation was requested gives the key up at once: every write of
+-- its attempt is fenced on NOT cancellation_requested, so it can no longer
+-- make progress while it winds down.
 CREATE UNIQUE INDEX horae_jobs_concurrency_key_idx ON horae_jobs (org_id, kind, concurrency_key)
-    WHERE concurrency_key IS NOT NULL AND status IN ('queued', 'running');
+    WHERE concurrency_key IS NOT NULL AND status IN ('queued', 'running')
+      AND NOT cancellation_requested;
 
 DROP INDEX horae_jobs_claim_idx;
 CREATE INDEX horae_jobs_claim_idx ON horae_jobs (priority DESC, available_at, created_at)
