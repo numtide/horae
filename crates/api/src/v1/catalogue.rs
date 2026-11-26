@@ -7,20 +7,28 @@ use uuid::Uuid;
 
 use super::types::Page;
 use crate::cursor::{Position, Walk};
+use crate::problem::Problem;
 
 /// The page of `walk` at `position`, from `rows` read with one row more than
 /// its limit.
-pub fn page<R, T: From<R>>(
+pub fn page<R, T>(
     walk: &Walk<'_>,
     mut rows: Vec<R>,
     position: Position,
     id: impl Fn(&R) -> Uuid,
-) -> Json<Page<T>> {
+) -> Result<Json<Page<T>>, Problem>
+where
+    T: TryFrom<R>,
+    Problem: From<T::Error>,
+{
     let next_cursor = walk.next_cursor(&mut rows, position, id, Utc::now());
-    Json(Page {
-        data: rows.into_iter().map(T::from).collect(),
+    Ok(Json(Page {
+        data: rows
+            .into_iter()
+            .map(T::try_from)
+            .collect::<Result<_, _>>()?,
         next_cursor,
-    })
+    }))
 }
 
 #[cfg(test)]

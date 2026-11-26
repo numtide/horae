@@ -70,7 +70,7 @@ pub async fn list(
     let mut read = ops::begin_read(&state.pool, caller).await?;
     let result = people::page(&mut read.tx, &read.actor, &page).await;
     let rows = read.finish(result).await?;
-    Ok(catalogue::page(&walk, rows, position, |person| person.id))
+    catalogue::page(&walk, rows, position, |person| person.id)
 }
 
 /// One person the owner may see. An archived person needs permission to

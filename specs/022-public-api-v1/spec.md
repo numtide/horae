@@ -243,7 +243,9 @@ ______________________________________________________________________
 - **A permission check that depends on scope** (own, managed, all): reads return only what the
   scope allows, and a single record outside it answers not found, not forbidden, as in the web app.
 - **Money in currencies with 0 or 3 decimals.** Amounts are integers in the currency's minor unit
-  with the currency code, so no decimal handling is needed by clients.
+  with the currency code, so no decimal handling is needed by clients. A project budget is always
+  a whole number of that unit: the form and a database check refuse JPY 10.50. Rates per hour
+  keep two decimals in every currency (a JPY rate of `"80.50"`), as FR-042 says.
 - **Durations of a running timer.** Reported in whole elapsed minutes as Horae computes them, never
   as fractions.
 - **Harvest's `/api/v2` alias.** Removed (FR-052), so `/api/v2` is free for a future version of
@@ -323,9 +325,13 @@ ______________________________________________________________________
   `/api/v1` responses.
 - **FR-041**: Identifiers MUST be Horae's UUIDs (v7), written as strings. The API MUST NOT expose
   the integer ids of the Harvest-compatible API.
-- **FR-042**: Durations MUST be integer minutes and money MUST be an integer in minor units with its
-  ISO 4217 currency code, on input and output. No decimal hours or decimal amounts appear in
-  `/api/v1` (constitution I).
+- **FR-042**: Durations MUST be integer minutes. An amount of money (a `Money`, such as a budget)
+  MUST be an integer in the currency's ISO 4217 minor unit (EUR 12.10 is `1210`, JPY 8000 is
+  `8000`, BHD 10.500 is `10500`) with its ISO 4217 currency code, on input and output. A price per
+  hour (a `Rate`) MUST be a decimal string with exactly the two decimals Horae stores for every
+  currency (`"120.00"`, JPY `"80.50"`, BHD `"10.50"`) with its currency code, because a rate
+  multiplies time before rounding and can be finer than the currency's minor unit. No decimal
+  hours, no other decimal amounts and no floats appear in `/api/v1` (constitution I).
 - **FR-043**: Timestamps MUST be RFC 3339 with an offset; calendar dates (an entry's day, a filter's
   range) MUST be plain ISO 8601 dates, interpreted as Horae interprets them in the web app.
 - **FR-044**: Every error MUST use one documented shape: the status, a stable machine-readable code

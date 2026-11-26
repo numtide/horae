@@ -1,5 +1,5 @@
 use super::super::form::{
-    ValidatedProject, form_payload, optional_amount, validate_project_form, with_field,
+    ValidatedProject, budget_step, form_payload, optional_amount, validate_project_form, with_field,
 };
 use super::*;
 use crate::models::Project;
@@ -451,6 +451,9 @@ fn validate_edit(
     validation_form.project_type = ProjectType::TimeAndMaterials;
     validation_form.rate_mode = RateMode::Person;
     let mut parsed = validate_project_form(&validation_form, "EUR", email_available)?;
+    // The budget's step is the project's own currency, not the stand-in above.
+    budget_step(parsed.budget_cents, project_currency(before))
+        .map_err(|error| with_field(error, ProjectFormField::BudgetValue))?;
     parsed.rate_cents = optional_amount(&form.project_rate, "Project rate")
         .map_err(|error| with_field(error, ProjectFormField::ProjectRate))?;
     Ok(parsed)

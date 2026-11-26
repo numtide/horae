@@ -47,6 +47,21 @@ pub(crate) fn optional_amount(value: &str, field: &str) -> Result<Option<i64>, O
     Ok(Some(amount))
 }
 
+/// Refuses a money budget that is not a whole number of `currency`'s ISO 4217
+/// minor unit (JPY 10.50). A budget is an amount, served exactly in minor
+/// units by `/api/v1`, and the database checks the same step.
+pub(crate) fn budget_step(amount: Option<i64>, currency: &str) -> Result<Option<i64>, OpError> {
+    use horae_core::money::{MinorUnitsError, to_iso_minor};
+    match amount.map(|cents| to_iso_minor(cents, currency)) {
+        Some(Err(MinorUnitsError::Inexact)) => Err(OpError::bad_input(format!(
+            "Budget: {} amounts have no decimal places",
+            currency.trim()
+        ))),
+        Some(Err(MinorUnitsError::Overflow)) => Err(OpError::bad_input("Budget is too large")),
+        _ => Ok(amount),
+    }
+}
+
 /// Refuses a fee that is not a whole number of `currency`'s unit (JPY 100.50):
 /// it would make an invoice whose total cannot be paid exactly. The database
 /// checks the same step.
@@ -173,16 +188,19 @@ pub(crate) fn with_field(error: OpError, field: ProjectFormField) -> OpError {
     error.with_field(field)
 }
 
+/// The total of per-task or per-person budgets: money in the given currency,
+/// or hours when `money_in` is `None`.
 fn sum_budgets<'a>(
     values: impl Iterator<Item = (ProjectFormField, &'a str)>,
-    money: bool,
+    money_in: Option<&str>,
 ) -> Result<Option<i64>, OpError> {
     let mut total = None;
     for (field, value) in values {
-        let amount = if money {
-            optional_amount(value, "Budget")
-        } else {
-            optional_hours(value)
+        let amount = match money_in {
+            Some(currency) => {
+                optional_amount(value, "Budget").and_then(|amount| budget_step(amount, currency))
+            }
+            None => optional_hours(value),
         }
         .map_err(|error| with_field(error, field))?;
         if let Some(amount) = amount {
@@ -274,6 +292,7 @@ pub fn validate_project_form(
             BudgetKind::Amount,
             "project",
             optional_amount(&form.budget_value, "Budget")
+                .and_then(|amount| budget_step(amount, currency))
                 .map_err(|error| with_field(error, ProjectFormField::BudgetValue))?,
             None,
         ),
@@ -285,7 +304,7 @@ pub fn validate_project_form(
                 form.tasks
                     .iter()
                     .map(|task| (ProjectFormField::TaskBudget(task.id), task.budget.as_str())),
-                false,
+                None,
             )?,
         ),
         BudgetMode::FeesPerTask => (
@@ -295,7 +314,7 @@ pub fn validate_project_form(
                 form.tasks
                     .iter()
                     .map(|task| (ProjectFormField::TaskBudget(task.id), task.budget.as_str())),
-                true,
+                Some(currency),
             )?,
             None,
         ),
@@ -310,7 +329,7 @@ pub fn validate_project_form(
                         member.budget.as_str(),
                     )
                 }),
-                false,
+                None,
             )?,
         ),
     };
@@ -764,6 +783,26 @@ mod tests {
             ..Default::default()
         };
         assert_rejection_field(&empty, false, serde_json::json!("milestones"));
+    }
+
+    /// A money budget is a whole number of the currency's minor unit: JPY
+    /// takes no decimals. The form's own currencies all have two, so this
+    /// matters for projects kept in another currency (legacy or imported).
+    #[test]
+    fn money_budgets_follow_the_currencys_minor_unit() {
+        for (amount, currency) in [
+            (None, "JPY"),
+            (Some(800_000), "JPY"),
+            (Some(8_050), "EUR"),
+            (Some(8_050), "BHD"),
+        ] {
+            assert_eq!(budget_step(amount, currency).unwrap(), amount, "{currency}");
+        }
+        let error = budget_step(Some(8_050), " JPY").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Budget: JPY amounts have no decimal places"
+        );
     }
 
     /// A fee is a whole number of its currency's unit: a JPY fee takes no
