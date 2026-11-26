@@ -75,7 +75,7 @@ const other = '019f2a00-0000-7000-8000-000000000001', otherName = 'Empty trackin
     await expect(popover.getByRole('button', { name: 'Start timer', exact: true })).toHaveCount(0);
     await popover.getByRole('link', { name: 'Open Projects', exact: true }).click();
     await expect(page).toHaveURL(/\/projects\??$/);
-    await expect(popover).toHaveCount(0);
+    await expect(popover).toBeHidden();
     console.log('PASS: the timer popover shows the empty state instead of an empty picker');
 
     await page.unroute(catalogs);

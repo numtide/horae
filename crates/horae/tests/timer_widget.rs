@@ -126,25 +126,24 @@ fn settle(dom: &mut VirtualDom) {
     panic!("widget did not settle after immediate resource responses");
 }
 
-fn click_listeners(edits: Vec<Mutation>) -> Vec<ElementId> {
+fn listeners(edits: &[Mutation], event: &str) -> Vec<ElementId> {
     edits
-        .into_iter()
+        .iter()
         .filter_map(|edit| match edit {
-            Mutation::NewEventListener { name, id } if name == "click" => Some(id),
+            Mutation::NewEventListener { name, id } if name == event => Some(*id),
             _ => None,
         })
         .collect()
 }
 
-/// Click and return the listeners the response rendered.
-fn click(dom: &mut VirtualDom, id: ElementId) -> Vec<ElementId> {
-    let event = Event::new(
-        Rc::new(PlatformEventData::new(Box::<
-            dioxus_html::SerializedMouseData,
-        >::default())) as Rc<dyn Any>,
-        true,
-    );
-    dom.runtime().handle_event("click", event, id);
+fn click_listeners(edits: Vec<Mutation>) -> Vec<ElementId> {
+    listeners(&edits, "click")
+}
+
+/// Dispatch `name` to `id` and return the click listeners the response rendered.
+fn dispatch(dom: &mut VirtualDom, name: &str, data: Box<dyn Any>, id: ElementId) -> Vec<ElementId> {
+    let event = Event::new(Rc::new(PlatformEventData::new(data)) as Rc<dyn Any>, true);
+    dom.runtime().handle_event(name, event, id);
     let mut edits = Vec::new();
     for _ in 0..20 {
         edits.extend(dom.render_immediate_to_vec().edits);
@@ -152,7 +151,27 @@ fn click(dom: &mut VirtualDom, id: ElementId) -> Vec<ElementId> {
             return click_listeners(edits);
         }
     }
-    panic!("widget did not settle after a click");
+    panic!("widget did not settle after {name}");
+}
+
+fn click(dom: &mut VirtualDom, id: ElementId) -> Vec<ElementId> {
+    dispatch(
+        dom,
+        "click",
+        Box::<dioxus_html::SerializedMouseData>::default(),
+        id,
+    )
+}
+
+/// The browser closed the popover (Escape, a click beside it, Close or Cancel).
+/// With no browser to ask, the widget reads the panel as closed.
+fn closed(dom: &mut VirtualDom, panel: ElementId) {
+    dispatch(
+        dom,
+        "toggle",
+        Box::new(dioxus_html::SerializedToggleData {}),
+        panel,
+    );
 }
 
 #[tokio::test]
@@ -164,17 +183,17 @@ async fn an_idle_timer_loads_the_catalogs_only_when_the_picker_opens() {
     settle(&mut dom);
     assert_eq!(probe.server.catalog_reads(), (0, 0));
 
-    let [open] = click_listeners(edits)[..] else {
+    let [open] = listeners(&edits, "click")[..] else {
         panic!("the idle widget has one control");
     };
-    let picker = click(&mut dom, open);
+    let [panel] = listeners(&edits, "toggle")[..] else {
+        panic!("the idle widget follows its popover");
+    };
+    click(&mut dom, open);
     assert_eq!(probe.server.catalog_reads(), (1, 1));
 
     // Closing and reopening re-reads, so names created meanwhile appear.
-    let [_overlay, close, ..] = picker[..] else {
-        panic!("the picker can be closed");
-    };
-    click(&mut dom, close);
+    closed(&mut dom, panel);
     click(&mut dom, open);
     assert_eq!(probe.server.catalog_reads(), (2, 2));
 }
@@ -203,8 +222,9 @@ async fn starting_from_the_picker_refreshes_the_timer_and_its_followers() {
     let edits = dom.rebuild_to_vec().edits;
     settle(&mut dom);
     let picker = click(&mut dom, click_listeners(edits)[0]);
-    let [_overlay, _close, start, _cancel] = picker[..] else {
-        panic!("the picker has close, start and cancel controls: {picker:?}");
+    // Close and Cancel are native popover controls with no handler.
+    let [start] = picker[..] else {
+        panic!("the picker has a start control: {picker:?}");
     };
     click(&mut dom, start);
 
@@ -229,8 +249,9 @@ async fn a_start_that_stops_a_running_timer_shows_what_the_limit_cut() {
     let edits = dom.rebuild_to_vec().edits;
     settle(&mut dom);
     let picker = click(&mut dom, click_listeners(edits)[0]);
-    let [_overlay, _close, start, _cancel] = picker[..] else {
-        panic!("the picker has close, start and cancel controls: {picker:?}");
+    // Close and Cancel are native popover controls with no handler.
+    let [start] = picker[..] else {
+        panic!("the picker has a start control: {picker:?}");
     };
     click(&mut dom, start);
 

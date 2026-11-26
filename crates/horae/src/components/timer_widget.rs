@@ -105,6 +105,9 @@ pub fn TimerWidget() -> Element {
         }
     });
 
+    // Whether the Start panel is open. The browser owns the popover's open
+    // state (Escape and light dismiss close it natively); this follows it so
+    // the panel's contents mount only while it is shown.
     let mut picking = use_signal(|| false);
     let mut selected_project = use_signal(String::new);
     let mut selected_task = use_signal(String::new);
@@ -128,6 +131,10 @@ pub fn TimerWidget() -> Element {
     // The rail outlives project management pages: re-read the names on every
     // open so a newly created or enabled task is offered without a reload.
     let open_picker = move |_| {
+        // A click on the trigger of an open panel closes it natively.
+        if picking() {
+            return;
+        }
         if catalogs_wanted() {
             projects.restart();
             all_tasks.restart();
@@ -214,6 +221,8 @@ pub fn TimerWidget() -> Element {
             match server_fns::start_timer(proj, task, note).await {
                 Ok((_, notice)) => {
                     stop_notice.set(notice);
+                    // The running display replaces the panel, which closes it
+                    // without a toggle event.
                     picking.set(false);
                     notes.set(String::new());
                     selected_project.set(String::new());
@@ -284,26 +293,59 @@ pub fn TimerWidget() -> Element {
                 }
             } else {
                 button {
+                    id: "sidebar-timer-trigger",
                     class: "sidebar-timer",
                     // The collapsed rail hides the label, leaving only the icon.
                     "aria-label": "Start timer",
                     title: "Start timer",
+                    "aria-haspopup": "dialog",
+                    "aria-expanded": "{picking}",
+                    "aria-controls": "sidebar-timer-pop",
+                    popovertarget: "sidebar-timer-pop",
                     onclick: open_picker,
                     span { class: "sidebar-timer-icon" }
                     span { class: "sidebar-timer-label", "Start timer" }
                 }
-                if picking() {
-                    div { class: "menu-overlay", onclick: move |_| picking.set(false) }
-                    div { class: "sidebar-timer-pop menu",
-                        div { class: "sidebar-timer-pop-head",
-                            span { "Start timer" }
-                            button {
-                                class: "sidebar-timer-pop-close",
-                                "aria-label": "Close",
-                                onclick: move |_| picking.set(false),
-                                "×"
-                            }
+                // A popover, so the panel sits in the top layer: the sticky rail
+                // is its own stacking context, and positioned page content later
+                // in the document painted over a plain fixed panel. Showing it
+                // focuses the panel; closing it returns focus to the trigger.
+                div {
+                    id: "sidebar-timer-pop",
+                    class: "sidebar-timer-pop menu",
+                    popover: "auto", role: "dialog",
+                    "aria-labelledby": "sidebar-timer-pop-title",
+                    tabindex: "-1",
+                    autofocus: true,
+                    ontoggle: move |_| async move {
+                        let open = document::eval(
+                            "return document.getElementById('sidebar-timer-pop')?.matches(':popover-open') ?? false",
+                        )
+                        .join::<bool>()
+                        .await
+                        .unwrap_or(false);
+                        if *picking.peek() != open {
+                            picking.set(open);
                         }
+                    },
+                    onkeydown: move |e: KeyboardEvent| {
+                        // Escape closes this panel natively; the mobile
+                        // navigation around it must not take it as well.
+                        if e.key() == Key::Escape {
+                            e.stop_propagation();
+                        }
+                    },
+                    div { class: "sidebar-timer-pop-head",
+                        span { id: "sidebar-timer-pop-title", "Start timer" }
+                        button {
+                            class: "sidebar-timer-pop-close",
+                            "aria-label": "Close",
+                            popovertarget: "sidebar-timer-pop",
+                            popovertargetaction: "hide",
+                            "×"
+                        }
+                    }
+                    if picking() {
                         if catalog_pending {
                             div { class: "sidebar-timer-pop-body",
                                 Loading { label: "Loading projects…" }
@@ -313,7 +355,10 @@ pub fn TimerWidget() -> Element {
                                 NoTrackingHint {
                                     id: "sidebar-timer-empty",
                                     can_manage: session.can_create_projects(),
-                                    on_follow: move |_| picking.set(false),
+                                    // The rail stays mounted across the navigation.
+                                    on_follow: move |_| {
+                                        document::eval("document.getElementById('sidebar-timer-pop')?.hidePopover()");
+                                    },
                                 }
                             }
                         } else {
@@ -330,7 +375,8 @@ pub fn TimerWidget() -> Element {
                                     button { class: "btn btn-primary", disabled: saving(), onclick: handle_start, "Start timer" }
                                     button {
                                         class: "btn btn-ghost",
-                                        onclick: move |_| picking.set(false),
+                                        popovertarget: "sidebar-timer-pop",
+                                        popovertargetaction: "hide",
                                         "Cancel"
                                     }
                                 }
