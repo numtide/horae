@@ -50,9 +50,10 @@ async fn denied_time_export_releases_authority_before_pool_cleanup(pool: PgPool)
         .connect_with((*pool.connect_options()).clone())
         .await
         .unwrap();
+    // The deactivated session is signed out.
     assert!(matches!(
         capture(&reader_pool, &ids).await,
-        Err(StatusCode::FORBIDDEN)
+        Err(StatusCode::UNAUTHORIZED)
     ));
     tokio::time::timeout(Duration::from_secs(5), returning.notified())
         .await
@@ -444,11 +445,13 @@ async fn scoped_xlsx_empty_files_still_validate_state_and_actor_at_release(pool:
             }
             _ => unreachable!(),
         }
-        assert_eq!(
-            render(&pool, export).await,
-            Err(StatusCode::FORBIDDEN),
-            "{change}"
-        );
+        // A deactivated session is signed out; bad stored state is refused.
+        let refused = if change == "inactive" {
+            StatusCode::UNAUTHORIZED
+        } else {
+            StatusCode::FORBIDDEN
+        };
+        assert_eq!(render(&pool, export).await, Err(refused), "{change}");
         let first = ExportPermit::acquire().unwrap();
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
@@ -644,7 +647,8 @@ async fn scoped_xlsx_release_observes_direct_actor_update_commit_or_rollback(poo
         wait_for_blocked(&pool, pid).await;
         if commit {
             writer.commit().await.unwrap();
-            assert_eq!(pending.await.unwrap(), Err(StatusCode::FORBIDDEN));
+            // The deactivated session is signed out.
+            assert_eq!(pending.await.unwrap(), Err(StatusCode::UNAUTHORIZED));
         } else {
             writer.rollback().await.unwrap();
             pending.await.unwrap().unwrap();

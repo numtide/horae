@@ -158,16 +158,9 @@ async fn overview_denies_unavailable_actor_instead_of_binding_an_empty_success(p
         .execute(&pool)
         .await
         .unwrap();
-    let error = fetch_project_overview(&pool, &viewer, Some(requester(&viewer)))
-        .await
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        }
-    ));
+    // The deactivated session is signed out, not answered with an empty page.
+    let result = fetch_project_overview(&pool, &viewer, Some(requester(&viewer))).await;
+    assert!(crate::server_fns::signed_out(&result), "{result:?}");
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

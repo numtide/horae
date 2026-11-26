@@ -156,9 +156,10 @@ async fn grouped_xlsx_rejects_wrong_identity_inactive_actor_and_page_cursor(pool
         .execute(&pool)
         .await
         .unwrap();
+    // The deactivated session is signed out.
     assert!(matches!(
         time::groups::read(&pool, requester, &query, TimeReportGrouping::Client).await,
-        Err(StatusCode::FORBIDDEN)
+        Err(StatusCode::UNAUTHORIZED)
     ));
 }
 

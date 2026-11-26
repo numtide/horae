@@ -32,7 +32,10 @@ pub(crate) async fn people_page(
     caller: Caller,
     week: chrono::NaiveDate,
 ) -> Result<PeoplePage, ops::OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(
+        ops::begin_read(db, caller).await,
+        "People directory is unavailable",
+    )?;
     let result = ops::people::directory::page(&mut read.tx, &read.actor, week).await;
     read.finish(result).await
 }

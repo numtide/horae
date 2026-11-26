@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 
 use super::page::{LoginAssets, LoginVariant, render};
-use super::session::set_session_user_id;
+use super::session::set_session_user;
 use crate::config::AutoProvision;
 
 /// Session key holding the in-flight authorization request's CSRF, PKCE, and
@@ -182,7 +182,7 @@ async fn resolve_and_login(
     // any pre-auth id an attacker may have fixed is discarded before we mark the
     // session authenticated.
     session.cycle_id().await?;
-    set_session_user_id(session, sign_in.user.id).await?;
+    set_session_user(session, sign_in.user.id, sign_in.user.org_id).await?;
 
     provisioning::announce_sign_in(state, &sign_in).await?;
     Ok(true)

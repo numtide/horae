@@ -36,16 +36,43 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
     // is scoped to this application's connections, needs no ownership
     // privileges on a database the deployment may share, and is visible here
     // rather than in out-of-band database state.
+    //
+    // sqlx keeps 100 prepared statements per connection by default. One walk
+    // of the app runs about 134 distinct statements, so connections kept
+    // evicting and re-preparing them: each miss costs a round trip for Parse
+    // and, once the cache is full, another to close the evicted one. 256
+    // holds every statement a walk uses; each costs ~52 KB of backend memory
+    // (the parsed query; `force_custom_plan` caches no plan), so at most
+    // ~13 MB per connection.
     let connect_options = database_url
         .parse::<PgConnectOptions>()?
-        .options([("plan_cache_mode", "force_custom_plan")]);
+        .options([("plan_cache_mode", "force_custom_plan")])
+        .statement_cache_capacity(256);
 
-    let pool = PgPoolOptions::new()
-        .max_connections(max_connections)
-        .acquire_timeout(Duration::from_secs(3))
+    let pool = pool_options(max_connections)
         .connect_with(connect_options)
         .await?;
     Ok(pool)
+}
+
+/// How the pool hands out and retires connections, apart from where they
+/// connect.
+fn pool_options(max_connections: u32) -> PgPoolOptions {
+    PgPoolOptions::new()
+        .max_connections(max_connections)
+        .acquire_timeout(Duration::from_secs(3))
+        // No ping on every acquire: it is a round trip of its own, three per
+        // request, which a far database multiplies. A connection the network
+        // dropped then fails the statement that uses it instead of the ping.
+        // The idle timeout below keeps that rare by closing connections
+        // before the usual idle cut-offs of NAT tables and load balancers
+        // (often 5 minutes or more).
+        .test_before_acquire(false)
+        .idle_timeout(Duration::from_secs(4 * 60))
+        // Retiring a connection empties its statement cache, and sqlx's
+        // default of 30 minutes made every connection re-prepare everything
+        // twice an hour. Six hours still bounds backend memory growth.
+        .max_lifetime(Duration::from_secs(6 * 60 * 60))
 }
 
 /// The embedded migrations. `#[sqlx::test]` takes this as
@@ -236,6 +263,22 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(mode, "force_custom_plan");
+    }
+
+    /// Each acquire costs no ping, and connections live long enough to keep
+    /// their statement cache.
+    #[test]
+    fn pool_skips_pings_and_keeps_connections() {
+        let options = super::pool_options(10);
+        assert!(!options.get_test_before_acquire());
+        assert_eq!(
+            options.get_idle_timeout(),
+            Some(std::time::Duration::from_secs(240))
+        );
+        assert_eq!(
+            options.get_max_lifetime(),
+            Some(std::time::Duration::from_secs(21600))
+        );
     }
 
     /// `migrate reset --confirm` promises a reset, so assert data is actually

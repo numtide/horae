@@ -747,5 +747,9 @@ async fn detailed_report_rechecks_direct_actor_deactivation_after_wait(pool: PgP
     let reader = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id, &query()).await });
     wait_for_blocked(&pool, pid).await;
     deactivate.commit().await.unwrap();
-    assert!(matches!(reader.await.unwrap(), Err(OpError::Forbidden(_))));
+    // The session is signed out by the actor load that waited.
+    assert!(matches!(
+        reader.await.unwrap(),
+        Err(OpError::Unauthenticated(_))
+    ));
 }

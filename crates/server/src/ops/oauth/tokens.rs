@@ -71,11 +71,7 @@ pub struct TokenSet {
 
 /// Begins the transaction a token endpoint operation runs in.
 pub async fn begin(pool: &PgPool) -> Result<Tx, OpError> {
-    let mut tx = pool
-        .begin_with("BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE")
-        .await?;
-    crate::ops::configure_transaction_limits(&mut tx).await?;
-    Ok(tx)
+    Ok(crate::ops::begin_read_committed(pool).await?)
 }
 
 /// Commits a success, and a refusal that revoked a grant; rolls back any

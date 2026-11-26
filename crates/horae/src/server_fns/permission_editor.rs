@@ -116,7 +116,7 @@ pub(crate) async fn subject_page(
     caller: Caller,
     after: Option<uuid::Uuid>,
 ) -> Result<PermissionSubjectPage, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::subjects(&mut read.tx, &read.actor, after).await;
     read.finish(result).await
 }
@@ -127,7 +127,7 @@ pub(crate) async fn editor_view(
     caller: Caller,
     user_id: uuid::Uuid,
 ) -> Result<PermissionEditor, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::load(&mut read.tx, &read.actor, user_id).await;
     read.finish(result).await
 }
@@ -138,7 +138,7 @@ pub(crate) async fn profile_preview(
     caller: Caller,
     draft: &ProfileDraft,
 ) -> Result<ProfilePreview, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::preview(&mut read.tx, &read.actor, draft).await;
     read.finish(result).await
 }
@@ -151,7 +151,7 @@ pub(crate) async fn template_deletion_preview(
     expected_access_revision: i64,
     expected_template_revision: i64,
 ) -> Result<TemplateDeletionPreview, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::preview_template_deletion(
         &mut read.tx,
         &read.actor,
@@ -193,11 +193,14 @@ pub(crate) async fn save_template(
 /// `AccessChange` gate: concurrent reads and saves wait for it.
 #[cfg(feature = "server")]
 async fn access_change(db: &PgPool, caller: Caller) -> Result<ops::WriteTx, OpError> {
-    ops::begin_gated(
-        db,
-        caller,
-        OrganizationLock::AccessChange,
-        WriteIsolation::ReadCommitted,
+    authenticated(
+        ops::begin_gated(
+            db,
+            caller,
+            OrganizationLock::AccessChange,
+            WriteIsolation::ReadCommitted,
+        )
+        .await,
+        UNAVAILABLE,
     )
-    .await
 }

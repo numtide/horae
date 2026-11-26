@@ -60,13 +60,7 @@ pub async fn finalize(
         .await
         .map_err(|error| with_field(error, ProjectFormField::Client))?;
     let currency = form.currency.as_deref().unwrap_or(&client.currency);
-    let org_currency = sqlx::query_scalar!(
-        "SELECT default_currency FROM organizations WHERE id = $1",
-        org_id,
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(storage)?;
+    let org_currency = actor.organization()?.default_currency.clone();
     // Person and task rates inherit only in the organization's currency, so
     // any other currency needs explicit rates. Refusing on the currency alone
     // keeps the answer the same whether or not anyone has a rate.

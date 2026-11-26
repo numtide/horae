@@ -101,7 +101,7 @@ fn download_body(
                     };
                     // Release authority and the connection before client-paced output.
                     let page = read.finish(page).await.map_err(|error| match error {
-                        ops::OpError::Forbidden(_) => {
+                        ops::OpError::Forbidden(_) | ops::OpError::Unauthenticated(_) => {
                             std::io::Error::other(super::op_status(error).to_string())
                         }
                         _ => std::io::Error::other("report archive is incomplete"),

@@ -1,3 +1,6 @@
+/// What a signed-out session is told, here and before any transaction.
+pub const ACCOUNT_NOT_ACTIVE: &str = "Account is not active";
+
 /// Why an operation did not complete, independent of any wire format. Each
 /// adapter maps it: server functions to `ServerFnError` status codes, HTTP
 /// adapters to their own responses.
@@ -8,6 +11,10 @@ pub enum OpError {
     NotFound(String),
     #[error("{0}")]
     Forbidden(String),
+    /// The session's person is gone or no longer active: the caller is
+    /// signed out, whatever the operation.
+    #[error("{0}")]
+    Unauthenticated(String),
     /// The request conflicts with the current state; reloading may help.
     #[error("{0}")]
     Conflict(String),
@@ -93,6 +100,11 @@ impl OpError {
 
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::Forbidden(message.into())
+    }
+
+    /// The refusal of a session whose account is gone or deactivated.
+    pub fn unauthenticated() -> Self {
+        Self::Unauthenticated(ACCOUNT_NOT_ACTIVE.into())
     }
 
     pub fn conflict(message: impl Into<String>) -> Self {

@@ -213,7 +213,8 @@ async fn client_api_rechecks_activity_after_session_authentication(pool: PgPool)
         crate::testing::wait_for_blocked(&pool, blocker).await;
         hold.commit().await.unwrap();
         let (status, body) = pending.await.unwrap();
-        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        // Deactivated after its session was looked up: the read signs it out.
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
         assert!(!body.contains("Acme"));
     }
 }

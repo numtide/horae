@@ -247,7 +247,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 .unwrap();
         }
         writer.commit().await.unwrap();
-        denied(pending.await.unwrap(), StatusCode::FORBIDDEN).await;
+        // The deactivated session is signed out; revoked grants refuse.
+        let refused = if report {
+            StatusCode::UNAUTHORIZED
+        } else {
+            StatusCode::FORBIDDEN
+        };
+        denied(pending.await.unwrap(), refused).await;
         sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
             .execute(pool)
             .await

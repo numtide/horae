@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id IS NOT NULL AS \"person_found!\",\n                              o.timezone, o.week_start, o.default_currency, o.access_revision,\n                              o.round_minutes, o.round_dir AS \"round_dir: RoundDir\",\n                              s.catalog_version AS \"catalog_version?\", s.grants AS \"grants?\",\n                              s.is_administrator AS \"is_administrator?\", s.source AS \"source?\",\n                              s.built_in_profile, s.template_id,\n                              s.applied_template_revision, s.revision AS \"revision?\"\n                         FROM organizations o\n                         LEFT JOIN users u\n                           ON $3 AND u.org_id = o.id AND u.id = $2 AND u.active\n                         LEFT JOIN person_permission_states s\n                           ON s.org_id = o.id AND s.user_id = u.id\n                        WHERE o.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "person_found!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "week_start",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "default_currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "access_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "round_minutes",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "round_dir: RoundDir",
+        "type_info": {
+          "Custom": {
+            "name": "round_dir",
+            "kind": {
+              "Enum": [
+                "nearest",
+                "up",
+                "down"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "catalog_version?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "grants?",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_administrator?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "source?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "built_in_profile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "applied_template_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 14,
+        "name": "revision?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "8fb693ad0c67ac7e72de2b395f4442110b81b5cb8c5a824ee67f6eaf7f90528f"
+}

@@ -247,7 +247,10 @@ async fn history_page_waits_for_revocation_commit_or_rollback_at_each_gate(pool:
                 change.rollback().await.unwrap();
             }
             let result = reader.join_next().await.unwrap().unwrap();
-            if commit {
+            if commit && direct_activity {
+                // The deactivated session is signed out.
+                assert!(matches!(result, Err(e) if e == OpError::unauthenticated()));
+            } else if commit {
                 assert!(matches!(result, Err(e) if e == forbidden()));
             } else {
                 assert_eq!(result.unwrap().entries.len(), 1);
@@ -310,9 +313,15 @@ async fn admitted_history_page_finishes_before_revocation_at_each_gate(pool: PgP
             records[0]
         );
         writer.join_next().await.unwrap().unwrap();
+        // A deactivated session is signed out; a revoked identity is refused.
+        let refused = if direct_activity {
+            OpError::unauthenticated()
+        } else {
+            forbidden()
+        };
         assert!(matches!(
             page(&pool, ids.org_id, ids.user_id, None, None).await,
-            Err(e) if e == forbidden()
+            Err(e) if e == refused
         ));
     }
 }

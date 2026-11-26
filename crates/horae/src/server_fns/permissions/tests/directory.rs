@@ -11,6 +11,11 @@ fn forbidden(result: &Result<PeoplePage, OpError>, message: &str) -> bool {
     matches!(result, Err(OpError::Forbidden(text)) if text == message)
 }
 
+/// A session whose person is gone, foreign or deactivated is signed out.
+fn signed_out(result: &Result<PeoplePage, OpError>) -> bool {
+    matches!(result, Err(error) if *error == OpError::unauthenticated())
+}
+
 const READ_REQUIRED: &str = "Current people-read authority is required";
 
 async fn grants(pool: &PgPool, actor: Uuid, selection: PermissionSelection) {
@@ -133,7 +138,12 @@ async fn directory_rechecks_grant_revocation_and_direct_deactivation_after_wait(
         let pending = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id).await });
         wait_for_blocked(&pool, holder).await;
         revoke.commit().await.unwrap();
-        assert!(forbidden(&pending.await.unwrap(), READ_REQUIRED));
+        let result = pending.await.unwrap();
+        if deactivate {
+            assert!(signed_out(&result), "{result:?}");
+        } else {
+            assert!(forbidden(&result, READ_REQUIRED), "{result:?}");
+        }
     }
 }
 
@@ -366,14 +376,14 @@ async fn directory_denies_foreign_inactive_and_invalid_authority(pool: PgPool) {
         (ids.org_id, Uuid::now_v7()),
     ] {
         let result = read(&pool, org, actor).await;
-        assert!(forbidden(&result, READ_REQUIRED), "{result:?}");
+        assert!(signed_out(&result), "{result:?}");
     }
     let page = || read(&pool, ids.org_id, ids.user_id);
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await
         .unwrap();
-    assert!(forbidden(&page().await, READ_REQUIRED));
+    assert!(signed_out(&page().await));
     sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await

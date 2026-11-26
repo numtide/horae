@@ -48,11 +48,12 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         )
         .route(
             "/test/login/{id}",
-            post(|session: Session, Path(id): Path<Uuid>| async move {
-                horae_api::session::set_session_user_id(&session, id)
-                    .await
-                    .unwrap();
-                StatusCode::NO_CONTENT
+            post({
+                let pool = pool.clone();
+                move |session: Session, Path(id): Path<Uuid>| async move {
+                    sign_in(&pool, &session, id).await;
+                    StatusCode::NO_CONTENT
+                }
             }),
         )
         .layer(

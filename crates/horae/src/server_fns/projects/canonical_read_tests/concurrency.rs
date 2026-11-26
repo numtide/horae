@@ -13,8 +13,20 @@ enum Reader {
 }
 
 impl Reader {
+    /// The projects this reader shows `viewer`.
     async fn projects(self, pool: &PgPool, viewer: &User, project: Uuid) -> Vec<Uuid> {
-        match self {
+        self.read(pool, viewer, project).await.unwrap()
+    }
+
+    /// [`Reader::projects`], or the failure that is not a reader seeing no
+    /// project, such as a signed-out session.
+    async fn read(
+        self,
+        pool: &PgPool,
+        viewer: &User,
+        project: Uuid,
+    ) -> Result<Vec<Uuid>, ServerFnError> {
+        Ok(match self {
             Self::DetailView => {
                 match detail_view::fetch(pool, viewer, project, None, today()).await {
                     Ok(view) => vec![view.project.id],
@@ -22,7 +34,7 @@ impl Reader {
                         code: NOT_FOUND | FORBIDDEN,
                         ..
                     }) => Vec::new(),
-                    other => panic!("unexpected detail view result: {other:?}"),
+                    Err(error) => return Err(error),
                 }
             }
             // Like DetailView, a 404 or 403 is a reader that sees no project.
@@ -32,7 +44,7 @@ impl Reader {
                 | Err(ServerFnError::ServerError {
                     code: FORBIDDEN, ..
                 }) => Vec::new(),
-                other => panic!("unexpected team result: {other:?}"),
+                Err(error) => return Err(error),
             },
             Self::Budget => crate::server_fns::budget_tests::progress_for_viewer(
                 pool,
@@ -41,30 +53,26 @@ impl Reader {
                 "2026-09-07".parse().unwrap(),
                 None,
             )
-            .await
-            .unwrap()
+            .await?
             .into_iter()
             .map(|row| row.project_id)
             .collect(),
             Self::Spend => fetch_project_spend(pool, viewer.org_id, viewer.id, None)
-                .await
-                .unwrap()
+                .await?
                 .into_iter()
                 .map(|row| row.project_id)
                 .collect(),
             Self::List => projects_for_viewer(pool, viewer, None, true, ProjectRead::Overview)
-                .await
-                .unwrap()
+                .await?
                 .into_iter()
                 .map(|row| row.id)
                 .collect(),
             Self::Tags => fetch_project_tags(pool, viewer.org_id, viewer.id, None)
-                .await
-                .unwrap()
+                .await?
                 .into_iter()
                 .map(|row| row.project_id)
                 .collect(),
-        }
+        })
     }
 }
 
@@ -184,14 +192,16 @@ async fn project_readers_observe_deactivation_after_waiting_for_actor(pool: PgPo
             .unwrap()
             .unwrap();
         let pending_pool = pool.clone();
-        let pending = tokio::spawn(async move {
-            reader
-                .projects(&pending_pool, &viewer, ids.project_id)
-                .await
-        });
+        let pending =
+            tokio::spawn(async move { reader.read(&pending_pool, &viewer, ids.project_id).await });
         wait_for_blocked(&pool, holder).await;
         hold.commit().await.unwrap();
-        assert!(pending.await.unwrap().is_empty(), "{reader:?}");
+        // The deactivated session is signed out.
+        let result = pending.await.unwrap();
+        assert!(
+            crate::server_fns::signed_out(&result),
+            "{reader:?}: {result:?}"
+        );
     }
 }
 
@@ -260,12 +270,11 @@ async fn project_readers_hold_authority_until_materialization_before_deactivatio
         hold.rollback().await.unwrap();
         assert_eq!(pending.await.unwrap(), [ids.project_id], "{reader:?}");
         revoke.await.unwrap();
+        // The deactivated session is signed out.
+        let after = reader.read(&pool, &viewer, ids.project_id).await;
         assert!(
-            reader
-                .projects(&pool, &viewer, ids.project_id)
-                .await
-                .is_empty(),
-            "{reader:?}"
+            crate::server_fns::signed_out(&after),
+            "{reader:?}: {after:?}"
         );
     }
 }

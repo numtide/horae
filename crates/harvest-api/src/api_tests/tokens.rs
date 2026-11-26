@@ -208,7 +208,7 @@ async fn cookie_reads_are_unchanged_and_unlimited(pool: PgPool) {
         std::sync::Arc::new(tower_sessions::MemoryStore::default()),
         None,
     );
-    horae_api::session::set_session_user_id(&session, ids.user_id)
+    horae_api::session::set_session_user(&session, ids.user_id, ids.org_id)
         .await
         .unwrap();
     let one_request = Arc::new(RateLimiter::new(RateLimit {
@@ -221,4 +221,37 @@ async fn cookie_reads_are_unchanged_and_unlimited(pool: PgPool) {
         let (status, _, body) = send(&app, get("/harvest/v2/users/me", &[])).await;
         assert_eq!(status, StatusCode::OK, "{body}");
     }
+}
+
+/// A token's person deactivated while the request waits for its actor's lock
+/// keeps the answer it had: only a session is signed out (401) by the
+/// operation's transaction, a token's actor merely has no authority.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_of_a_person_deactivated_mid_request_is_refused_as_before(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let (secret, _) = token(&pool, &ids).await;
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let blocker = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap();
+    let app = router(pool.clone(), limiter());
+    let pending = tokio::spawn(async move {
+        send(
+            &app,
+            get(
+                "/harvest/v2/users/me",
+                &[("authorization", &bearer(&secret))],
+            ),
+        )
+        .await
+    });
+    crate::testing::wait_for_blocked(&pool, blocker).await;
+    hold.commit().await.unwrap();
+    let (status, _, body) = pending.await.unwrap();
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
 }

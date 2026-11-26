@@ -80,13 +80,7 @@ pub async fn options(
     }
     let private = require_creator(actor)?;
     let org_id = actor.org_id();
-    let organization_currency = sqlx::query_scalar!(
-        "SELECT default_currency FROM organizations WHERE id = $1",
-        org_id,
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(storage)?;
+    let organization_currency = actor.organization()?.default_currency.clone();
     // Read one extra item to distinguish a complete catalog from a page.
     // Archived clients are explicitly labelled rather than silently replaced.
     let mut clients = sqlx::query_as!(

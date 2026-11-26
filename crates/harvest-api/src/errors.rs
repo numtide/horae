@@ -102,6 +102,7 @@ impl From<OpError> for ApiError {
             OpError::Invalid { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             OpError::NotFound(_) => StatusCode::NOT_FOUND,
             OpError::Forbidden(_) => StatusCode::FORBIDDEN,
+            OpError::Unauthenticated(_) => StatusCode::UNAUTHORIZED,
             OpError::Conflict(_) => StatusCode::CONFLICT,
             OpError::Internal(_) | OpError::Detailed { .. } => return Self::internal(error),
         };

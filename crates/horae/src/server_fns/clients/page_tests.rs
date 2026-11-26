@@ -57,6 +57,7 @@ async fn detail(pool: &PgPool, ids: &SeedIds) -> Result<ClientDetailView, Server
     client_detail_view_for(pool, ids.org_id, ids.user_id, ids.client_id, None).await
 }
 
+#[track_caller]
 fn assert_code(error: ServerFnError, expected: u16) {
     assert!(
         matches!(error, ServerFnError::ServerError { code, .. } if code == expected),
@@ -222,15 +223,16 @@ async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
             .unwrap_err();
         assert_code(error, NOT_FOUND);
     }
-    // A known organization does not admit an actor from another one.
+    // A known organization does not admit an actor from another one: that
+    // session is signed out.
     let error = client_overview_for(&pool, ids.org_id, foreign.user_id, None)
         .await
         .unwrap_err();
-    assert_code(error, FORBIDDEN);
+    assert_code(error, UNAUTHORIZED);
     let error = client_detail_view_for(&pool, ids.org_id, foreign.user_id, ids.client_id, None)
         .await
         .unwrap_err();
-    assert_code(error, NOT_FOUND);
+    assert_code(error, UNAUTHORIZED);
 
     let page = overview(&pool, &ids).await.unwrap();
     let bound = Some(page.requester);
@@ -286,12 +288,13 @@ async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPo
                 .unwrap(),
             _ => unreachable!(),
         };
-        assert_code(overview(&pool, &ids).await.unwrap_err(), FORBIDDEN);
+        // A deactivated session is signed out; unusable state is refused.
         let expected = if state == "inactive" {
-            NOT_FOUND
+            UNAUTHORIZED
         } else {
             FORBIDDEN
         };
+        assert_code(overview(&pool, &ids).await.unwrap_err(), expected);
         assert_code(detail(&pool, &ids).await.unwrap_err(), expected);
     }
 }

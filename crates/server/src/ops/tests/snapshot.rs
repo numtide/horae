@@ -110,6 +110,15 @@ fn denied(result: Result<Value, OpError>) {
     assert!(matches!(result, Err(OpError::Forbidden(_))), "{result:?}");
 }
 
+/// A session whose person is inactive, foreign or unknown is signed out
+/// before the reader runs.
+fn signed_out(result: Result<Value, OpError>) {
+    assert!(
+        matches!(result, Err(OpError::Unauthenticated(_))),
+        "{result:?}"
+    );
+}
+
 async fn pid(tx: &mut Transaction<'_, Postgres>) -> i32 {
     sqlx::query_scalar!("SELECT pg_backend_pid() as \"pid!\"")
         .fetch_one(&mut **tx)
@@ -167,6 +176,8 @@ async fn readers_reject_revoked_session_identity(pool: PgPool) {
                 .await;
             if result.is_ok() {
                 leaks.push((reader, inactive));
+            } else if inactive {
+                signed_out(result);
             } else {
                 denied(result);
             }
@@ -193,7 +204,7 @@ async fn readers_preserve_actor_tenant_filters_and_missing_resources(pool: PgPoo
             (fixture.ids.org_id, Uuid::now_v7()),
             (Uuid::now_v7(), fixture.ids.user_id),
         ] {
-            denied(fixture.read(&pool, org, actor, reader).await);
+            signed_out(fixture.read(&pool, org, actor, reader).await);
         }
     }
     let list = invoice_list(
@@ -255,12 +266,15 @@ async fn readers_deny_writer_first_revocation(pool: PgPool) {
                 let pending = fixture.spawn(&pool, reader);
                 wait_for_blocked(&pool, blocker).await;
                 writer.commit().await.unwrap();
-                denied(
-                    tokio::time::timeout(Duration::from_secs(5), pending)
-                        .await
-                        .unwrap()
-                        .unwrap(),
-                );
+                let result = tokio::time::timeout(Duration::from_secs(5), pending)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if deactivate {
+                    signed_out(result);
+                } else {
+                    denied(result);
+                }
             }
         }
     }
@@ -305,7 +319,7 @@ async fn readers_hold_reader_first_authority_until_materialized(pool: PgPool) {
             .await
             .unwrap()
             .unwrap();
-        denied(
+        signed_out(
             fixture
                 .read(&pool, fixture.ids.org_id, fixture.ids.user_id, reader)
                 .await,
@@ -432,7 +446,7 @@ async fn readers_preserve_inherited_connection_settings(pool: PgPool) {
                     .unwrap(),
                 expected
             );
-            denied(
+            signed_out(
                 fixture
                     .read(&reader_pool, fixture.ids.org_id, Uuid::now_v7(), reader)
                     .await,

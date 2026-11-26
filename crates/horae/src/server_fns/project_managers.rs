@@ -49,7 +49,10 @@ pub(crate) async fn project_managers_view(
     project_id: uuid::Uuid,
     expected: Option<PermissionRequester>,
 ) -> Result<ProjectManagers, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(
+        ops::begin_read(db, caller).await,
+        "Project managers are unavailable",
+    )?;
     let result =
         ops::projects::managers::read(&mut read.tx, &read.actor, project_id, expected).await;
     read.finish(result).await
@@ -65,13 +68,16 @@ pub(crate) async fn project_managers_save(
     expected: PermissionRequester,
     events: &dyn EventSink,
 ) -> Result<ProjectManagersOutcome, OpError> {
-    let mut write = ops::begin_gated(
-        db,
-        caller,
-        crate::db::OrganizationLock::AccessChange,
-        WriteIsolation::ReadCommitted,
-    )
-    .await?;
+    let mut write = authenticated(
+        ops::begin_gated(
+            db,
+            caller,
+            crate::db::OrganizationLock::AccessChange,
+            WriteIsolation::ReadCommitted,
+        )
+        .await,
+        "Project managers are unavailable",
+    )?;
     let result =
         ops::projects::managers::save(&mut write.tx, &write.actor, command, expected).await;
     write.commit(result, events).await

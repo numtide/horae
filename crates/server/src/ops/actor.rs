@@ -6,7 +6,9 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use horae_core::permissions::oauth::{Scope, ScopeSet};
 use sqlx::PgConnection;
 
-use super::permissions::{PermissionStorageError, load_person_permissions};
+use horae_core::types::RoundDir;
+
+use super::permissions::{PermissionStorageError, StoredPersonPermissions};
 use super::{Caller, OpError};
 use crate::models::permission_editor::PermissionRequester;
 use crate::ops::permissions::PersonPermissions;
@@ -46,6 +48,9 @@ pub enum Channel {
 pub struct Actor {
     identity: horae_core::permissions::Actor,
     channel: Channel,
+    /// The organization's settings, read with its lock; `None` for a missing
+    /// organization.
+    organization: Option<OrganizationSettings>,
     /// The stored grants and administrator flag; `None` for a missing
     /// organization or a foreign or inactive person.
     permissions: Option<PersonPermissions>,
@@ -56,6 +61,94 @@ pub struct Actor {
     /// track their own time. Read only through
     /// [`Actor::may_track_own_time`].
     tracks_own_time: bool,
+}
+
+/// The organization's settings as the actor's transaction sees them, so an
+/// operation need not read the row again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrganizationSettings {
+    /// The workspace's IANA zone name.
+    pub timezone: String,
+    /// The first weekday, 1 (Monday) to 7 (Sunday).
+    pub week_start: i16,
+    pub default_currency: String,
+    pub access_revision: i64,
+    /// CHECK-constrained non-negative.
+    pub round_minutes: i16,
+    pub round_dir: RoundDir,
+}
+
+impl OrganizationSettings {
+    /// The organization's today, for workspace-wide periods such as budget
+    /// months.
+    pub fn today(&self) -> chrono::NaiveDate {
+        crate::timezone::today_in(&self.timezone, chrono::Utc::now())
+    }
+}
+
+/// One row of the actor's load: the organization's settings, whether the
+/// person is an active member, and their stored permission state, if any.
+struct Authority {
+    person_found: bool,
+    timezone: String,
+    week_start: i16,
+    default_currency: String,
+    access_revision: i64,
+    round_minutes: i16,
+    round_dir: RoundDir,
+    catalog_version: Option<i32>,
+    grants: Option<Vec<String>>,
+    is_administrator: Option<bool>,
+    source: Option<String>,
+    built_in_profile: Option<String>,
+    template_id: Option<uuid::Uuid>,
+    applied_template_revision: Option<i64>,
+    revision: Option<i64>,
+}
+
+impl Authority {
+    fn organization(&self) -> OrganizationSettings {
+        OrganizationSettings {
+            timezone: self.timezone.clone(),
+            week_start: self.week_start,
+            default_currency: self.default_currency.clone(),
+            access_revision: self.access_revision,
+            round_minutes: self.round_minutes,
+            round_dir: self.round_dir,
+        }
+    }
+
+    /// The stored state; `None` when the person has none.
+    fn permissions(self) -> Result<Option<PersonPermissions>, PermissionStorageError> {
+        let (
+            Some(catalog_version),
+            Some(grants),
+            Some(is_administrator),
+            Some(source),
+            Some(revision),
+        ) = (
+            self.catalog_version,
+            self.grants,
+            self.is_administrator,
+            self.source,
+            self.revision,
+        )
+        else {
+            return Ok(None);
+        };
+        StoredPersonPermissions {
+            catalog_version,
+            grants,
+            is_administrator,
+            source,
+            built_in_profile: self.built_in_profile,
+            template_id: self.template_id,
+            applied_template_revision: self.applied_template_revision,
+            revision,
+        }
+        .restore()
+        .map(Some)
+    }
 }
 
 const STATE_UNAVAILABLE: &str = "Permission state is unavailable";
@@ -105,65 +198,76 @@ impl Actor {
                 active: false,
             },
             channel: caller.channel,
+            organization: None,
             permissions: None,
             locked: None,
             tracks_own_time: false,
-        };
-        let organization = match lock {
-            Lock::Share => {
-                sqlx::query_scalar!(
-                    "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
-                    caller.org_id,
-                )
-                .fetch_optional(&mut *connection)
-                .await?
-            }
-            Lock::None => {
-                sqlx::query_scalar!("SELECT id FROM organizations WHERE id = $1", caller.org_id)
-                    .fetch_optional(&mut *connection)
-                    .await?
-            }
         };
         // Only the organization is locked for a channel with no person.
         let person_channel = matches!(
             caller.channel,
             Channel::Session | Channel::Token { .. } | Channel::OAuth { .. }
         );
-        if organization.is_none() || !person_channel {
-            return Ok(actor);
-        }
-        let person = match lock {
+        // One round trip. The locked load is `horae_actor_authority` (migration
+        // 0014), which keeps the lock order and the per-statement snapshots of
+        // separate statements; changing how authority is locked means changing
+        // that function and the access writers, nothing here.
+        let authority = match lock {
             Lock::Share => {
-                sqlx::query_scalar!(
-                    "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
+                sqlx::query_as!(
+                    Authority,
+                    r#"SELECT person_found AS "person_found!",
+                              timezone AS "timezone!", week_start AS "week_start!",
+                              default_currency AS "default_currency!",
+                              access_revision AS "access_revision!",
+                              round_minutes AS "round_minutes!",
+                              round_dir AS "round_dir!: RoundDir",
+                              catalog_version, grants, is_administrator, source,
+                              built_in_profile, template_id, applied_template_revision, revision
+                         FROM horae_actor_authority($1, $2, $3)"#,
                     caller.org_id,
                     caller.user_id,
+                    person_channel,
                 )
                 .fetch_optional(&mut *connection)
                 .await?
             }
             Lock::None => {
-                sqlx::query_scalar!(
-                    "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active",
+                sqlx::query_as!(
+                    Authority,
+                    r#"SELECT u.id IS NOT NULL AS "person_found!",
+                              o.timezone, o.week_start, o.default_currency, o.access_revision,
+                              o.round_minutes, o.round_dir AS "round_dir: RoundDir",
+                              s.catalog_version AS "catalog_version?", s.grants AS "grants?",
+                              s.is_administrator AS "is_administrator?", s.source AS "source?",
+                              s.built_in_profile, s.template_id,
+                              s.applied_template_revision, s.revision AS "revision?"
+                         FROM organizations o
+                         LEFT JOIN users u
+                           ON $3 AND u.org_id = o.id AND u.id = $2 AND u.active
+                         LEFT JOIN person_permission_states s
+                           ON s.org_id = o.id AND s.user_id = u.id
+                        WHERE o.id = $1"#,
                     caller.org_id,
                     caller.user_id,
+                    person_channel,
                 )
                 .fetch_optional(&mut *connection)
                 .await?
             }
         };
-        if person.is_none() {
+        let Some(authority) = authority else {
+            return Ok(actor);
+        };
+        actor.organization = Some(authority.organization());
+        if !authority.person_found {
             return Ok(actor);
         }
-        let mut state = load_person_permissions(connection, caller.org_id, caller.user_id)
-            .await
-            .map_err(|error| match error {
-                // A lost race or a storage fault, not missing authority.
-                PermissionStorageError::Database(error) => OpError::from(error),
-                error => {
-                    tracing::error!(%error, "Invalid stored permission state");
-                    OpError::forbidden(STATE_UNAVAILABLE)
-                }
+        let mut state = authority
+            .permissions()
+            .map_err(|error| {
+                tracing::error!(%error, "Invalid stored permission state");
+                OpError::forbidden(STATE_UNAVAILABLE)
             })?
             .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
         actor.tracks_own_time = state.grants.contains(Permission::TimeWriteOwn)
@@ -194,6 +298,15 @@ impl Actor {
 
     pub fn org_id(&self) -> uuid::Uuid {
         self.identity.org_id
+    }
+
+    /// The organization's settings, read with its lock, which holds them
+    /// unchanged until the transaction ends unless it changes them itself.
+    /// Not found when the organization does not exist.
+    pub fn organization(&self) -> Result<&OrganizationSettings, OpError> {
+        self.organization
+            .as_ref()
+            .ok_or_else(|| OpError::not_found("Organization not found"))
     }
 
     /// The identity `horae-core` scope checks (`AccessScope::covers`) take.

@@ -100,7 +100,10 @@ pub(crate) async fn project_people_page(
     context: ProjectPeopleContext,
     query: &ProjectPeopleQuery,
 ) -> Result<ProjectPeopleResult, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(
+        ops::begin_read(db, caller).await,
+        "Project people are unavailable",
+    )?;
     let result = ops::projects::people::read(&mut read.tx, &read.actor, context, query).await;
     read.finish(result).await
 }
@@ -113,7 +116,10 @@ pub(crate) async fn project_editor_catalog_page(
     search: &ProjectEditorCatalogSearch,
     email_available: bool,
 ) -> Result<ProjectEditorCatalog, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(
+        ops::begin_read(db, caller).await,
+        "Project catalogs are unavailable",
+    )?;
     let result = ops::projects::editor::catalog::read(
         &mut read.tx,
         &read.actor,

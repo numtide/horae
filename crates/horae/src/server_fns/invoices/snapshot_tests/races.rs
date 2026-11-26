@@ -60,12 +60,16 @@ async fn financial_snapshots_deny_winning_actor_revocation(pool: PgPool) {
                     .await
                     .unwrap()
                 };
-                assert_denied(
-                    tokio::time::timeout(Duration::from_secs(5), pending)
-                        .await
-                        .unwrap()
-                        .unwrap(),
-                );
+                // A deactivated session is signed out; a revoked grant is refused.
+                let result = tokio::time::timeout(Duration::from_secs(5), pending)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if deactivate {
+                    assert_signed_out(result);
+                } else {
+                    assert_denied(result);
+                }
                 assert_eq!(
                     sqlx::query_scalar!(
                         "SELECT xmin::text AS \"version!\" FROM organizations WHERE id=$1",
@@ -165,7 +169,8 @@ async fn financial_snapshots_hold_authority_until_materialization(pool: PgPool) 
             .await
             .unwrap()
             .unwrap();
-        assert_denied(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
+        // The deactivated session is signed out.
+        assert_signed_out(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
     }
 }
 

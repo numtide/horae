@@ -145,7 +145,7 @@ pub async fn list_items(
     let names = client_names(tx, org_id, &client_ids).await?;
     let ids: Vec<_> = invoices.iter().map(|invoice| invoice.id).collect();
     let mut imported = imported(tx, org_id, &ids).await?;
-    let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
+    let today = actor.organization()?.today();
     invoices
         .into_iter()
         .map(|invoice| {
@@ -265,7 +265,7 @@ pub async fn detail(
         .await?
         .remove(&invoice.client_id)
         .ok_or_else(|| OpError::not_found("Invoice client not found"))?;
-    let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
+    let today = actor.organization()?.today();
     let (imported, imported_lines) = match fetch_imported(tx, org_id, invoice_id).await? {
         Some((imported, lines)) => (Some(imported), lines),
         None => (None, Vec::new()),
@@ -433,7 +433,7 @@ pub async fn set_status(
         .await?;
     }
     if current.imported && target == InvoiceStatus::Paid {
-        let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
+        let today = actor.organization()?.today();
         sqlx::query!(
             "UPDATE harvest_invoices SET due_cents = 0, paid_on = $3
              WHERE invoice_id = $1 AND org_id = $2",

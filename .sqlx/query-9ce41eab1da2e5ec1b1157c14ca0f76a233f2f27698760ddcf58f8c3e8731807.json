@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT u.oidc_issuer, u.timezone, o.timezone AS workspace_timezone\n         FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = $1",
+  "query": "SELECT u.oidc_issuer, u.timezone, o.timezone AS workspace_timezone\n         FROM users u JOIN organizations o ON o.id = u.org_id\n         WHERE u.id = $1 AND u.active",
   "describe": {
     "columns": [
       {
@@ -30,5 +30,5 @@
       false
     ]
   },
-  "hash": "9a5b52e9bfdbbbd96609645910feca2fece36d2417703ab4e6766e30c6727c6b"
+  "hash": "9ce41eab1da2e5ec1b1157c14ca0f76a233f2f27698760ddcf58f8c3e8731807"
 }

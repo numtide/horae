@@ -321,7 +321,8 @@ pub async fn commit_harvest_import_preview(
 pub async fn harvest_import_error_summary(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::ErrorSummary, ServerFnError> {
-    let caller = session_caller().await?;
+    // The summary loads its actor without a transaction.
+    let caller = active_session_caller().await?;
     let state = crate::state::global_state().await;
     commands::error_summary(&state.db, caller.org_id, caller.user_id, job_id).await
 }
@@ -365,7 +366,7 @@ pub async fn retry_harvest_import_job(
 /// change (`credentials::authorize_change`), checks again under the locks.
 #[cfg(feature = "server")]
 async fn require_administrator() -> Result<crate::ops::Caller, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = active_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut connection = state.db.acquire().await.map_err(server_err)?;
     crate::ops::Actor::load_unlocked(&mut connection, caller)

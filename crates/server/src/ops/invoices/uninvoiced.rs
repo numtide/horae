@@ -37,7 +37,7 @@ pub async fn list(tx: &mut Tx, actor: &Actor) -> Result<Vec<UninvoicedClient>, O
     authorize_read(actor, PREPARE)?;
     authorize_read(actor, READ)?;
     let org_id = actor.org_id();
-    let today = crate::timezone::today_for_org(&mut **tx, org_id).await?;
+    let today = actor.organization()?.today();
     let rows = sqlx::query_as!(
         Sum,
         r#"WITH unbilled_time AS (

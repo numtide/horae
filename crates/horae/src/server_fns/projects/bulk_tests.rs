@@ -355,14 +355,17 @@ async fn status_writes_recheck_current_actor_grants(pool: PgPool) {
             _ => {}
         }
         let before = snapshot(&pool, ids.org_id).await;
+        // A deactivated or foreign session is signed out; missing grants refuse.
+        let refused = if matches!(change, "inactive" | "foreign actor") {
+            UNAUTHORIZED
+        } else {
+            FORBIDDEN
+        };
         for result in status_writes(&pool, &ids, actor).await {
             assert!(
                 matches!(
                     result,
-                    Err(ServerFnError::ServerError {
-                        code: FORBIDDEN,
-                        ..
-                    })
+                    Err(ServerFnError::ServerError { code, .. }) if code == refused
                 ),
                 "{change}: {result:?}"
             );

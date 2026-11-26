@@ -11,9 +11,11 @@ use crate::ops;
 pub async fn load_timesheet_tracking(
     context: crate::models::scoped_time::TimesheetWriteContext,
 ) -> Result<Vec<crate::models::scoped_time::TimesheetTrackingOption>, ServerFnError> {
-    let caller = session_caller_or("Timesheet is unavailable").await?;
+    const UNAVAILABLE: &str = "Timesheet is unavailable";
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let mut read =
+        authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
     let result = ops::time::tracking(&mut read.tx, &read.actor, &context).await;
     read.finish(result).await.map_err(op_error)
 }
@@ -26,9 +28,11 @@ pub async fn apply_timesheet_command(
     context: crate::models::scoped_time::TimesheetWriteContext,
     command: crate::models::scoped_time::TimesheetCommand,
 ) -> Result<Option<String>, ServerFnError> {
-    let caller = session_caller_or("Timesheet is unavailable").await?;
+    const UNAVAILABLE: &str = "Timesheet is unavailable";
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
+    let mut write =
+        authenticated(ops::begin(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
     let result = ops::time::apply(&mut write.tx, &write.actor, &context, command).await;
     let change = write
         .commit(result, &*state.plugins)
@@ -45,9 +49,11 @@ pub async fn apply_timesheet_command(
 pub async fn load_timesheet_page(
     query: crate::models::scoped_time::TimesheetQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPage, ServerFnError> {
-    let caller = session_caller_or("Timesheet is unavailable").await?;
+    const UNAVAILABLE: &str = "Timesheet is unavailable";
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let mut read =
+        authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
     let result = ops::time_reads::sheet(&mut read.tx, &read.actor, &query).await;
     read.finish(result).await.map_err(op_error)
 }
@@ -57,9 +63,11 @@ pub async fn load_timesheet_page(
 pub async fn list_timesheet_people(
     query: crate::models::scoped_time::TimesheetPeopleQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPeoplePage, ServerFnError> {
-    let caller = session_caller_or("Timesheet people are unavailable").await?;
+    const UNAVAILABLE: &str = "Timesheet people are unavailable";
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let mut read =
+        authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
     let result = ops::time_reads::people(&mut read.tx, &read.actor, &query).await;
     read.finish(result).await.map_err(op_error)
 }

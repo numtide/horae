@@ -178,6 +178,56 @@ async fn a_refused_actor_releases_its_locks_in_every_begin(pool: PgPool) {
     }
 }
 
+/// The session path reads no account before the transaction, so every
+/// `begin*` answers a session of a deactivated or missing person as signed
+/// out, and releases its locks. A token's actor only loses its authority.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn every_begin_signs_out_a_session_whose_account_is_not_active(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    for caller in [
+        Caller::session(ids.org_id, ids.user_id),
+        Caller::session(ids.org_id, Uuid::now_v7()),
+    ] {
+        for case in 0..5 {
+            let result = match case {
+                0 => begin(&pool, caller).await.map(drop),
+                1 => begin_read(&pool, caller).await.map(drop),
+                2 => begin_read_snapshot(&pool, caller, SnapshotLimits::Short)
+                    .await
+                    .map(drop),
+                3 => begin_read_snapshot(&pool, caller, SnapshotLimits::LockWait)
+                    .await
+                    .map(drop),
+                _ => begin_gated(
+                    &pool,
+                    caller,
+                    OrganizationLock::Shared,
+                    WriteIsolation::ReadCommitted,
+                )
+                .await
+                .map(drop),
+            };
+            assert_eq!(
+                result.err(),
+                Some(OpError::unauthenticated()),
+                "case {case}"
+            );
+            assert!(
+                organization_lockable(&pool, ids.org_id),
+                "case {case} still holds the organization lock"
+            );
+        }
+    }
+    let token = Caller::token(ids.org_id, ids.user_id, Uuid::now_v7());
+    let read = begin_read(&pool, token).await.unwrap();
+    assert!(!read.actor.is_active());
+    read.finish(Ok(())).await.unwrap();
+}
+
 /// A deferred constraint fails at COMMIT, after the operation succeeded.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_failed_commit_dispatches_nothing(pool: PgPool) {

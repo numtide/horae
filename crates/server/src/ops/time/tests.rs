@@ -14,17 +14,16 @@ mod timesheet;
 mod update;
 
 /// The timer operations run as the session adapters run them, for tests that
-/// name only the person. An unknown person gets an organization of their own,
-/// so the actor carries no authority.
-async fn session_write(pool: &PgPool, user_id: Uuid) -> ops::WriteTx {
+/// name only the person. An unknown person gets an organization of their own;
+/// a session of an inactive or unknown person is signed out here, before the
+/// operation runs.
+async fn session_write(pool: &PgPool, user_id: Uuid) -> Result<ops::WriteTx, OpError> {
     let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id=$1", user_id)
         .fetch_optional(pool)
         .await
         .unwrap()
         .unwrap_or_else(Uuid::now_v7);
-    ops::begin(pool, Caller::session(org_id, user_id))
-        .await
-        .unwrap()
+    ops::begin(pool, Caller::session(org_id, user_id)).await
 }
 
 /// New own time for tests: a running entry starts the timer (which files it on
@@ -52,7 +51,7 @@ async fn insert_time_entry(
         return start_timer_record(pool, user_id, input.project_id, input.task_id, input.notes)
             .await;
     }
-    let mut write = session_write(pool, user_id).await;
+    let mut write = session_write(pool, user_id).await?;
     let context = TimesheetWriteContext {
         expected_requester: PermissionRequester {
             org_id: write.actor.org_id(),
@@ -101,7 +100,7 @@ async fn start_timer_record(
     task_id: Uuid,
     notes: Option<&str>,
 ) -> Result<TimeEntry, OpError> {
-    let mut write = session_write(pool, user_id).await;
+    let mut write = session_write(pool, user_id).await?;
     let result = start_timer(&mut write.tx, &write.actor, project_id, task_id, notes).await;
     let started = write.commit(result, &Recorder::default()).await?;
     Ok(started.entry)
@@ -113,7 +112,7 @@ async fn stop_entry_timer(
     user_id: Uuid,
     entry_id: Uuid,
 ) -> Result<(TimeEntry, Option<String>), OpError> {
-    let mut write = session_write(pool, user_id).await;
+    let mut write = session_write(pool, user_id).await?;
     let result = stop_timer(&mut write.tx, &write.actor, entry_id).await;
     write.commit(result, &Recorder::default()).await
 }
@@ -122,7 +121,7 @@ async fn fetch_time_entry_contexts(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<Vec<TimeEntryContext>, OpError> {
-    let mut write = session_write(pool, user_id).await;
+    let mut write = session_write(pool, user_id).await?;
     let result = contexts(&mut write.tx, &write.actor).await.map(Done::new);
     write.commit(result, &Recorder::default()).await
 }

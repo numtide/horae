@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET timezone = 'Europe/Madrid', week_start = 7,\n            default_currency = 'USD', round_minutes = 15 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9a10f1e92fcdfe97e683ddb089b668b8930f82744db82ee92afb13212cb829b"
+}

@@ -69,6 +69,7 @@ impl Case {
     }
 }
 
+#[track_caller]
 fn assert_status(result: Result<Value, ServerFnError>, status: u16) {
     assert!(
         matches!(result, Err(ServerFnError::ServerError { code, .. }) if code == status),
@@ -109,11 +110,12 @@ async fn editor_snapshots_preserve_rows_and_override_inherited_read_only(pool: P
                 .unwrap(),
             expected
         );
+        // A session of a missing or foreign person is signed out.
         for actor in [Uuid::now_v7(), foreign.user_id] {
             assert_status(
                 case.read(&reader_pool, (case.ids.org_id, actor), reader)
                     .await,
-                FORBIDDEN,
+                UNAUTHORIZED,
             );
         }
         assert_status(
@@ -201,12 +203,13 @@ async fn editor_snapshots_deny_winning_revocation(pool: PgPool) {
                     .await
                     .unwrap()
                 };
+                // A deactivated session is signed out; a revoked grant is refused.
                 assert_status(
                     tokio::time::timeout(Duration::from_secs(5), pending)
                         .await
                         .unwrap()
                         .unwrap(),
-                    FORBIDDEN,
+                    if deactivate { UNAUTHORIZED } else { FORBIDDEN },
                 );
                 assert_eq!(
                     sqlx::query_scalar!(
@@ -359,7 +362,8 @@ async fn editor_snapshots_retain_authority_and_release_cancelled_reads(pool: PgP
                 )
                 .await
                 .unwrap(),
-                FORBIDDEN,
+                // The deactivated session is signed out.
+                UNAUTHORIZED,
             );
             assert_eq!(case.stored(&pool).await, before);
             wait_for_other_transactions(&pool).await;

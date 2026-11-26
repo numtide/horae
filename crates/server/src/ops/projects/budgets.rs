@@ -23,7 +23,7 @@ pub async fn progress(
     actor: &Actor,
     expected: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectBudgetOverview>, OpError> {
-    let today = crate::timezone::today_for_org(&mut **tx, actor.org_id()).await?;
+    let today = actor.organization()?.today();
     progress_on(tx, actor, today, expected).await
 }
 

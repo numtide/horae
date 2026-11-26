@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT person_found AS \"person_found!\",\n                              timezone AS \"timezone!\", week_start AS \"week_start!\",\n                              default_currency AS \"default_currency!\",\n                              access_revision AS \"access_revision!\",\n                              round_minutes AS \"round_minutes!\",\n                              round_dir AS \"round_dir!: RoundDir\",\n                              catalog_version, grants, is_administrator, source,\n                              built_in_profile, template_id, applied_template_revision, revision\n                         FROM horae_actor_authority($1, $2, $3)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "person_found!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "timezone!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "week_start!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "default_currency!",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "access_revision!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "round_minutes!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "round_dir!: RoundDir",
+        "type_info": {
+          "Custom": {
+            "name": "round_dir",
+            "kind": {
+              "Enum": [
+                "nearest",
+                "up",
+                "down"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "catalog_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "grants",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_administrator",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "built_in_profile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "applied_template_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 14,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "9c4c188d0ffdc16dcade93579c43a0d24aacb403d37327ac8436e73f444f8ff0"
+}

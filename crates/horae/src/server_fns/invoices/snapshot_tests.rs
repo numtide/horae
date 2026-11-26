@@ -34,6 +34,13 @@ async fn read(
     }
 }
 
+/// A session whose person is gone, foreign or deactivated is signed out.
+#[track_caller]
+fn assert_signed_out(result: Result<i64, ServerFnError>) {
+    assert!(crate::server_fns::signed_out(&result), "{result:?}");
+}
+
+#[track_caller]
 fn assert_denied(result: Result<i64, ServerFnError>) {
     assert!(
         matches!(
@@ -57,9 +64,9 @@ async fn financial_snapshots_require_current_same_tenant_invoice_preparer(pool: 
         read(&pool, (ids.org_id, ids.user_id), &ids, reader)
             .await
             .unwrap();
-        assert_denied(read(&pool, (ids.org_id, Uuid::now_v7()), &ids, reader).await);
-        assert_denied(read(&pool, (ids.org_id, foreign.user_id), &ids, reader).await);
-        assert_denied(read(&pool, (Uuid::now_v7(), ids.user_id), &ids, reader).await);
+        assert_signed_out(read(&pool, (ids.org_id, Uuid::now_v7()), &ids, reader).await);
+        assert_signed_out(read(&pool, (ids.org_id, foreign.user_id), &ids, reader).await);
+        assert_signed_out(read(&pool, (Uuid::now_v7(), ids.user_id), &ids, reader).await);
         // Neither reading every invoice, managing them without everyone's
         // billable rates, nor those rates alone is enough to prepare one.
         for grants in [
@@ -73,13 +80,13 @@ async fn financial_snapshots_require_current_same_tenant_invoice_preparer(pool: 
         // Being an administrator is not the grant.
         crate::ops::testing::provision(&pool, &ids, &[], true).await;
         assert_denied(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
-        // Every grant, but inactive.
+        // Every grant, but inactive: signed out.
         crate::ops::testing::provision(&pool, &ids, Permission::ALL, true).await;
         sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
             .execute(&pool)
             .await
             .unwrap();
-        assert_denied(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
+        assert_signed_out(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
         sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
             .execute(&pool)
             .await

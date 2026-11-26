@@ -347,23 +347,24 @@ async fn billability_empty_exports_still_require_active_authority(pool: PgPool) 
         .execute(&pool)
         .await
         .unwrap();
+    // The deactivated session is signed out on every path.
     assert_eq!(
         time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .err(),
-        Some(StatusCode::FORBIDDEN)
+        Some(StatusCode::UNAUTHORIZED)
     );
     assert_eq!(
         time::groups::read(&pool, requester, &query, TimeReportGrouping::Client)
             .await
             .err(),
-        Some(StatusCode::FORBIDDEN)
+        Some(StatusCode::UNAUTHORIZED)
     );
     assert_eq!(
         entries(pool.clone(), ids.org_id, ids.user_id, options())
             .await
             .err(),
-        Some(StatusCode::FORBIDDEN)
+        Some(StatusCode::UNAUTHORIZED)
     );
     assert_eq!(
         groups::download(
@@ -375,6 +376,6 @@ async fn billability_empty_exports_still_require_active_authority(pool: PgPool) 
         )
         .await
         .err(),
-        Some(StatusCode::FORBIDDEN)
+        Some(StatusCode::UNAUTHORIZED)
     );
 }

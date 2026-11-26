@@ -326,7 +326,7 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
         );
     }
     let pool = &pool;
-    let refused = |org_id, user_id| async move {
+    let refused = |org_id, user_id, expected: u16| async move {
         let error = fetch_report(
             pool,
             org_id,
@@ -340,19 +340,17 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
         assert!(
             matches!(
                 error,
-                ServerFnError::ServerError {
-                    code: FORBIDDEN,
-                    ..
-                }
+                ServerFnError::ServerError { code, .. } if code == expected
             ),
             "{error:?}"
         );
     };
-    refused(first.org_id, Uuid::now_v7()).await;
-    refused(foreign.org_id, first.user_id).await;
+    // A session of a missing or foreign person is signed out.
+    refused(first.org_id, Uuid::now_v7(), UNAUTHORIZED).await;
+    refused(foreign.org_id, first.user_id, UNAUTHORIZED).await;
     // Own time alone is not a management report.
     provision(pool, &first, &[Permission::TimeReadOwn], false).await;
-    refused(first.org_id, first.user_id).await;
+    refused(first.org_id, first.user_id, FORBIDDEN).await;
     provision(pool, &first, &[Permission::TimeReadAll], true).await;
     sqlx::query!(
         "UPDATE users SET active = false WHERE id = $1",
@@ -361,7 +359,8 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
     .execute(pool)
     .await
     .unwrap();
-    refused(first.org_id, first.user_id).await;
+    // The deactivated session is signed out.
+    refused(first.org_id, first.user_id, UNAUTHORIZED).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

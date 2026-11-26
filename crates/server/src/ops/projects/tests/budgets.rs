@@ -93,12 +93,16 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
     assert_eq!(rows[0].period_key, "2026-09");
     let lifetime = spend(&pool, ids.org_id, ids.user_id).await.unwrap();
     assert_eq!(lifetime[0].spent_minutes, 120);
-    assert!(
-        visible_scopes(&pool, ids.org_id, foreign.user_id, date)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    // A session naming a person of another organization is signed out.
+    assert!(matches!(
+        visible_scopes(&pool, ids.org_id, foreign.user_id, date).await,
+        Err(OpError::Unauthenticated(_))
+    ));
+    // A token naming them reaches the read, which shows nothing.
+    let token = Caller::token(ids.org_id, foreign.user_id, Uuid::now_v7());
+    let mut read = begin_read(&pool, token).await.unwrap();
+    let result = super::budget_progress_on(&mut read.tx, &read.actor, date, None).await;
+    assert!(read.finish(result).await.unwrap().is_empty());
     set_grants(&mut pool.acquire().await.unwrap(), &ids, &[])
         .await
         .unwrap();
@@ -145,12 +149,16 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
         .execute(&pool)
         .await
         .unwrap();
-    assert!(
-        visible_scopes(&pool, ids.org_id, ids.user_id, date)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    // Their session is signed out; their token reaches the read, which shows
+    // nothing.
+    assert!(matches!(
+        visible_scopes(&pool, ids.org_id, ids.user_id, date).await,
+        Err(OpError::Unauthenticated(_))
+    ));
+    let token = Caller::token(ids.org_id, ids.user_id, Uuid::now_v7());
+    let mut read = begin_read(&pool, token).await.unwrap();
+    let result = super::budget_progress_on(&mut read.tx, &read.actor, date, None).await;
+    assert!(read.finish(result).await.unwrap().is_empty());
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

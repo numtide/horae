@@ -10,13 +10,18 @@ use crate::ops;
 pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
+    // No transaction checks the account here, so the read does.
     let day = sqlx::query_scalar!(
-        "SELECT week_start FROM organizations WHERE id = $1",
-        caller.org_id
+        "SELECT o.week_start FROM organizations o
+           JOIN users u ON u.org_id = o.id AND u.id = $2 AND u.active
+          WHERE o.id = $1",
+        caller.org_id,
+        caller.user_id,
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| unauthorized(crate::ops::ACCOUNT_NOT_ACTIVE))?;
     match day {
         1 => Ok(chrono::Weekday::Mon),
         2 => Ok(chrono::Weekday::Tue),
@@ -38,16 +43,18 @@ pub async fn get_org_name() -> Result<String, ServerFnError> {
     let user_id = session_caller().await?.user_id;
     let state = crate::state::global_state().await;
 
+    // No transaction checks the account here, so the read does.
     let name = sqlx::query_scalar!(
         r#"SELECT o.name
              FROM organizations o
              JOIN users u ON u.org_id = o.id
-            WHERE u.id = $1"#,
+            WHERE u.id = $1 AND u.active"#,
         user_id,
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| unauthorized(crate::ops::ACCOUNT_NOT_ACTIVE))?;
 
     Ok(name)
 }

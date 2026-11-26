@@ -129,7 +129,7 @@ async fn every_token_route_needs_a_bearer_token(pool: PgPool) {
 async fn the_session_cookie_is_not_a_credential(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);
-    crate::session::set_session_user_id(&session, ids.user_id)
+    crate::session::set_session_user(&session, ids.user_id, ids.org_id)
         .await
         .unwrap();
     let signed_in = router(&pool, 100).layer(Extension(session));
@@ -304,4 +304,30 @@ async fn the_timer_is_the_running_entry_or_no_content(pool: PgPool) {
     assert_eq!(body["is_running"], true);
     assert_eq!(body["state"], "open");
     assert!(body["timer_started_at"].is_string(), "{body}");
+}
+
+/// A token's person deactivated while the request waits for its actor's lock
+/// keeps the answer it had: only a session is signed out (401) by the
+/// operation's transaction, a token's actor merely has no authority.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_of_a_person_deactivated_mid_request_is_refused_as_before(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let (secret, _) = token(&pool, &ids, "calendar sync").await;
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let blocker = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap();
+    let router = router(&pool, 100);
+    let pending =
+        tokio::spawn(async move { send(&router, "getMe", get("/api/v1/me", Some(&secret))).await });
+    crate::testing::wait_for_blocked(&pool, blocker).await;
+    hold.commit().await.unwrap();
+    let (status, _, body) = pending.await.unwrap();
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(body["code"], "forbidden", "{body}");
 }

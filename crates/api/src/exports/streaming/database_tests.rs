@@ -36,7 +36,8 @@ async fn streamed_project_exports_deny_inactive_actors(pool: PgPool) {
         ProjectsExportParams::default(),
     )
     .await;
-    assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
+    // The deactivated session is signed out.
+    assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
 }
 
 async fn body(response: Response) -> Vec<u8> {

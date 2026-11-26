@@ -514,7 +514,8 @@ async fn discovery_rechecks_revocation_and_actor_activity_after_waiting(pool: Pg
         revoke.commit().await.unwrap();
         let result = pending.await.unwrap();
         if mode == 3 {
-            assert!(matches!(result, Err(OpError::Forbidden(_))));
+            // The session is signed out by the actor load that waited.
+            assert!(matches!(result, Err(OpError::Unauthenticated(_))));
         } else {
             assert_eq!(ids(&result.unwrap()), [seed.user_id].into());
         }
@@ -664,8 +665,21 @@ async fn discovery_fails_closed_for_identity_and_invalid_state(pool: PgPool) {
     let seed = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let query = TimesheetPeopleQuery::default();
+    // A session naming a foreign person is signed out.
     assert!(matches!(
         people(&pool, seed.org_id, foreign.user_id, &query).await,
+        Err(OpError::Unauthenticated(_))
+    ));
+    // A token reaches the read, which refuses it.
+    let mut token = ops::begin_read(
+        &pool,
+        Caller::token(seed.org_id, foreign.user_id, Uuid::now_v7()),
+    )
+    .await
+    .unwrap();
+    let result = ops::time_reads::people(&mut token.tx, &token.actor, &query).await;
+    assert!(matches!(
+        token.finish(result).await,
         Err(OpError::Forbidden(_))
     ));
     sqlx::query!(

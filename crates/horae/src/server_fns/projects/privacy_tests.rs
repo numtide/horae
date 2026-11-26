@@ -148,12 +148,10 @@ async fn client_project_filter_preserves_progress_access_and_rate_redaction(pool
         .execute(&pool)
         .await
         .unwrap();
-    assert!(
-        projects_for_viewer(&pool, &viewer, filter, true, ProjectRead::Overview)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(
+        &projects_for_viewer(&pool, &viewer, filter, true, ProjectRead::Overview).await
+    ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -390,26 +388,18 @@ async fn project_reads_use_current_authority_and_reject_foreign_scope(pool: PgPo
             .is_empty()
         );
     }
+    // A session naming an organization its person is not in is signed out.
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     viewer.org_id = foreign.org_id;
-    assert!(
-        projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)
-            .await
-            .unwrap()
-            .is_empty()
-    );
-    assert!(
-        tasks_for_viewer(&pool, &viewer, Some(ids.project_id), TaskRead::Catalog)
-            .await
-            .unwrap()
-            .is_empty()
-    );
-    assert!(
-        fetch_project_spend(&pool, viewer.org_id, viewer.id, None)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(crate::server_fns::signed_out(
+        &projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview).await
+    ));
+    assert!(crate::server_fns::signed_out(
+        &tasks_for_viewer(&pool, &viewer, Some(ids.project_id), TaskRead::Catalog).await
+    ));
+    assert!(crate::server_fns::signed_out(
+        &fetch_project_spend(&pool, viewer.org_id, viewer.id, None).await
+    ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -449,42 +439,37 @@ async fn outsiders_and_inactive_viewers_have_no_project_reads(pool: PgPool) {
                 .await
                 .unwrap();
         }
+        // An outsider reads nothing; the deactivated session is signed out.
         for purpose in [ProjectRead::Overview, ProjectRead::Tracking] {
-            assert!(
-                projects_for_viewer(&pool, &viewer, None, true, purpose)
-                    .await
-                    .unwrap()
-                    .is_empty()
-            );
+            let result = projects_for_viewer(&pool, &viewer, None, true, purpose).await;
+            if inactive {
+                assert!(crate::server_fns::signed_out(&result), "{result:?}");
+            } else {
+                assert!(result.unwrap().is_empty());
+            }
         }
         for purpose in [TaskRead::Catalog, TaskRead::Tracking] {
-            assert!(
-                tasks_for_viewer(&pool, &viewer, None, purpose)
-                    .await
-                    .unwrap()
-                    .is_empty()
-            );
+            let result = tasks_for_viewer(&pool, &viewer, None, purpose).await;
+            if inactive {
+                assert!(crate::server_fns::signed_out(&result), "{result:?}");
+            } else {
+                assert!(result.unwrap().is_empty());
+            }
         }
         let team = project_team(&pool, &viewer, ids.project_id).await;
         if inactive {
-            assert!(matches!(
-                team,
-                Err(ServerFnError::ServerError {
-                    code: FORBIDDEN,
-                    ..
-                })
-            ));
+            assert!(crate::server_fns::signed_out(&team), "{team:?}");
         } else {
             assert!(
                 team.unwrap().is_none(),
                 "an outsider cannot open the project"
             );
         }
-        assert!(
-            fetch_project_spend(&pool, viewer.org_id, viewer.id, None)
-                .await
-                .unwrap()
-                .is_empty()
-        );
+        let spend = fetch_project_spend(&pool, viewer.org_id, viewer.id, None).await;
+        if inactive {
+            assert!(crate::server_fns::signed_out(&spend), "{spend:?}");
+        } else {
+            assert!(spend.unwrap().is_empty());
+        }
     }
 }

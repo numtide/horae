@@ -126,14 +126,20 @@ async fn subject_discovery_requires_current_explicit_identity(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let all_grants = person(&pool, ids.org_id, false, BuiltInProfile::Administrator).await;
-    for actor in [all_grants, foreign.user_id, Uuid::now_v7()] {
+    // Every grant without the identity is refused; a session of a foreign or
+    // missing person is signed out.
+    for (actor, refused) in [
+        (all_grants, forbidden()),
+        (foreign.user_id, crate::ops::OpError::unauthenticated()),
+        (Uuid::now_v7(), crate::ops::OpError::unauthenticated()),
+    ] {
         assert!(matches!(
             editor::subjects(&pool, ids.org_id, actor, None).await,
-            Err(e) if e == forbidden()
+            Err(e) if e == refused
         ));
         assert!(matches!(
             editor::subjects(&pool, ids.org_id, actor, Some(Uuid::max())).await,
-            Err(e) if e == forbidden()
+            Err(e) if e == refused
         ));
     }
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private-invalid-grant'] WHERE user_id=$1", ids.user_id)
@@ -214,9 +220,10 @@ async fn subject_discovery_rechecks_direct_deactivation(pool: PgPool) {
         );
     wait_for_blocked(&pool, holder).await;
     revoke.commit().await.unwrap();
+    // The deactivated session is signed out.
     assert!(matches!(
         pending.await.unwrap(),
-        Err(e) if e == forbidden()
+        Err(e) if e == crate::ops::OpError::unauthenticated()
     ));
 }
 

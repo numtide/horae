@@ -19,14 +19,8 @@ pub async fn permissions(tx: &mut Tx, actor: &Actor) -> Result<OwnPermissions, O
         return Err(OpError::forbidden(IDENTITY_REQUIRED));
     };
     let org_id = actor.org_id();
-    // `Actor::load` holds the organization `FOR SHARE`, so the revision read
-    // here matches the state it loaded.
-    let access_revision = sqlx::query_scalar!(
-        "SELECT access_revision FROM organizations WHERE id = $1",
-        org_id
-    )
-    .fetch_one(&mut **tx)
-    .await?;
+    // Read with the state `Actor::load` loaded, under the same lock.
+    let access_revision = actor.organization()?.access_revision;
     let profile = profile_name(tx, org_id, state.source).await?;
     let managed_person_ids = sqlx::query_scalar!(
         "SELECT managed_user_id FROM person_management_assignments

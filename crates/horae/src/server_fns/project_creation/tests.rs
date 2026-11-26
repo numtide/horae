@@ -1333,8 +1333,10 @@ async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
     assert!(refused(
         super::load_draft_record(&pool, member.user_id, member.org_id).await
     ));
-    assert!(refused(
-        super::load_draft_record(&pool, admin.user_id, member.org_id).await
+    // A session in an organization its person is not in, and then a
+    // deactivated one, is signed out.
+    assert!(crate::server_fns::signed_out(
+        &super::load_draft_record(&pool, admin.user_id, member.org_id).await
     ));
     sqlx::query!(
         "UPDATE users SET active = false WHERE id = $1",
@@ -1343,8 +1345,8 @@ async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    assert!(refused(
-        super::load_draft_record(&pool, admin.user_id, admin.org_id).await
+    assert!(crate::server_fns::signed_out(
+        &super::load_draft_record(&pool, admin.user_id, admin.org_id).await
     ));
 }
 

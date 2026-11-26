@@ -107,9 +107,10 @@ async fn template_command_waits_for_direct_actor_deactivation_on_replay(pool: Pg
         );
     wait_for_blocked(&pool, pid).await;
     revoke.commit().await.unwrap();
+    // The deactivated session is signed out, even for a replay.
     assert!(matches!(
         pending.await.unwrap(),
-        Err(e) if e == forbidden()
+        Err(e) if e == crate::ops::OpError::unauthenticated()
     ));
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
 }
@@ -279,10 +280,11 @@ async fn delete_replay_does_not_touch_a_same_name_replacement(pool: PgPool) {
 async fn missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
     let ids = administrator(&pool).await;
     let other = administrator(&pool).await;
+    // A session of a foreign or missing person is signed out.
     for actor in [other.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &create("Denied", 0)).await,
-            Err(e) if e == forbidden()
+            Err(e) if e == crate::ops::OpError::unauthenticated()
         ));
     }
     let grants: Vec<String> = serde_json::from_value(
@@ -603,9 +605,15 @@ async fn revocation_winning_org_gate_denies_pending_replay_and_new_command(pool:
                 sqlx::query!("UPDATE person_permission_states SET is_administrator = false WHERE user_id = $1", ids.user_id).execute(&mut *held).await.unwrap();
             }
             held.commit().await.unwrap();
+            // A deactivated session is signed out; a revoked identity is refused.
+            let refused = if deactivate {
+                crate::ops::OpError::unauthenticated()
+            } else {
+                forbidden()
+            };
             assert!(matches!(
                 pending.await.unwrap(),
-                Err(e) if e == forbidden()
+                Err(e) if e == refused
             ));
             assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
             assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);

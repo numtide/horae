@@ -180,16 +180,19 @@ async fn activity_rejects_unavailable_authority_even_for_noops(pool: PgPool) {
             }
             _ => unreachable!(),
         }
+        // The deactivated session is signed out; unusable authority refuses.
+        let refused = if case == "inactive" {
+            UNAUTHORIZED
+        } else {
+            FORBIDDEN
+        };
         for active in [false, true] {
             let result =
                 set_task_active_record(&pool, ids.org_id, ids.user_id, ids.task_id, active).await;
             assert!(
                 matches!(
                     result,
-                    Err(ServerFnError::ServerError {
-                        code: FORBIDDEN,
-                        ..
-                    })
+                    Err(ServerFnError::ServerError { code, .. }) if code == refused
                 ),
                 "{case}: {result:?}"
             );

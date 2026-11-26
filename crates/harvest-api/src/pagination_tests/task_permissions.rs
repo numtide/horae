@@ -219,7 +219,8 @@ async fn task_api_rechecks_deactivation_after_session_lookup(pool: PgPool) {
         let pending = tokio::spawn(async move { request(&app, &uri).await });
         crate::testing::wait_for_blocked(&pool, blocker).await;
         hold.commit().await.unwrap();
-        assert_eq!(pending.await.unwrap().0, StatusCode::FORBIDDEN);
+        // Deactivated after its session was looked up: the read signs it out.
+        assert_eq!(pending.await.unwrap().0, StatusCode::UNAUTHORIZED);
     }
 }
 

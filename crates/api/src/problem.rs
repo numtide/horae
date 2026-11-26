@@ -93,6 +93,7 @@ impl From<OpError> for Problem {
         let (status, code, reason_applies) = match error.kind() {
             OpError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found", false),
             OpError::Forbidden(_) => (StatusCode::FORBIDDEN, "forbidden", false),
+            OpError::Unauthenticated(_) => (StatusCode::UNAUTHORIZED, "unauthorized", false),
             OpError::Conflict(_) => (StatusCode::CONFLICT, "conflict", true),
             OpError::Invalid { .. } => (StatusCode::UNPROCESSABLE_ENTITY, "invalid", true),
             OpError::Internal(_) | OpError::Detailed { .. } => return Self::internal(),

@@ -50,8 +50,9 @@ pub(super) fn database_error(error: sqlx::Error) -> StatusCode {
 /// Loads the exporting person as an [`Actor`](crate::ops::Actor) on the
 /// export's own connection, which keeps the organization and the person
 /// locked `FOR SHARE` until the caller's transaction or savepoint ends. A
-/// missing organization, a foreign or inactive person, and missing or invalid
-/// permission state are refused; a lost race is a retryable 409.
+/// missing organization or a foreign or inactive person signs the session out
+/// (401), as every `ops::begin*` does; missing or invalid permission state is
+/// refused; a lost race is a retryable 409.
 pub(super) async fn load_actor(
     connection: &mut PgConnection,
     org_id: Uuid,
@@ -62,7 +63,7 @@ pub(super) async fn load_actor(
         .await
         .map_err(super::op_status)?;
     if !actor.is_active() {
-        return Err(StatusCode::FORBIDDEN);
+        return Err(StatusCode::UNAUTHORIZED);
     }
     Ok(actor)
 }

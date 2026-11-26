@@ -97,6 +97,7 @@ pub(crate) fn op_status(error: crate::ops::OpError) -> StatusCode {
     use crate::ops::OpError;
     match error.kind() {
         OpError::Forbidden(_) | OpError::NotFound(_) => StatusCode::FORBIDDEN,
+        OpError::Unauthenticated(_) => StatusCode::UNAUTHORIZED,
         OpError::Conflict(_) => StatusCode::CONFLICT,
         OpError::Invalid { .. } => StatusCode::BAD_REQUEST,
         OpError::Internal(_) | OpError::Detailed { .. } => StatusCode::INTERNAL_SERVER_ERROR,

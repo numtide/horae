@@ -135,8 +135,23 @@ async fn server_version_refuses_a_person_deactivated_mid_session(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
+    // The session is signed out before the gate runs.
+    assert_eq!(version(&pool, &ids).await, Err(OpError::unauthenticated()));
+    // A token reaches the gate, which refuses an inactive person.
+    let state = crate::state::AppState::new(
+        pool.clone(),
+        std::sync::Arc::new(crate::plugin::PluginRegistry::empty()),
+    )
+    .with_version(VERSION.into());
+    let read = begin_read(
+        &pool,
+        Caller::token(ids.org_id, ids.user_id, Uuid::now_v7()),
+    )
+    .await
+    .unwrap();
+    let result = server_version(&read.actor, &state);
     assert_eq!(
-        version(&pool, &ids).await,
+        read.finish(result).await,
         Err(OpError::forbidden(IDENTITY_REQUIRED))
     );
 }
@@ -194,7 +209,17 @@ async fn own_permissions_deny_invalid_identity_and_state(pool: PgPool) {
         (ids.org_id, Uuid::now_v7()),
         (Uuid::now_v7(), ids.user_id),
     ] {
-        assert_eq!(read(&pool, org, actor).await, forbidden(IDENTITY_REQUIRED));
+        // A session naming a foreign, unknown or missing person is signed out.
+        assert_eq!(
+            read(&pool, org, actor).await,
+            Err(OpError::unauthenticated())
+        );
+        // A token reaches the operation, which refuses it.
+        let mut token = begin_read(&pool, Caller::token(org, actor, Uuid::now_v7()))
+            .await
+            .unwrap();
+        let result = permissions(&mut token.tx, &token.actor).await;
+        assert_eq!(token.finish(result).await, forbidden(IDENTITY_REQUIRED));
     }
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
         .execute(&pool)
@@ -202,7 +227,7 @@ async fn own_permissions_deny_invalid_identity_and_state(pool: PgPool) {
         .unwrap();
     assert_eq!(
         read(&pool, ids.org_id, ids.user_id).await,
-        forbidden(IDENTITY_REQUIRED)
+        Err(OpError::unauthenticated())
     );
     sqlx::query!("UPDATE users SET active = true WHERE id = $1", ids.user_id)
         .execute(&pool)
@@ -252,7 +277,7 @@ async fn own_permissions_wait_for_current_actor_deactivation(pool: PgPool) {
             .await
             .unwrap()
             .unwrap(),
-        Err(OpError::Forbidden(_))
+        Err(OpError::Unauthenticated(_))
     ));
 }
 
@@ -381,7 +406,7 @@ async fn own_permissions_reload_after_winning_gate_under_repeatable_read_default
             .unwrap()
             .unwrap();
         if deactivate {
-            assert!(matches!(result, Err(OpError::Forbidden(_))));
+            assert!(matches!(result, Err(OpError::Unauthenticated(_))));
         } else {
             let result = result.unwrap();
             assert_eq!(
@@ -442,7 +467,7 @@ async fn own_permissions_reader_retains_actor_activity_until_snapshot_is_loaded(
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id).await,
-        Err(OpError::Forbidden(_))
+        Err(OpError::Unauthenticated(_))
     ));
 }
 
@@ -544,8 +569,21 @@ async fn a_deactivated_person_cannot_save(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
+    // The session is signed out before the save runs.
     assert_eq!(
         save(&pool, &ids, "Ana", None).await,
+        Err(OpError::unauthenticated())
+    );
+    // A token reaches the save, which refuses an inactive person.
+    let mut write = begin(
+        &pool,
+        Caller::token(ids.org_id, ids.user_id, Uuid::now_v7()),
+    )
+    .await
+    .unwrap();
+    let result = update(&mut write.tx, &write.actor, "Ana", None).await;
+    assert_eq!(
+        write.commit(result, &Recorder::default()).await,
         Err(OpError::forbidden("Account is not active"))
     );
     assert_eq!(profile(&pool, ids.user_id).await.0, "Test User");

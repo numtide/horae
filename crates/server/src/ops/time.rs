@@ -477,10 +477,11 @@ async fn authorize(
         "Timesheet identity changed; refresh the page",
     )?;
     let org = actor.org_id();
-    if !actor.is_active() || !subject_is_active(tx, org, context.subject_id).await? {
+    let owner = actor.id() == context.subject_id;
+    // An active actor's own row is already held: `Actor::load` locked it.
+    if !actor.is_active() || (!owner && !subject_is_active(tx, org, context.subject_id).await?) {
         return Err(OpError::forbidden(ACTIVE_ACCOUNTS_REQUIRED));
     }
-    let owner = actor.id() == context.subject_id;
     let mut authority = Authority {
         org,
         subject: context.subject_id,

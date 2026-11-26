@@ -400,9 +400,14 @@ async fn every_active_person_reads_the_harvest_account_id(pool: PgPool) {
     assert_eq!(read.finish(result).await.unwrap(), stored);
 
     set_active(&pool, ids.user_id, false).await;
-    let mut read = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+    // A session is signed out before the operation runs.
+    let signed_out = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
         .await
-        .unwrap();
+        .map(drop);
+    assert_eq!(signed_out, Err(OpError::unauthenticated()));
+    // A token reaches the operation, which refuses an inactive person.
+    let token = Caller::token(ids.org_id, ids.user_id, Uuid::now_v7());
+    let mut read = crate::ops::begin_read(&pool, token).await.unwrap();
     let result = harvest_account_id(&mut read.tx, &read.actor).await;
     let refused = read.finish(result).await;
     assert!(matches!(refused, Err(OpError::Forbidden(_))), "{refused:?}");

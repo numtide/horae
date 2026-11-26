@@ -59,13 +59,7 @@ pub async fn submit_week(
     }
     let (user_id, org_id) = (actor.id(), actor.org_id());
     let week_end = week_end(week_start)?;
-    let config = sqlx::query!(
-        r#"SELECT week_start, round_minutes, round_dir as "round_dir: RoundDir"
-           FROM organizations WHERE id = $1"#,
-        org_id,
-    )
-    .fetch_one(&mut **tx)
-    .await?;
+    let config = actor.organization()?;
     // Writers take the shared form of this lock before changing any entries.
     // Taking the user-wide lock first covers inserts and cross-week moves, not
     // just rows that happened to exist when submission started.
@@ -183,12 +177,7 @@ pub async fn list(
     week_start: NaiveDate,
 ) -> Result<Vec<ApprovalSummary>, OpError> {
     require_approval_access(actor)?;
-    let first_day = sqlx::query_scalar!(
-        "SELECT week_start FROM organizations WHERE id = $1",
-        actor.org_id()
-    )
-    .fetch_one(&mut **tx)
-    .await?;
+    let first_day = actor.organization()?.week_start;
     if week_start.weekday().number_from_monday() as i16 != first_day {
         return Err(OpError::invalid(
             "week_start",

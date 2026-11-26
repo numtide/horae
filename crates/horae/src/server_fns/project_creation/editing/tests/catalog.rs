@@ -162,12 +162,9 @@ async fn editor_catalog_rejects_switched_requesters_and_out_of_scope_projects(po
         .execute(&pool)
         .await
         .unwrap();
-    assert!(matches!(
-        read(&pool, &ids, context(&ids)).await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(
+        &read(&pool, &ids, context(&ids)).await
     ));
 }
 
