@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state, query, xact_start FROM pg_stat_activity WHERE pid = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "query",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "xact_start",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "77bd409a3b37422b8a48d5d026e8a3bdc99b2941490d846d0795ece041d9c11a"
+}
