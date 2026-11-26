@@ -197,6 +197,8 @@ const format = (code, cents) => {
     await page.getByRole('button', { name: /Sign in as Admin/ }).click();
     await page.waitForURL(url => !url.pathname.startsWith('/auth/'));
     await page.goto(`${base}/reports`);
+    // The view arrives with the page; typing before it hydrates would be lost.
+    await expect(page.locator('input[type="date"]').first()).toHaveAttribute('data-dioxus-id', /\d+/);
     await page.locator('input[type="date"]').first().fill(from);
     await page.locator('input[type="date"]').last().fill(to);
     await expect(totalRow).toHaveCount(1);

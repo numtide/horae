@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 
-use crate::route::Route;
 use crate::server_fns;
 
 const FORBIDDEN: u16 = 403;
@@ -23,14 +22,17 @@ fn hidden(server: Option<&Result<String, ServerFnError>>) -> bool {
 /// from before a deploy, and a reload fetches the current one.
 #[component]
 pub fn VersionInfo() -> Element {
-    // The rail stays mounted across navigation, so ask again on every route
-    // change: a tab left open across a deploy then sees the new server. A
-    // restart keeps the last answer on screen while it runs.
-    let route = use_route::<Route>();
-    let server = use_resource(use_reactive!(|route| async move {
-        let _ = route;
-        server_fns::get_server_version().await
-    }));
+    // The rail stays mounted across navigation, so ask once on mount and again
+    // whenever the tab is shown: a tab left open across a deploy sees the new
+    // server when the person comes back to it. A restart keeps the last answer
+    // on screen while it runs.
+    let mut server = use_resource(|| async { server_fns::get_server_version().await });
+    use_future(move || async move {
+        let mut shown = document::eval(WATCH_VISIBILITY);
+        while shown.recv::<bool>().await.is_ok() {
+            server.restart();
+        }
+    });
     // Read after mount: server-side rendering would put the server's label in
     // the front-end row, and hydration would then keep it.
     let mut front_end = use_signal(|| None::<String>);
@@ -76,6 +78,20 @@ pub fn VersionInfo() -> Element {
         }
     }
 }
+
+/// Tells the block when the tab is shown again. The listener removes itself
+/// once the block is gone, since dropping the eval does not reach the browser.
+const WATCH_VISIBILITY: &str = r#"
+const shown = () => {
+  if (!document.querySelector('.sidebar-version')) {
+    document.removeEventListener('visibilitychange', shown);
+    return;
+  }
+  if (document.visibilityState === 'visible') dioxus.send(true);
+};
+document.addEventListener('visibilitychange', shown);
+await new Promise(() => {});
+"#;
 
 #[cfg(test)]
 mod tests {

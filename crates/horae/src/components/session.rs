@@ -9,6 +9,8 @@ use crate::components::screen_state::PageFailed;
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::user::CurrentUser;
 use crate::server_fns;
+// By crate path: the UI tests that include this file name only the models they use.
+use horae_types::permission_editor::PermissionRequester;
 
 /// The signed-in user, their permissions and their organization's settings,
 /// loaded once by the app shell and read by every page that renders
@@ -18,7 +20,9 @@ use crate::server_fns;
 /// value can only show or hide UI, never grant access. Code that binds browser
 /// storage to the identity calls `get_me` itself instead, because this copy would
 /// not see a user switched in another tab: invoice recovery on each gate mount,
-/// permission recovery on each editor mount and whenever a person is opened.
+/// permission recovery whenever a person is opened. Screens also pin their
+/// first reads to [`Session::requester`] so those start at once; the server
+/// refuses them if the account has changed.
 #[derive(Clone, Copy)]
 pub struct Session {
     pub me: Memo<CurrentUser>,
@@ -53,6 +57,34 @@ impl Session {
     /// Whether the last re-read failed; the values are then the ones before it.
     pub fn refresh_failed(&self) -> bool {
         self.loaded.is_error()
+    }
+
+    /// The signed-in person as the identity pin a read sends, so a screen can
+    /// start its reads beside its first one instead of after it. Read without
+    /// subscribing: a screen pins the identity it mounted with.
+    pub fn requester(&self) -> PermissionRequester {
+        let me = self.me.peek();
+        PermissionRequester {
+            org_id: me.org_id,
+            user_id: me.id,
+        }
+    }
+
+    /// The signed-in person's name, read without subscribing.
+    pub fn name(&self) -> String {
+        self.me.peek().name.clone()
+    }
+
+    /// Whether the grants include reading invoices (`invoices::READ`).
+    pub fn reads_invoices(&self) -> bool {
+        matches!(
+            &*self.permissions.read(),
+            Ok(access) if access.catalog_version == PERMISSION_CATALOG_VERSION
+                && horae_core::permissions::invoices::holds(
+                    |grant| access.grants.contains(&grant),
+                    horae_core::permissions::invoices::READ,
+                )
+        )
     }
 
     /// Whether to offer project creation, by the same rule the projects page

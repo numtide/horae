@@ -192,6 +192,11 @@ pub mod session {
         pub fn refresh(mut self) {
             self.loaded.restart();
         }
+
+        /// The account the editor answers for.
+        pub fn requester(&self) -> horae_types::permission_editor::PermissionRequester {
+            consume_context::<super::Probe>().editor.requester
+        }
     }
 
     pub fn use_session() -> Session {
@@ -378,6 +383,18 @@ impl Probe {
 fn app(probe: Probe) -> Element {
     use_context_provider(|| probe.clone());
     use_context_provider(|| Rc::new(probe.clone()) as Rc<dyn document::Document>);
+    // A session for the dialog's identity; the People page provides its own.
+    let loaded = use_resource(|| async { Err(ServerFnError::new("no session permissions")) });
+    let permissions = use_memo(move || {
+        loaded
+            .read()
+            .clone()
+            .unwrap_or_else(|| Err(ServerFnError::new("no session permissions")))
+    });
+    use_context_provider(|| session::Session {
+        permissions,
+        loaded,
+    });
     let person = use_signal(|| {
         probe
             .open_person
@@ -1425,8 +1442,9 @@ async fn opening_a_person_rechecks_the_session() {
         .send(Ok(directory_page(&probe)))
         .unwrap();
     let mut ui = Ui::new(probe.clone());
-    assert_eq!(*probe.identity_reads.borrow(), 1);
-    for reads in [2, 3] {
+    // Mounting checks retained requests with the session's identity.
+    assert_eq!(*probe.identity_reads.borrow(), 0);
+    for reads in [1, 2] {
         ui.click(&format!("person-permissions-{}", probe.editor.user_id));
         assert!(ui.html().contains("Review changes"));
         assert_eq!(*probe.identity_reads.borrow(), reads);

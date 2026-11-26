@@ -250,8 +250,16 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
     // Keep the requester pinned across selected-person/date/view remounts.
     let requester = use_signal(|| None::<PermissionRequester>);
     // The last week's write context, so the next week can start loading its
-    // tracking choices without waiting for its sheet.
-    let last_context = use_signal(|| None::<TimesheetWriteContext>);
+    // tracking choices without waiting for its sheet. The first is the
+    // session's own: one's own sheet then loads its choices beside it too.
+    let session = use_session();
+    let last_context = use_signal(|| {
+        let requester = session.requester();
+        Some(TimesheetWriteContext {
+            expected_requester: requester,
+            subject_id: requester.user_id,
+        })
+    });
     let subject = if user.is_empty() {
         None
     } else if let Ok(id) = user.parse::<Uuid>() {
@@ -422,6 +430,26 @@ fn TimesheetContent(
             })
     });
     let loaded = use_memo(move || context().is_some());
+    // Who the person picker lists for, and whom it shows chosen: the sheet's
+    // answer, or the held week's. On one's own sheet the session names both,
+    // so the picker loads beside the first sheet instead of after it.
+    let session = use_session();
+    let own_requester = use_hook(|| session.requester());
+    let own = use_hook(|| crate::models::scoped_time::TimesheetPerson {
+        id: own_requester.user_id,
+        name: session.name(),
+    });
+    let picker_identity = use_memo(move || {
+        let current = current_sheet.read();
+        let shown = current
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .or(held().and(admitted.read().as_ref().map(|(.., page)| page)))
+            .map(|page| (page.requester, page.subject.clone()));
+        shown.or_else(|| {
+            (subject.is_none() && current.is_none()).then(|| (own_requester, own.clone()))
+        })
+    });
     use_effect(move || {
         if let Some(context) = context()
             && *last_context.peek() != Some(context)
@@ -1485,14 +1513,16 @@ fn TimesheetContent(
                 }
             }
 
-            if let Some(page) = current_sheet.read().as_ref().and_then(|result| result.as_ref().ok())
-                .or(held().and(admitted.read().as_ref().map(|(.., page)| page)))
-            {
-                people::PersonPicker {
-                    requester: page.requester, selected: page.subject.clone(), disabled: busy(),
-                    on_selected: move |id: Uuid| {
-                        navigator().push(Route::Timesheet { view, date, span, user: id.to_string() });
-                    },
+            if let Some((requester, selected)) = picker_identity() {
+                // Keyed by the requester, so another account starts its own list.
+                for key in [format!("{}-{}", requester.org_id, requester.user_id)] {
+                    people::PersonPicker {
+                        key: "{key}",
+                        requester, selected: selected.clone(), disabled: busy(),
+                        on_selected: move |id: Uuid| {
+                            navigator().push(Route::Timesheet { view, date, span, user: id.to_string() });
+                        },
+                    }
                 }
             }
             if subject.is_some() {

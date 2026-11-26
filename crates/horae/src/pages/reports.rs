@@ -74,13 +74,43 @@ fn group_choices(tr: Tr) -> [(&'static str, String); 4] {
     ]
 }
 
+/// The report access the session's grants imply, by the server's rule
+/// (`ops::time_reads::reports::access`): any time read opens Reports, and
+/// managed or organization-wide reads open the financial view. `None` when
+/// the grants are unreadable, from another catalog version, or hold no time
+/// read; the server then decides, and explains a refusal.
+fn session_access(
+    requester: crate::models::permission_editor::PermissionRequester,
+    permissions: &Result<crate::models::own_permissions::OwnPermissions, ServerFnError>,
+) -> Option<crate::models::time_report::TimeReportAccess> {
+    use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+    let own = permissions
+        .as_ref()
+        .ok()
+        .filter(|own| own.catalog_version == PERMISSION_CATALOG_VERSION)?;
+    let has = |permission| own.grants.contains(&permission);
+    let financial = has(Permission::TimeReadManaged) || has(Permission::TimeReadAll);
+    (financial || has(Permission::TimeReadOwn)).then_some(
+        crate::models::time_report::TimeReportAccess {
+            requester,
+            financial,
+        },
+    )
+}
+
 #[component]
 pub fn Reports() -> Element {
-    use crate::models::time_report::TimeReportAccess;
-
+    // The session holds the grants the access check reads, so the reports
+    // start loading at once. Every report read still authorizes on the
+    // server; a stale session can only pick a view whose reads are refused.
+    let session = crate::components::session::use_session();
+    let mut known = use_signal(|| session_access(session.requester(), &session.permissions.peek()));
     // Retain identity and view when refreshing access unmounts the result view.
-    let mut binding = use_signal(|| None::<TimeReportAccess>);
+    let mut binding = use_signal(|| *known.peek());
     let mut access = use_resource(move || async move {
+        if let Some(known) = *known.peek() {
+            return Ok(known);
+        }
         let expected = *binding.peek();
         let result = server_fns::get_time_report_access(expected.map(|value| value.requester))
             .await
@@ -92,6 +122,20 @@ pub fn Reports() -> Element {
         Ok(result)
     });
     let retry_access = use_callback(move |_| access.restart());
+    // "Refresh access" asks the server, against the identity shown so far.
+    let check_access = use_callback(move |_| {
+        known.set(None);
+        access.restart();
+    });
+    match known() {
+        Some(known) if known.financial => return rsx! { FinancialReports {} },
+        Some(known) => {
+            return rsx! {
+                scoped::ScopedReports { requester: known.requester, on_check_access: check_access }
+            };
+        }
+        None => {}
+    }
     if access.state()() != UseResourceState::Ready {
         return rsx! { Loading { label: "Loading report access…" } };
     }
@@ -100,7 +144,7 @@ pub fn Reports() -> Element {
         Some(Ok(allowed)) => rsx! {
             scoped::ScopedReports {
                 requester: allowed.requester,
-                on_check_access: move |_| access.restart(),
+                on_check_access: check_access,
             }
         },
         response => {

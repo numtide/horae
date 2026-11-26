@@ -44,6 +44,34 @@ fn ClientDetailContent(id: Uuid) -> Element {
         Ok::<_, ServerFnError>(view)
     });
     let retry = use_callback(move |_| details.restart());
+    // The sections' reads need only the client id, so they start beside the
+    // view instead of after it. Invoices start at once when the session holds
+    // the grant, and otherwise once the view grants them; the view decides
+    // whether they show.
+    let session = crate::components::session::use_session();
+    let session_reads_invoices = use_hook(|| session.reads_invoices());
+    let mut projects =
+        use_resource(
+            move || async move { server_fns::list_projects(Some(id.to_string()), true).await },
+        );
+    let mut spend = use_resource(|| async { server_fns::list_project_spend(None).await });
+    let wants_invoices = use_memo(move || {
+        session_reads_invoices
+            || matches!(&*details.read(), Some(Ok(view)) if view.can_read_invoices)
+    });
+    let mut invoices = use_resource(move || async move {
+        if !wants_invoices() {
+            return None;
+        }
+        Some(server_fns::list_client_invoices(id.to_string()).await)
+    });
+    // After a change to the client, its view and sections read again.
+    let reload = use_callback(move |()| {
+        details.restart();
+        projects.restart();
+        spend.restart();
+        invoices.restart();
+    });
     // The header control to refocus once a save or status change has reloaded.
     let mut refocus = use_signal(|| None::<&'static str>);
     let mut saved = use_signal(|| None::<String>);
@@ -94,7 +122,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                     status_error.set(None);
                     saved.set(Some(tr.clients_restored_toast(&name)));
                     refocus.set(Some(ACTIONS_TRIGGER));
-                    details.restart();
+                    reload.call(());
                 }
                 Err(error) => status_error.set(Some(error.to_string())),
             }
@@ -151,7 +179,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                     div { class: "alert alert-danger mb-4", role: "alert", "Could not change client status: {message}" }
                 }
                 div { class: "client-detail-grid grid gap-4 items-start",
-                    ClientProjects { client_id: id }
+                    ClientProjects { client_id: id, projects, spend }
                     div { class: "flex flex-col gap-4 min-w-0",
                         Card { title: "Billing", id: "client-billing-title", class: "min-w-0",
                             p { class: "text-sm wrap-anywhere m-0 mb-4",
@@ -176,7 +204,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                 }
                             }
                         }
-                        if can_read_invoices { ClientInvoices { client_id: id } }
+                        if can_read_invoices { ClientInvoices { invoices } }
                     }
                 }
             }
@@ -185,7 +213,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                 on_saved: move |_| {
                     refocus.set(Some(ACTIONS_TRIGGER));
                     show_editor.set(false);
-                    details.restart();
+                    reload.call(());
                 },
             }
             super::status::ArchiveDialog { target: archiving, pending: archive_pending, focus_fallback: "page-back",
@@ -193,7 +221,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                     status_error.set(None);
                     saved.set(Some(tr.clients_archived_toast(&client.name)));
                     refocus.set(Some(ACTIONS_TRIGGER));
-                    details.restart();
+                    reload.call(());
                 },
             }
             ToastContainer {
@@ -207,12 +235,12 @@ fn ClientDetailContent(id: Uuid) -> Element {
 }
 
 #[component]
-fn ClientProjects(client_id: Uuid) -> Element {
-    let mut projects = use_resource(move || async move {
-        server_fns::list_projects(Some(client_id.to_string()), true).await
-    });
+fn ClientProjects(
+    client_id: Uuid,
+    mut projects: Resource<Result<Vec<crate::models::Project>, ServerFnError>>,
+    mut spend: Resource<Result<Vec<crate::models::ProjectSpend>, ServerFnError>>,
+) -> Element {
     let retry = use_callback(move |_| projects.restart());
-    let mut spend = use_resource(|| async { server_fns::list_project_spend(None).await });
     let ready = projects.state()() == UseResourceState::Ready;
     let spend_ready = spend.state()() == UseResourceState::Ready;
     let data = projects.read();
@@ -292,18 +320,19 @@ fn ClientProjects(client_id: Uuid) -> Element {
 }
 
 #[component]
-fn ClientInvoices(client_id: Uuid) -> Element {
-    let mut invoices = use_resource(move || async move {
-        server_fns::list_client_invoices(client_id.to_string()).await
-    });
+fn ClientInvoices(
+    mut invoices: Resource<Option<Result<Vec<crate::models::Invoice>, ServerFnError>>>,
+) -> Element {
     let retry = use_callback(move |_| invoices.restart());
-    let ready = invoices.state()() == UseResourceState::Ready;
-    let data = invoices.read();
+    // `Some(None)`: not started yet, because the grant was still unknown.
+    let read = invoices.read();
+    let data = read.as_ref().and_then(Option::as_ref);
+    let ready = invoices.state()() == UseResourceState::Ready && data.is_some();
     rsx! {
         Card { title: "Invoices", id: "client-invoices-title", focusable: true, class: "min-w-0",
-            if !ready && !matches!(&*data, Some(Err(_))) {
+            if !ready && !matches!(data, Some(Err(_))) {
                 Loading { label: "Loading invoices…" }
-            } else if let Some(Ok(rows)) = &*data {
+            } else if let Some(Ok(rows)) = data {
                 if rows.is_empty() {
                     EmptyState { icon: "invoices", title: "No invoices yet", inset: true,
                         body: "Invoices generated for this client appear here.",
@@ -319,7 +348,7 @@ fn ClientInvoices(client_id: Uuid) -> Element {
                         }
                     }
                 }
-            } else if let Some(Err(error)) = &*data {
+            } else if let Some(Err(error)) = data {
                 LoadError { error: error.clone(), what: "invoices", retry, pending: !ready, inset: true,
                     focus_on_recovery: "client-invoices-title",
                 }

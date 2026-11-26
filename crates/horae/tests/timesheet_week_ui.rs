@@ -90,6 +90,18 @@ mod components {
             pub fn can_create_projects(&self) -> bool {
                 false
             }
+
+            /// The account the sheets answer for (`release`).
+            pub fn requester(&self) -> super::super::PermissionRequester {
+                super::super::PermissionRequester {
+                    org_id: uuid::Uuid::nil(),
+                    user_id: super::super::ME,
+                }
+            }
+
+            pub fn name(&self) -> String {
+                "Me".into()
+            }
         }
 
         pub fn use_session() -> Session {
@@ -202,6 +214,9 @@ thread_local! {
     static FAIL_COMMANDS: Cell<bool> = const { Cell::new(false) };
     /// Seconds the selected person's zone is ahead of UTC.
     static SUBJECT_OFFSET: Cell<i32> = const { Cell::new(0) };
+    /// How often the tracking choices and the person picker were read.
+    static TRACKING_READS: Cell<usize> = const { Cell::new(0) };
+    static PEOPLE_READS: Cell<usize> = const { Cell::new(0) };
 }
 
 /// Answer the commands held in flight.
@@ -258,6 +273,7 @@ mod server_fns {
     pub async fn load_timesheet_tracking(
         _: TimesheetWriteContext,
     ) -> Result<Vec<TimesheetTrackingOption>, ServerFnError> {
+        TRACKING_READS.set(TRACKING_READS.get() + 1);
         if NO_TRACKING.get() {
             return Ok(Vec::new());
         }
@@ -296,6 +312,7 @@ mod server_fns {
     pub async fn list_timesheet_people(
         _: TimesheetPeopleQuery,
     ) -> Result<TimesheetPeoplePage, ServerFnError> {
+        PEOPLE_READS.set(PEOPLE_READS.get() + 1);
         Ok(TimesheetPeoplePage {
             requester: PermissionRequester {
                 org_id: Uuid::nil(),
@@ -535,6 +552,19 @@ fn week_a(view: ViewMode) -> Page {
     release(monday(), vec![entry(monday(), 60, "Old week project")]);
     page.settle();
     page
+}
+
+#[tokio::test]
+async fn ones_own_first_week_loads_its_choices_and_picker_beside_the_sheet() {
+    let mut page = Page::open();
+    let html = page.html();
+    assert!(html.contains("Loading timesheet"), "{html}");
+    assert!(html.contains("Timesheet for"), "{html}");
+    assert_eq!((TRACKING_READS.get(), PEOPLE_READS.get()), (1, 1));
+    release(monday(), Vec::new());
+    page.settle();
+    // The sheet confirms the session's account: nothing loads again.
+    assert_eq!((TRACKING_READS.get(), PEOPLE_READS.get()), (1, 1));
 }
 
 #[tokio::test]

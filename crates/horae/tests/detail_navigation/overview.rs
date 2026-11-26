@@ -7,9 +7,11 @@ fn overview() -> project::ProjectOverview {
         active: false,
     };
     project::ProjectOverview {
+        // The session's account (`get_me`), so the list's auxiliary reads are
+        // the ones started beside the overview.
         requester: permission_editor::PermissionRequester {
-            org_id: Uuid::from_u128(10),
-            user_id: Uuid::from_u128(20),
+            org_id: Uuid::nil(),
+            user_id: Uuid::from_u128(300),
         },
         can_create: false,
         can_import: false,
@@ -193,7 +195,7 @@ async fn client_bands_without_client_access_stay_plain_labels() {
 }
 
 #[tokio::test]
-async fn pending_or_denied_overview_starts_no_auxiliary_reads_or_actions() {
+async fn pending_or_denied_overview_shows_no_auxiliary_data_or_actions() {
     let probe = Probe {
         initial_path: Some("/projects".into()),
         ..Probe::default()
@@ -203,7 +205,10 @@ async fn pending_or_denied_overview_starts_no_auxiliary_reads_or_actions() {
     let mut dom = mount(&probe);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Loading projects"), "{html}");
-    assert!(probe.auxiliary_requesters.borrow().is_empty());
+    // The auxiliary reads start beside the overview, pinned to the session's
+    // account, and nothing shows them until the overview admits the list.
+    let session = overview().requester;
+    assert_eq!(*probe.auxiliary_requesters.borrow(), [Some(session); 3]);
     assert_eq!(*probe.client_catalog_reads.borrow(), 0);
     assert!(
         !html.contains("Export") && !html.contains("project-bulk-menu"),
@@ -225,7 +230,7 @@ async fn pending_or_denied_overview_starts_no_auxiliary_reads_or_actions() {
         !html.contains("private diagnostic") && !html.contains("Export"),
         "{html}"
     );
-    assert!(probe.auxiliary_requesters.borrow().is_empty());
+    assert_eq!(probe.auxiliary_requesters.borrow().len(), 3);
 }
 
 #[tokio::test]
@@ -290,9 +295,15 @@ async fn overview_refresh_re_pins_a_changed_account_or_organization_without_old_
             *probe.overview_requests.borrow(),
             [None, Some(initial.requester), None]
         );
+        // "Refresh access" retries the session's reads; the other account's
+        // list then starts its own.
         assert_eq!(
             *probe.auxiliary_requesters.borrow(),
-            [[Some(initial.requester); 3], [Some(changed.requester); 3]].concat()
+            [
+                [Some(initial.requester); 6].as_slice(),
+                &[Some(changed.requester); 3]
+            ]
+            .concat()
         );
     }
 }
@@ -471,7 +482,8 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
         "{html}"
     );
 
-    // ProjectListContent starts three auxiliary reads each time it mounts.
+    // The three auxiliary reads start once, beside the first overview; the
+    // list's reloads keep them.
     assert_eq!(probe.auxiliary_requesters.borrow().len(), 3);
 }
 

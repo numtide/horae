@@ -571,13 +571,42 @@ pub fn ProjectList(filter: ProjectFilter) -> Element {
         admitted.set(Some(response));
         Ok(())
     });
+    // The auxiliary reads start beside the overview, pinned to the account
+    // the session names. When the overview answers for another account (one
+    // switched in another tab), the content starts its own reads for that
+    // one instead, so it never shows this account's tags or spend.
+    let session = crate::components::session::use_session();
+    let session_requester = use_hook(|| session.requester());
+    let aux = AuxiliaryReads {
+        tags: use_resource(move || async move {
+            server_fns::list_project_tags(Some(session_requester)).await
+        }),
+        spend: use_resource(move || async move {
+            server_fns::list_project_spend(Some(session_requester)).await
+        }),
+        budget: use_resource(move || async move {
+            server_fns::list_project_budget_progress(Some(session_requester)).await
+        }),
+    };
     let retry_access = use_callback(move |_| projects.restart());
     let tr = crate::i18n::use_tr();
     if let Some(overview) = admitted() {
         let account = overview.requester;
+        if account == session_requester {
+            return rsx! {
+                ProjectListContent {
+                    overview,
+                    projects,
+                    admitted,
+                    bulk_success,
+                    filter: filter.clone(),
+                    aux,
+                }
+            };
+        }
         return rsx! {
             for overview in [overview] {
-                ProjectListContent {
+                SwitchedProjectList {
                     key: "{account.org_id}-{account.user_id}",
                     overview,
                     projects,
@@ -636,6 +665,43 @@ fn access_denied(error: &ServerFnError) -> bool {
     )
 }
 
+/// The project list's reads besides the overview: tags, spend and budget
+/// progress.
+#[derive(Clone, Copy, PartialEq)]
+struct AuxiliaryReads {
+    tags: Resource<Result<Vec<ProjectTagLink>, ServerFnError>>,
+    spend: Resource<Result<Vec<crate::models::ProjectSpend>, ServerFnError>>,
+    budget: Resource<Result<Vec<ProjectBudgetOverview>, ServerFnError>>,
+}
+
+/// The list of an account other than the session's. It mounts afresh for
+/// each account (its key is the requester), so filters, selection and the
+/// auxiliary reads start again, bound to that account.
+#[component]
+fn SwitchedProjectList(
+    filter: ProjectFilter,
+    overview: ProjectOverview,
+    projects: Resource<Result<(), ServerFnError>>,
+    admitted: Signal<Option<ProjectOverview>>,
+    bulk_success: Signal<Option<String>>,
+) -> Element {
+    let requester = overview.requester;
+    let aux = AuxiliaryReads {
+        tags: use_resource(
+            move || async move { server_fns::list_project_tags(Some(requester)).await },
+        ),
+        spend: use_resource(move || async move {
+            server_fns::list_project_spend(Some(requester)).await
+        }),
+        budget: use_resource(move || async move {
+            server_fns::list_project_budget_progress(Some(requester)).await
+        }),
+    };
+    rsx! {
+        ProjectListContent { filter, overview, projects, admitted, bulk_success, aux }
+    }
+}
+
 #[component]
 fn ProjectListContent(
     filter: ProjectFilter,
@@ -643,15 +709,14 @@ fn ProjectListContent(
     mut projects: Resource<Result<(), ServerFnError>>,
     mut admitted: Signal<Option<ProjectOverview>>,
     mut bulk_success: Signal<Option<String>>,
+    aux: AuxiliaryReads,
 ) -> Element {
     let requester = overview.requester;
-    let mut tags_res =
-        use_resource(move || async move { server_fns::list_project_tags(Some(requester)).await });
-    let mut spend_res =
-        use_resource(move || async move { server_fns::list_project_spend(Some(requester)).await });
-    let mut budget_res = use_resource(move || async move {
-        server_fns::list_project_budget_progress(Some(requester)).await
-    });
+    let AuxiliaryReads {
+        tags: mut tags_res,
+        spend: mut spend_res,
+        budget: mut budget_res,
+    } = aux;
 
     let tr = crate::i18n::use_tr();
     let navigator = use_navigator();
@@ -943,10 +1008,16 @@ fn ProjectListContent(
         return rsx! {
             PageHeader { title: "Projects" }
             div { class: "alert alert-danger", role: "alert", "Your session or project access changed. Refresh access before continuing." }
-            // Dropping the admitted list remounts this content, and so its
-            // auxiliary reads, only once the reload admits access again.
+            // Dropping the admitted list remounts this content only once the
+            // reload admits access again; the auxiliary reads start again with it.
             button { id: "projects-refresh-access", r#type: "button", class: "btn btn-secondary",
-                onclick: move |_| { admitted.set(None); projects.restart(); }, "Refresh access"
+                onclick: move |_| {
+                    tags_res.restart();
+                    spend_res.restart();
+                    budget_res.restart();
+                    admitted.set(None);
+                    projects.restart();
+                }, "Refresh access"
             }
         };
     }
