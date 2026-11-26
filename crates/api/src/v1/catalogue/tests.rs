@@ -31,6 +31,82 @@ async fn add_project(pool: &PgPool, ids: &SeedIds, name: &str) -> Uuid {
     id
 }
 
+/// A project in `currency` with a rate and a money budget, stored in
+/// hundredths as every amount is.
+async fn add_priced_project(
+    pool: &PgPool,
+    ids: &SeedIds,
+    currency: &str,
+    rate_hundredths: i64,
+    budget_hundredths: i64,
+) -> Uuid {
+    let id = add_project(pool, ids, currency).await;
+    sqlx::query!(
+        "UPDATE projects SET currency = $2, rate_cents = $3, budget_kind = 'amount',
+                budget_amount_cents = $4
+         WHERE id = $1",
+        id,
+        currency,
+        rate_hundredths,
+        budget_hundredths,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+/// Amounts are served in the currency's ISO 4217 minor unit: a two-decimal
+/// currency's hundredths unchanged, a zero-decimal one's whole units, a
+/// three-decimal one's thousandths.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn project_amounts_are_in_the_currencys_minor_unit(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let (secret, _) = token(&pool, &admin, "sync").await;
+    let router = router(&pool, 100);
+    for (currency, rate, budget, rate_minor, budget_minor) in [
+        ("EUR", 1_210, 500_000, 1_210, 500_000),
+        ("JPY", 800_000, 50_000_000, 8_000, 500_000),
+        ("BHD", 1_050, 500_000, 10_500, 5_000_000),
+    ] {
+        let id = add_priced_project(&pool, &admin, currency, rate, budget).await;
+        let (status, project) = read(
+            &router,
+            "getProject",
+            &format!("/api/v1/projects/{id}"),
+            &secret,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{currency}: {project}");
+        assert_eq!(
+            project["hourly_rate"],
+            json!({ "amount_minor": rate_minor, "currency": currency })
+        );
+        assert_eq!(
+            project["budget_amount"],
+            json!({ "amount_minor": budget_minor, "currency": currency })
+        );
+    }
+}
+
+/// A stored zero-decimal amount with hundredths has no exact value in the
+/// currency's minor unit: the read fails with a 500 rather than round it.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_inexact_stored_amount_is_refused_not_rounded(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let (secret, _) = token(&pool, &admin, "sync").await;
+    let router = router(&pool, 100);
+    let id = add_priced_project(&pool, &admin, "JPY", 800_050, 0).await;
+    for (operation, uri) in [
+        ("getProject", format!("/api/v1/projects/{id}")),
+        ("listProjects", "/api/v1/projects".to_owned()),
+    ] {
+        let (status, problem) = read(&router, operation, &uri, &secret).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{operation}");
+        assert_eq!(problem["code"], "internal", "{operation}: {problem}");
+    }
+}
+
 /// An administrator, and a member who works on the seeded project and may
 /// track its task. The client has an address and tax id, the project a rate
 /// and a money budget, and a second project belongs to nobody.

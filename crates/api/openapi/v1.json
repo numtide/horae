@@ -205,7 +205,21 @@
         "type": "object"
       },
       "Money": {
-        "description": "An amount of money: an integer in minor units (cents) and its ISO 4217\ncurrency.",
+        "description": "An amount of money: an integer in the ISO 4217 minor unit of its currency.\nEUR 12.10 is `1210`, JPY 8000 (no minor unit) is `8000` and BHD 10.500\n(three decimals) is `10500`. Every amount in this API is a `Money`.",
+        "examples": [
+          {
+            "amount_minor": 1210,
+            "currency": "EUR"
+          },
+          {
+            "amount_minor": 8000,
+            "currency": "JPY"
+          },
+          {
+            "amount_minor": 10500,
+            "currency": "BHD"
+          }
+        ],
         "properties": {
           "amount_minor": {
             "format": "int64",

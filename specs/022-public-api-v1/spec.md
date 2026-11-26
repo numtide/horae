@@ -323,8 +323,9 @@ ______________________________________________________________________
   `/api/v1` responses.
 - **FR-041**: Identifiers MUST be Horae's UUIDs (v7), written as strings. The API MUST NOT expose
   the integer ids of the Harvest-compatible API.
-- **FR-042**: Durations MUST be integer minutes and money MUST be an integer in minor units with its
-  ISO 4217 currency code, on input and output. No decimal hours or decimal amounts appear in
+- **FR-042**: Durations MUST be integer minutes and money MUST be an integer in the currency's ISO
+  4217 minor unit (EUR 12.10 is `1210`, JPY 8000 is `8000`, BHD 10.500 is `10500`) with its ISO
+  4217 currency code, on input and output. No decimal hours or decimal amounts appear in
   `/api/v1` (constitution I).
 - **FR-043**: Timestamps MUST be RFC 3339 with an offset; calendar dates (an entry's day, a filter's
   range) MUST be plain ISO 8601 dates, interpreted as Horae interprets them in the web app.

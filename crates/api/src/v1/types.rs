@@ -4,6 +4,7 @@
 //! shapes cannot reach the API unnoticed.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use horae_core::money::{MinorUnitsError, from_iso_minor, to_iso_minor};
 use horae_core::permissions::oauth::Scope;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -18,6 +19,7 @@ use crate::ops::oauth::tokens::OAuthIdentity;
 use crate::ops::people::PersonRecord;
 use crate::ops::projects::reads::ProjectRecord;
 use crate::ops::projects::task_catalog::TaskRecord;
+use crate::problem::Problem;
 
 /// One page of a list, in `id` order. `next_cursor` is `null` on the last
 /// page.
@@ -27,13 +29,50 @@ pub struct Page<T> {
     pub next_cursor: Option<String>,
 }
 
-/// An amount of money: an integer in minor units (cents) and its ISO 4217
-/// currency.
+/// An amount of money: an integer in the ISO 4217 minor unit of its currency.
+/// EUR 12.10 is `1210`, JPY 8000 (no minor unit) is `8000` and BHD 10.500
+/// (three decimals) is `10500`. Every amount in this API is a `Money`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[schema(examples(
+    json!({ "amount_minor": 1210, "currency": "EUR" }),
+    json!({ "amount_minor": 8000, "currency": "JPY" }),
+    json!({ "amount_minor": 10500, "currency": "BHD" }),
+))]
 pub struct Money {
-    pub amount_minor: i64,
+    amount_minor: i64,
     #[schema(pattern = "^[A-Z]{3}$")]
-    pub currency: String,
+    currency: String,
+}
+
+// Storage keeps hundredths for every currency; these are the API's only
+// conversions to and from them.
+impl Money {
+    /// The `Money` of an amount stored in hundredths. Errors, never rounds,
+    /// when the amount has no exact value in the currency's minor unit.
+    pub fn from_stored(hundredths: i64, currency: &str) -> Result<Self, MinorUnitsError> {
+        Ok(Self {
+            amount_minor: to_iso_minor(hundredths, currency)?,
+            currency: currency.to_owned(),
+        })
+    }
+
+    /// The hundredths to store for a received amount, or a 422 naming
+    /// `field` when storage cannot hold it exactly.
+    pub fn to_stored(&self, field: &str) -> Result<i64, Problem> {
+        from_iso_minor(self.amount_minor, &self.currency).map_err(|error| {
+            Problem::invalid(
+                field,
+                format!("{} {}: {error}", self.amount_minor, self.currency),
+            )
+        })
+    }
+}
+
+/// A stored amount `/api/v1` cannot serve exactly: a 500, logged with the row
+/// it came from, rather than a rounded amount.
+fn inexact_stored(row: Uuid, column: &str, error: MinorUnitsError) -> Problem {
+    tracing::error!(%row, column, %error, "stored amount has no exact ISO 4217 minor-unit value");
+    Problem::internal()
 }
 
 /// Who the token acts as, and in which organization.
@@ -419,17 +458,21 @@ pub struct Project {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<ProjectRecord> for Project {
-    fn from(project: ProjectRecord) -> Self {
-        let money = |amount_minor| Money {
-            amount_minor,
-            currency: project.currency.clone(),
+impl TryFrom<ProjectRecord> for Project {
+    type Error = Problem;
+
+    fn try_from(project: ProjectRecord) -> Result<Self, Problem> {
+        let money = |hundredths: Option<i64>, column| {
+            hundredths
+                .map(|hundredths| Money::from_stored(hundredths, &project.currency))
+                .transpose()
+                .map_err(|error| inexact_stored(project.id, column, error))
         };
-        Self {
+        Ok(Self {
             id: project.id,
             client_id: project.client_id,
-            budget_amount: project.budget_amount_cents.map(money),
-            hourly_rate: project.rate_cents.map(money),
+            budget_amount: money(project.budget_amount_cents, "budget_amount_cents")?,
+            hourly_rate: money(project.rate_cents, "rate_cents")?,
             name: project.name,
             code: project.code,
             project_type: project.project_type.into(),
@@ -441,7 +484,7 @@ impl From<ProjectRecord> for Project {
             created_at: project.created_at,
             updated_at: project.updated_at,
             currency: project.currency,
-        }
+        })
     }
 }
 
@@ -526,5 +569,27 @@ impl From<PersonRecord> for Person {
             created_at: person.created_at,
             updated_at: person.updated_at,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+    use serde_json::json;
+
+    use super::Money;
+
+    #[test]
+    fn a_received_amount_is_stored_in_hundredths_or_refused_naming_its_field() {
+        let money = |value| serde_json::from_value::<Money>(value).unwrap();
+        let bhd = money(json!({ "amount_minor": 10_500, "currency": "BHD" }));
+        assert_eq!(bhd.to_stored("rate"), Ok(1_050));
+        let jpy = money(json!({ "amount_minor": 8_000, "currency": "JPY" }));
+        assert_eq!(jpy.to_stored("rate"), Ok(800_000));
+        let problem = money(json!({ "amount_minor": 10_505, "currency": "BHD" }))
+            .to_stored("hourly_rate")
+            .unwrap_err();
+        assert_eq!(problem.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(problem.field.as_deref(), Some(&json!("hourly_rate")));
     }
 }

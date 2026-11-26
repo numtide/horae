@@ -496,6 +496,34 @@ mod invoice {
                 .sum();
             prop_assert_eq!(sum % step, 0);
         }
+
+        /// Stored hundredths and ISO 4217 minor units round-trip whenever a
+        /// conversion succeeds, and a conversion fails only when the amount is
+        /// inexact or out of range; a silent rounding or a wrong factor would
+        /// break the round trip.
+        #[test]
+        fn iso_minor_units_round_trip_or_refuse(
+            amount in prop_oneof![any::<i64>(), -1_000_000..=1_000_000_i64],
+            currency in prop::sample::select(vec!["JPY", " KRW", "EUR", "KWD", "BHD", "jpy", "XYZ"]),
+        ) {
+            use horae_core::money::{currency_decimals, from_iso_minor, to_iso_minor};
+            let (down, up): (i128, i128) = match currency_decimals(currency) {
+                0 => (100, 1),
+                3 => (1, 10),
+                _ => (1, 1),
+            };
+            let exact = i128::from(amount) % down == 0 && i64::try_from(i128::from(amount) * up / down).is_ok();
+            match to_iso_minor(amount, currency) {
+                Ok(minor) => prop_assert_eq!(from_iso_minor(minor, currency), Ok(amount)),
+                Err(_) => prop_assert!(!exact),
+            }
+            // The write direction is the same factor, the other way round.
+            let fits = i128::from(amount) % up == 0 && i64::try_from(i128::from(amount) * down / up).is_ok();
+            match from_iso_minor(amount, currency) {
+                Ok(stored) => prop_assert_eq!(to_iso_minor(stored, currency), Ok(amount)),
+                Err(_) => prop_assert!(!fits),
+            }
+        }
     }
 }
 

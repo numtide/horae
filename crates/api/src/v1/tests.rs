@@ -30,6 +30,88 @@ fn openapi_snapshot_is_current() {
     );
 }
 
+/// Money-looking properties that are deliberately not a `Money`, each with
+/// why. Empty: every amount uses the one convention.
+const NOT_MONEY: &[&str] = &[];
+
+/// Whether a property named `name`, described as `description`, reads as an
+/// amount of money.
+fn looks_like_money(name: &str, description: &str) -> bool {
+    const WORDS: &[&str] = &[
+        "amount", "rate", "cost", "price", "total", "cents", "minor", "fee", "tax", "discount",
+        "subtotal", "balance", "money",
+    ];
+    // An identifier (`tax_id`) is never an amount, whatever it names.
+    let identifier = name == "id" || name.ends_with("_id");
+    name == "budget"
+        || (!identifier && name.split('_').any(|word| WORDS.contains(&word)))
+        || ["money", "cents", "minor unit"]
+            .iter()
+            .any(|phrase| description.to_lowercase().contains(phrase))
+}
+
+fn refers_to_money(schema: &Value) -> bool {
+    match schema {
+        Value::Object(fields) => {
+            fields.get("$ref") == Some(&json!("#/components/schemas/Money"))
+                || fields.values().any(refers_to_money)
+        }
+        Value::Array(items) => items.iter().any(refers_to_money),
+        _ => false,
+    }
+}
+
+/// Every property under `node` that looks like money, with the path to it,
+/// and whether it is a `Money`.
+fn money_properties(node: &Value, path: &str, found: &mut Vec<(String, bool)>) {
+    match node {
+        Value::Object(fields) => {
+            if let Some(Value::Object(properties)) = fields.get("properties") {
+                for (name, schema) in properties {
+                    let description = schema["description"].as_str().unwrap_or_default();
+                    if looks_like_money(name, description) {
+                        found.push((format!("{path}.{name}"), refers_to_money(schema)));
+                    }
+                }
+            }
+            for (key, child) in fields {
+                money_properties(child, &format!("{path}/{key}"), found);
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                money_properties(child, &format!("{path}/{index}"), found);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// No endpoint can add a second money convention: every amount in the
+/// document, request or response, is a `$ref` to `Money`.
+#[test]
+fn every_amount_in_the_document_is_money() {
+    let mut document = serde_json::to_value(document()).unwrap();
+    // `Money` itself is the one place its fields are spelled out.
+    document["components"]["schemas"]
+        .as_object_mut()
+        .unwrap()
+        .remove("Money")
+        .expect("the document defines Money");
+    let mut found = Vec::new();
+    money_properties(&document, "", &mut found);
+    let stray: Vec<&String> = found
+        .iter()
+        .filter(|(path, money)| !money && !NOT_MONEY.iter().any(|allowed| path.ends_with(allowed)))
+        .map(|(path, _)| path)
+        .collect();
+    assert!(stray.is_empty(), "amounts that are not a Money: {stray:?}");
+    assert!(
+        found.iter().any(|(path, _)| path.ends_with(".hourly_rate")),
+        "the walk finds the project's rate: {found:?}"
+    );
+}
+
 #[test]
 fn the_document_is_openapi_3_1_with_bearer_tokens() {
     let document = serde_json::to_value(document()).unwrap();

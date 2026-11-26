@@ -1,8 +1,9 @@
 # Data model: Public API `/api/v1`
 
 Every new table has a UUID v7 primary key and `org_id` (Principle III). Durations stay integer
-minutes and money integer minor units (Principle I); `/api/v1` exposes them as they are stored
-(research R-8). New schema goes in `crates/server/migrations/0002_*.sql` onwards; the baseline is
+minutes and money integer hundredths of the major unit for every currency (Principle I);
+`/api/v1` exposes durations as they are stored and money in the currency's ISO 4217 minor unit
+(research R-8; see **Money** below). New schema goes in `crates/server/migrations/0002_*.sql` onwards; the baseline is
 never edited.
 
 ## New table: `api_tokens` (PR C)
@@ -106,7 +107,12 @@ Shapes are in [contracts/api-v1.md](contracts/api-v1.md); the draft schema is
 - **Client**: id, name, currency, active, created at, updated at; address and tax id only for
   catalogue readers, as in the web app.
 - **Person**: id, name, email, active, created at, updated at.
-- **Money**: `{ amount_minor: i64, currency: string }`.
+- **Money**: `{ amount_minor: i64, currency: string }`, `amount_minor` in the currency's ISO 4217
+  minor unit: EUR 12.10 is `1210`, JPY 8000 is `8000`, BHD 10.500 is `10500`. It is built from
+  and read into stored hundredths only through `horae_core::money::{to_iso_minor, from_iso_minor}`.
+  A stored amount with no exact minor-unit value (JPY with hundredths) answers `500` and is logged,
+  never rounded; a received one that storage cannot hold (BHD not a multiple of 10) is a `422`
+  naming the field.
 - **Page\<T>**: `{ data: [T], next_cursor: string | null }`.
 - **Problem**: RFC 9457 body with `code` and optional `field` (research R-4).
 
