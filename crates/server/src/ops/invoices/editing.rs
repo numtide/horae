@@ -139,6 +139,8 @@ fn evaluate(
             ));
         }
         // An unchanged amount stays editable, even one stored before steps were enforced.
+        // Unreachable today (fee lines come only from configured projects, whose
+        // currencies all have hundredths); kept as defence in depth, see `fee_step`.
         if fee.amount_cents != row.amount_cents {
             crate::ops::projects::form::fee_step(fee.amount_cents, currency, "Fee amount")
                 .map_err(|error| {

@@ -50,6 +50,10 @@ pub(crate) fn optional_amount(value: &str, field: &str) -> Result<Option<i64>, O
 /// Refuses a fee that is not a whole number of `currency`'s unit (JPY 100.50):
 /// it would make an invoice whose total cannot be paid exactly. The database
 /// checks the same step.
+///
+/// Today no call can fail: `validate_basics` limits project currencies to
+/// `PROJECT_CURRENCIES`, all with hundredths, and fee lines come only from
+/// configured projects. It is defence in depth for when that list grows.
 pub(crate) fn fee_step(amount: i64, currency: &str, field: &str) -> Result<i64, OpError> {
     if amount % horae_core::money::amount_step(currency) == 0 {
         Ok(amount)

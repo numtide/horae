@@ -36,10 +36,10 @@ ALTER TABLE public.project_fee_occurrences
 
 -- A fee schedule's currency is its project's, which a CHECK cannot read, so
 -- constraint triggers check the project's whole schedule against its current
--- currency when a fee or the currency is written. They are deferred to the
--- commit: the project editor may change the currency before it writes the new
--- fee in the same transaction. A failure is a check violation named after the
--- rule.
+-- currency when a fee or the currency is written. The app never changes a
+-- project's currency, so they are deferred to the commit only for a data
+-- migration, which may then rewrite the currency and the fees in either order.
+-- A failure is a check violation named after the rule.
 CREATE FUNCTION public.check_fee_amount_currency_step() RETURNS trigger
     LANGUAGE plpgsql
     AS $$

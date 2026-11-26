@@ -578,7 +578,7 @@ async fn the_database_keeps_fees_on_the_currency_step(pool: PgPool) {
     );
 
     // Switching a project to a zero-decimal currency rechecks its fees at the
-    // commit, so the editor may write the currency before the new fee.
+    // commit, so a data migration may write the currency before the new fee.
     let ids = fee_project_in(&pool, "EUR", 10_050).await;
     let switched = sqlx::query!(
         "UPDATE projects SET currency = 'JPY' WHERE id = $1",
