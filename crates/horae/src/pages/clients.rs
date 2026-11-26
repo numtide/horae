@@ -72,11 +72,19 @@ pub fn ClientList(filter: ClientFilter) -> Element {
     let settled = use_debounced(query, SEARCH_DEBOUNCE);
     // Only a settled search moves the URL. The filter is read from the
     // router at that moment, so Back to another search is never undone.
+    // Each search asks once: the editor's navigation guard can hold the
+    // replace, and asking again on every route update would never end.
+    let asked = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(None::<String>)));
     use_effect(move || {
         let search = settled();
-        if let Route::ClientList { filter: current } = dioxus::router::router().current::<Route>()
-            && search != current.search
-        {
+        let Route::ClientList { filter: current } = dioxus::router::router().current::<Route>()
+        else {
+            return;
+        };
+        if search == current.search {
+            *asked.borrow_mut() = None;
+        } else if asked.borrow().as_ref() != Some(&search) {
+            *asked.borrow_mut() = Some(search.clone());
             navigator.replace(Route::ClientList {
                 filter: ClientFilter { search, ..current },
             });

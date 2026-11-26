@@ -676,11 +676,19 @@ fn ProjectListContent(
         }
     });
     // Only a settled search moves the URL, and only on the list's own route.
+    // Each search asks once: a navigation guard can hold the replace, and
+    // asking again on every route update would never end.
+    let asked = use_hook(|| Rc::new(std::cell::RefCell::new(None::<String>)));
     use_effect(move || {
         let search = settled();
-        if let Route::ProjectList { filter: current } = dioxus::router::router().current::<Route>()
-            && search != current.search
-        {
+        let Route::ProjectList { filter: current } = dioxus::router::router().current::<Route>()
+        else {
+            return;
+        };
+        if search == current.search {
+            *asked.borrow_mut() = None;
+        } else if asked.borrow().as_ref() != Some(&search) {
+            *asked.borrow_mut() = Some(search.clone());
             navigator.replace(Route::ProjectList {
                 filter: ProjectFilter { search, ..current },
             });

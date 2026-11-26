@@ -244,11 +244,11 @@ pub(super) fn ScopedReports(
             filters: rsx! {
                 div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
                     label { class: "text-sm text-secondary", r#for: "report-from", {tr.reports_from()} }
-                    Input { kind: "date", id: "report-from", class: "w-auto min-w-0 max-w-full", value: from(), error_id: date_error_id.clone(),
+                    Input { kind: "date", id: "report-from", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: from(), error_id: date_error_id.clone(),
                         oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); from.set(event.value()); }
                     }
                     label { class: "text-sm text-secondary", r#for: "report-to", {tr.reports_to()} }
-                    Input { kind: "date", id: "report-to", class: "w-auto min-w-0 max-w-full", value: to(), error_id: date_error_id,
+                    Input { kind: "date", id: "report-to", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: to(), error_id: date_error_id,
                         oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); to.set(event.value()); }
                     }
                 }

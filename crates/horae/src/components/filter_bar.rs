@@ -8,7 +8,7 @@ use super::icons::NavIcon;
 pub fn FilterBar(filters: Element, search: Option<Element>) -> Element {
     rsx! {
         div { class: "flex flex-wrap items-center gap-4 mb-5",
-            div { class: "flex flex-wrap items-center gap-3", {filters} }
+            div { class: "flex flex-wrap items-center gap-3 min-w-0 max-w-full", {filters} }
             if let Some(search) = search {
                 div { class: "flex-1" }
                 {search}

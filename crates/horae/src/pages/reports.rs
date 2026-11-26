@@ -265,7 +265,8 @@ fn FinancialReports() -> Element {
                         Input {
                             kind: "date",
                             id: "report-filter-from",
-                            class: "w-auto min-w-0 max-w-full min-h-control",
+                            // Narrow padding below 640px lets a full date fit at enlarged text.
+                            class: "w-auto min-w-0 max-w-full min-h-control px-1 sm:px-3",
                             value: "{from_input}",
                             oninput: move |e: FormEvent| from_input.set(e.value()),
                         }
@@ -273,7 +274,8 @@ fn FinancialReports() -> Element {
                         Input {
                             kind: "date",
                             id: "report-filter-to",
-                            class: "w-auto min-w-0 max-w-full min-h-control",
+                            // Narrow padding below 640px lets a full date fit at enlarged text.
+                            class: "w-auto min-w-0 max-w-full min-h-control px-1 sm:px-3",
                             value: "{to_input}",
                             oninput: move |e: FormEvent| to_input.set(e.value()),
                         }
