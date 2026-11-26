@@ -238,6 +238,16 @@ pub fn from_iso_minor(minor: i64, currency: &str) -> Result<i64, MinorUnitsError
     }
 }
 
+/// A per-hour price (a rate) as `/api/v1` serves it: a decimal in major units
+/// with exactly the two decimals Horae stores for every currency, trailing
+/// zeros included. JPY 8050 hundredths is `"80.50"`, JPY 800000 is
+/// `"8000.00"`, USD 12000 is `"120.00"` and BHD 1050 is `"10.50"`. A rate
+/// multiplies time before rounding, so it keeps its stored precision even
+/// where the currency's minor unit is coarser, and never fails.
+pub fn rate_decimal(hundredths: i64) -> String {
+    format_cents_plain(hundredths)
+}
+
 /// Display a project budget in its own unit: money for an amount budget, hours
 /// for an hours budget, empty for no budget.
 pub fn format_budget(
@@ -303,6 +313,15 @@ mod tests {
         assert_eq!(from_iso_minor(1_210, "EUR"), Ok(1_210));
         assert_eq!(from_iso_minor(8_000, "JPY"), Ok(800_000));
         assert_eq!(from_iso_minor(10_500, "BHD"), Ok(1_050));
+    }
+
+    #[test]
+    fn rates_keep_their_two_stored_decimals_in_every_currency() {
+        assert_eq!(rate_decimal(8_050), "80.50");
+        assert_eq!(rate_decimal(800_000), "8000.00");
+        assert_eq!(rate_decimal(12_000), "120.00");
+        assert_eq!(rate_decimal(1_050), "10.50");
+        assert_eq!(rate_decimal(5), "0.05");
     }
 
     #[test]
