@@ -1649,6 +1649,70 @@ async fn finalized_task_links_apply_the_template_in_any_currency(pool: PgPool) {
     assert_eq!(kept, 2);
 }
 
+/// A Project Manager cannot read billable rates, but New Project still applies
+/// the task's template to a link they leave blank.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_manager_without_rate_access_gets_the_template_without_seeing_it(pool: PgPool) {
+    use crate::models::project_creation::{
+        CreationSearch, ProjectTaskInput, TaskAccess, TaskSource,
+    };
+    use horae_core::project::RateMode;
+    use horae_core::types::ProjectType;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents=8050 WHERE id=$1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    become_profile(&pool, &ids, BuiltInProfile::ProjectManager).await;
+    let options = super::load_creation_options(
+        &pool,
+        ids.user_id,
+        ids.org_id,
+        &CreationSearch::default(),
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(options.tasks[0].default_rate_cents, None);
+    let form = ProjectForm {
+        client_id: Some(ids.client_id),
+        name: "Managed without rates".into(),
+        project_type: ProjectType::TimeAndMaterials,
+        rate_mode: RateMode::Task,
+        tasks: vec![ProjectTaskInput {
+            id: Uuid::now_v7(),
+            source: TaskSource::Existing {
+                task_id: ids.task_id,
+            },
+            billable: true,
+            rate: String::new(),
+            budget: String::new(),
+            access: TaskAccess::Everyone,
+        }],
+        ..Default::default()
+    };
+    let draft = Uuid::now_v7();
+    super::save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &form)
+        .await
+        .unwrap();
+    let project =
+        super::finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &form, false)
+            .await
+            .unwrap();
+    let rate = sqlx::query_scalar!(
+        "SELECT rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+        project,
+        ids.task_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rate, Some(8050));
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn creation_catalogs_show_billable_rates_only_to_rate_readers(pool: PgPool) {
     use crate::models::project_creation::CreationSearch;

@@ -258,6 +258,7 @@ const template = cents => `${Math.floor(cents / 100)}.${String(cents % 100).padS
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/${id}`);
     assert.equal(storedRate(id), String(task.default_rate_cents));
+    let rateless;
     for (const [amount, currency, placeholder, override, expected] of [
       [8050, 'USD', '80.50', undefined, '8050'],
       [8050, 'GBP', '80.50', undefined, '8050'],
@@ -267,8 +268,19 @@ const template = cents => `${Math.floor(cents / 100)}.${String(cents % 100).padS
       sql(`UPDATE tasks SET default_rate_cents = ${amount} WHERE id = '${task.id}'`);
       const project = await createProject('Task', currency, undefined, { placeholder, override });
       assert.equal(storedRate(project), expected);
+      if (expected === '') rateless = project;
     }
     sql(`UPDATE tasks SET default_rate_cents = ${task.default_rate_cents} WHERE id = '${task.id}'`);
+    // An existing link without a rate keeps inheriting: the editor does not
+    // offer the template unless the rate is edited, and saving leaves it empty.
+    await openEditor(rateless);
+    const kept = page.locator('.np-page').getByRole('textbox', { name: 'Hourly rate for Development (EUR)', exact: true });
+    await expect(kept).toHaveValue('');
+    await expect(kept).toHaveAttribute('placeholder', 'Inherit');
+    await page.locator('#np-name').fill(`Rateless ${rateless}`);
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects/${rateless}`);
+    assert.equal(storedRate(rateless), '');
     await readsFinished();
     assert.deepEqual(errors, []);
     console.log('PASS: New Project task rates and editor capabilities preserve configured/legacy modes, apply task templates in any currency, scoped budgets and keyboard recovery across three widths');

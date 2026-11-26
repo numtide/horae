@@ -299,7 +299,13 @@ mod tests {
                 "{typed}"
             );
         }
-        for refused in ["80.505", "-1", "", "0", "0.00"] {
+        assert_eq!(
+            RateTemplate::parse("92233720368547758.07")
+                .map(RateTemplate::hundredths)
+                .ok(),
+            Some(i64::MAX)
+        );
+        for refused in ["80.505", "-1", "", "0", "0.00", "92233720368547758.08"] {
             assert!(RateTemplate::parse(refused).is_err(), "{refused}");
         }
         assert_eq!(RateTemplate::from_hundredths(0), None);

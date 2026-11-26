@@ -1,9 +1,9 @@
 # Constitution amendment for 026 Task rate templates
 
 **Status**: Approved by the maintainer on 2026-11-23, with the last three sentences of the
-Principle I paragraph added the same day (review finding H3). Not applied yet. The templates PR (delivery 2
-in plan.md) applies the text below verbatim to `.specify/memory/constitution.md` as its first
-change, with a Sync Impact Report. The rounding PR (delivery 1) does not need it: it only rounds
+Principle I paragraph added the same day (review finding H3). Applied verbatim to
+`.specify/memory/constitution.md` as version 7.2.0 by the templates PR (delivery 2 in plan.md, #484),
+with a Sync Impact Report. The rounding PR (delivery 1) does not need it: it only rounds
 money.
 
 **Version change**: MINOR, 7.1.0 → 7.2.0, as the maintainer chose (materially expanded guidance on

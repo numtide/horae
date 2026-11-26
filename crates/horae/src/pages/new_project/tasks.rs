@@ -148,7 +148,7 @@ pub(super) fn Tasks(
                 span { "Everyone on the project can track to unrestricted tasks. Open a task's access settings to limit who can." }
             }
             for task in form.read().tasks.clone() {
-                TaskRow { key: "{task.id}", form, options, billable_access, on_edit, id: task.id, archived_ids, retained: retained_ids.contains(&task.id), inactive: matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)), invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
+                TaskRow { key: "{task.id}", form, options, billable_access, on_edit, id: task.id, archived_ids, retained: retained_ids.contains(&task.id), editing: editor_context.is_some(), inactive: matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)), invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
             }
             if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-project-panel", "No tasks selected yet." } }
             div { class: "px-project-panel py-3",
@@ -209,11 +209,14 @@ fn TaskRow(
     id: Uuid,
     mut archived_ids: Signal<HashSet<Uuid>>,
     retained: bool,
+    /// In the project editor rather than New Project.
+    editing: bool,
     #[props(default)] inactive: bool,
     on_access: EventHandler<Uuid>,
     invalid_field: Option<ProjectFormField>,
     error_message: Option<String>,
 ) -> Element {
+    let mut rate_edited = use_signal(|| false);
     let Some(task) = form.read().tasks.iter().find(|task| task.id == id).cloned() else {
         return rsx! {};
     };
@@ -262,12 +265,19 @@ fn TaskRow(
         })
         .unwrap_or_else(|| "project currency".into());
     let billable_project = form.read().project_type != ProjectType::NonBillable;
-    // The rate an empty field saves: the task's template in the project's
-    // currency, shown beside the "{currency}/h" suffix.
+    // An empty rate takes the task's template only in a task-billed project, and
+    // in the editor only for a new link or an edited rate, with rate access
+    // (`preserved_fields`). There the placeholder shows the template beside the
+    // "{currency}/h" suffix; elsewhere the link inherits.
+    let applies_template = form.read().project_type == ProjectType::TimeAndMaterials
+        && form.read().rate_mode == RateMode::Task
+        && (!editing
+            || (billable_access == ProjectFieldAccess::Editable && (!retained || rate_edited())));
     let rate_placeholder = match catalog
         .as_ref()
         .and_then(|task| task.default_rate_cents)
         .and_then(RateTemplate::from_hundredths)
+        .filter(|_| applies_template)
     {
         Some(template) => format_cents_plain(template.apply(&currency)),
         None => "Inherit".into(),
@@ -281,7 +291,7 @@ fn TaskRow(
             }
             div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
                 if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task) || form.read().rate_mode == RateMode::Legacy) {
-                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-task-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::TaskRate(id)),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-task-rate-{id}", oninput: move |_| { rate_edited.set(true); on_edit.call(ProtectedProjectField::TaskRate(id)) },
                         "rate"
                         Input { class: "w-30 max-w-full text-mono text-right", id: "np-task-rate-{id}", disabled: read_only || billable_access != ProjectFieldAccess::Editable || !options.read().can_edit_billable_settings, label: "Hourly rate for {name} ({currency})", value: task.rate,
                             error_id: (invalid_field == Some(ProjectFormField::TaskRate(id))).then(|| format!("np-task-error-{id}")),
