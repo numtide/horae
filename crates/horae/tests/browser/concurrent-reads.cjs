@@ -111,7 +111,12 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     const asked = page.waitForRequest(r => r.url().includes('/api/get_server_version'));
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await asked;
-    console.log('PASS: the version check asks when the tab is shown, not on navigation');
+    // Within the minute, coming back again does not ask again.
+    calls = [];
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.waitForTimeout(500);
+    assert.ok(!calls.includes('get_server_version'), calls.join(', '));
+    console.log('PASS: the version check asks when the tab is shown, at most once a minute, not on navigation');
 
     // A loading state is in place at once but drawn only after a short wait.
     const gate = await hold('client_overview');
@@ -125,6 +130,31 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await gate.release();
     await expect(page.locator('main a[href^="/clients/"]').first()).toBeVisible();
     console.log('PASS: loading states appear only after a short wait');
+
+    // Reports arrives with the page. On a cold load its dates wait, disabled,
+    // for hydration, so a date typed at once is kept rather than replaced.
+    const cold = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    assert.ok((await cold.request.post(`${base}/auth/dev-login`, { maxRedirects: 0 })).status() < 400);
+    const coldPage = await cold.newPage();
+    coldPage.on('pageerror', error => errors.push({ message: error.message, stack: error.stack, url: coldPage.url() }));
+    let wasm;
+    const wasmHeld = new Promise(resolve => { wasm = resolve; });
+    await coldPage.route('**/*.wasm*', async route => { await wasmHeld; await route.fallback(); });
+    const queried = [];
+    coldPage.on('request', request => {
+      if (request.url().includes('/api/report_time')) queried.push(JSON.parse(request.postData() || '{}').from);
+    });
+    await coldPage.goto(`${base}/reports`, { waitUntil: 'domcontentloaded' });
+    const from = coldPage.locator('#report-filter-from');
+    await expect(from).toBeDisabled();
+    const typing = from.fill('2020-01-01');
+    wasm();
+    await typing;
+    await expect.poll(() => queried).toContain('2020-01-01');
+    await coldPage.waitForTimeout(1000);
+    await expect(from).toHaveValue('2020-01-01');
+    await cold.close();
+    console.log('PASS: a date typed during a cold Reports load is kept');
 
     assert.deepEqual(errors, []);
   } finally {

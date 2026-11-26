@@ -675,7 +675,7 @@ Every new or changed screen and data-bearing component covers these states befor
 - **Loading** works the same way on every screen:
   - The shell and the page header come first. The title, filters and actions are visible from the first frame; nothing above or around the header waits on data (Invoices no longer shows "Checking invoice recovery…" above the title: its actions wait for the check instead).
   - The session is rendered on the server, so the sidebar, its sections and every action that depends on a permission are in the first HTML, with no "Not signed in", and screens that waited on the session first lose one wave. One `use_loader` in `use_session_provider` loads the person, their permissions, the week start and the workspace name.
-  - The content region shows a `Skeleton` shaped like what arrives, after about 300 ms. `Loading` text is only for small regions.
+  - The content region shows a `Skeleton` shaped like what arrives, after 150 ms (`appear-late`). `Loading` text is only for small regions.
   - Nothing that depends on the data shows before it: no pager, no "Refresh", no totals as "—", no filters without their options.
   - A reload (a filter, a new week, a refresh after a mutation) keeps the old data on screen, dimmed and `aria-busy`, until the new data replaces it. It never swaps the table back to a loading line, and the dimming makes clear that what is shown is not yet the new answer (the Timesheet's previous week under the new dates).
   - No cascades: a screen asks for what it needs at once instead of in waves (the Timesheet waits on three today, Projects for client on three, Reports on two). Data every screen needs, such as the week start, travels with the session.

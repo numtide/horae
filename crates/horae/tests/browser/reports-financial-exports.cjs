@@ -153,8 +153,6 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
     };
 
     let ready = loaded(states[0]);
-    // The view arrives with the page; typing before it hydrates would be lost.
-    await expect(page.locator('input[type="date"]').first()).toHaveAttribute('data-dioxus-id', /\d+/);
     await page.locator('input[type="date"]').first().fill(from);
     await page.locator('input[type="date"]').last().fill(to);
     await ready;

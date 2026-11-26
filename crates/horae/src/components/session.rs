@@ -75,10 +75,11 @@ impl Session {
         self.me.peek().name.clone()
     }
 
-    /// Whether the grants include reading invoices (`invoices::READ`).
+    /// Whether the grants include reading invoices (`invoices::READ`), read
+    /// without subscribing.
     pub fn reads_invoices(&self) -> bool {
         matches!(
-            &*self.permissions.read(),
+            &*self.permissions.peek(),
             Ok(access) if access.catalog_version == PERMISSION_CATALOG_VERSION
                 && horae_core::permissions::invoices::holds(
                     |grant| access.grants.contains(&grant),

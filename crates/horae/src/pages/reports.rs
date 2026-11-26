@@ -74,6 +74,16 @@ fn group_choices(tr: Tr) -> [(&'static str, String); 4] {
     ]
 }
 
+/// False in the server's HTML and in the first render that hydrates it, true
+/// right after. The report views arrive with the page, and a date typed into
+/// them before hydration would be replaced by the default one, so the date
+/// inputs stay disabled until then.
+fn use_hydrated() -> bool {
+    let mut hydrated = use_signal(|| false);
+    use_effect(move || hydrated.set(true));
+    hydrated()
+}
+
 /// The report access the session's grants imply, by the server's rule
 /// (`ops::time_reads::reports::access`): any time read opens Reports, and
 /// managed or organization-wide reads open the financial view. `None` when
@@ -169,6 +179,7 @@ pub fn Reports() -> Element {
 #[component]
 fn FinancialReports() -> Element {
     let tr = crate::i18n::use_tr();
+    let hydrated = use_hydrated();
     let today = crate::components::today::today();
     let month_start = today.with_day(1).unwrap_or(today);
 
@@ -312,6 +323,7 @@ fn FinancialReports() -> Element {
                             // Narrow padding below 640px lets a full date fit at enlarged text.
                             class: "w-auto min-w-0 max-w-full min-h-control px-1 sm:px-3",
                             value: "{from_input}",
+                            disabled: !hydrated,
                             oninput: move |e: FormEvent| from_input.set(e.value()),
                         }
                         label { class: "text-sm text-secondary", r#for: "report-filter-to", {tr.reports_to()} }
@@ -321,6 +333,7 @@ fn FinancialReports() -> Element {
                             // Narrow padding below 640px lets a full date fit at enlarged text.
                             class: "w-auto min-w-0 max-w-full min-h-control px-1 sm:px-3",
                             value: "{to_input}",
+                            disabled: !hydrated,
                             oninput: move |e: FormEvent| to_input.set(e.value()),
                         }
                     }

@@ -23,9 +23,10 @@ fn hidden(server: Option<&Result<String, ServerFnError>>) -> bool {
 #[component]
 pub fn VersionInfo() -> Element {
     // The rail stays mounted across navigation, so ask once on mount and again
-    // whenever the tab is shown: a tab left open across a deploy sees the new
-    // server when the person comes back to it. A restart keeps the last answer
-    // on screen while it runs.
+    // when the person comes back to the tab or window: a tab left open across
+    // a deploy then sees the new server. A tab kept in view the whole time
+    // notices only on reload. A restart keeps the last answer on screen while
+    // it runs.
     let mut server = use_resource(|| async { server_fns::get_server_version().await });
     use_future(move || async move {
         let mut shown = document::eval(WATCH_VISIBILITY);
@@ -79,17 +80,25 @@ pub fn VersionInfo() -> Element {
     }
 }
 
-/// Tells the block when the tab is shown again. The listener removes itself
-/// once the block is gone, since dropping the eval does not reach the browser.
+/// Tells the block when the tab is shown again or the window regains focus,
+/// at most once a minute. Dropping the eval does not reach the browser, so a
+/// later mount takes over the watch and the older listeners remove themselves.
 const WATCH_VISIBILITY: &str = r#"
+const token = {};
+window.__horaeVersionWatch = token;
+let last = 0;
 const shown = () => {
-  if (!document.querySelector('.sidebar-version')) {
+  if (window.__horaeVersionWatch !== token) {
     document.removeEventListener('visibilitychange', shown);
+    window.removeEventListener('focus', shown);
     return;
   }
-  if (document.visibilityState === 'visible') dioxus.send(true);
+  if (document.visibilityState !== 'visible' || Date.now() - last < 60000) return;
+  last = Date.now();
+  dioxus.send(true);
 };
 document.addEventListener('visibilitychange', shown);
+window.addEventListener('focus', shown);
 await new Promise(() => {});
 "#;
 
