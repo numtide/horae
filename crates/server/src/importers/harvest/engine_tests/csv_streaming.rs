@@ -80,10 +80,27 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
             tokio::time::timeout(HANG_GUARD, waiting.notified())
                 .await
                 .unwrap();
-            let outside_transaction = sqlx::query_scalar!(
-                "SELECT xact_start IS NULL AS \"outside_transaction!\" FROM pg_stat_activity WHERE pid = $1",
-                pid,
-            ).fetch_one(&pool).await.unwrap();
+            // Sampled from another connection, so wait out any statement still in
+            // flight: a transaction held across the parser wait shows as
+            // `idle in transaction`, never as `active`.
+            let session = tokio::time::timeout(HANG_GUARD, async {
+                loop {
+                    let session = sqlx::query!(
+                        r#"SELECT state, query, xact_start IS NULL AS "outside_transaction!"
+                             FROM pg_stat_activity WHERE pid = $1"#,
+                        pid,
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                    if session.state.as_deref() != Some("active") {
+                        break session;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
             stop.send_replace(true);
             let error = tokio::time::timeout(HANG_GUARD, running.join_next())
                 .await
@@ -93,8 +110,11 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
                 .unwrap_err();
             single.close().await;
             assert!(
-                outside_transaction,
-                "{mode:?}, after {completed} checkpointed rows: SQL transaction spans parser wait"
+                session.state.as_deref() == Some("idle") && session.outside_transaction,
+                "{mode:?}, after {completed} checkpointed rows: SQL transaction spans parser wait \
+                 (state {:?}, last query {:?})",
+                session.state,
+                session.query,
             );
             assert!(error.to_string().contains("interrupted"), "{error}");
             assert_eq!(
