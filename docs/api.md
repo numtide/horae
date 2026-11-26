@@ -45,7 +45,8 @@ token shows their administrator profile with `"administrator": false`. A request
 the token's scopes gets `403` with code `insufficient_scope` and a
 `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"` header naming the scope that would
 do. Within its scopes, a token still can do no more than its person can in the web app, and never
-acts as an administrator. The OpenAPI document lists each operation's scope.
+acts as an administrator. The OpenAPI document lists each operation's scope. No scope covers the
+invoices yet: they answer an app's token with `insufficient_scope`, and need a personal token.
 
 ## Requests
 
@@ -79,6 +80,8 @@ header (just `Bearer` when no token was sent).
 | `POST /time_entries/{id}/stop` | stop a running timer |
 | `POST /time_entries/{id}/restart` | run a stopped entry of today again |
 | `GET /projects`, `/tasks`, `/clients`, `/people` (and `/{id}`) | the catalogue, read-only |
+| `GET /invoices`, `GET /invoices/{id}` | the organization's invoices, read-only, for an owner who may view all invoices; one invoice comes with its lines. Filters: `status`, `client_id`, `updated_since` |
+| `GET /invoices/{id}/pdf` | the invoice's PDF, the web app's download byte for byte |
 
 All paths are under `/api/v1`. Time entries and timers behave as on the timesheet:
 
@@ -163,9 +166,11 @@ when there is one. Program against `status` and `code`, not `detail`.
 | 403 | `insufficient_scope` | an app's token lacks the operation's scope (see [Apps](#apps)) |
 | 404 | `not_found` | missing, or outside what the owner may see |
 | 409 | `conflict` | the record's state forbids it: submitted, approved, invoiced, no running timer, … |
+| 413 | `too_large` | an invoice too large for its PDF |
 | 422 | `invalid`, `unknown_field` | a value fails validation, or the body has a field the operation does not take |
 | 429 | `rate_limited` | over the token's limit; wait the seconds in `Retry-After` |
 | 500 | `internal` | a server error; `detail` is withheld |
+| 503, 504 | `unavailable`, `timeout` | too many PDFs being made at once, or one that took too long; try again |
 
 A later release may add codes. Treat an unknown `code` as its status.
 

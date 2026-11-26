@@ -19,22 +19,26 @@ fn assert_released(pool: &PgPool, ids: &SeedIds, path: &str) {
 async fn refused_invoice_exports_release_their_locks(pool: PgPool) {
     let member = seed(&pool, BuiltInProfile::Member).await;
     assert_eq!(
-        crate::exports::begin_invoice_export(&pool, member.org_id, member.user_id)
-            .await
-            .err(),
+        crate::exports::begin_invoice_export(
+            &pool,
+            crate::ops::Caller::session(member.org_id, member.user_id)
+        )
+        .await
+        .err(),
         Some(StatusCode::FORBIDDEN)
     );
     assert_released(&pool, &member, "begin_invoice_export");
 
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let missing = Uuid::now_v7();
+    let caller = crate::ops::Caller::session(ids.org_id, ids.user_id);
     assert_eq!(
-        invoice(&pool, ids.org_id, ids.user_id, missing).await.err(),
+        invoice(&pool, caller, missing).await.err(),
         Some(StatusCode::NOT_FOUND)
     );
     assert_released(&pool, &ids, "invoice");
     assert_eq!(
-        pdf(&pool, ids.org_id, ids.user_id, missing).await.err(),
+        pdf(&pool, caller, missing).await.err(),
         Some(StatusCode::NOT_FOUND)
     );
     assert_released(&pool, &ids, "pdf");

@@ -31,11 +31,12 @@ impl Case {
         (org, actor): (Uuid, Uuid),
         reader: Reader,
     ) -> Result<Value, StatusCode> {
+        let caller = crate::ops::Caller::session(org, actor);
         Ok(match reader {
             Reader::Entries => json!(entries(pool, org, actor, &params()).await?),
-            Reader::Invoice => json!(invoice(pool, org, actor, self.invoice_id).await?),
+            Reader::Invoice => json!(invoice(pool, caller, self.invoice_id).await?),
             Reader::Pdf => {
-                let doc = pdf(pool, org, actor, self.invoice_id).await?;
+                let doc = pdf(pool, caller, self.invoice_id).await?;
                 json!({"invoice":doc.invoice, "lines":doc.lines, "client":doc.client_name,
                     "address":doc.client_address, "tax_id":doc.client_tax_id, "branding":doc.branding})
             }
@@ -113,11 +114,21 @@ async fn materialized_exports_deny_revoked_readers(pool: PgPool) {
             .is_ok()
     );
     assert!(matches!(
-        invoice(&pool, ids.org_id, ids.user_id, id).await,
+        invoice(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id
+        )
+        .await,
         Err(StatusCode::FORBIDDEN)
     ));
     assert!(matches!(
-        pdf(&pool, ids.org_id, ids.user_id, id).await,
+        pdf(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id
+        )
+        .await,
         Err(StatusCode::FORBIDDEN)
     ));
 }
@@ -522,11 +533,13 @@ async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgP
             expected
         );
     }
-    let mut tx =
-        crate::exports::begin_invoice_export(&reader_pool, case.ids.org_id, case.ids.user_id)
-            .await
-            .unwrap()
-            .tx;
+    let mut tx = crate::exports::begin_invoice_export(
+        &reader_pool,
+        crate::ops::Caller::session(case.ids.org_id, case.ids.user_id),
+    )
+    .await
+    .unwrap()
+    .tx;
     let settings = sqlx::query!(r#"SELECT current_setting('transaction_isolation') AS "isolation!", current_setting('transaction_read_only') AS "read_only!", current_setting('statement_timeout') AS "statement!", current_setting('idle_in_transaction_session_timeout') AS "idle!", current_setting('lock_timeout') AS "lock!""#).fetch_one(&mut *tx).await.unwrap();
     assert_eq!(
         (
@@ -577,8 +590,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
                     render_invoice_export(
                         ExportPermit::acquire().unwrap(),
                         &pool,
-                        org,
-                        actor,
+                        crate::ops::Caller::session(org, actor),
                         move || {
                             started.send(()).unwrap();
                             wait.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -635,8 +647,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
     let body = render_invoice_export(
         ExportPermit::acquire().unwrap(),
         &pool,
-        ids.org_id,
-        ids.user_id,
+        crate::ops::Caller::session(ids.org_id, ids.user_id),
         || Ok(b"authorized export".to_vec()),
     )
     .await
@@ -677,8 +688,7 @@ async fn materialized_exports_release_rendered_body_when_final_check_is_interrup
                 render_invoice_export(
                     ExportPermit::acquire().unwrap(),
                     &pool,
-                    org,
-                    actor,
+                    crate::ops::Caller::session(org, actor),
                     move || {
                         started.send(()).unwrap();
                         wait.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -720,12 +730,15 @@ async fn materialized_exports_release_rendered_body_when_final_check_is_interrup
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
         tokio::time::timeout(Duration::from_secs(5), async {
-            crate::exports::begin_invoice_export(&reader_pool, ids.org_id, ids.user_id)
-                .await
-                .unwrap()
-                .finish(Ok(()))
-                .await
-                .unwrap();
+            crate::exports::begin_invoice_export(
+                &reader_pool,
+                crate::ops::Caller::session(ids.org_id, ids.user_id),
+            )
+            .await
+            .unwrap()
+            .finish(Ok(()))
+            .await
+            .unwrap();
         })
         .await
         .unwrap();

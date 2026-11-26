@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices SET status = 'paid' WHERE number = 'S-2'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "494688e332f7613ac20ca8a712ecabfd954f34a5d7339fd7f2a43e09b9b0f4f7"
+}

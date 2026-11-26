@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::models::invoice::{ImportedInvoice, ImportedInvoiceLine, InvoiceLine};
 use crate::models::{Invoice, OrgBranding};
+use crate::ops::Caller;
 
 use super::ProjectExportRow;
 
@@ -134,13 +135,11 @@ async fn read_invoice(
 
 pub(super) async fn invoice(
     pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+    caller: Caller,
     invoice_id: Uuid,
 ) -> Result<(Invoice, Vec<InvoiceLine>, Option<ImportedParts>), StatusCode> {
-    let mut tx = super::begin_invoice_export(pool, org_id, actor_id)
-        .await?
-        .tx;
+    let org_id = caller.org_id;
+    let mut tx = super::begin_invoice_export(pool, caller).await?.tx;
     let result = async {
         let (invoice, lines) = read_invoice(&mut tx, org_id, invoice_id, XLSX).await?;
         // shortcut: imported lines are not counted against the export limits;
@@ -184,14 +183,11 @@ impl PdfInvoice {
 
 pub(super) async fn pdf(
     pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+    caller: Caller,
     invoice_id: Uuid,
 ) -> Result<PdfInvoice, StatusCode> {
-    let mut tx = super::begin_invoice_export(pool, org_id, actor_id)
-        .await?
-        .tx;
-    let result = read_pdf(&mut tx, org_id, invoice_id).await;
+    let mut tx = super::begin_invoice_export(pool, caller).await?.tx;
+    let result = read_pdf(&mut tx, caller.org_id, invoice_id).await;
     finish(tx, result).await
 }
 
@@ -279,7 +275,13 @@ mod tests {
     async fn invoice_exports_show_saved_adjustments_and_exact_large_amounts(pool: PgPool) {
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, _) = add_invoice(&pool, &ids, 1).await;
-        let mut document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let mut document = pdf(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id,
+        )
+        .await
+        .unwrap();
         let inv = &mut document.invoice;
         inv.subtotal_cents = 10001;
         inv.discount_bps = 1250;
@@ -607,16 +609,14 @@ mod tests {
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, lines) = add_invoice(&pool, &ids, PDF.rows as usize + 1).await;
+        let caller = crate::ops::Caller::session(ids.org_id, ids.user_id);
+        let stranger = crate::ops::Caller::session(other.org_id, other.user_id);
         assert_eq!(
-            invoice(&pool, ids.org_id, ids.user_id, id)
-                .await
-                .unwrap()
-                .1
-                .len(),
+            invoice(&pool, caller, id).await.unwrap().1.len(),
             PDF.rows as usize + 1
         );
         assert!(matches!(
-            pdf(&pool, ids.org_id, ids.user_id, id).await,
+            pdf(&pool, caller, id).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
         sqlx::query!("DELETE FROM invoice_line_items WHERE id = $1", lines[0])
@@ -624,19 +624,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            pdf(&pool, ids.org_id, ids.user_id, id)
-                .await
-                .unwrap()
-                .lines
-                .len(),
+            pdf(&pool, caller, id).await.unwrap().lines.len(),
             PDF.rows as usize
         );
         assert!(matches!(
-            invoice(&pool, other.org_id, other.user_id, id).await,
+            invoice(&pool, stranger, id).await,
             Err(StatusCode::NOT_FOUND)
         ));
         assert!(matches!(
-            pdf(&pool, other.org_id, other.user_id, id).await,
+            pdf(&pool, stranger, id).await,
             Err(StatusCode::NOT_FOUND)
         ));
         sqlx::query!(
@@ -647,10 +643,10 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(
-            pdf(&pool, ids.org_id, ids.user_id, id).await,
+            pdf(&pool, caller, id).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
-        assert!(invoice(&pool, ids.org_id, ids.user_id, id).await.is_ok());
+        assert!(invoice(&pool, caller, id).await.is_ok());
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -671,7 +667,12 @@ mod tests {
         assert_eq!(before, during);
         tx.commit().await.unwrap();
         assert!(matches!(
-            invoice(&pool, ids.org_id, ids.user_id, id).await,
+            invoice(
+                &pool,
+                crate::ops::Caller::session(ids.org_id, ids.user_id),
+                id
+            )
+            .await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
     }
@@ -742,7 +743,13 @@ mod tests {
              VALUES ($1, $2, $3, 0, 1, 'Service', 'Design', 1.05, 95.2381, 10000, true, false)",
             Uuid::now_v7(), ids.org_id, id,
         ).execute(&pool).await.unwrap();
-        let (invoice, lines, imported) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let (invoice, lines, imported) = invoice(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id,
+        )
+        .await
+        .unwrap();
         let workbook =
             super::super::invoice_xlsx(&invoice, &lines, imported_view(&imported)).unwrap();
         let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
@@ -782,7 +789,13 @@ mod tests {
             .unwrap();
         sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
         sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", uuid::Uuid::now_v7(), id, fee_id).execute(&pool).await.unwrap();
-        let (invoice, lines, _) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let (invoice, lines, _) = invoice(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id,
+        )
+        .await
+        .unwrap();
         let workbook = super::super::invoice_xlsx(&invoice, &lines, None).unwrap();
         let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
         assert!(!xml.contains("r=\"B2\""));
@@ -790,7 +803,13 @@ mod tests {
         assert_cell(&xml, "D2", "125");
         assert_cell(&xml, "D3", "125");
         assert_cell(&xml, "D4", "125");
-        let document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let document = pdf(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id,
+        )
+        .await
+        .unwrap();
         tokio::task::spawn_blocking(move || {
             let render = || {
                 crate::render::render_invoice_pdf(
@@ -837,14 +856,26 @@ mod tests {
             .unwrap();
         let sheet = super::super::projects_xlsx(&rows).unwrap();
         assert!(xlsx_part(&sheet, "xl/sharedStrings.xml").contains("Widget"));
-        let (invoice, lines, _) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let (invoice, lines, _) = invoice(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id,
+        )
+        .await
+        .unwrap();
         let sheet = super::super::invoice_xlsx(&invoice, &lines, None).unwrap();
         let xml = xlsx_part(&sheet, "xl/worksheets/sheet1.xml");
         assert_cell(&xml, "C2", "12.34");
         assert_cell(&xml, "D2", "12.34");
         assert_cell(&xml, "D3", "12.34");
         assert_cell(&xml, "D4", "12.34");
-        let document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let document = pdf(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id,
+        )
+        .await
+        .unwrap();
         tokio::task::spawn_blocking(move || {
             let render = || {
                 crate::render::render_invoice_pdf(
@@ -897,7 +928,13 @@ mod tests {
         }
         drop(bytes);
         let start = std::time::Instant::now();
-        let document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
+        let document = pdf(
+            &pool,
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
+            id,
+        )
+        .await
+        .unwrap();
         let loaded = start.elapsed();
         let bytes = tokio::task::spawn_blocking(move || {
             crate::render::render_invoice_pdf(

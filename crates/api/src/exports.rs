@@ -61,19 +61,16 @@ async fn require_invoice_reader(session: &Session) -> Result<(uuid::Uuid, uuid::
 }
 
 /// A snapshot read holding the actor's whole-invoice read grant, bounded by
-/// the export deadlines.
+/// the export deadlines. `caller` is a session's, or a token's for
+/// `/api/v1`'s PDF.
 async fn begin_invoice_export(
     pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
+    caller: crate::ops::Caller,
 ) -> Result<crate::ops::ReadTx, StatusCode> {
-    let mut read = crate::ops::begin_read_snapshot(
-        pool,
-        crate::ops::Caller::session(org_id, actor_id),
-        crate::ops::SnapshotLimits::LockWait,
-    )
-    .await
-    .map_err(op_status)?;
+    let mut read =
+        crate::ops::begin_read_snapshot(pool, caller, crate::ops::SnapshotLimits::LockWait)
+            .await
+            .map_err(op_status)?;
     if let Err(error) =
         crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ)
     {
@@ -88,13 +85,12 @@ async fn begin_invoice_export(
 async fn render_invoice_export(
     permit: bounded::ExportPermit,
     pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
+    caller: crate::ops::Caller,
     render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
 ) -> Result<axum::body::Body, StatusCode> {
     let body = permit.render(render).await?;
     // Rendering holds no authority locks. Recheck before releasing its result.
-    begin_invoice_export(pool, org_id, actor_id)
+    begin_invoice_export(pool, caller)
         .await?
         .finish(Ok(()))
         .await
@@ -492,14 +488,14 @@ pub async fn export_invoice_xlsx(
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let (actor_id, org_id) = require_invoice_reader(&session).await?;
+    let caller = crate::ops::Caller::session(org_id, actor_id);
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let (invoice, lines, imported) =
-        limits::invoice(&state.db, org_id, actor_id, invoice_id).await?;
+    let (invoice, lines, imported) = limits::invoice(&state.db, caller, invoice_id).await?;
 
     let filename = format!("invoice-{}.xlsx", invoice.number);
-    let data = render_invoice_export(permit, &state.db, org_id, actor_id, move || {
+    let data = render_invoice_export(permit, &state.db, caller, move || {
         invoice_xlsx(&invoice, &lines, limits::imported_view(&imported))
     })
     .await?;
@@ -648,15 +644,30 @@ fn invoice_xlsx(
 pub async fn export_invoice_pdf(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<axum::response::Response, StatusCode> {
     let (actor_id, org_id) = require_invoice_reader(&session).await?;
-    let permit = bounded::ExportPermit::acquire()?;
-
     let state = crate::state::global_state().await;
-    let document = limits::pdf(&state.db, org_id, actor_id, invoice_id).await?;
+    invoice_pdf(
+        &state.db,
+        crate::ops::Caller::session(org_id, actor_id),
+        invoice_id,
+    )
+    .await
+}
+
+/// The invoice as a PDF download for `caller`: the web app's export, and
+/// `/api/v1`'s `GET /invoices/{id}/pdf`, which refuses first what its read
+/// would.
+pub(crate) async fn invoice_pdf(
+    pool: &sqlx::PgPool,
+    caller: crate::ops::Caller,
+    invoice_id: uuid::Uuid,
+) -> Result<axum::response::Response, StatusCode> {
+    let permit = bounded::ExportPermit::acquire()?;
+    let document = limits::pdf(pool, caller, invoice_id).await?;
 
     let filename = format!("invoice-{}.pdf", document.invoice.number);
-    let pdf_bytes = render_invoice_export(permit, &state.db, org_id, actor_id, move || {
+    let pdf_bytes = render_invoice_export(permit, pool, caller, move || {
         crate::render::render_invoice_pdf(
             &document.invoice,
             &document.lines,
@@ -684,5 +695,6 @@ pub async fn export_invoice_pdf(
             ),
         ],
         pdf_bytes,
-    ))
+    )
+        .into_response())
 }
