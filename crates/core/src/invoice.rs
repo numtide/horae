@@ -107,20 +107,19 @@ pub struct Rounding {
 }
 
 impl Rounding {
-    /// `currency`'s step, as [`line_amount_cents`] picks it, with `method`.
+    /// `currency`'s step, the one line amounts round to, with `method`.
     pub fn new(currency: &str, method: RoundingMethod) -> Self {
-        let step = if crate::money::currency_decimals(currency) == 0 {
-            100
-        } else {
-            1
-        };
-        Self { step, method }
+        Self {
+            step: amount_step(currency),
+            method,
+        }
     }
 
     /// `percentage` of `amount`, rounded to the step. A signed amount rounds
     /// by magnitude, so a negative one mirrors its positive. The SQL twin is
-    /// `invoice_portion_cents(numeric, integer, text, rounding_method)`.
-    fn portion(self, amount: i64, percentage: Percentage) -> Result<i64, InvoiceAmountError> {
+    /// `invoice_portion_cents(numeric, integer, text, rounding_method)`. It
+    /// stays in `i128`: rounding up to the step can pass `i64::MAX`.
+    fn portion(self, amount: i64, percentage: Percentage) -> i128 {
         let exact = i128::from(amount) * i128::from(percentage.basis_points());
         let unit = 10_000 * i128::from(self.step);
         let bias = match self.method {
@@ -128,9 +127,12 @@ impl Rounding {
             RoundingMethod::HalfUp => unit / 2,
             RoundingMethod::Up => unit - 1,
         };
-        i64::try_from((exact.abs() + bias) / unit * i128::from(self.step) * exact.signum())
-            .map_err(|_| InvoiceAmountError::Overflow)
+        (exact.abs() + bias) / unit * i128::from(self.step) * exact.signum()
     }
+}
+
+fn to_cents(amount: i128) -> Result<i64, InvoiceAmountError> {
+    i64::try_from(amount).map_err(|_| InvoiceAmountError::Overflow)
 }
 
 /// Apply the discount before independently rounded taxes, using exact minor
@@ -148,11 +150,15 @@ pub fn invoice_amounts(
     if subtotal_cents < 0 {
         return Err(InvoiceAmountError::NegativeSubtotal);
     }
-    let portion = |amount, percentage| rounding.portion(amount, percentage);
-    let discount_cents = portion(subtotal_cents, discount)?.min(subtotal_cents);
+    // Clamped before narrowing, so a full discount of any subtotal fits.
+    let discount_cents = to_cents(
+        rounding
+            .portion(subtotal_cents, discount)
+            .min(i128::from(subtotal_cents)),
+    )?;
     let taxable_cents = subtotal_cents - discount_cents;
-    let tax1_cents = portion(taxable_cents, tax1)?;
-    let tax2_cents = portion(taxable_cents, tax2)?;
+    let tax1_cents = to_cents(rounding.portion(taxable_cents, tax1))?;
+    let tax2_cents = to_cents(rounding.portion(taxable_cents, tax2))?;
     let total_cents = taxable_cents
         .checked_add(tax1_cents)
         .and_then(|total| total.checked_add(tax2_cents))
@@ -214,12 +220,17 @@ pub fn line_amount_cents(
     minutes: i32,
     currency: &str,
 ) -> Result<i64, std::num::TryFromIntError> {
-    let step = if crate::money::currency_decimals(currency) == 0 {
+    line_amount_in_step(rate_cents, minutes, i128::from(amount_step(currency)))
+}
+
+/// The step of `currency`'s amounts, in hundredths: 100 (a whole unit) for a
+/// zero-decimal currency, else 1. The SQL twin is `currency_amount_step(text)`.
+pub(crate) fn amount_step(currency: &str) -> i64 {
+    if crate::money::currency_decimals(currency) == 0 {
         100
     } else {
         1
-    };
-    line_amount_in_step(rate_cents, minutes, step)
+    }
 }
 
 /// [`line_amount_cents`] once the currency's step is known, in hundredths:
@@ -478,17 +489,9 @@ mod tests {
     #[test]
     fn rounding_methods_differ_on_a_half_step() {
         use RoundingMethod::{Down, HalfUp, Up};
-        let half = |method| {
-            Rounding::new("JPY", method)
-                .portion(100, "50".parse().unwrap())
-                .unwrap()
-        };
+        let half = |method| Rounding::new("JPY", method).portion(100, "50".parse().unwrap());
         assert_eq!([half(HalfUp), half(Down), half(Up)], [100, 0, 100]);
-        let below_half = |method| {
-            Rounding::new("JPY", method)
-                .portion(98, "50".parse().unwrap())
-                .unwrap()
-        };
+        let below_half = |method| Rounding::new("JPY", method).portion(98, "50".parse().unwrap());
         assert_eq!(
             [below_half(HalfUp), below_half(Down), below_half(Up)],
             [0, 0, 100]
@@ -509,7 +512,7 @@ mod tests {
                         let percentage = Percentage::try_from(bps).unwrap();
                         assert_eq!(
                             rounding.portion(-amount, percentage),
-                            rounding.portion(amount, percentage).map(|p| -p),
+                            -rounding.portion(amount, percentage),
                             "{currency} {method:?} {amount} {bps}"
                         );
                     }
@@ -554,6 +557,14 @@ mod tests {
                 .unwrap()
                 .total_cents,
             0
+        );
+        // Rounded up to whole yen, the full discount of `i64::MAX` passes it;
+        // it is clamped to the subtotal before it has to fit in `i64`.
+        let jpy_up = Rounding::new("JPY", RoundingMethod::Up);
+        assert_eq!(
+            invoice_amounts(i64::MAX, "100".parse().unwrap(), zero, zero, jpy_up)
+                .map(|a| (a.discount_cents, a.total_cents)),
+            Ok((i64::MAX, 0))
         );
     }
 

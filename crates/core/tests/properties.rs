@@ -408,6 +408,8 @@ mod invoice {
                 ((0..=i64::MAX / 2).prop_map(|k| 2 * k + 1), Just(half()), Just(half()), Just(half())),
                 // Whole units at 50% tie on half a unit in a zero-decimal currency.
                 ((0..=i64::MAX / 200).prop_map(|k| 100 * (2 * k + 1)), Just(half()), Just(half()), Just(half())),
+                // A full discount near `i64::MAX` rounds past it before the clamp.
+                ((i64::MAX - 200)..=i64::MAX, Just(Percentage::try_from(10_000).unwrap()), percentage(), percentage()),
             ],
             (currency, step) in currency(),
             method in method(),
