@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT state, query, xact_start IS NULL AS \"outside_transaction!\"\n                             FROM pg_stat_activity WHERE pid = $1",
+  "query": "SELECT state, query, xact_start FROM pg_stat_activity WHERE pid = $1",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "outside_transaction!",
-        "type_info": "Bool"
+        "name": "xact_start",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -27,8 +27,8 @@
     "nullable": [
       true,
       true,
-      null
+      true
     ]
   },
-  "hash": "a9d388ad840c89d0d62d78ad5ae3be91f77edbac81fc1f56759f75335d8a51f2"
+  "hash": "77bd409a3b37422b8a48d5d026e8a3bdc99b2941490d846d0795ece041d9c11a"
 }

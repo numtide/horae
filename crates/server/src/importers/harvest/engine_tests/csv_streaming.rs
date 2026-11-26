@@ -81,13 +81,14 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
                 .await
                 .unwrap();
             // Sampled from another connection, so wait out any statement still in
-            // flight: a transaction held across the parser wait shows as
-            // `idle in transaction`, never as `active`.
+            // flight. A transaction held across the parser wait then shows as
+            // `idle in transaction`. `xact_start` alone is not proof: an idle
+            // backend serving a sinval catchup interrupt (ProcessCatchupInterrupt,
+            // sinval.c) runs a brief transaction while still reported `idle`.
             let session = tokio::time::timeout(HANG_GUARD, async {
                 loop {
                     let session = sqlx::query!(
-                        r#"SELECT state, query, xact_start IS NULL AS "outside_transaction!"
-                             FROM pg_stat_activity WHERE pid = $1"#,
+                        "SELECT state, query, xact_start FROM pg_stat_activity WHERE pid = $1",
                         pid,
                     )
                     .fetch_one(&pool)
@@ -109,12 +110,13 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
                 .unwrap()
                 .unwrap_err();
             single.close().await;
-            assert!(
-                session.state.as_deref() == Some("idle") && session.outside_transaction,
+            assert_eq!(
+                session.state.as_deref(),
+                Some("idle"),
                 "{mode:?}, after {completed} checkpointed rows: SQL transaction spans parser wait \
-                 (state {:?}, last query {:?})",
-                session.state,
+                 (last query {:?}, xact_start {:?})",
                 session.query,
+                session.xact_start,
             );
             assert!(error.to_string().contains("interrupted"), "{error}");
             assert_eq!(
