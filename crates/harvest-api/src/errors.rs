@@ -1,11 +1,14 @@
 //! Harvest-shaped error responses (specs/021-harvest-api-compat/contracts/harvest-api-v2.md,
 //! *Error bodies*). Failed authentication answers with `error` and
 //! `error_description`, like an OAuth2 resource server; other refusals with
-//! `message`. A refusal over the request limit adds `retry_after`.
+//! `message`. A refusal over the request limit adds `retry_after`. A refused
+//! bearer token, or an OAuth token without the request's scope, also carries
+//! a `WWW-Authenticate` challenge (spec 024 R-13).
 
 use axum::Json;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
+use horae_core::permissions::oauth::Scope;
 use serde_json::json;
 
 use crate::ops::OpError;
@@ -16,6 +19,8 @@ pub struct ApiError {
     pub message: String,
     /// Seconds until the token may call again, on 429 only.
     pub retry_after: Option<u64>,
+    /// The `WWW-Authenticate` challenge (RFC 6750 §3.1).
+    pub challenge: Option<&'static str>,
 }
 
 impl ApiError {
@@ -24,6 +29,7 @@ impl ApiError {
             status,
             message: message.into(),
             retry_after: None,
+            challenge: None,
         }
     }
 
@@ -41,6 +47,28 @@ impl ApiError {
 
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, message)
+    }
+
+    /// A token that was sent and refused: unknown, expired or revoked, or an
+    /// OAuth token outside the `Authorization` header.
+    pub fn invalid_token(message: impl Into<String>) -> Self {
+        Self {
+            challenge: Some(r#"Bearer error="invalid_token""#),
+            ..Self::unauthorized(message)
+        }
+    }
+
+    /// An OAuth token whose scopes do not cover the request; `needed` is the
+    /// scope that would.
+    pub fn insufficient_scope(needed: Scope) -> Self {
+        Self {
+            challenge: Some(match needed {
+                Scope::TimeRead => r#"Bearer error="insufficient_scope", scope="time:read""#,
+                Scope::TimeWrite => r#"Bearer error="insufficient_scope", scope="time:write""#,
+                Scope::CatalogRead => r#"Bearer error="insufficient_scope", scope="catalog:read""#,
+            }),
+            ..Self::forbidden("The token's scopes do not cover this request")
+        }
     }
 
     pub fn forbidden(message: impl Into<String>) -> Self {
@@ -87,6 +115,9 @@ impl IntoResponse for ApiError {
             StatusCode::UNAUTHORIZED => {
                 json!({ "error": "invalid_token", "error_description": self.message })
             }
+            StatusCode::FORBIDDEN if self.challenge.is_some() => {
+                json!({ "error": "insufficient_scope", "error_description": self.message })
+            }
             StatusCode::FORBIDDEN => {
                 json!({ "error": "forbidden", "error_description": self.message })
             }
@@ -103,6 +134,12 @@ impl IntoResponse for ApiError {
             response
                 .headers_mut()
                 .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        if let Some(challenge) = self.challenge {
+            response.headers_mut().insert(
+                header::WWW_AUTHENTICATE,
+                HeaderValue::from_static(challenge),
+            );
         }
         response
     }

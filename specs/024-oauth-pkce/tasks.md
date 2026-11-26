@@ -165,9 +165,9 @@ ______________________________________________________________________
 - [ ] T063 [US4] Add the route `SettingsApps` (`/settings/apps`) in the SETTINGS group after API tokens in `crates/horae/src/route.rs` and the settings side menu, and the page `crates/horae/src/pages/settings/apps.rs` per `contracts/server-functions.md`
 - [ ] T064 [P] [US4] Catalog entries for the page under `## Apps` in `crates/i18n/locales/en/horae.ftl`
 - [ ] T065 [P] [US4] UI tests for the page (list, revoke through `ConfirmDialog`, empty state, no audit link) in `crates/horae/tests/oauth_settings_ui.rs`
-- [ ] T066 [US5] In `crates/harvest-api/src/auth.rs`, accept `horae_oat_` tokens from the header only (D-5), refuse them from `access_token`, keep the `Harvest-Account-Id` check, key the limiter by grant, and unlock the actor for the route's scope (T067) before calling any operation
-- [ ] T067 [US5] Add a scope column to the route table in `crates/harvest-api/src/lib.rs` per `contracts/api-changes.md`, enforce it for OAuth callers with 403 and `WWW-Authenticate`, and add a test that every route names a scope
-- [ ] T068 [P] [US5] Tests: OAuth reads and writes per scope against the personal-token results, query parameter refused, switch off answers 404, in `crates/harvest-api/src/oauth_tests.rs`
+- [X] T066 [US5] In `crates/harvest-api/src/auth.rs`, accept `horae_oat_` tokens from the header only (D-5), refuse them from `access_token`, keep the `Harvest-Account-Id` check, key the limiter by grant, and unlock the actor for the route's scope (T067) before calling any operation
+- [X] T067 [US5] Add a scope column to the route table in `crates/harvest-api/src/lib.rs` per `contracts/api-changes.md`, enforce it for OAuth callers with 403 and `WWW-Authenticate`, and add a test that every route names a scope
+- [X] T068 [P] [US5] Tests: OAuth reads and writes per scope against the personal-token results, query parameter refused, switch off answers 404, in `crates/harvest-api/src/oauth_tests.rs`
 - [ ] T069 Checkpoint: `nix flake check` passes; PR F opened
 
 ______________________________________________________________________

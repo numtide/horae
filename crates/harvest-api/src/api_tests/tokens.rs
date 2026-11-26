@@ -10,7 +10,7 @@ use super::*;
 use crate::testing::SeedIds;
 
 /// A new token of the seeded person: its whole secret and its id.
-pub(super) async fn token(pool: &PgPool, ids: &SeedIds) -> (String, Uuid) {
+pub(crate) async fn token(pool: &PgPool, ids: &SeedIds) -> (String, Uuid) {
     let mut write = ops::begin(pool, ops::Caller::session(ids.org_id, ids.user_id))
         .await
         .unwrap();
