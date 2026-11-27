@@ -1,3 +1,4 @@
+use crate::money::amount_step;
 use crate::project::{Percentage, RateMode};
 use crate::types::RoundingMethod;
 
@@ -52,6 +53,12 @@ pub enum InvoiceAmountError {
 /// stable source order so preview, save and draft edits allocate identically.
 /// Zero-subtotal invoices return zero contributions.
 ///
+/// The allocation moves whole steps of the currency, so a zero-decimal
+/// invoice's lines keep whole units. When a line or the discount is off the
+/// step (a fractional amount stored before steps were enforced), it moves
+/// hundredths instead. In a currency whose step is a hundredth both are the
+/// same.
+///
 /// # Errors
 /// Rejects negative lines or a subtotal exceeding `i64::MAX`.
 pub fn allocate_invoice_discount(
@@ -76,23 +83,34 @@ pub fn allocate_invoice_discount(
         rounding,
     )?
     .discount_cents;
-    let mut remaining = discount_cents;
+    let on_step = |amount: i64| amount % rounding.step == 0;
+    let unit = if on_step(discount_cents) && gross_lines.iter().all(|&gross| on_step(gross)) {
+        rounding.step
+    } else {
+        1
+    };
+    // Shares and remainders are counted in units; every division is exact.
+    let (subtotal, discount) = (
+        i128::from(subtotal / unit),
+        i128::from(discount_cents / unit),
+    );
+    let mut remaining = discount_cents / unit;
     let mut contributions = Vec::with_capacity(gross_lines.len());
     let mut remainders = Vec::with_capacity(gross_lines.len());
     for (index, &gross) in gross_lines.iter().enumerate() {
-        let numerator = i128::from(gross) * i128::from(discount_cents);
-        let share = i64::try_from(numerator / i128::from(subtotal))
-            .map_err(|_| InvoiceAmountError::Overflow)?;
-        contributions.push(gross - share);
+        let numerator = i128::from(gross / unit) * discount;
+        let share =
+            i64::try_from(numerator / subtotal).map_err(|_| InvoiceAmountError::Overflow)?;
+        contributions.push(gross - share * unit);
         remaining -= share;
-        remainders.push((index, numerator % i128::from(subtotal)));
+        remainders.push((index, numerator % subtotal));
     }
     remainders.sort_unstable_by_key(|&(index, remainder)| (std::cmp::Reverse(remainder), index));
     for (index, _) in remainders {
         if remaining == 0 {
             break;
         }
-        contributions[index] -= 1;
+        contributions[index] -= unit;
         remaining -= 1;
     }
     Ok(contributions)
@@ -223,16 +241,6 @@ pub fn line_amount_cents(
     line_amount_in_step(rate_cents, minutes, i128::from(amount_step(currency)))
 }
 
-/// The step of `currency`'s amounts, in hundredths: 100 (a whole unit) for a
-/// zero-decimal currency, else 1. The SQL twin is `currency_amount_step(text)`.
-pub(crate) fn amount_step(currency: &str) -> i64 {
-    if crate::money::currency_decimals(currency) == 0 {
-        100
-    } else {
-        1
-    }
-}
-
 /// [`line_amount_cents`] once the currency's step is known, in hundredths:
 /// 1, or 100 for a zero-decimal currency.
 pub(crate) fn line_amount_in_step(
@@ -321,6 +329,50 @@ mod tests {
             allocate_invoice_discount(&[i64::MAX - 1, 1], half, EUR).unwrap(),
             [i64::MAX / 2, 0]
         );
+    }
+
+    #[test]
+    fn a_zero_decimal_allocation_moves_whole_units() {
+        // ¥175 at 10%: ¥17.50 rounds to ¥18, shared as 13 + 4 + 1.
+        let jpy = Rounding::new("JPY", RoundingMethod::HalfUp);
+        let ten = "10".parse().unwrap();
+        assert_eq!(
+            allocate_invoice_discount(&[12_300, 4_500, 700], ten, jpy).unwrap(),
+            [11_000, 4_100, 600]
+        );
+        // A line off the step (stored before steps were enforced) moves hundredths.
+        assert_eq!(
+            allocate_invoice_discount(&[12_350, 4_500], ten, jpy).unwrap(),
+            [11_104, 4_046]
+        );
+    }
+
+    #[test]
+    fn two_and_three_decimal_allocations_keep_hundredths() {
+        let ten: Percentage = "10".parse().unwrap();
+        let third = Percentage::try_from(3_333).unwrap();
+        for method in [
+            RoundingMethod::HalfUp,
+            RoundingMethod::Down,
+            RoundingMethod::Up,
+        ] {
+            let allocate = |currency, lines: &[i64], discount| {
+                allocate_invoice_discount(lines, discount, Rounding::new(currency, method)).unwrap()
+            };
+            for (lines, discount) in [
+                (&[12_300, 4_500, 700][..], ten),
+                (&[1, 3, 1, 99_999][..], third),
+            ] {
+                assert_eq!(
+                    allocate("EUR", lines, discount),
+                    allocate("BHD", lines, discount)
+                );
+            }
+            assert_eq!(
+                allocate("EUR", &[12_300, 4_500, 700], ten),
+                [11_070, 4_050, 630]
+            );
+        }
     }
 
     #[test]

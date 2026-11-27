@@ -615,4 +615,69 @@ mod tests {
             .unwrap();
         assert!(methods.iter().all(|method| method == "half_up"));
     }
+
+    /// `fee_amount_steps` stops on a zero-decimal project with a fractional
+    /// fee, naming it, and rewrites nothing; once the fee is whole it passes,
+    /// and hundredths stay fine in a two-decimal currency.
+    #[sqlx::test(migrations = false)]
+    async fn fee_amount_steps_stop_on_fractional_zero_decimal_fees(pool: sqlx::PgPool) {
+        let at = super::MIGRATOR
+            .iter()
+            .position(|migration| migration.description == "fee amount steps")
+            .expect("the fee_amount_steps migration");
+        let (before, steps) = super::MIGRATOR.migrations.split_at(at);
+        for migration in before {
+            sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        }
+        let ids = crate::testing::seed_tenant(&pool).await;
+        let euro = crate::testing::seed_tenant(&pool).await;
+        for (ids, currency) in [(&ids, "JPY"), (&euro, "EUR")] {
+            sqlx::query!(
+                "UPDATE projects SET currency = $2, project_type = 'fixed_fee' WHERE id = $1",
+                ids.project_id,
+                currency
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, fee_mode, fee_amount_cents)
+                 VALUES ($1, $2, $3, $4, 'person', 'single', 10050)",
+                uuid::Uuid::now_v7(),
+                ids.org_id,
+                ids.project_id,
+                ids.user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let error = sqlx::raw_sql(&steps[0].sql)
+            .execute(&pool)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&ids.project_id.to_string()), "{error}");
+        assert!(!error.contains(&euro.project_id.to_string()), "{error}");
+        let fee = || async {
+            sqlx::query_scalar!(
+                "SELECT fee_amount_cents FROM project_settings WHERE project_id = $1",
+                ids.project_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        assert_eq!(fee().await, Some(10050), "nothing is rewritten");
+
+        sqlx::query!(
+            "UPDATE project_settings SET fee_amount_cents = 10000 WHERE project_id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::raw_sql(&steps[0].sql).execute(&pool).await.unwrap();
+        assert_eq!(fee().await, Some(10000));
+    }
 }

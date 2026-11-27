@@ -284,6 +284,17 @@ pub fn rate_decimal(hundredths: i64) -> String {
     format_cents_plain(hundredths)
 }
 
+/// The step of `currency`'s amounts, in hundredths: 100 (a whole unit) for a
+/// zero-decimal currency, else 1, the finest unit Horae stores. Every amount
+/// of money is a multiple of it. The SQL twin is `currency_amount_step(text)`.
+pub fn amount_step(currency: &str) -> i64 {
+    if currency_decimals(currency) == 0 {
+        100
+    } else {
+        1
+    }
+}
+
 /// Display a project budget in its own unit: money for an amount budget, hours
 /// for an hours budget, empty for no budget.
 pub fn format_budget(

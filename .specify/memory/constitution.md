@@ -1,5 +1,25 @@
 <!--
 Sync Impact Report
+- Version change: 7.2.0 → 7.2.1
+- Bump rationale: PATCH. Principle I states how invoice-level amounts round, which it left
+  unsaid: the half-up rule covers amounts computed from an applied rate (invoice lines), not
+  an invoice's discount and taxes. The sentence records the behaviour Horae implements
+  (invoice rounding methods, PR #487) and adds no new obligation. Requested by the maintainer
+  on 2026-11-26, sentence applied verbatim.
+- Modified principles:
+  - I. Exactness: an "Invoice rounding" paragraph after "Rate templates (not money)".
+- Added sections: none
+- Removed sections: none
+- Templates checked:
+  - .specify/templates/plan-template.md: Constitution Check takes its gates from this file ✅ (no change)
+  - .specify/templates/spec-template.md, tasks-template.md, checklist-template.md: no
+    principle-driven change ✅
+  - AGENTS.md: domain invariants name integer money only ✅ (no change)
+  - README.md: links the constitution only ✅ (no change)
+- Follow-up: the 7.2.0 follow-up (Principle I's "minor units (cents)" wording) stays open.
+-->
+<!--
+Sync Impact Report (7.2.0)
 - Version change: 7.1.0 → 7.2.0
 - Bump rationale: MINOR. Principle I gains materially expanded guidance: a rate template (a
   task's default hourly rate) is an integer at two decimals with no currency, and is not money
@@ -273,6 +293,9 @@ and one hundredth for every other currency, the finest unit Horae stores. An int
 such a rate as a decimal, such as the Harvest-compatible API, writes its two decimals; this does not
 breach the decimal wire formats rule above.
 
+**Invoice rounding**: An invoice's discount and taxes round to the currency's precision by the
+rounding method the invoice stores (half up, down or up).
+
 **Rationale**: Billing and invoicing are financial operations; floating-point accumulation produces
 rounding drift that corrupts totals and erodes trust. Integer representation makes correctness verifiable.
 The XLSX library's numeric-cell API takes an `f64`, so the value is converted at that call; most
@@ -417,4 +440,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 7.2.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-26
+**Version**: 7.2.1 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-26
