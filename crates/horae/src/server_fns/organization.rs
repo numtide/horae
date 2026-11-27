@@ -90,7 +90,7 @@ pub async fn update_org_branding(
 
 #[server]
 pub async fn get_invoice_rounding() -> Result<RoundingMethod, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::invoice_rounding(&mut read.tx, &read.actor).await;
@@ -99,7 +99,7 @@ pub async fn get_invoice_rounding() -> Result<RoundingMethod, ServerFnError> {
 
 #[server]
 pub async fn set_invoice_rounding(method: RoundingMethod) -> Result<RoundingMethod, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::set_invoice_rounding(&mut write.tx, &write.actor, method).await;
