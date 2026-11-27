@@ -68,7 +68,15 @@ pub(crate) fn pool_options(max_connections: u32) -> PgPoolOptions {
         .before_acquire(|connection, meta| {
             Box::pin(async move {
                 if meta.idle_for >= CHECK_IDLE_AFTER || checking_every_connection() {
-                    check_connection(connection).await?;
+                    // The pool replaces a connection that fails the check, so
+                    // the statement never sees the error and nothing else
+                    // opens the window. Idle connections go out oldest first:
+                    // the same request's next statement may get a younger one
+                    // that died with it and goes out unchecked.
+                    if let Err(error) = check_connection(connection).await {
+                        check_every_connection();
+                        return Err(error);
+                    }
                 }
                 Ok(true)
             })
