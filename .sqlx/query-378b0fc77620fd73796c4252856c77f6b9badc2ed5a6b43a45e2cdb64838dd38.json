@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT invoice_portion_cents(-$1::bigint, $2, $3, $4)::bigint AS \"p!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "p!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Text",
+        {
+          "Custom": {
+            "name": "rounding_method",
+            "kind": {
+              "Enum": [
+                "half_up",
+                "down",
+                "up"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "378b0fc77620fd73796c4252856c77f6b9badc2ed5a6b43a45e2cdb64838dd38"
+}

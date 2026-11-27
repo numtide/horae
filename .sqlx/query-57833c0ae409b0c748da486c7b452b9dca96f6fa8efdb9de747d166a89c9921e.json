@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices SET tax1_cents = 896, total_cents = total_cents - 900 + 896 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57833c0ae409b0c748da486c7b452b9dca96f6fa8efdb9de747d166a89c9921e"
+}

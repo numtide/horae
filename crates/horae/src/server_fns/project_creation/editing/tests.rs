@@ -611,6 +611,50 @@ async fn foreign_actor_cannot_save_or_retry_another_organizations_edit(pool: PgP
     ));
 }
 
+/// A legacy project keeps its currency, here JPY, and its money budget must be
+/// a whole number of yen: the form says so instead of the database refusing
+/// the row.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_legacy_yen_budget_with_decimals_is_refused_on_its_field(pool: PgPool) {
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
+    sqlx::query!(
+        "UPDATE projects SET project_type = 'retainer', currency = 'JPY' WHERE id = $1",
+        owner.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut request = edit_request(
+        load_editable_project(&pool, owner.user_id, owner.org_id, owner.project_id)
+            .await
+            .unwrap(),
+    );
+    request.form.budget_mode = BudgetMode::TotalFees;
+    request.form.budget_value = "10.50".into();
+    let error = save_editable_project(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap_err();
+    let ServerFnError::ServerError {
+        code,
+        message,
+        details,
+    } = &error
+    else {
+        panic!("{error:?}");
+    };
+    assert_eq!(*code, BAD_REQUEST, "{error:?}");
+    assert_eq!(message, "Budget: JPY amounts have no decimal places");
+    assert_eq!(
+        details.as_ref().and_then(|details| details.get("field")),
+        Some(&serde_json::json!("budget_value"))
+    );
+
+    request.form.budget_value = "10".into();
+    save_editable_project(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap();
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn save_edits_the_same_legacy_project_and_never_creates_a_draft_or_configuration(
     pool: PgPool,

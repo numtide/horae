@@ -120,6 +120,7 @@ pub(super) fn ScopedReports(
     on_check_access: EventHandler<()>,
 ) -> Element {
     let tr = crate::i18n::use_tr();
+    let hydrated = super::use_hydrated();
     let today = crate::components::today::today();
     let mut from = use_signal(move || today.with_day(1).unwrap_or(today).to_string());
     let mut to = use_signal(move || today.to_string());
@@ -244,11 +245,11 @@ pub(super) fn ScopedReports(
             filters: rsx! {
                 div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
                     label { class: "text-sm text-secondary", r#for: "report-from", {tr.reports_from()} }
-                    Input { kind: "date", id: "report-from", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: from(), error_id: date_error_id.clone(),
+                    Input { kind: "date", id: "report-from", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: from(), error_id: date_error_id.clone(), disabled: !hydrated,
                         oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); from.set(event.value()); }
                     }
                     label { class: "text-sm text-secondary", r#for: "report-to", {tr.reports_to()} }
-                    Input { kind: "date", id: "report-to", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: to(), error_id: date_error_id,
+                    Input { kind: "date", id: "report-to", class: "w-auto min-w-0 max-w-full px-1 sm:px-3", value: to(), error_id: date_error_id, disabled: !hydrated,
                         oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); to.set(event.value()); }
                     }
                 }

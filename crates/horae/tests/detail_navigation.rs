@@ -91,8 +91,10 @@ mod models {
     };
     pub use super::{
         client::Client,
+        invoice::Invoice,
         organization::{OrgBranding, branding_value_error},
         project::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink},
+        server_fns::ProjectSpend,
     };
 }
 
@@ -374,7 +376,12 @@ async fn pending_or_failed_client_navigation_never_shows_previous_identity_or_wo
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Try again"), "{html}");
     assert!(!html.contains("No projects"), "{html}");
-    assert_eq!(*probe.client_invoice_requests.borrow(), [first]);
+    // The second client's invoices start beside its view (the session holds
+    // the grant) and show only once the view admits them.
+    assert_eq!(
+        *probe.client_invoice_requests.borrow(),
+        [first, Uuid::from_u128(2)]
+    );
 }
 
 #[tokio::test]
@@ -1024,6 +1031,17 @@ mod server_fns {
         _branding: OrgBranding,
         _expected: OrgBranding,
     ) -> Result<OrgBranding, ServerFnError> {
+        unreachable!("detail navigation never opens invoice settings")
+    }
+
+    pub async fn get_invoice_rounding() -> Result<horae_core::types::RoundingMethod, ServerFnError>
+    {
+        unreachable!("detail navigation never opens invoice settings")
+    }
+
+    pub async fn set_invoice_rounding(
+        _method: horae_core::types::RoundingMethod,
+    ) -> Result<horae_core::types::RoundingMethod, ServerFnError> {
         unreachable!("detail navigation never opens invoice settings")
     }
 

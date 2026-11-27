@@ -13,9 +13,9 @@ use models::time_report::TimeReportAccess;
 use tokio::sync::oneshot;
 
 // These production modules also define types for unrelated routes.
-pub use horae_types::{permission_editor, time_report, user};
+pub use horae_types::{own_permissions, permission_editor, time_report, user};
 mod models {
-    pub use super::{permission_editor, time_report, user};
+    pub use super::{own_permissions, permission_editor, time_report, user};
     // Only the financial endpoints are stubbed; canonical wire types are production imports.
     pub struct CatalogItem {
         pub id: uuid::Uuid,
@@ -85,7 +85,36 @@ mod components {
         badge, combobox, controls, debounce, filter_bar, form, icons, menu, page_header,
         screen_state, table, today,
     };
+
+    /// The shell's session: the probe's grants, if any, for its account.
+    pub mod session {
+        use dioxus::prelude::*;
+        use horae_types::own_permissions::OwnPermissions;
+        use horae_types::permission_editor::PermissionRequester;
+
+        #[derive(Clone, Copy)]
+        pub struct Session {
+            pub permissions: Signal<Result<OwnPermissions, ServerFnError>>,
+        }
+
+        impl Session {
+            pub fn requester(&self) -> PermissionRequester {
+                super::super::SESSION_REQUESTER
+            }
+        }
+
+        pub fn use_session() -> Session {
+            use_context::<Session>()
+        }
+    }
 }
+
+/// The account the session names.
+const SESSION_REQUESTER: permission_editor::PermissionRequester =
+    permission_editor::PermissionRequester {
+        org_id: uuid::Uuid::from_u128(1),
+        user_id: uuid::Uuid::from_u128(2),
+    };
 #[path = "../src/pages/reports.rs"]
 mod reports;
 
@@ -106,6 +135,9 @@ struct Probe {
     financial_reads: Rc<RefCell<Vec<&'static str>>>,
     queries: Rc<RefCell<Vec<models::time_report::TimeReportQuery>>>,
     access_bindings: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
+    /// The session's grants. `None` leaves them unreadable, so the server's
+    /// access check decides.
+    session_grants: Option<Vec<horae_core::permissions::catalog::Permission>>,
 }
 
 fn queue<T>(receivers: &RefCell<VecDeque<oneshot::Receiver<T>>>) -> oneshot::Sender<T> {
@@ -115,7 +147,22 @@ fn queue<T>(receivers: &RefCell<VecDeque<oneshot::Receiver<T>>>) -> oneshot::Sen
 }
 
 fn app(probe: Probe) -> Element {
+    let grants = probe.session_grants.clone();
     use_context_provider(|| probe);
+    let permissions = use_signal(|| match grants {
+        Some(grants) => Ok(own_permissions::OwnPermissions {
+            catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
+            grants,
+            is_administrator: false,
+            profile: None,
+            access_revision: 1,
+            person_revision: 1,
+            managed_person_ids: Vec::new(),
+            managed_project_ids: Vec::new(),
+        }),
+        None => Err(ServerFnError::new("permissions unavailable")),
+    });
+    use_context_provider(|| components::session::Session { permissions });
     rsx! { reports::Reports {} }
 }
 
@@ -204,6 +251,61 @@ async fn financial_catalogs_wait_for_explicit_authenticated_financial_access() {
     assert!(dioxus::ssr::render(&dom).contains("Export CSV"));
     assert_eq!(probe.identity_reads.get(), 0);
     assert!(probe.queries.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn session_grants_open_the_financial_view_without_an_access_read() {
+    use horae_core::permissions::catalog::Permission;
+    let probe = Probe {
+        session_grants: Some(vec![Permission::TimeReadAll]),
+        ..Probe::default()
+    };
+    let dom = mount(&probe);
+    assert_eq!(probe.access_reads.get(), 0);
+    assert_eq!(probe.financial_reads.borrow().len(), 5);
+    assert!(dioxus::ssr::render(&dom).contains("Export CSV"));
+}
+
+#[tokio::test]
+async fn session_grants_open_the_scoped_view_and_refresh_asks_the_server() {
+    use horae_core::permissions::catalog::Permission;
+    let probe = Probe {
+        session_grants: Some(vec![Permission::TimeReadOwn]),
+        ..Probe::default()
+    };
+    let _first = queue(&probe.reports);
+    let mut dom = mount(&probe);
+    assert_eq!(probe.access_reads.get(), 0);
+    assert!(probe.financial_reads.borrow().is_empty());
+    assert_eq!(
+        probe.queries.borrow()[0].expected_requester,
+        Some(SESSION_REQUESTER)
+    );
+    // "Refresh access" checks with the server, pinned to the session's account.
+    let check = queue(&probe.access);
+    click(&mut dom, "reports-retry-access");
+    assert_eq!(*probe.access_bindings.borrow(), [Some(SESSION_REQUESTER)]);
+    check
+        .send(Ok(TimeReportAccess {
+            financial: true,
+            requester: SESSION_REQUESTER,
+        }))
+        .unwrap();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("session or report access changed"));
+}
+
+#[tokio::test]
+async fn session_grants_without_a_time_read_leave_the_decision_to_the_server() {
+    use horae_core::permissions::catalog::Permission;
+    let probe = Probe {
+        session_grants: Some(vec![Permission::ProjectCreateAll]),
+        ..Probe::default()
+    };
+    let _access = queue(&probe.access);
+    let dom = mount(&probe);
+    assert_eq!(probe.access_reads.get(), 1);
+    assert!(dioxus::ssr::render(&dom).contains("Loading report access"));
 }
 
 use screen_state::{Failure, loaded};

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET invoice_rounding = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "rounding_method",
+            "kind": {
+              "Enum": [
+                "half_up",
+                "down",
+                "up"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da6b9c62016102e25fc51ceca06c515e260b2c5889f7429685adafbedb64ba7d"
+}

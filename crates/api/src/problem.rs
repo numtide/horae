@@ -86,6 +86,13 @@ impl Problem {
     }
 }
 
+// For conversions that cannot fail, such as `TryFrom` via `From`.
+impl From<std::convert::Infallible> for Problem {
+    fn from(never: std::convert::Infallible) -> Self {
+        match never {}
+    }
+}
+
 impl From<OpError> for Problem {
     fn from(error: OpError) -> Self {
         let detail = error.detail().cloned().unwrap_or_default();

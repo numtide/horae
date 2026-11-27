@@ -1,4 +1,5 @@
-//! Branding and the workspace time zone, allowed and refused by stored grants.
+//! Branding, invoice rounding and the workspace time zone, allowed and
+//! refused by stored grants.
 
 use std::time::Duration;
 
@@ -169,6 +170,44 @@ async fn branding_needs_invoice_write_for_everyone(pool: PgPool) {
             assert_forbidden(loaded, who);
             assert_forbidden(saved, who);
             assert_eq!(row_version(&pool, ids.org_id).await, before, "{who:?}");
+        }
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn invoice_rounding_needs_invoice_write_for_everyone(pool: PgPool) {
+    for (who, allowed) in [
+        (Who::Profile(Administrator), true),
+        (Who::Profile(Accounting), true),
+        (Who::Profile(ProjectManager), false),
+        (Who::Profile(Member), false),
+        (Who::Grants(&[InvoiceWriteAll]), true),
+        (Who::Grants(&[InvoiceReadAll]), false),
+        (Who::Grants(&[CompanyWrite]), false),
+    ] {
+        let ids = fixture(&pool, who).await;
+        let caller = Caller::session(ids.org_id, ids.user_id);
+        let mut read = crate::ops::begin_read(&pool, caller).await.unwrap();
+        let loaded = invoice_rounding(&mut read.tx, &read.actor).await;
+        let loaded = read.finish(loaded).await;
+        let mut write = crate::ops::begin(&pool, caller).await.unwrap();
+        let saved = set_invoice_rounding(&mut write.tx, &write.actor, RoundingMethod::Up).await;
+        let saved = write.commit(saved, &Recorder::default()).await;
+        let stored = sqlx::query_scalar!(
+            r#"SELECT invoice_rounding AS "rounding: RoundingMethod" FROM organizations WHERE id = $1"#,
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if allowed {
+            assert_eq!(loaded.unwrap(), RoundingMethod::HalfUp, "{who:?}");
+            assert_eq!(saved.unwrap(), RoundingMethod::Up, "{who:?}");
+            assert_eq!(stored, RoundingMethod::Up, "{who:?}");
+        } else {
+            assert_forbidden(loaded, who);
+            assert_forbidden(saved, who);
+            assert_eq!(stored, RoundingMethod::HalfUp, "{who:?}");
         }
     }
 }

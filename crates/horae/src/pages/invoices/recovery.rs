@@ -163,12 +163,10 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
             loaded.set(false);
             checking.set(true);
             let result = async {
-                let user = server_fns::get_me()
-                    .await
-                    .map_err(|error| error.to_string())?;
-                let own = server_fns::get_my_permissions()
-                    .await
-                    .map_err(|error| error.to_string())?;
+                let (user, own) =
+                    futures_util::join!(server_fns::get_me(), server_fns::get_my_permissions());
+                let user = user.map_err(|error| error.to_string())?;
+                let own = own.map_err(|error| error.to_string())?;
                 let refused = !reads_invoices(&own);
                 denied.set(refused);
                 if refused {

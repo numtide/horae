@@ -8,9 +8,23 @@
 //! minutes at three. The proptest properties `parse_never_panics` and
 //! `parse_stays_inside_the_day` in `tests/properties.rs` cover them instead.
 
-use crate::invoice::{InvoiceAmountError, invoice_amounts, line_amount_in_step};
+use crate::invoice::{InvoiceAmountError, Rounding, invoice_amounts, line_amount_in_step};
 use crate::project::Percentage;
-use crate::types::RoundDir;
+use crate::types::{RoundDir, RoundingMethod};
+
+/// Either step `Rounding::new` can pick, 1 hundredth or 100 (a zero-decimal
+/// currency's whole unit), with any method. Which currency gets which step is
+/// `currency_decimals`' mapping, tested in `money.rs`, so the proofs leave it out.
+fn any_rounding() -> Rounding {
+    Rounding {
+        step: if kani::any() { 100 } else { 1 },
+        method: match kani::any::<u8>() % 3 {
+            0 => RoundingMethod::HalfUp,
+            1 => RoundingMethod::Down,
+            _ => RoundingMethod::Up,
+        },
+    }
+}
 
 fn any_dir() -> RoundDir {
     match kani::any::<u8>() % 3 {
@@ -66,28 +80,34 @@ fn rounding_lands_on_the_named_side_for_every_u32() {
     }
 }
 
-/// For every non-negative subtotal and any three percentages, invoice amounts
-/// never panic or wrap (Kani's own overflow and panic checks), keep the
-/// subtotal they were given and never make the discount negative.
+/// For every non-negative subtotal, any three percentages and any rounding,
+/// invoice amounts never panic or wrap (Kani's own overflow and panic checks),
+/// keep the subtotal they were given and never make the discount negative.
+/// Both taxes land on the step, and so does the discount unless it is the
+/// whole subtotal.
 #[kani::proof]
 fn invoice_amounts_never_panic_for_every_subtotal() {
     let subtotal: i64 = kani::any();
     kani::assume(subtotal >= 0);
+    let rounding = any_rounding();
     let amounts = invoice_amounts(
         subtotal,
         any_percentage(),
         any_percentage(),
         any_percentage(),
+        rounding,
     );
     kani::cover!(amounts.is_err());
     if let Ok(a) = amounts {
         assert!(a.subtotal_cents == subtotal && a.discount_cents >= 0);
+        assert!(a.discount_cents % rounding.step == 0 || a.discount_cents == subtotal);
+        assert!(a.tax1_cents % rounding.step == 0 && a.tax2_cents % rounding.step == 0);
     }
 }
 
-/// For every non-negative amount and any two tax rates, both taxes are
-/// non-negative and the total is exactly the amount plus them, and it fails
-/// only for amounts past a third of `i64::MAX`. With the discount zero the
+/// For every non-negative amount, any two tax rates and any rounding, both
+/// taxes are non-negative and the total is exactly the amount plus them, and
+/// it fails only for amounts near or past a third of `i64::MAX`. With the discount zero the
 /// amount is the taxable amount. After a discount, the next proof keeps that
 /// non-negative only for subtotals up to 2^28 cents; above it, the proptest
 /// properties sample it.
@@ -96,7 +116,7 @@ fn invoice_taxes_are_non_negative_and_add_up_for_every_amount() {
     let taxable: i64 = kani::any();
     kani::assume(taxable >= 0);
     let (tax1, tax2) = (any_percentage(), any_percentage());
-    match invoice_amounts(taxable, Percentage::ZERO, tax1, tax2) {
+    match invoice_amounts(taxable, Percentage::ZERO, tax1, tax2, any_rounding()) {
         Ok(a) => {
             kani::cover!();
             assert!(a.discount_cents == 0 && a.tax1_cents >= 0 && a.tax2_cents >= 0);
@@ -107,10 +127,10 @@ fn invoice_taxes_are_non_negative_and_add_up_for_every_amount() {
         }
         Err(e) => {
             kani::cover!();
-            // Each tax is at most the amount, so only an amount past a third
-            // of `i64::MAX` can overflow. The exact total in `i128` ran past
+            // Each tax is at most the amount rounded up to the step, so only
+            // an amount past a third of `i64::MAX` can overflow. The exact total in `i128` ran past
             // five minutes.
-            assert!(e == InvoiceAmountError::Overflow && taxable > i64::MAX / 3);
+            assert!(e == InvoiceAmountError::Overflow && taxable > (i64::MAX - 2 * 99) / 3);
         }
     }
 }
@@ -120,7 +140,7 @@ fn invoice_taxes_are_non_negative_and_add_up_for_every_amount() {
 /// leaves a non-negative taxable amount. `discount ≤ subtotal` needs CBMC to
 /// bound a symbolic 128-bit quotient: 2^32 took two minutes and `i64` did not
 /// finish in ten. The proptest properties cover the whole range and the
-/// half-up rounding of every component.
+/// rounding of every component by each method.
 #[kani::proof]
 fn invoice_discount_stays_within_the_subtotal() {
     let subtotal: i64 = kani::any();
@@ -130,6 +150,7 @@ fn invoice_discount_stays_within_the_subtotal() {
         any_percentage(),
         Percentage::ZERO,
         Percentage::ZERO,
+        any_rounding(),
     )
     .unwrap();
     assert!(0 <= a.discount_cents && a.discount_cents <= subtotal);

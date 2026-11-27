@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT invoice_rounding AS \"rounding: RoundingMethod\" FROM organizations WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rounding: RoundingMethod",
+        "type_info": {
+          "Custom": {
+            "name": "rounding_method",
+            "kind": {
+              "Enum": [
+                "half_up",
+                "down",
+                "up"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aabf963c3a94fbef3dadee9b8a58286ab41d4562f829cc1203ef43800328501c"
+}

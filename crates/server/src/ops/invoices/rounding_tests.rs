@@ -1,11 +1,13 @@
 //! Per-entry amounts round to the currency's precision everywhere they are
 //! computed (spec 026, User Story 3): invoice previews and lines, the time
 //! report, project figures and amount budgets agree, and totals are sums of
-//! the rounded lines.
+//! the rounded lines. An invoice's discount and taxes round to the same
+//! precision by the method it stores, which a new invoice takes from the
+//! organization's setting.
 
 use chrono::NaiveDate;
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::EntryState;
+use horae_core::types::{EntryState, RoundingMethod};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -362,4 +364,487 @@ async fn an_imported_invoice_keeps_its_amounts_and_its_time_rounds_in_its_curren
     .await
     .unwrap();
     assert_eq!(budget[0].consumed, 12350);
+}
+
+async fn begin_write(pool: &PgPool, ids: &SeedIds) -> crate::ops::WriteTx {
+    begin_gated(
+        pool,
+        Caller::session(ids.org_id, ids.user_id),
+        OrganizationLock::Shared,
+        WriteIsolation::ReadCommitted,
+    )
+    .await
+    .unwrap()
+}
+
+async fn set_org_rounding(pool: &PgPool, ids: &SeedIds, method: RoundingMethod) {
+    let mut write = begin_write(pool, ids).await;
+    let set =
+        crate::ops::organization::set_invoice_rounding(&mut write.tx, &write.actor, method).await;
+    write.commit(set, &Recorder::default()).await.unwrap();
+}
+
+async fn generate_invoice(pool: &PgPool, ids: &SeedIds) -> crate::models::InvoiceWithLines {
+    let mut write = begin_write(pool, ids).await;
+    let generated = super::generate(
+        &mut write.tx,
+        &write.actor,
+        super::Generation {
+            client_id: ids.client_id,
+            period: (day(), day()),
+            project_ids: None,
+            overrides: None,
+            request: None,
+        },
+    )
+    .await;
+    write.commit(generated, &Recorder::default()).await.unwrap()
+}
+
+/// (discount, tax1, total) and the stored method of an invoice.
+async fn stored(pool: &PgPool, id: Uuid) -> ((i64, i64, i64), RoundingMethod) {
+    let row = sqlx::query!(
+        r#"SELECT discount_cents, tax1_cents, total_cents, rounding AS "rounding: RoundingMethod"
+           FROM invoices WHERE id = $1"#,
+        id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    (
+        (row.discount_cents, row.tax1_cents, row.total_cents),
+        row.rounding,
+    )
+}
+
+/// A JPY project billing JPY 124 (121 + 3) with a 10% discount and 8% tax:
+/// a discount of JPY 12.40, then tax on JPY 112 (8.96) or JPY 111 (8.88).
+async fn discounted_jpy_project(pool: &PgPool) -> SeedIds {
+    let ids = project_in(pool, "JPY").await;
+    sqlx::query!(
+        "UPDATE project_settings SET discount_bps = 1000, tax1_bps = 800 WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    ids
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_new_invoice_rounds_by_the_organization_method_in_whole_yen(pool: PgPool) {
+    for (method, expected) in [
+        (RoundingMethod::HalfUp, (1200, 900, 12100)),
+        (RoundingMethod::Down, (1200, 800, 12000)),
+        (RoundingMethod::Up, (1300, 900, 12000)),
+    ] {
+        let ids = discounted_jpy_project(&pool).await;
+        set_org_rounding(&pool, &ids, method).await;
+
+        let caller = Caller::session(ids.org_id, ids.user_id);
+        let mut read = begin_read_snapshot(&pool, caller, crate::ops::SnapshotLimits::LockWait)
+            .await
+            .unwrap();
+        let preview = super::preview::prepare(
+            &mut read.tx,
+            &read.actor,
+            ids.client_id,
+            (day(), day()),
+            None,
+            None,
+            None,
+        )
+        .await;
+        let amounts = read.finish(preview).await.unwrap().amounts.unwrap();
+        assert_eq!(
+            (
+                amounts.discount_cents,
+                amounts.tax1_cents,
+                amounts.total_cents
+            ),
+            expected,
+            "{method:?} preview"
+        );
+
+        let invoice = generate_invoice(&pool, &ids).await;
+        assert_eq!(
+            stored(&pool, invoice.invoice.id).await,
+            (expected, method),
+            "{method:?} invoice"
+        );
+        let mut contributions: Vec<i64> = sqlx::query_scalar!(
+            r#"SELECT net_before_tax_cents AS "net!" FROM invoice_line_items WHERE invoice_id = $1"#,
+            invoice.invoice.id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        contributions.sort_unstable();
+        assert_eq!(
+            contributions.iter().sum::<i64>(),
+            12400 - expected.0,
+            "{method:?} line discounts"
+        );
+        // The discount moves whole yen: JPY 3 and JPY 121 share JPY 12 or 13.
+        assert!(
+            contributions.iter().all(|net| net % 100 == 0),
+            "{method:?} {contributions:?}"
+        );
+    }
+}
+
+/// The seeded project billed as one fixed fee of `fee_cents`, starting on
+/// 2026-09-01, with its client and itself in `currency`.
+async fn fee_project_in(pool: &PgPool, currency: &str, fee_cents: i64) -> SeedIds {
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
+    sqlx::query!(
+        "UPDATE clients SET currency = $2 WHERE id = $1",
+        ids.client_id,
+        currency
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE projects SET currency = $2, project_type = 'fixed_fee', starts_on = '2026-09-01'
+         WHERE id = $1",
+        ids.project_id,
+        currency
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, fee_mode, fee_amount_cents)
+         VALUES ($1, $2, $3, $4, 'person', 'single', $5)",
+        Uuid::now_v7(),
+        ids.org_id,
+        ids.project_id,
+        ids.user_id,
+        fee_cents
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    ids
+}
+
+fn constraint(error: sqlx::Error) -> Option<String> {
+    error
+        .as_database_error()
+        .and_then(|error| error.constraint().map(str::to_owned))
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_database_keeps_fees_on_the_currency_step(pool: PgPool) {
+    const STEP: Option<&str> = Some("project_fee_amount_currency_step");
+    // Hundredths are fine where the currency has them.
+    for currency in ["EUR", "BHD"] {
+        fee_project_in(&pool, currency, 10_050).await;
+    }
+    let ids = fee_project_in(&pool, "JPY", 10_000).await;
+    let settings = sqlx::query!(
+        "UPDATE project_settings SET fee_amount_cents = 10050 WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(constraint(settings).as_deref(), STEP);
+    let milestone = sqlx::query!(
+        "INSERT INTO project_fee_milestones (id, org_id, project_id, name, due_on, amount_cents, position)
+         VALUES ($1, $2, $3, 'Delivery', '2026-09-01', 10050, 0)",
+        Uuid::now_v7(),
+        ids.org_id,
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(constraint(milestone).as_deref(), STEP);
+    let occurrence = sqlx::query!(
+        "INSERT INTO project_fee_occurrences (id, org_id, project_id, period_key, due_on, description, amount_cents, currency)
+         VALUES ($1, $2, $3, 'single', '2026-09-01', 'Fixed fee', 10050, 'JPY')",
+        Uuid::now_v7(),
+        ids.org_id,
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        constraint(occurrence).as_deref(),
+        Some("project_fee_occurrences_amount_currency_step")
+    );
+
+    // Switching a project to a zero-decimal currency rechecks its fees at the
+    // commit, so a data migration may write the currency before the new fee.
+    let ids = fee_project_in(&pool, "EUR", 10_050).await;
+    let switched = sqlx::query!(
+        "UPDATE projects SET currency = 'JPY' WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(constraint(switched).as_deref(), STEP);
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE projects SET currency = 'JPY' WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE project_settings SET fee_amount_cents = 10000 WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_draft_editor_keeps_fee_lines_on_the_currency_step(pool: PgPool) {
+    for (currency, edited, refused) in [
+        ("JPY", 1_190_000, true),
+        ("EUR", 1_190_050, false),
+        ("BHD", 1_190_050, false),
+    ] {
+        let ids = fee_project_in(&pool, currency, 1_200_000).await;
+        let mut write = begin_write(&pool, &ids).await;
+        let generated = super::generate(
+            &mut write.tx,
+            &write.actor,
+            super::Generation {
+                client_id: ids.client_id,
+                period: ("2026-09-01".parse().unwrap(), day()),
+                project_ids: None,
+                overrides: None,
+                request: None,
+            },
+        )
+        .await;
+        let draft = write
+            .commit(generated, &Recorder::default())
+            .await
+            .unwrap()
+            .invoice
+            .id;
+        let caller = Caller::session(ids.org_id, ids.user_id);
+        let mut read = begin_read(&pool, caller).await.unwrap();
+        let editor = super::editing::load(&mut read.tx, &read.actor, draft).await;
+        let mut edit = read.finish(editor).await.unwrap().edit;
+        let line = edit.fees[0].line_id;
+        let review = |edit: crate::models::invoice::InvoiceDraftEdit| {
+            let pool = pool.clone();
+            async move {
+                let mut read = begin_read(&pool, caller).await.unwrap();
+                let review = super::editing::review(&mut read.tx, &read.actor, draft, &edit).await;
+                read.finish(review).await
+            }
+        };
+        // Whole units are fine everywhere; hundredths only where the currency has them.
+        edit.fees[0].amount_cents = edited;
+        assert!(review(edit.clone()).await.is_ok(), "{currency} {edited}");
+        edit.fees[0].amount_cents = 1_190_050;
+        let result = review(edit.clone()).await;
+        if refused {
+            let error = result.unwrap_err();
+            assert!(
+                matches!(error.kind(), crate::ops::OpError::Invalid { .. }),
+                "{error:?}"
+            );
+            assert_eq!(
+                error.detail().and_then(|detail| detail.field.clone()),
+                Some(serde_json::json!({ "fee_line": line }))
+            );
+            assert_eq!(
+                error.to_string(),
+                "Fee amount: JPY amounts have no decimal places"
+            );
+        } else {
+            assert!(result.is_ok(), "{currency}");
+        }
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_invoice_keeps_its_method_when_the_setting_changes(pool: PgPool) {
+    let ids = discounted_jpy_project(&pool).await;
+    set_org_rounding(&pool, &ids, RoundingMethod::Down).await;
+    let draft = generate_invoice(&pool, &ids).await.invoice.id;
+    set_org_rounding(&pool, &ids, RoundingMethod::Up).await;
+
+    // Editing the draft recomputes with the method it stores, not the setting.
+    let caller = Caller::session(ids.org_id, ids.user_id);
+    let mut read = begin_read(&pool, caller).await.unwrap();
+    let editor = super::editing::load(&mut read.tx, &read.actor, draft).await;
+    let editor = read.finish(editor).await.unwrap();
+    assert_eq!(editor.review.amounts.total_cents, 12000);
+    let mut edit = editor.edit;
+    // Without the discount the tax is JPY 9.92: 9 down, where up gives 10.
+    edit.defaults.discount_bps = 0;
+    let mut read = begin_read(&pool, caller).await.unwrap();
+    let review = super::editing::review(&mut read.tx, &read.actor, draft, &edit).await;
+    let review = read.finish(review).await.unwrap();
+    assert_eq!(
+        (review.amounts.discount_cents, review.amounts.tax1_cents),
+        (0, 900)
+    );
+    let mut write = begin_write(&pool, &ids).await;
+    let request = crate::models::invoice::InvoiceDraftSave {
+        request_id: Uuid::now_v7(),
+        edit,
+        review,
+        confirmed_excess: Vec::new(),
+    };
+    let saved = super::editing::save(&mut write.tx, &write.actor, draft, &request).await;
+    write.commit(saved, &Recorder::default()).await.unwrap();
+    assert_eq!(
+        stored(&pool, draft).await,
+        ((0, 900, 13300), RoundingMethod::Down)
+    );
+
+    // An issued invoice is never recomputed: changing the setting again leaves it.
+    let mut write = begin_write(&pool, &ids).await;
+    let sent = super::set_status(
+        &mut write.tx,
+        &write.actor,
+        draft,
+        horae_core::types::InvoiceStatus::Sent,
+    )
+    .await;
+    write.commit(sent, &Recorder::default()).await.unwrap();
+    set_org_rounding(&pool, &ids, RoundingMethod::HalfUp).await;
+    assert_eq!(
+        stored(&pool, draft).await,
+        ((0, 900, 13300), RoundingMethod::Down)
+    );
+    let mut read = begin_read(&pool, caller).await.unwrap();
+    let detail = super::detail(&mut read.tx, &read.actor, draft).await;
+    let detail = read.finish(detail).await.unwrap();
+    let text = crate::render::invoice_text(&detail.invoice, &detail.lines, None, &branding());
+    for amount in ["124.00", "9.00", "133.00"] {
+        assert!(text.contains(amount), "missing {amount}: {text}");
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_database_refuses_amounts_its_method_would_not_give(pool: PgPool) {
+    let ids = discounted_jpy_project(&pool).await;
+    let invoice = generate_invoice(&pool, &ids).await.invoice.id;
+    // The fractional tax two-decimal rounding gave before: JPY 8.96.
+    let error = sqlx::query!(
+        "UPDATE invoices SET tax1_cents = 896, total_cents = total_cents - 900 + 896 WHERE id = $1",
+        invoice
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().constraint(),
+        Some("invoice_tax1_exact")
+    );
+    // Half up's JPY 9 under another method is refused too.
+    let error = sqlx::query!(
+        "UPDATE invoices SET rounding = 'down' WHERE id = $1",
+        invoice
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().constraint(),
+        Some("invoice_tax1_exact")
+    );
+}
+
+/// `invoice_portion_cents`, which the CHECKs use, and `invoice_amounts` give
+/// the same discount and taxes for every method in every kind of currency.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn invoice_portion_sql_matches_rust(pool: PgPool) {
+    use horae_core::invoice::{Rounding, invoice_amounts};
+    use horae_core::project::Percentage;
+    let subtotals = [
+        0_i64,
+        1,
+        49,
+        50,
+        51,
+        99,
+        100,
+        150,
+        9_999,
+        12_345,
+        1_234_500,
+        1_234_550,
+        i64::MAX / 3,
+    ];
+    let rates = [0_u16, 1, 800, 1_000, 2_500, 5_000, 9_999, 10_000];
+    for currency in ["JPY", "EUR", "BHD", " JPY", "jpy", "XYZ"] {
+        for method in [
+            RoundingMethod::HalfUp,
+            RoundingMethod::Down,
+            RoundingMethod::Up,
+        ] {
+            for subtotal in subtotals {
+                for (discount, tax) in rates.iter().zip(rates.iter().rev()) {
+                    let rust = invoice_amounts(
+                        subtotal,
+                        Percentage::try_from(*discount).unwrap(),
+                        Percentage::try_from(*tax).unwrap(),
+                        Percentage::ZERO,
+                        Rounding::new(currency, method),
+                    )
+                    .unwrap();
+                    let sql = sqlx::query!(
+                        r#"SELECT d::bigint AS "discount!",
+                                  invoice_portion_cents($1::bigint - d, $3, $4, $5)::bigint AS "tax!"
+                           FROM (SELECT LEAST($1::bigint::numeric,
+                                   invoice_portion_cents($1::bigint, $2, $4, $5)) AS d) discount"#,
+                        subtotal,
+                        i32::from(*discount),
+                        i32::from(*tax),
+                        currency,
+                        method as RoundingMethod,
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                    assert_eq!(
+                        (sql.discount, sql.tax),
+                        (rust.discount_cents, rust.tax1_cents),
+                        "{currency:?} {method:?} {subtotal} {discount} {tax}"
+                    );
+                    let negated: i64 = sqlx::query_scalar!(
+                        r#"SELECT invoice_portion_cents(-$1::bigint, $2, $3, $4)::bigint AS "p!""#,
+                        subtotal,
+                        i32::from(*tax),
+                        currency,
+                        method as RoundingMethod,
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                    let positive: i64 = sqlx::query_scalar!(
+                        r#"SELECT invoice_portion_cents($1::bigint, $2, $3, $4)::bigint AS "p!""#,
+                        subtotal,
+                        i32::from(*tax),
+                        currency,
+                        method as RoundingMethod,
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                    assert_eq!(
+                        negated, -positive,
+                        "{currency:?} {method:?} {subtotal} {tax}"
+                    );
+                }
+            }
+        }
+    }
 }

@@ -1324,6 +1324,11 @@ tbody tr.table-state td { padding: 0; }
 .skeleton-row:nth-child(even) .skeleton-cell:nth-child(odd) .skeleton-bar { width: 45%; }
 @keyframes skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; } }
+/* Loading states show only after 150 ms, so a fast answer does not flash one.
+   Hidden, they keep their space, so the page does not move when they appear.
+   A delay is not motion: the reduced-motion rule shortens the duration only. */
+@keyframes appear-late { from { visibility: hidden; } }
+.loading, .skeleton, .table-skeleton { animation: appear-late 1ms 150ms both; }
 
 /* Alert / flash messages */
 .alert {

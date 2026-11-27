@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT edit_revision, rounding AS \"rounding: RoundingMethod\"\n           FROM invoices WHERE id=$1 AND org_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "edit_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "rounding: RoundingMethod",
+        "type_info": {
+          "Custom": {
+            "name": "rounding_method",
+            "kind": {
+              "Enum": [
+                "half_up",
+                "down",
+                "up"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "16a0e4ee06345ceb3d3396786ae1c7c7ebe4eb735a0fdc0af85014fc6f6029c3"
+}

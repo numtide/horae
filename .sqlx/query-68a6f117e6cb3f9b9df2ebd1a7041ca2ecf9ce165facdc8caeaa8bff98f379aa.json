@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d::bigint AS \"discount!\",\n                                  invoice_portion_cents($1::bigint - d, $3, $4, $5)::bigint AS \"tax!\"\n                           FROM (SELECT LEAST($1::bigint::numeric,\n                                   invoice_portion_cents($1::bigint, $2, $4, $5)) AS d) discount",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "discount!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "tax!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Int4",
+        "Text",
+        {
+          "Custom": {
+            "name": "rounding_method",
+            "kind": {
+              "Enum": [
+                "half_up",
+                "down",
+                "up"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "68a6f117e6cb3f9b9df2ebd1a7041ca2ecf9ce165facdc8caeaa8bff98f379aa"
+}

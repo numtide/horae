@@ -715,4 +715,149 @@ mod tests {
         .await;
         assert!(zero.is_err(), "a zero template is refused");
     }
+
+    /// `invoice_rounding` stops on a Horae invoice with fractional yen rather
+    /// than rewrite it, and passes once it is gone; two-decimal invoices and
+    /// imported ones with whole amounts carry over unchanged, half up.
+    #[sqlx::test(migrations = false)]
+    async fn invoice_rounding_stops_on_fractional_zero_decimal_invoices(pool: sqlx::PgPool) {
+        let at = super::MIGRATOR
+            .iter()
+            .position(|migration| migration.description == "invoice rounding")
+            .expect("the invoice_rounding migration");
+        let (before, rounding) = super::MIGRATOR.migrations.split_at(at);
+        for migration in before {
+            sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        }
+        let ids = crate::testing::seed_tenant(&pool).await;
+        // (number, currency, subtotal, tax, source): 8% of 123.45 and of JPY 12,345.
+        let invoices = [
+            ("EUR-1", "EUR", 12_345_i64, 988_i64, "horae"),
+            ("JPY-1", "JPY", 1_234_500, 98_760, "horae"),
+            ("JPY-2", "JPY", 1_000_000, 80_000, "horae"),
+            ("H-1", "JPY", 1_234_500, 0, "harvest"),
+        ];
+        for (number, currency, subtotal, tax, source) in invoices {
+            // The `rounding` column does not exist yet, so these are not checked macros.
+            sqlx::query(
+                "INSERT INTO invoices (id, org_id, client_id, number, issued_on, due_on, currency,
+                                       total_cents, tax1_bps, tax1_cents, source)
+                 VALUES ($1, $2, $3, $4, current_date, current_date, $5, $6,
+                         CASE WHEN $8 = 'horae' THEN 800 ELSE 0 END, $7, $8::invoice_source)",
+            )
+            .bind(uuid::Uuid::now_v7())
+            .bind(ids.org_id)
+            .bind(ids.client_id)
+            .bind(number)
+            .bind(currency)
+            .bind(subtotal + tax)
+            .bind(tax)
+            .bind(source)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let snapshot = || async {
+            sqlx::query_scalar!(
+                r#"SELECT (to_jsonb(i) - 'rounding')::text AS "row!" FROM invoices i ORDER BY number"#
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+        };
+        let carried = snapshot().await;
+
+        let error = sqlx::raw_sql(&rounding[0].sql)
+            .execute(&pool)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("JPY-1"), "{error}");
+        assert!(
+            !error.contains("JPY-2") && !error.contains("H-1"),
+            "{error}"
+        );
+        assert_eq!(snapshot().await, carried, "nothing is rewritten");
+
+        sqlx::query!("DELETE FROM invoices WHERE number = 'JPY-1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let carried = snapshot().await;
+        sqlx::raw_sql(&rounding[0].sql)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(snapshot().await, carried);
+        let methods = sqlx::query_scalar!(r#"SELECT rounding::text AS "m!" FROM invoices"#)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert!(methods.iter().all(|method| method == "half_up"));
+    }
+
+    /// `fee_amount_steps` stops on a zero-decimal project with a fractional
+    /// fee, naming it, and rewrites nothing; once the fee is whole it passes,
+    /// and hundredths stay fine in a two-decimal currency.
+    #[sqlx::test(migrations = false)]
+    async fn fee_amount_steps_stop_on_fractional_zero_decimal_fees(pool: sqlx::PgPool) {
+        let at = super::MIGRATOR
+            .iter()
+            .position(|migration| migration.description == "fee amount steps")
+            .expect("the fee_amount_steps migration");
+        let (before, steps) = super::MIGRATOR.migrations.split_at(at);
+        for migration in before {
+            sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        }
+        let ids = crate::testing::seed_tenant(&pool).await;
+        let euro = crate::testing::seed_tenant(&pool).await;
+        for (ids, currency) in [(&ids, "JPY"), (&euro, "EUR")] {
+            sqlx::query!(
+                "UPDATE projects SET currency = $2, project_type = 'fixed_fee' WHERE id = $1",
+                ids.project_id,
+                currency
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, fee_mode, fee_amount_cents)
+                 VALUES ($1, $2, $3, $4, 'person', 'single', 10050)",
+                uuid::Uuid::now_v7(),
+                ids.org_id,
+                ids.project_id,
+                ids.user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let error = sqlx::raw_sql(&steps[0].sql)
+            .execute(&pool)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&ids.project_id.to_string()), "{error}");
+        assert!(!error.contains(&euro.project_id.to_string()), "{error}");
+        let fee = || async {
+            sqlx::query_scalar!(
+                "SELECT fee_amount_cents FROM project_settings WHERE project_id = $1",
+                ids.project_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        assert_eq!(fee().await, Some(10050), "nothing is rewritten");
+
+        sqlx::query!(
+            "UPDATE project_settings SET fee_amount_cents = 10000 WHERE project_id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::raw_sql(&steps[0].sql).execute(&pool).await.unwrap();
+        assert_eq!(fee().await, Some(10000));
+    }
 }

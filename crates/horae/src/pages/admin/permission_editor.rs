@@ -92,14 +92,21 @@ pub(crate) fn PermissionEditorDialog(
         *was_open = open;
         *count
     });
-    // The identity keys this tab's recovery storage, so it is checked on mount,
-    // whenever a person is opened (another tab may have switched the user) and on
-    // reload. Closing re-reads only the storage, which a save in this dialog may
-    // have written (a rejected save stays recoverable). Each answer carries the
-    // open it was fetched for, so the storage is never read with an older one.
+    // The identity keys this tab's recovery storage. Until a person is opened,
+    // the session's identity finds a retained request: recovering it sends that
+    // identity as the pin, so a user switched in another tab is refused. Each
+    // open and each reload after one asks the server (another tab may have
+    // switched the user). Closing re-reads only the storage, which a save in
+    // this dialog may have written (a rejected save stays recoverable). Each
+    // answer carries the open it was fetched for, so the storage is never read
+    // with an older one.
+    let session = crate::components::session::use_session();
     let mut identity = use_resource(move || {
         let opened = opened();
         async move {
+            if opened == 0 {
+                return (opened, Ok(session.requester()));
+            }
             let user = server_fns::get_me().await.map_err(|error| {
                 if matches!(
                     error,
@@ -153,6 +160,8 @@ pub(crate) fn PermissionEditorDialog(
             None => Ok(None),
         }
     });
+    let open = use_memo(move || person().is_some());
+    let (mut subjects, subject_cursors) = subjects::use_subject_pages(open);
     // A successful reload can return unchanged revisions but must discard local state.
     let mut generation = use_signal(Uuid::now_v7);
     let reload = use_callback(move |_: ()| {
@@ -160,6 +169,7 @@ pub(crate) fn PermissionEditorDialog(
             dirty.set(false);
             generation.set(Uuid::now_v7());
             editor.restart();
+            subjects.restart();
             identity.restart();
             recovery.restart();
         }
@@ -249,6 +259,7 @@ pub(crate) fn PermissionEditorDialog(
                                         confirming_discard: confirming_discard(),
                                         on_person_selected: move |choice| change_person.call(Some(choice)),
                                         on_reload: reload,
+                                        subjects, subject_cursors,
                                         on_saved: move |changed| {
                                             locked.set(false);
                                             person.set(None);
@@ -289,6 +300,8 @@ fn PermissionForm(
     on_person_selected: EventHandler<(Uuid, PermissionRequester)>,
     on_reload: EventHandler<()>,
     on_saved: EventHandler<bool>,
+    subjects: subjects::SubjectPages,
+    subject_cursors: Signal<Vec<Option<Uuid>>>,
 ) -> Element {
     let tr = crate::i18n::use_tr();
     let mut state = use_signal(|| initial);
@@ -472,6 +485,7 @@ fn PermissionForm(
                 requester: snapshot.editor.requester, selected: snapshot.editor.user_id,
                 disabled: frozen || confirming_discard,
                 on_selected: on_person_selected,
+                page: subjects, cursors: subject_cursors,
             }
             h3 { class: "text-xl mb-2", "{snapshot.editor.name}" }
             p { class: "text-sm text-secondary mb-4", "Saved configuration: {source_label(&snapshot)}" }
