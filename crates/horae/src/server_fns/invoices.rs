@@ -59,7 +59,7 @@ fn parse_projects(
 
 #[server]
 pub async fn get_invoice_editor(invoice_id: String) -> Result<InvoiceEditor, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
@@ -72,7 +72,7 @@ pub async fn review_invoice_edit(
     invoice_id: String,
     edit: InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
@@ -85,7 +85,7 @@ pub async fn save_invoice_draft(
     invoice_id: String,
     request: InvoiceDraftSave,
 ) -> Result<InvoiceWithLines, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let mut write = begin_write(&state.db, caller.org_id, caller.user_id).await?;
@@ -106,7 +106,7 @@ pub async fn prepare_invoice(
     overrides: Option<InvoiceDefaults>,
     fees: Option<Vec<InvoiceFeeSelection>>,
 ) -> Result<InvoicePreparation, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let selected = parse_projects(project_ids)?;
     let client_id = parse_uuid(&client_id, "client_id")?;
@@ -131,7 +131,7 @@ pub async fn prepare_invoice(
 /// Clients with unbilled time or fees due up to today.
 #[server]
 pub async fn list_uninvoiced_clients() -> Result<Vec<UninvoicedClient>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::uninvoiced::list(&mut read.tx, &read.actor).await;
@@ -143,7 +143,7 @@ pub async fn list_uninvoiced_clients() -> Result<Vec<UninvoicedClient>, ServerFn
 pub async fn get_last_client_invoice(
     client_id: String,
 ) -> Result<Option<LastInvoice>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&client_id, "client_id")?;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
@@ -155,7 +155,7 @@ pub async fn get_last_client_invoice(
 /// What Duplicate copies from an invoice into a new one.
 #[server]
 pub async fn get_invoice_duplicate(invoice_id: String) -> Result<InvoiceDuplicate, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
@@ -191,7 +191,7 @@ mod client_label_tests;
 
 #[server]
 pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
 
     let status_filter: Option<InvoiceStatus> = status
@@ -206,7 +206,7 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem
 
 #[server]
 pub async fn get_invoice(invoice_id: String) -> Result<InvoiceDetailView, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
 
     let state = crate::state::global_state().await;
@@ -224,7 +224,7 @@ pub async fn generate_invoice(
     overrides: Option<InvoiceDefaults>,
     request: InvoiceGenerationRequest,
 ) -> Result<InvoiceWithLines, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let client_id = parse_uuid(&client_id, "client_id")?;
     let from = parse_date(&period_from, "period_from")?;
@@ -254,7 +254,7 @@ pub async fn update_invoice_status(
     invoice_id: String,
     new_status: String,
 ) -> Result<Invoice, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let target: InvoiceStatus = parse_enum(&new_status, "status")?;

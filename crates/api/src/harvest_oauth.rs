@@ -67,8 +67,9 @@ async fn oauth_callback(
     };
     // Only an authenticated admin may land a connection on their org.
     let connected = match crate::auth::session::get_session_user_id(&session).await {
-        Some(user_id) => complete_connect(user_id, code, &attempt).await,
-        None => Err(anyhow::anyhow!("no authenticated session")),
+        Ok(Some(user_id)) => complete_connect(user_id, code, &attempt).await,
+        Ok(None) => Err(anyhow::anyhow!("no authenticated session")),
+        Err(error) => Err(error.into()),
     };
     match connected {
         Ok(()) => Redirect::to(dest_ok).into_response(),

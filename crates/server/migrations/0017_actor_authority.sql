@@ -24,6 +24,15 @@
 -- organization's settings, which many operations need and which its lock
 -- holds still, whether the person is an active member, and their stored
 -- permission state, if any.
+--
+-- `round_dir` comes back as text: a column of the enum type makes sqlx look
+-- up its OID in `pg_type` on each new connection, one more round trip on the
+-- first request it serves.
+--
+-- The search path is the caller's, as for the statements this replaces: the
+-- function is SECURITY INVOKER, so a different path reaches only what the
+-- caller could reach anyway, and the financial snapshot tests rely on it to
+-- put a failing `organizations` in front of the real one.
 CREATE FUNCTION horae_actor_authority(org uuid, person uuid, with_person boolean)
 RETURNS TABLE (
     person_found boolean,
@@ -32,7 +41,7 @@ RETURNS TABLE (
     default_currency character(3),
     access_revision bigint,
     round_minutes smallint,
-    round_dir round_dir,
+    round_dir text,
     catalog_version integer,
     grants text[],
     is_administrator boolean,
@@ -61,7 +70,7 @@ BEGIN
         RETURN QUERY
             SELECT true,
                    o.timezone, o.week_start, o.default_currency, o.access_revision,
-                   o.round_minutes, o.round_dir,
+                   o.round_minutes, o.round_dir::text,
                    s.catalog_version, s.grants, s.is_administrator, s.source,
                    s.built_in_profile, s.template_id, s.applied_template_revision, s.revision
               FROM organizations o
@@ -72,7 +81,7 @@ BEGIN
         RETURN QUERY
             SELECT false,
                    o.timezone, o.week_start, o.default_currency, o.access_revision,
-                   o.round_minutes, o.round_dir,
+                   o.round_minutes, o.round_dir::text,
                    NULL::integer, NULL::text[], NULL::boolean, NULL::text,
                    NULL::text, NULL::uuid, NULL::bigint, NULL::bigint
               FROM organizations o

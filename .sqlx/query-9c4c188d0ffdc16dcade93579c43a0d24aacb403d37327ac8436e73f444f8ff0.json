@@ -36,18 +36,7 @@
       {
         "ordinal": 6,
         "name": "round_dir!: RoundDir",
-        "type_info": {
-          "Custom": {
-            "name": "round_dir",
-            "kind": {
-              "Enum": [
-                "nearest",
-                "up",
-                "down"
-              ]
-            }
-          }
-        }
+        "type_info": "Text"
       },
       {
         "ordinal": 7,

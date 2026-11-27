@@ -18,6 +18,10 @@ pub async fn download(
 ) -> Result<axum::response::Response, StatusCode> {
     let user_id = crate::auth::session::get_session_user_id(&session)
         .await
+        .map_err(|error| {
+            tracing::error!(%error, "Could not read the session of an error download");
+            StatusCode::SERVICE_UNAVAILABLE
+        })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;
     let org_id = sqlx::query_scalar!(

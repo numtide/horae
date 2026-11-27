@@ -21,7 +21,7 @@ const UNAVAILABLE: &str = permissions::EDITOR_UNAVAILABLE;
 pub async fn list_permission_subjects(
     after: Option<uuid::Uuid>,
 ) -> Result<PermissionSubjectPage, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     subject_page(&state.db, caller, after)
         .await
@@ -33,7 +33,7 @@ pub async fn list_permission_subjects(
 pub async fn load_permission_editor(
     user_id: uuid::Uuid,
 ) -> Result<PermissionEditor, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     editor_view(&state.db, caller, user_id)
         .await
@@ -45,7 +45,7 @@ pub async fn load_permission_editor(
 pub async fn preview_person_permissions(
     draft: ProfileDraft,
 ) -> Result<ProfilePreview, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     profile_preview(&state.db, caller, &draft)
         .await
@@ -58,7 +58,7 @@ pub async fn save_person_permissions(
     command: ProfileCommand,
     expected_requester: PermissionRequester,
 ) -> Result<ProfileOutcome, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     save_profile(
         &state.db,
@@ -78,7 +78,7 @@ pub async fn preview_permission_template_deletion(
     expected_access_revision: i64,
     expected_template_revision: i64,
 ) -> Result<TemplateDeletionPreview, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     template_deletion_preview(
         &state.db,
@@ -97,7 +97,7 @@ pub async fn save_permission_template(
     command: TemplateCommand,
     expected_requester: PermissionRequester,
 ) -> Result<TemplateOutcome, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     save_template(
         &state.db,

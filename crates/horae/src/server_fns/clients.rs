@@ -13,7 +13,7 @@ pub async fn create_client_profile(
     profile: ClientProfile,
     default_rate: String,
 ) -> Result<ClientDetails, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::clients::create(&mut write.tx, &write.actor, &profile, &default_rate).await;
@@ -28,7 +28,7 @@ pub async fn update_client_profile(
     client_id: String,
     edit: ClientProfileEdit,
 ) -> Result<ClientDetails, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let client_id = client_id
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
@@ -43,7 +43,7 @@ pub async fn update_client_profile(
 
 #[server]
 pub async fn get_client_details(client_id: String) -> Result<ClientDetails, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let client_id = client_id
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
@@ -67,7 +67,7 @@ async fn client_details_for_viewer(
 
 #[server]
 pub async fn list_client_invoices(client_id: String) -> Result<Vec<Invoice>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let client_id = client_id
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
@@ -94,7 +94,7 @@ async fn client_invoices_for_viewer(
 pub async fn client_overview(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ClientOverview, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     client_overview_for(&state.db, caller.org_id, caller.user_id, expected_requester).await
 }
@@ -104,7 +104,7 @@ pub async fn client_detail_view(
     client_id: String,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ClientDetailView, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let client_id = client_id
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
@@ -156,7 +156,7 @@ pub async fn create_project_client(
     currency: String,
     default_rate: String,
 ) -> Result<crate::models::project_creation::CreationClient, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     create_project_client_record(
         &state.db,
@@ -205,7 +205,7 @@ pub(super) async fn create_project_client_record(
 /// view that also needs to reactivate deactivated clients.
 #[server]
 pub async fn list_clients(include_inactive: bool) -> Result<Vec<Client>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::clients::list(&mut read.tx, &read.actor, include_inactive).await;
@@ -215,7 +215,7 @@ pub async fn list_clients(include_inactive: bool) -> Result<Vec<Client>, ServerF
 /// Archive or restore a client (FR-036).
 #[server]
 pub async fn set_client_active(client_id: String, active: bool) -> Result<Client, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let client_id = parse_uuid(&client_id, "client_id")?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;

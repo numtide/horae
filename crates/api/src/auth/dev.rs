@@ -111,7 +111,7 @@ pub async fn logout_post(session: Session, body: axum::body::Bytes) -> impl Into
 /// Announces the sign-out and empties the session.
 async fn end_session(session: &Session) {
     // Capture the user before clearing the session so the logout can be announced.
-    if let Some(uid) = super::session::get_session_user_id(session).await {
+    if let Ok(Some(uid)) = super::session::get_session_user_id(session).await {
         let state = crate::state::global_state().await;
         let payload = async {
             let mut connection = state.db.acquire().await?;

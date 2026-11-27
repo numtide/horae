@@ -24,6 +24,7 @@ mod status {
     pub const NOT_FOUND: u16 = 404;
     pub const CONFLICT: u16 = 409;
     pub const INTERNAL_ERROR: u16 = 500;
+    pub const SERVICE_UNAVAILABLE: u16 = 503;
 }
 #[cfg(feature = "server")]
 pub(crate) use status::*;
@@ -42,7 +43,19 @@ pub(crate) async fn session_user_id() -> Result<uuid::Uuid, ServerFnError> {
 
     horae_api::session::get_session_user_id(&session)
         .await
+        .map_err(session_unavailable)?
         .ok_or_else(|| unauthorized("Not authenticated — please sign in."))
+}
+
+/// A session store that cannot be read is no sign-out: a 503, which the app
+/// reports as an error, not "Session ended".
+#[cfg(feature = "server")]
+fn session_unavailable(error: horae_api::session::SessionUnavailable) -> ServerFnError {
+    tracing::error!(%error, "Could not read the session");
+    err(
+        SERVICE_UNAVAILABLE,
+        "Horae is temporarily unavailable. Please try again.",
+    )
 }
 
 /// Build a `ServerFnError::ServerError` with a named status code, so error
@@ -167,23 +180,28 @@ pub(crate) async fn require_user() -> Result<User, ServerFnError> {
 /// loading a session actor whose person is gone or deactivated fails with
 /// `OpError::Unauthenticated`, the same 401 as [`require_user`]. An endpoint
 /// that reads the database without such a transaction takes
-/// [`active_session_caller`] instead.
+/// [`active_session_caller`] instead, which is why this one is named
+/// unchecked.
 #[cfg(feature = "server")]
-pub(crate) async fn session_caller() -> Result<crate::ops::Caller, ServerFnError> {
+pub(crate) async fn unchecked_session_caller() -> Result<crate::ops::Caller, ServerFnError> {
     use tower_sessions::Session;
 
     let session: Session = dioxus_fullstack::FullstackContext::extract::<Session, _>().await?;
     let user_id = horae_api::session::get_session_user_id(&session)
         .await
+        .map_err(session_unavailable)?
         .ok_or_else(|| unauthorized("Not authenticated — please sign in."))?;
-    match horae_api::session::get_session_org_id(&session).await {
+    match horae_api::session::get_session_org_id(&session)
+        .await
+        .map_err(session_unavailable)?
+    {
         Some(org_id) => Ok(crate::ops::Caller::session(org_id, user_id)),
         // Signed in before sessions stored the organization.
         None => checked_caller(user_id).await,
     }
 }
 
-/// [`session_caller`], refusing a deactivated account before returning, for
+/// The session's caller, refusing a deactivated account before returning, for
 /// endpoints that read the database outside an `ops::begin*` transaction.
 #[cfg(feature = "server")]
 pub(crate) async fn active_session_caller() -> Result<crate::ops::Caller, ServerFnError> {
@@ -199,13 +217,13 @@ async fn checked_caller(user_id: uuid::Uuid) -> Result<crate::ops::Caller, Serve
         .ok_or_else(|| unauthorized(crate::ops::ACCOUNT_NOT_ACTIVE))
 }
 
-/// [`session_caller`] for endpoints that answer any failure other than a 401
-/// as `unavailable`, without exposing the cause.
+/// [`unchecked_session_caller`] for endpoints that answer any failure other
+/// than a 401 as `unavailable`, without exposing the cause.
 #[cfg(feature = "server")]
-pub(crate) async fn session_caller_or(
+pub(crate) async fn unchecked_session_caller_or(
     unavailable: &'static str,
 ) -> Result<crate::ops::Caller, ServerFnError> {
-    session_caller()
+    unchecked_session_caller()
         .await
         .map_err(|error| unavailable_unless_unauthorized(error, unavailable))
 }
@@ -223,7 +241,7 @@ fn unavailable_unless_unauthorized(error: ServerFnError, unavailable: &str) -> S
     }
 }
 
-/// The `ops::begin*` of an endpoint that took [`session_caller_or`]: the
+/// The `ops::begin*` of an endpoint that took [`unchecked_session_caller_or`]: the
 /// account check runs in that transaction, so a storage failure there answers
 /// `unavailable` as a failed session lookup does. Its refusals are unchanged.
 #[cfg(feature = "server")]

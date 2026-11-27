@@ -12,7 +12,7 @@ pub async fn load_timesheet_tracking(
     context: crate::models::scoped_time::TimesheetWriteContext,
 ) -> Result<Vec<crate::models::scoped_time::TimesheetTrackingOption>, ServerFnError> {
     const UNAVAILABLE: &str = "Timesheet is unavailable";
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     let mut read =
         authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
@@ -29,7 +29,7 @@ pub async fn apply_timesheet_command(
     command: crate::models::scoped_time::TimesheetCommand,
 ) -> Result<Option<String>, ServerFnError> {
     const UNAVAILABLE: &str = "Timesheet is unavailable";
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     let mut write =
         authenticated(ops::begin(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
@@ -50,7 +50,7 @@ pub async fn load_timesheet_page(
     query: crate::models::scoped_time::TimesheetQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPage, ServerFnError> {
     const UNAVAILABLE: &str = "Timesheet is unavailable";
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     let mut read =
         authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
@@ -64,7 +64,7 @@ pub async fn list_timesheet_people(
     query: crate::models::scoped_time::TimesheetPeopleQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPeoplePage, ServerFnError> {
     const UNAVAILABLE: &str = "Timesheet people are unavailable";
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     let mut read =
         authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
@@ -76,7 +76,7 @@ pub async fn list_timesheet_people(
 #[server]
 pub async fn list_time_entry_contexts()
 -> Result<Vec<crate::models::time_entry::TimeEntryContext>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::contexts(&mut read.tx, &read.actor).await;
@@ -92,7 +92,7 @@ pub async fn start_timer(
     task_id: String,
     notes: Option<String>,
 ) -> Result<(TimeEntry, Option<String>), ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
@@ -120,7 +120,7 @@ pub async fn start_timer(
 /// the day; the notice, when present, says how much the daily limit cut.
 #[server]
 pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>), ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
@@ -136,7 +136,7 @@ pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>),
 /// Return the currently running timer for the authenticated user, if any.
 #[server]
 pub async fn get_current_timer() -> Result<Option<TimeEntry>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::time::current_timer(&mut read.tx, &read.actor).await;

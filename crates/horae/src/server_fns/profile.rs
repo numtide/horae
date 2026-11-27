@@ -7,7 +7,7 @@ use crate::models::user::ProfileOptions;
 /// offer. The person's other values come from `get_me`.
 #[server]
 pub async fn get_profile_options() -> Result<ProfileOptions, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     // No transaction checks the account here, so the read does.
     let row = sqlx::query!(
@@ -47,7 +47,7 @@ pub async fn update_own_profile(
     timezone: Option<String>,
 ) -> Result<(), ServerFnError> {
     use crate::ops;
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result =
@@ -63,7 +63,7 @@ pub async fn update_own_profile(
 #[server]
 pub async fn set_workspace_timezone(timezone: String) -> Result<(), ServerFnError> {
     use crate::ops;
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::set_timezone(&mut write.tx, &write.actor, &timezone).await;

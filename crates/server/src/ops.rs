@@ -118,7 +118,38 @@ pub async fn begin_lock_only_read_async_commit(
             limits!("true")
         ),
     };
-    pool.begin_with(begin).await
+    begin_on_a_working_connection(pool, begin).await
+}
+
+/// `pool.begin_with(begin)`, guarding the pool against what a failure leaves.
+///
+/// On a connection that turns out to be gone, nothing has run yet, so it goes
+/// out once more, on a connection the pool checks first.
+///
+/// A database error after a fused `BEGIN` (a cancelled limits statement)
+/// leaves its connection in an aborted transaction block: sqlx counts the
+/// transaction as open only once the whole text succeeded, so its rollback
+/// guard sends nothing, and it has already taken the connection back to the
+/// pool by the time the error reaches here. The pool then checks every
+/// connection it hands out for a while, and the check closes that one.
+async fn begin_on_a_working_connection(
+    pool: &PgPool,
+    begin: &'static str,
+) -> Result<Tx, sqlx::Error> {
+    match pool.begin_with(begin).await {
+        Err(error) if crate::db::broken_connection(&error) => {
+            crate::db::check_every_connection();
+            tracing::info!(%error, "Retrying a BEGIN on a lost connection");
+            pool.begin_with(begin).await
+        }
+        Err(error) => {
+            if matches!(error, sqlx::Error::Database(_)) {
+                crate::db::check_every_connection();
+            }
+            Err(error)
+        }
+        begun => begun,
+    }
 }
 
 /// Set local limits only after the caller selects its transaction isolation.
@@ -144,7 +175,7 @@ async fn begin_bounded(pool: &PgPool, isolation: WriteIsolation) -> Result<Tx, s
             limits!("false")
         ),
     };
-    pool.begin_with(begin).await
+    begin_on_a_working_connection(pool, begin).await
 }
 
 /// [`begin_bounded`] at READ COMMITTED, for writers that run a transaction
@@ -394,9 +425,11 @@ pub async fn begin_read_snapshot(
                 None,
             ),
             SnapshotLimits::LockWait => {
-                let mut tx = pool
-                    .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE")
-                    .await?;
+                let mut tx = begin_on_a_working_connection(
+                    pool,
+                    "BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE",
+                )
+                .await?;
                 // The materialized CTE reads the inherited lock_timeout before
                 // bounding it, so it can be restored once authorized. The
                 // commit need not wait for a WAL flush: see

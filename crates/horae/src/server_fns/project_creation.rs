@@ -47,7 +47,7 @@ pub async fn project_people(
     context: ProjectPeopleContext,
     query: ProjectPeopleQuery,
 ) -> Result<ProjectPeopleResult, ServerFnError> {
-    let caller = session_caller_or("Project people are unavailable").await?;
+    let caller = unchecked_session_caller_or("Project people are unavailable").await?;
     let state = crate::state::global_state().await;
     project_people_page(&state.db, caller, context, &query)
         .await
@@ -60,7 +60,7 @@ pub async fn project_editor_catalog(
     context: ProjectEditorContext,
     search: ProjectEditorCatalogSearch,
 ) -> Result<ProjectEditorCatalog, ServerFnError> {
-    let caller = session_caller_or("Project catalogs are unavailable").await?;
+    let caller = unchecked_session_caller_or("Project catalogs are unavailable").await?;
     let state = crate::state::global_state().await;
     project_editor_catalog_page(&state.db, caller, context, &search, state.mail.is_some())
         .await
@@ -70,7 +70,7 @@ pub async fn project_editor_catalog(
 /// Load the existing project into the same form used for creation.
 #[server]
 pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProject, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     project_editor_view(&state.db, caller, project_id)
         .await
@@ -79,7 +79,7 @@ pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProje
 
 #[server]
 pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uuid, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let saved = project_editor_save(
         &state.db,
@@ -171,7 +171,7 @@ pub async fn project_creation_selection(
     task_ids: Vec<uuid::Uuid>,
     user_ids: Vec<uuid::Uuid>,
 ) -> Result<CreationSelection, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     load_selected_catalog(
         &state.db,
@@ -188,7 +188,7 @@ pub async fn project_creation_selection(
 pub async fn project_creation_client(
     client_id: uuid::Uuid,
 ) -> Result<Option<CreationClient>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     load_selected_client(&state.db, caller.user_id, caller.org_id, client_id).await
 }
@@ -197,7 +197,7 @@ pub async fn project_creation_client(
 pub async fn project_creation_options(
     search: CreationSearch,
 ) -> Result<CreationOptions, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     load_creation_options(
         &state.db,
@@ -215,7 +215,7 @@ pub async fn finalize_project_draft(
     expected_revision: i64,
     form: ProjectForm,
 ) -> Result<uuid::Uuid, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     finalize_draft_record(
         &state.db,
@@ -231,7 +231,7 @@ pub async fn finalize_project_draft(
 
 #[server]
 pub async fn load_project_draft() -> Result<Option<ProjectDraft>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     load_draft_record(&state.db, caller.user_id, caller.org_id).await
 }
@@ -242,7 +242,7 @@ pub async fn save_project_draft(
     expected_revision: i64,
     form: ProjectForm,
 ) -> Result<DraftSaved, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     save_draft_record(
         &state.db,
@@ -260,7 +260,7 @@ pub async fn discard_project_draft(
     draft_id: uuid::Uuid,
     expected_revision: i64,
 ) -> Result<(), ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     discard_draft_record(
         &state.db,

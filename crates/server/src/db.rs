@@ -57,22 +57,95 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
 
 /// How the pool hands out and retires connections, apart from where they
 /// connect.
-fn pool_options(max_connections: u32) -> PgPoolOptions {
+pub(crate) fn pool_options(max_connections: u32) -> PgPoolOptions {
     PgPoolOptions::new()
         .max_connections(max_connections)
         .acquire_timeout(Duration::from_secs(3))
-        // No ping on every acquire: it is a round trip of its own, three per
-        // request, which a far database multiplies. A connection the network
-        // dropped then fails the statement that uses it instead of the ping.
-        // The idle timeout below keeps that rare by closing connections
-        // before the usual idle cut-offs of NAT tables and load balancers
-        // (often 5 minutes or more).
+        // sqlx's own ping on every acquire is a round trip of its own, three
+        // per request, which a far database multiplies. `check_connection`
+        // checks only the connections that may be broken.
         .test_before_acquire(false)
+        .before_acquire(|connection, meta| {
+            Box::pin(async move {
+                if meta.idle_for >= CHECK_IDLE_AFTER || checking_every_connection() {
+                    check_connection(connection).await?;
+                }
+                Ok(true)
+            })
+        })
+        // Closes connections before the usual idle cut-offs of NAT tables and
+        // load balancers (often 5 minutes or more).
         .idle_timeout(Duration::from_secs(4 * 60))
-        // Retiring a connection empties its statement cache, and sqlx's
-        // default of 30 minutes made every connection re-prepare everything
-        // twice an hour. Six hours still bounds backend memory growth.
-        .max_lifetime(Duration::from_secs(6 * 60 * 60))
+        // Retiring a connection empties its statement cache, which sqlx's
+        // default of 30 minutes did twice an hour. An hour halves that and
+        // still bounds backend memory growth and how long a connection can
+        // carry state nobody noticed.
+        .max_lifetime(Duration::from_secs(60 * 60))
+}
+
+/// A pooled connection idle this long is checked before it is handed out.
+///
+/// A connection dies with the server or the network path while it sits idle:
+/// a Postgres restart, a pod reschedule or a NAT reset. The statements of one
+/// page load arrive milliseconds apart, so they reuse warm connections
+/// without a check; a connection idle for five seconds costs one round trip
+/// more. That catches every connection a NAT dropped and those that sat out
+/// an outage longer than five seconds, but not all after a short one: a
+/// `pg_ctl restart -m fast` of a small database took 0.2 s. There the first
+/// statement on a dead warm connection fails instead, the session load or
+/// `ops::begin*` retries it once, and the error makes every acquire check for
+/// a while (see [`check_every_connection`]), so the retry and what follows get
+/// working connections.
+const CHECK_IDLE_AFTER: Duration = Duration::from_secs(5);
+
+/// Until when every acquire checks its connection, whatever its idle time.
+static CHECK_EVERY_CONNECTION_UNTIL: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+
+/// Check every pooled connection on acquire for the next two
+/// [`CHECK_IDLE_AFTER`], after an error that says some of them may be broken
+/// or left in an aborted transaction. Any connection idle since before the
+/// call that is handed out after the window has been idle longer than
+/// `CHECK_IDLE_AFTER`, so it is checked anyway; the second interval covers a
+/// connection whose return to the pool, a round trip of its own, ends after
+/// this call.
+pub fn check_every_connection() {
+    let until = std::time::Instant::now() + 2 * CHECK_IDLE_AFTER;
+    let mut current = CHECK_EVERY_CONNECTION_UNTIL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *current = Some(current.map_or(until, |current| current.max(until)));
+}
+
+fn checking_every_connection() -> bool {
+    CHECK_EVERY_CONNECTION_UNTIL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .is_some_and(|until| std::time::Instant::now() < until)
+}
+
+/// One round trip that fails on a closed connection and, unlike sqlx's ping
+/// (a bare `Sync`), on one left in an aborted transaction block. A failed
+/// check makes the pool close the connection and open a new one.
+async fn check_connection(connection: &mut sqlx::PgConnection) -> Result<(), sqlx::Error> {
+    // Not `raw_sql`, whose future is not `Send` for every borrow, which the
+    // pool's hook requires. Prepared once per connection, then one round trip.
+    sqlx::query("SELECT 1").execute(connection).await?;
+    Ok(())
+}
+
+/// Whether `error` says the connection itself is gone, so nothing sent on it
+/// ran and the same request can go out again on another one: an I/O failure,
+/// a connection exception (class 08) or the server ending the session
+/// (`admin_shutdown`, `crash_shutdown`).
+pub fn broken_connection(error: &sqlx::Error) -> bool {
+    match error {
+        sqlx::Error::Io(_) => true,
+        sqlx::Error::Database(error) => error
+            .code()
+            .is_some_and(|code| code.starts_with("08") || code == "57P01" || code == "57P02"),
+        _ => false,
+    }
 }
 
 /// The embedded migrations. `#[sqlx::test]` takes this as
@@ -265,8 +338,8 @@ mod tests {
         assert_eq!(mode, "force_custom_plan");
     }
 
-    /// Each acquire costs no ping, and connections live long enough to keep
-    /// their statement cache.
+    /// A warm connection is handed out without sqlx's ping, and connections
+    /// live long enough to keep their statement cache.
     #[test]
     fn pool_skips_pings_and_keeps_connections() {
         let options = super::pool_options(10);
@@ -277,8 +350,41 @@ mod tests {
         );
         assert_eq!(
             options.get_max_lifetime(),
-            Some(std::time::Duration::from_secs(21600))
+            Some(std::time::Duration::from_secs(3600))
         );
+    }
+
+    /// The acquire check fails on a connection left in an aborted transaction
+    /// block, which sqlx's ping would hand out as healthy.
+    #[sqlx::test(migrations = false)]
+    async fn the_acquire_check_refuses_an_aborted_transaction(pool: sqlx::PgPool) {
+        let mut connection = pool.acquire().await.unwrap();
+        sqlx::raw_sql("BEGIN; SELECT 1/0")
+            .execute(&mut *connection)
+            .await
+            .unwrap_err();
+        sqlx::Connection::ping(&mut *connection).await.unwrap();
+        let checked = super::check_connection(&mut connection).await;
+        assert_eq!(
+            checked
+                .unwrap_err()
+                .as_database_error()
+                .and_then(|error| error.code())
+                .as_deref(),
+            Some("25P02")
+        );
+    }
+
+    /// The errors after which the same statement may go out again.
+    #[sqlx::test(migrations = false)]
+    async fn only_a_lost_connection_counts_as_broken(pool: sqlx::PgPool) {
+        let division = sqlx::query("SELECT 1/0").execute(&pool).await.unwrap_err();
+        assert!(!super::broken_connection(&division));
+        let ended = sqlx::query("SELECT pg_terminate_backend(pg_backend_pid())")
+            .execute(&pool)
+            .await
+            .unwrap_err();
+        assert!(super::broken_connection(&ended), "{ended:?}");
     }
 
     /// `migrate reset --confirm` promises a reset, so assert data is actually

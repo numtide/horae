@@ -56,7 +56,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         StatusCode::UNAUTHORIZED
     );
 
-    // `session_caller` and `session_caller_or` refuse exactly as `get_me` does.
+    // `unchecked_session_caller` and `unchecked_session_caller_or` refuse exactly as `get_me` does.
     for name in [
         "get_server_version",
         "get_week_start",

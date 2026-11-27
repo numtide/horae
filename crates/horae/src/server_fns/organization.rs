@@ -8,7 +8,7 @@ use crate::ops;
 /// and its date picker. Invalid stored configuration must not silently default.
 #[server]
 pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     // No transaction checks the account here, so the read does.
     let day = sqlx::query_scalar!(
@@ -40,7 +40,7 @@ pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
 /// Any signed-in user may read it (it is not sensitive).
 #[server]
 pub async fn get_org_name() -> Result<String, ServerFnError> {
-    let user_id = session_caller().await?.user_id;
+    let user_id = unchecked_session_caller().await?.user_id;
     let state = crate::state::global_state().await;
 
     // No transaction checks the account here, so the read does.
@@ -63,7 +63,7 @@ pub async fn get_org_name() -> Result<String, ServerFnError> {
 
 #[server]
 pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::branding(&mut read.tx, &read.actor).await;
@@ -75,7 +75,7 @@ pub async fn update_org_branding(
     branding: OrgBranding,
     expected: OrgBranding,
 ) -> Result<OrgBranding, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result =

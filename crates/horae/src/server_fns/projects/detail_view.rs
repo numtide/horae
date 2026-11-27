@@ -7,7 +7,7 @@ pub async fn get_project_detail_view(
     project_id: String,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectDetailView, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read_snapshot(&state.db, caller, ops::SnapshotLimits::Short)

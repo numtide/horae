@@ -16,7 +16,7 @@ pub async fn load_project_managers(
     project_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectManagers, ServerFnError> {
-    let caller = session_caller_or("Project managers are unavailable").await?;
+    let caller = unchecked_session_caller_or("Project managers are unavailable").await?;
     let state = crate::state::global_state().await;
     project_managers_view(&state.db, caller, project_id, expected_requester)
         .await
@@ -29,7 +29,7 @@ pub async fn save_project_managers(
     command: ProjectManagersCommand,
     expected_requester: PermissionRequester,
 ) -> Result<ProjectManagersOutcome, ServerFnError> {
-    let caller = session_caller_or("Project managers are unavailable").await?;
+    let caller = unchecked_session_caller_or("Project managers are unavailable").await?;
     let state = crate::state::global_state().await;
     project_managers_save(
         &state.db,

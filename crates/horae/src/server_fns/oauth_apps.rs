@@ -17,14 +17,14 @@ use uuid::Uuid;
 /// Every app of the organization, Horae's own first.
 #[server]
 pub async fn list_oauth_apps() -> Result<Vec<AppRow>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     list(&crate::state::global_state().await.db, caller).await
 }
 
 /// One app, for its page.
 #[server]
 pub async fn get_oauth_app(id: String) -> Result<AppRow, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "app ID")?;
     get(&crate::state::global_state().await.db, caller, id).await
 }
@@ -33,7 +33,7 @@ pub async fn get_oauth_app(id: String) -> Result<AppRow, ServerFnError> {
 /// authorization server needs. Registering works either way.
 #[server]
 pub async fn oauth_apps_can_connect() -> Result<bool, ServerFnError> {
-    session_caller().await?;
+    active_session_caller().await?;
     Ok(crate::state::global_state().await.public_url.is_some())
 }
 
@@ -41,21 +41,21 @@ pub async fn oauth_apps_can_connect() -> Result<bool, ServerFnError> {
 /// is shown.
 #[server]
 pub async fn create_oauth_app(app: AppInput) -> Result<CreatedApp, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     create(&crate::state::global_state().await.db, caller, app).await
 }
 
 /// Changes an app's name, redirect URIs and scopes; its kind stays.
 #[server]
 pub async fn update_oauth_app(id: String, changes: AppInput) -> Result<AppRow, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "app ID")?;
     update(&crate::state::global_state().await.db, caller, id, changes).await
 }
 
 #[server]
 pub async fn set_oauth_app_enabled(id: String, enabled: bool) -> Result<AppRow, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "app ID")?;
     set_enabled(&crate::state::global_state().await.db, caller, id, enabled).await
 }
@@ -64,7 +64,7 @@ pub async fn set_oauth_app_enabled(id: String, enabled: bool) -> Result<AppRow, 
 /// working at once.
 #[server]
 pub async fn replace_oauth_app_secret(id: String) -> Result<CreatedApp, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "app ID")?;
     replace_secret(&crate::state::global_state().await.db, caller, id).await
 }
@@ -72,7 +72,7 @@ pub async fn replace_oauth_app_secret(id: String) -> Result<CreatedApp, ServerFn
 /// Deletes an app with its authorizations and tokens.
 #[server]
 pub async fn delete_oauth_app(id: String) -> Result<(), ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "app ID")?;
     delete(&crate::state::global_state().await.db, caller, id).await
 }
@@ -80,7 +80,7 @@ pub async fn delete_oauth_app(id: String) -> Result<(), ServerFnError> {
 /// The app's active authorizations, newest first.
 #[server]
 pub async fn list_oauth_app_grants(id: String) -> Result<Vec<GrantRow>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "app ID")?;
     list_grants(&crate::state::global_state().await.db, caller, id).await
 }
@@ -88,7 +88,7 @@ pub async fn list_oauth_app_grants(id: String) -> Result<Vec<GrantRow>, ServerFn
 /// Ends anyone's authorization, for an administrator.
 #[server]
 pub async fn revoke_oauth_grant(id: String) -> Result<(), ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "authorization ID")?;
     revoke_grant(&crate::state::global_state().await.db, caller, id).await
 }

@@ -64,7 +64,7 @@ mod common_task_tests;
 pub async fn list_project_tags(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectTagLink>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     fetch_project_tags(&state.db, caller.org_id, caller.user_id, expected_requester).await
 }
@@ -88,7 +88,7 @@ async fn fetch_project_tags(
 pub async fn get_project_overview(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectOverview, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     fetch_project_overview(&state.db, caller, expected_requester).await
 }
@@ -111,7 +111,7 @@ pub async fn list_projects(
     client_id: Option<String>,
     include_inactive: bool,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let client_id = parse_opt_uuid(client_id, "client_id")?;
     projects_for_viewer(
@@ -128,7 +128,7 @@ pub async fn list_projects(
 /// Reporting visibility must not prevent a teammate from using their timesheet.
 #[server]
 pub async fn list_tracking_projects() -> Result<Vec<Project>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     projects_for_viewer(&state.db, caller, None, true, ProjectRead::Tracking).await
 }
@@ -161,7 +161,7 @@ async fn projects_for_viewer(
 pub async fn list_project_spend(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectSpend>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
 
     fetch_project_spend(&state.db, caller.org_id, caller.user_id, expected_requester).await
@@ -173,7 +173,7 @@ pub async fn list_project_spend(
 pub async fn list_project_budget_progress(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result =
@@ -203,7 +203,7 @@ pub async fn set_project_active(
     active: bool,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Project, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let mut projects = set_projects_status(
@@ -228,7 +228,7 @@ pub async fn set_projects_active(
     active: bool,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let ids = parse_bulk_project_ids(&project_ids)?;
     let state = crate::state::global_state().await;
     set_projects_status(
@@ -327,7 +327,7 @@ async fn set_project_active_record(
 /// Lists all active org-level tasks.
 #[server]
 pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
 
     tasks_for_viewer(&state.db, caller, None, TaskRead::Catalog).await
@@ -336,7 +336,7 @@ pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
 /// Rate-free task identities, including archived tasks in the viewer's history.
 #[server]
 pub async fn list_tracking_tasks() -> Result<Vec<Task>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     tasks_for_viewer(&state.db, caller, None, TaskRead::Tracking).await
 }
@@ -363,7 +363,7 @@ pub async fn create_task(
     rate: TaskRateEdit,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let details = TaskDetails {
         name,
@@ -414,7 +414,7 @@ pub async fn update_task(
     rate: TaskRateEdit,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     let details = TaskDetails {
@@ -457,7 +457,7 @@ pub async fn set_task_active(
     active: bool,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     task_set_active(

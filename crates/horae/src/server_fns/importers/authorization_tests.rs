@@ -26,7 +26,7 @@ use super::*;
 
 /// Signs `id` in as sign-in does, with their organization. An unknown id gets
 /// the person alone, like a session signed in before the organization was
-/// stored, so both ways `session_caller` learns the organization are covered.
+/// stored, so both ways `unchecked_session_caller` learns the organization are covered.
 async fn sign_in(pool: &PgPool, session: &Session, id: Uuid) {
     let org = sqlx::query_scalar!("SELECT org_id FROM users WHERE id = $1", id)
         .fetch_optional(pool)

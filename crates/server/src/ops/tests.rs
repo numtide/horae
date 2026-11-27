@@ -178,6 +178,70 @@ async fn a_refused_actor_releases_its_locks_in_every_begin(pool: PgPool) {
     }
 }
 
+/// A fused `BEGIN` whose limits statement fails leaves the explicit
+/// transaction open and aborted. The pool must not hand that connection out
+/// again: with one connection, the next query would fail with 25P02.
+#[sqlx::test(migrations = false)]
+async fn a_failed_fused_begin_leaves_no_aborted_connection_in_the_pool(
+    _: sqlx::postgres::PgPoolOptions,
+    options: sqlx::postgres::PgConnectOptions,
+) {
+    let pool = crate::db::pool_options(1)
+        .connect_with(options)
+        .await
+        .unwrap();
+    let failed = begin_on_a_working_connection(
+        &pool,
+        "BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE; SELECT 1/0",
+    )
+    .await;
+    assert!(failed.is_err());
+
+    let one: i32 = sqlx::query_scalar("SELECT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(one, 1);
+    begin_read_committed(&pool)
+        .await
+        .unwrap()
+        .commit()
+        .await
+        .unwrap();
+}
+
+/// A `begin*` on a pooled connection the server has since closed goes out
+/// again on a working one instead of failing the request.
+#[sqlx::test(migrations = false)]
+async fn a_begin_on_a_lost_connection_is_retried(
+    _: sqlx::postgres::PgPoolOptions,
+    options: sqlx::postgres::PgConnectOptions,
+) {
+    let pool = crate::db::pool_options(1)
+        .connect_with(options.clone())
+        .await
+        .unwrap();
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let mut other = sqlx::PgConnection::connect_with(&options).await.unwrap();
+    let ended: bool = sqlx::query_scalar("SELECT pg_terminate_backend($1)")
+        .bind(pid)
+        .fetch_one(&mut other)
+        .await
+        .unwrap();
+    assert!(ended);
+
+    let mut tx = begin_read_committed(&pool).await.unwrap();
+    let now: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert_ne!(now, pid);
+    tx.commit().await.unwrap();
+}
+
 /// The session path reads no account before the transaction, so every
 /// `begin*` answers a session of a deactivated or missing person as signed
 /// out, and releases its locks. A token's actor only loses its authority.

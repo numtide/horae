@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 /// The signed-in person's own tokens, newest first.
 #[server]
 pub async fn list_api_tokens() -> Result<Vec<ApiTokenRow>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     list_own(&crate::state::global_state().await.db, caller).await
 }
 
@@ -21,7 +21,7 @@ pub async fn create_api_token(
     name: String,
     expires_at: Option<DateTime<Utc>>,
 ) -> Result<CreatedApiToken, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     create(
         &crate::state::global_state().await.db,
         caller,
@@ -34,7 +34,7 @@ pub async fn create_api_token(
 /// Revokes one of the person's tokens, or anyone's for an administrator.
 #[server]
 pub async fn revoke_api_token(id: String) -> Result<ApiTokenRow, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&id, "token ID")?;
     revoke(&crate::state::global_state().await.db, caller, id).await
 }
@@ -42,7 +42,7 @@ pub async fn revoke_api_token(id: String) -> Result<ApiTokenRow, ServerFnError> 
 /// Every token in the organization, for an administrator.
 #[server]
 pub async fn list_org_api_tokens() -> Result<Vec<ApiTokenRow>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     list_org(&crate::state::global_state().await.db, caller).await
 }
 
@@ -50,7 +50,7 @@ pub async fn list_org_api_tokens() -> Result<Vec<ApiTokenRow>, ServerFnError> {
 /// or `None` while the Harvest-compatible API is off.
 #[server]
 pub async fn harvest_account_id() -> Result<Option<i64>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     if !state.harvest_api {
         return Ok(None);

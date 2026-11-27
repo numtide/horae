@@ -210,14 +210,22 @@ async fn a_load_that_waited_for_an_access_change_sees_it(pool: PgPool) {
     .execute(&mut *change)
     .await
     .unwrap();
+    let change_pid = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut *change)
+        .await
+        .unwrap();
     let waiting = tokio::spawn({
         let pool = pool.clone();
         async move { load(&pool, ids.org_id, ids.user_id).await }
     });
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
+        // Only a backend waiting on this change counts: tests running in
+        // parallel have lock waits of their own.
         let blocked = sqlx::query_scalar!(
-            r#"SELECT EXISTS (SELECT 1 FROM pg_locks WHERE NOT granted) AS "blocked!""#
+            r#"SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+                               WHERE $1 = ANY (pg_blocking_pids(pid))) AS "blocked!""#,
+            change_pid
         )
         .fetch_one(&pool)
         .await

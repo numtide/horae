@@ -209,7 +209,7 @@ impl Actor {
             Channel::Session | Channel::Token { .. } | Channel::OAuth { .. }
         );
         // One round trip. The locked load is `horae_actor_authority` (migration
-        // 0014), which keeps the lock order and the per-statement snapshots of
+        // 0017), which keeps the lock order and the per-statement snapshots of
         // separate statements; changing how authority is locked means changing
         // that function and the access writers, nothing here.
         let authority = match lock {
@@ -237,7 +237,7 @@ impl Actor {
                     Authority,
                     r#"SELECT u.id IS NOT NULL AS "person_found!",
                               o.timezone, o.week_start, o.default_currency, o.access_revision,
-                              o.round_minutes, o.round_dir AS "round_dir: RoundDir",
+                              o.round_minutes, o.round_dir::text AS "round_dir!: RoundDir",
                               s.catalog_version AS "catalog_version?", s.grants AS "grants?",
                               s.is_administrator AS "is_administrator?", s.source AS "source?",
                               s.built_in_profile, s.template_id,

@@ -10,7 +10,7 @@ pub use page::LoginAssets;
 use axum::{
     Router,
     extract::Request,
-    http::{Method, header},
+    http::{Method, StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -78,7 +78,23 @@ pub async fn login_redirect_guard(session: Session, request: Request, next: Next
             .and_then(|v| v.to_str().ok())
             .is_some_and(|accept| accept.contains("text/html"));
 
-    if is_page && !public && session::get_session_user_id(&session).await.is_none() {
+    if !is_page || public {
+        return next.run(request).await;
+    }
+    let signed_in = match session::get_session_user_id(&session).await {
+        Ok(user_id) => user_id.is_some(),
+        // Not known to be signed out: sending the person to sign in again
+        // would end a session that is still valid.
+        Err(error) => {
+            tracing::error!(%error, "Could not read the session of a page load");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Horae is temporarily unavailable. Please reload the page.",
+            )
+                .into_response();
+        }
+    };
+    if !signed_in {
         let target = request.uri().path_and_query().map(|target| target.as_str());
         if let Some(target) = target.and_then(safe_return_to)
             && let Err(error) = session.insert(RETURN_TO_KEY, target).await

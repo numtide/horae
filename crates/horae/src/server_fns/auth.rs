@@ -47,7 +47,7 @@ pub async fn list_permission_audit(
     expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
 ) -> Result<crate::models::permission_audit::AuditPage, ServerFnError> {
     use crate::ops::permissions::audit::HISTORY_UNAVAILABLE;
-    let caller = session_caller_or(HISTORY_UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(HISTORY_UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     audit_page(
         &state.db,
@@ -86,7 +86,7 @@ pub async fn get_my_permissions()
 -> Result<crate::models::own_permissions::OwnPermissions, ServerFnError> {
     use crate::ops;
     const UNAVAILABLE: &str = "Permission state is unavailable";
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     let mut read =
         authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
@@ -98,7 +98,7 @@ pub async fn get_my_permissions()
 #[server]
 pub async fn get_server_version() -> Result<String, ServerFnError> {
     use crate::ops;
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::profile::server_version(&read.actor, state);

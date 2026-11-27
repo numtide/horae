@@ -14,7 +14,7 @@ pub struct PluginInfo {
 #[server]
 pub async fn list_plugins() -> Result<Vec<PluginInfo>, ServerFnError> {
     use crate::ops;
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let allowed = ops::organization::require_settings(&read.actor);
