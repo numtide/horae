@@ -148,6 +148,29 @@ pub fn broken_connection(error: &sqlx::Error) -> bool {
     }
 }
 
+/// `run` once more if it failed on a lost connection, after turning on the
+/// check of every connection so the second try gets a working one.
+///
+/// For the first statement of a request that goes to the pool outside an
+/// `ops::begin*`, such as a token lookup: after a restart every idle
+/// connection is gone, and a connection used under [`CHECK_IDLE_AFTER`] ago is
+/// handed out unchecked. Only for work that is safe to repeat: a read, or a
+/// write whose second run changes nothing the first did not.
+pub async fn retry_on_a_lost_connection<T, F, Fut>(mut run: F) -> Result<T, sqlx::Error>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, sqlx::Error>>,
+{
+    match run().await {
+        Err(error) if broken_connection(&error) => {
+            check_every_connection();
+            tracing::info!(%error, "Retrying a statement on a lost connection");
+            run().await
+        }
+        done => done,
+    }
+}
+
 /// The embedded migrations. `#[sqlx::test]` takes this as
 /// `migrator = "crate::db::MIGRATOR"`: given a path instead, it would paste
 /// every migration's SQL into each of the ~1,300 tests it expands.

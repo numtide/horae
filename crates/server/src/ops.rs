@@ -136,20 +136,13 @@ async fn begin_on_a_working_connection(
     pool: &PgPool,
     begin: &'static str,
 ) -> Result<Tx, sqlx::Error> {
-    match pool.begin_with(begin).await {
-        Err(error) if crate::db::broken_connection(&error) => {
-            crate::db::check_every_connection();
-            tracing::info!(%error, "Retrying a BEGIN on a lost connection");
-            pool.begin_with(begin).await
-        }
-        Err(error) => {
-            if matches!(error, sqlx::Error::Database(_)) {
-                crate::db::check_every_connection();
-            }
-            Err(error)
-        }
-        begun => begun,
+    let begun = crate::db::retry_on_a_lost_connection(|| pool.begin_with(begin)).await;
+    // Any database error, not only a lost connection: this is also what
+    // keeps an aborted transaction out of the next request.
+    if let Err(sqlx::Error::Database(_)) = &begun {
+        crate::db::check_every_connection();
     }
+    begun
 }
 
 /// Set local limits only after the caller selects its transaction isolation.

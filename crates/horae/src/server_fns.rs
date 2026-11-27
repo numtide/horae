@@ -218,7 +218,8 @@ async fn checked_caller(user_id: uuid::Uuid) -> Result<crate::ops::Caller, Serve
 }
 
 /// [`unchecked_session_caller`] for endpoints that answer any failure other
-/// than a 401 as `unavailable`, without exposing the cause.
+/// than a 401, or the 503 of a session store that cannot be read, as
+/// `unavailable`, without exposing the cause.
 #[cfg(feature = "server")]
 pub(crate) async fn unchecked_session_caller_or(
     unavailable: &'static str,
@@ -232,7 +233,8 @@ pub(crate) async fn unchecked_session_caller_or(
 fn unavailable_unless_unauthorized(error: ServerFnError, unavailable: &str) -> ServerFnError {
     match error {
         error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
+            code: UNAUTHORIZED | SERVICE_UNAVAILABLE,
+            ..
         } => error,
         error => {
             tracing::error!(%error, unavailable, "Unable to authenticate request");

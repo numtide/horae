@@ -237,7 +237,14 @@ pub async fn revoke_token(tx: &mut Tx, client: &ClientAuth, token: &str) -> Resu
 /// The caller an OAuth access token stands for, if it is unexpired, its
 /// grant active, its app enabled and its person active (FR-052). Stamps the
 /// grant's `last_used_at` at most once a minute (FR-053).
+///
+/// It is a token request's first statement, so it is retried on a lost
+/// connection; running it twice is harmless, the stamp included.
 pub async fn authenticate(pool: &PgPool, token: &str) -> Result<Option<Caller>, sqlx::Error> {
+    crate::db::retry_on_a_lost_connection(|| find_caller(pool, token)).await
+}
+
+async fn find_caller(pool: &PgPool, token: &str) -> Result<Option<Caller>, sqlx::Error> {
     if !token.starts_with(ACCESS_TOKEN_PREFIX) {
         return Ok(None);
     }

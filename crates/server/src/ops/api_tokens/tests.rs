@@ -167,6 +167,39 @@ async fn a_valid_token_authenticates_as_its_owner(pool: PgPool) {
     );
 }
 
+/// A token request starts with the lookup, on the pool and outside any
+/// `begin*`: on a pooled connection the server has since closed, it goes out
+/// again on a working one instead of failing the request.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_lookup_on_a_lost_connection_is_retried(
+    setup: sqlx::postgres::PgPoolOptions,
+    options: sqlx::postgres::PgConnectOptions,
+) {
+    use sqlx::Connection;
+
+    let setup = setup.connect_with(options.clone()).await.unwrap();
+    let ids = seed(&setup, BuiltInProfile::Member).await;
+    let (secret, _) = create_as(&setup, &ids, "script", None).await.unwrap();
+    let pool = crate::db::pool_options(1)
+        .connect_with(options.clone())
+        .await
+        .unwrap();
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let mut other = sqlx::PgConnection::connect_with(&options).await.unwrap();
+    let ended: bool = sqlx::query_scalar("SELECT pg_terminate_backend($1)")
+        .bind(pid)
+        .fetch_one(&mut other)
+        .await
+        .unwrap();
+    assert!(ended);
+
+    let caller = authenticate(&pool, secret.expose()).await.unwrap();
+    assert_eq!(caller.map(|caller| caller.user_id), Some(ids.user_id));
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unknown_and_malformed_tokens_are_refused(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
