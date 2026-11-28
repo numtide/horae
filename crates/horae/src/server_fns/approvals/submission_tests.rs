@@ -50,7 +50,10 @@ async fn submission_rechecks_permission_state_and_activity_after_access_change(p
                 change.rollback().await.unwrap();
             }
             let result = run.join_next().await.unwrap().unwrap();
-            if commit {
+            if commit && !state_change {
+                // A deactivated session is signed out.
+                assert!(crate::server_fns::signed_out(&result), "{result:?}");
+            } else if commit {
                 assert!(
                     matches!(
                         result,

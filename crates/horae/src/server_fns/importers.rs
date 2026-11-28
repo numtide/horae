@@ -57,7 +57,7 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
 /// Report whether the org has a usable Harvest connection (never the tokens).
 #[dioxus_fullstack::post("/api/import/harvest/connection")]
 pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = crate::ops::begin_read(&state.db, caller)
         .await
@@ -71,7 +71,7 @@ pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnErr
 /// never the secret (contracts/client-settings.md).
 #[dioxus_fullstack::post("/api/import/harvest/client")]
 pub async fn harvest_client_settings() -> Result<ClientSettings, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = crate::ops::begin_read(&state.db, caller)
         .await
@@ -240,7 +240,7 @@ pub async fn start_harvest_api_import(
 pub async fn get_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<Option<crate::models::JobStatus>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     commands::status(&state.db, caller.org_id, caller.user_id, job_id).await
 }
@@ -250,7 +250,7 @@ pub async fn list_harvest_import_jobs(
     before: Option<uuid::Uuid>,
     limit: Option<i64>,
 ) -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     commands::history(
         &state.db,
@@ -303,7 +303,7 @@ pub async fn start_harvest_csv_import(
 pub async fn commit_harvest_import_preview(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     commands::commit_preview(
         &state.db,
@@ -321,7 +321,8 @@ pub async fn commit_harvest_import_preview(
 pub async fn harvest_import_error_summary(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::ErrorSummary, ServerFnError> {
-    let caller = session_caller().await?;
+    // The summary loads its actor without a transaction.
+    let caller = active_session_caller().await?;
     let state = crate::state::global_state().await;
     commands::error_summary(&state.db, caller.org_id, caller.user_id, job_id).await
 }
@@ -330,7 +331,7 @@ pub async fn harvest_import_error_summary(
 pub async fn cancel_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     commands::cancel(
         &state.db,
@@ -346,7 +347,7 @@ pub async fn cancel_harvest_import_job(
 pub async fn retry_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     commands::retry(
         &state.db,
@@ -365,7 +366,7 @@ pub async fn retry_harvest_import_job(
 /// change (`credentials::authorize_change`), checks again under the locks.
 #[cfg(feature = "server")]
 async fn require_administrator() -> Result<crate::ops::Caller, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = active_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut connection = state.db.acquire().await.map_err(server_err)?;
     crate::ops::Actor::load_unlocked(&mut connection, caller)

@@ -593,7 +593,11 @@ async fn grouped_reports_recheck_actor_deactivation_after_wait(pool: PgPool) {
     });
     wait_for_blocked(&pool, pid).await;
     deactivate.commit().await.unwrap();
-    assert!(matches!(reader.await.unwrap(), Err(OpError::Forbidden(_))));
+    // The session is signed out by the actor load that waited.
+    assert!(matches!(
+        reader.await.unwrap(),
+        Err(OpError::Unauthenticated(_))
+    ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

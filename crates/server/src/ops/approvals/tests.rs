@@ -307,8 +307,9 @@ async fn submitting_requires_writing_ones_own_time(pool: PgPool) {
 
 /// An approver who is no longer an active person of the organization holds
 /// no authority, whatever their stored grants: every action is refused and
-/// the week stays pending. The same holds for a session naming another
-/// organization.
+/// the week stays pending. The same holds for a caller naming another
+/// organization. A session is signed out before any operation runs; a token
+/// reaches the operations, which refuse it.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn inactive_or_foreign_approvers_decide_nothing(pool: PgPool) {
     for (who, refusal) in MATRIX {
@@ -324,9 +325,28 @@ async fn inactive_or_foreign_approvers_decide_nothing(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-        let inactive = caller(&approver);
-        let elsewhere = Caller::session(foreign.org_id, approver.user_id);
         let refused = OpError::forbidden(ACTIVE_REQUIRED);
+        for session in [
+            caller(&approver),
+            Caller::session(foreign.org_id, approver.user_id),
+        ] {
+            assert_eq!(
+                ops::begin_read(&pool, session).await.map(drop),
+                Err(OpError::unauthenticated()),
+                "{who:?}"
+            );
+            assert_eq!(
+                ops::begin(&pool, session).await.map(drop),
+                Err(OpError::unauthenticated()),
+                "{who:?}"
+            );
+            assert_eq!(
+                submit_as(&pool, session).await.map(drop),
+                Err(OpError::unauthenticated())
+            );
+        }
+        let inactive = Caller::token(approver.org_id, approver.user_id, Uuid::now_v7());
+        let elsewhere = Caller::token(foreign.org_id, approver.user_id, Uuid::now_v7());
 
         for caller in [inactive, elsewhere] {
             let mut read = ops::begin_read(&pool, caller).await.unwrap();

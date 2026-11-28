@@ -55,12 +55,13 @@ async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(po
             (ids.org_id, Uuid::now_v7()),
             (Uuid::now_v7(), ids.user_id),
         ] {
+            // A session whose person is not an active member is signed out.
             assert_eq!(
                 surface
                     .export(&pool, org, actor, invoice_id)
                     .await
                     .unwrap_err(),
-                StatusCode::FORBIDDEN
+                StatusCode::UNAUTHORIZED
             );
         }
         sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
@@ -72,7 +73,7 @@ async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(po
                 .export(&pool, ids.org_id, ids.user_id, invoice_id)
                 .await
                 .unwrap_err(),
-            StatusCode::FORBIDDEN
+            StatusCode::UNAUTHORIZED
         );
         sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
             .execute(&pool)
@@ -159,7 +160,11 @@ async fn streamed_exports_refresh_after_organization_or_actor_wait(pool: PgPool)
                 .await
                 .unwrap();
             writer.commit().await.unwrap();
-            assert_eq!(pending.await.unwrap().unwrap_err(), StatusCode::FORBIDDEN);
+            // The deactivated session is signed out.
+            assert_eq!(
+                pending.await.unwrap().unwrap_err(),
+                StatusCode::UNAUTHORIZED
+            );
             sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
                 .execute(&pool)
                 .await

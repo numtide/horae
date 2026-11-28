@@ -7,16 +7,19 @@ use crate::models::user::ProfileOptions;
 /// offer. The person's other values come from `get_me`.
 #[server]
 pub async fn get_profile_options() -> Result<ProfileOptions, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
+    // No transaction checks the account here, so the read does.
     let row = sqlx::query!(
         "SELECT u.oidc_issuer, u.timezone, o.timezone AS workspace_timezone
-         FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = $1",
+         FROM users u JOIN organizations o ON o.id = u.org_id
+         WHERE u.id = $1 AND u.active",
         caller.user_id
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| unauthorized(crate::ops::ACCOUNT_NOT_ACTIVE))?;
     Ok(ProfileOptions {
         sign_in: row.oidc_issuer.as_deref().map(issuer_host),
         zones: zone_choices(row.timezone.into_iter().chain([row.workspace_timezone])),
@@ -44,7 +47,7 @@ pub async fn update_own_profile(
     timezone: Option<String>,
 ) -> Result<(), ServerFnError> {
     use crate::ops;
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result =
@@ -60,7 +63,7 @@ pub async fn update_own_profile(
 #[server]
 pub async fn set_workspace_timezone(timezone: String) -> Result<(), ServerFnError> {
     use crate::ops;
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::set_timezone(&mut write.tx, &write.actor, &timezone).await;

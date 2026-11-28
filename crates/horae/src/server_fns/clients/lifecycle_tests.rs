@@ -253,7 +253,13 @@ async fn status_changes_recheck_current_authority_before_project_state(pool: PgP
                 .await
                 .unwrap_err();
             let (code, message) = code_and_message(error);
-            assert_eq!(code, FORBIDDEN, "{change}");
+            // A deactivated or foreign session is signed out.
+            let refused = if matches!(change, "inactive" | "foreign actor") {
+                UNAUTHORIZED
+            } else {
+                FORBIDDEN
+            };
+            assert_eq!(code, refused, "{change}");
             assert_ne!(message, ARCHIVE_PROJECTS_FIRST, "{change}");
         }
         assert!(client_active(&pool, ids.client_id).await, "{change}");

@@ -373,14 +373,13 @@ async fn saves_recheck_current_authority_and_do_not_repeat_noops(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
+        // A member is refused; the deactivated session is signed out.
+        let refused = if active { FORBIDDEN } else { UNAUTHORIZED };
         assert!(matches!(
             save_editable_project(&pool, owner.user_id, owner.org_id, &request, false)
                 .await
                 .unwrap_err(),
-            ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            }
+            ServerFnError::ServerError { code, .. } if code == refused
         ));
     }
 }
@@ -1032,12 +1031,11 @@ async fn editor_rechecks_tenant_grants_and_active_status(pool: PgPool) {
         let error = load_editable_project(&pool, owner.user_id, owner.org_id, owner.project_id)
             .await
             .unwrap_err();
+        // A member is refused; the deactivated session is signed out.
+        let refused = if active { FORBIDDEN } else { UNAUTHORIZED };
         assert!(matches!(
             error,
-            ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            }
+            ServerFnError::ServerError { code, .. } if code == refused
         ));
     }
 }

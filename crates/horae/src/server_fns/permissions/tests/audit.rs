@@ -46,12 +46,13 @@ async fn direct_deactivation_winning_user_lock_denies_audit_read(pool: PgPool) {
         tokio::spawn(async move { read(&reader_pool, ids.org_id, ids.user_id, receipt).await });
     wait_for_blocked(&pool, pid).await;
     revoke.commit().await.unwrap();
+    // The deactivated session is signed out.
     assert!(matches!(
         tokio::time::timeout(Duration::from_secs(5), reader)
             .await
             .unwrap()
             .unwrap(),
-        Err(e) if e == forbidden()
+        Err(e) if e == OpError::unauthenticated()
     ));
 }
 
@@ -134,9 +135,10 @@ async fn audit_reader_holds_requester_until_materialization_finishes(pool: PgPoo
         .await
         .unwrap()
         .unwrap();
+    // The deactivated session is signed out.
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
-        Err(e) if e == forbidden()
+        Err(e) if e == OpError::unauthenticated()
     ));
 }
 
@@ -523,10 +525,11 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
             .unwrap()
             .is_none()
     );
+    // A session of a foreign or missing person is signed out.
     for actor in [foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             read(&pool, ids.org_id, actor, receipt).await,
-            Err(e) if e == forbidden()
+            Err(e) if e == OpError::unauthenticated()
         ));
     }
     sqlx::query!(
@@ -542,7 +545,7 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
-        Err(e) if e == forbidden()
+        Err(e) if e == OpError::unauthenticated()
     ));
     sqlx::query!("UPDATE users SET active = true WHERE id = $1", ids.user_id)
         .execute(&pool)

@@ -13,7 +13,7 @@ use tower_sessions::Session;
 /// What the approval page shows about request `request`.
 #[server]
 pub async fn oauth_consent_details(request: String) -> Result<ConsentDetails, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let session = session().await?;
     details(
         &crate::state::global_state().await.db,
@@ -27,7 +27,7 @@ pub async fn oauth_consent_details(request: String) -> Result<ConsentDetails, Se
 /// Allow: the address, carrying the code, to send the browser to.
 #[server]
 pub async fn approve_oauth_request(request: String) -> Result<String, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let session = session().await?;
     let state = crate::state::global_state().await;
     let issuer = state.public_url.as_ref().map(|url| url.as_str());
@@ -37,7 +37,7 @@ pub async fn approve_oauth_request(request: String) -> Result<String, ServerFnEr
 /// Deny: the address that tells the app the person said no.
 #[server]
 pub async fn deny_oauth_request(request: String) -> Result<String, ServerFnError> {
-    session_caller().await?;
+    active_session_caller().await?;
     let session = session().await?;
     let state = crate::state::global_state().await;
     let issuer = state.public_url.as_ref().map(|url| url.as_str());

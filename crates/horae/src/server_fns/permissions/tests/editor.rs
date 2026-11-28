@@ -73,10 +73,16 @@ async fn editor_loss_names_cover_only_current_outgoing_effects(pool: PgPool) {
     .unwrap();
     assert!(retained.remove_projects.is_empty());
     assert!(retained.remove_people.is_empty());
-    for requester in [manager, ids.user_id, foreign.user_id] {
+    assert!(matches!(
+        editor::preview(&pool, ids.org_id, manager, &proposal).await,
+        Err(e) if e == forbidden()
+    ));
+    // The deactivated person's session, and one of another organization's
+    // person, is signed out.
+    for requester in [ids.user_id, foreign.user_id] {
         assert!(matches!(
             editor::preview(&pool, ids.org_id, requester, &proposal).await,
-            Err(e) if e == forbidden()
+            Err(e) if e == crate::ops::OpError::unauthenticated()
         ));
     }
     assert!(matches!(
@@ -270,13 +276,14 @@ async fn editor_direct_actor_deactivation_wins_preview_and_load(pool: PgPool) {
     });
     wait_for_blocked(&pool, holder).await;
     revoke.commit().await.unwrap();
+    // The deactivated session is signed out.
     assert!(matches!(
         pending.await.unwrap(),
-        Err(e) if e == forbidden()
+        Err(e) if e == crate::ops::OpError::unauthenticated()
     ));
     assert!(matches!(
         editor::load(&pool, ids.org_id, ids.user_id, ids.user_id).await,
-        Err(e) if e == forbidden()
+        Err(e) if e == crate::ops::OpError::unauthenticated()
     ));
 }
 

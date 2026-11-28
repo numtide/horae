@@ -68,11 +68,26 @@ async fn every_time_mutation_denies_inactive_and_missing_owners_without_changes(
             .fetch_one(&pool)
             .await
             .unwrap();
+            // Their session is signed out before the write runs.
             for actor in [entry.user_id, Uuid::now_v7()] {
                 let result = attempt(&pool, actor, &entry, operation).await;
                 assert!(
-                    matches!(result, Err(OpError::Forbidden(_))),
+                    matches!(result, Err(OpError::Unauthenticated(_))),
                     "administrator={administrator} {operation:?}: {result:?}"
+                );
+                let after = sqlx::query_scalar!("SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM time_entries e WHERE user_id=$1", entry.user_id)
+                    .fetch_one(&pool).await.unwrap();
+                assert_eq!(after, before);
+            }
+            // Their token reaches the timer stop, which refuses them.
+            if matches!(operation, Operation::Stop) {
+                let token = Caller::token(entry.org_id, entry.user_id, Uuid::now_v7());
+                let mut write = ops::begin(&pool, token).await.unwrap();
+                let result = stop_timer(&mut write.tx, &write.actor, entry.id).await;
+                let result = write.commit(result, &Recorder::default()).await;
+                assert!(
+                    matches!(result, Err(OpError::Forbidden(_))),
+                    "administrator={administrator}: {result:?}"
                 );
                 let after = sqlx::query_scalar!("SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM time_entries e WHERE user_id=$1", entry.user_id)
                     .fetch_one(&pool).await.unwrap();

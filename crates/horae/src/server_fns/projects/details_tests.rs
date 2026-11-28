@@ -124,12 +124,10 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
             .unwrap()
             .is_none()
     );
-    assert!(
-        fetch_project_tags(&pool, other.org_id, ids.user_id, None)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    // A session naming an organization its person is not in is signed out.
+    assert!(crate::server_fns::signed_out(
+        &fetch_project_tags(&pool, other.org_id, ids.user_id, None).await
+    ));
 
     // A Project Manager reads every project but not its private notes.
     become_profile(&pool, &ids, BuiltInProfile::ProjectManager).await;
@@ -175,19 +173,13 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
         .execute(&pool)
         .await
         .unwrap();
-    assert!(matches!(
-        project_details(&pool, ids.org_id, ids.user_id, ids.project_id).await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(
+        &project_details(&pool, ids.org_id, ids.user_id, ids.project_id).await
     ));
-    assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(crate::server_fns::signed_out(
+        &fetch_project_tags(&pool, ids.org_id, ids.user_id, None).await
+    ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

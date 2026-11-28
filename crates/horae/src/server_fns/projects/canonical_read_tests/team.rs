@@ -133,12 +133,9 @@ async fn team_reader_denies_foreign_projects_and_unavailable_actors(pool: PgPool
         .execute(&pool)
         .await
         .unwrap();
-    assert!(matches!(
-        project_team(&pool, &viewer, ids.project_id).await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(
+        &project_team(&pool, &viewer, ids.project_id).await
     ));
 }
 

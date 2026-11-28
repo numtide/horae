@@ -144,9 +144,8 @@ async fn an_inactive_person_cannot_allow(pool: PgPool) {
         .await
         .unwrap();
     let config = crate::config::OAuthConfig::default();
-    let error = approve(&pool, &session, caller(&ids), &id, Some(ISSUER), &config)
-        .await
-        .unwrap_err();
-    assert_eq!(code(&error), FORBIDDEN);
+    // The deactivated session is signed out, and nothing is granted.
+    let result = approve(&pool, &session, caller(&ids), &id, Some(ISSUER), &config).await;
+    assert!(crate::server_fns::signed_out(&result), "{result:?}");
     assert_eq!(grants(&pool).await, 0);
 }

@@ -1951,19 +1951,16 @@ async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(poo
             ..
         })
     ));
-    assert!(matches!(
-        transition_invoice(
+    // A session of another organization's person is signed out here.
+    assert!(crate::server_fns::signed_out(
+        &transition_invoice(
             &pool,
             ids.org_id,
             invoice.id,
             InvoiceStatus::Sent,
             foreign.user_id
         )
-        .await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
+        .await
     ));
     transition_invoice(
         &pool,

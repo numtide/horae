@@ -222,8 +222,9 @@ async fn deactivation_before_check_denies_delegation(pool: &PgPool, subject: Act
     deactivate.commit().await.unwrap();
     let result = pending.await.unwrap();
     match subject {
+        // The actor's session is signed out by the load that waited.
         ActivitySubject::Actor => {
-            assert!(matches!(result, Err(OpError::Forbidden(message)) if message == EDITING))
+            assert!(matches!(result, Err(OpError::Unauthenticated(_))))
         }
         ActivitySubject::AddedManager => {
             assert!(
@@ -534,10 +535,15 @@ async fn canonical_actor_grants_activity_and_tenant_are_required(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    for actor in [reader, foreign.user_id, Uuid::now_v7()] {
+    assert!(matches!(
+        execute(&pool, ids.org_id, reader, &command).await,
+        Err(OpError::Forbidden(message)) if message == EDITING
+    ));
+    // A session naming a foreign or unknown person is signed out.
+    for actor in [foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &command).await,
-            Err(OpError::Forbidden(message)) if message == EDITING
+            Err(OpError::Unauthenticated(_))
         ));
     }
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
@@ -546,7 +552,7 @@ async fn canonical_actor_grants_activity_and_tenant_are_required(pool: PgPool) {
         .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(OpError::Forbidden(message)) if message == EDITING
+        Err(OpError::Unauthenticated(_))
     ));
     assert_eq!(revision(&pool, ids.org_id).await, 0);
 }

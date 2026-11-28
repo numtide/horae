@@ -21,7 +21,7 @@ pub async fn view(
     project_id: Uuid,
     expected: Option<PermissionRequester>,
 ) -> Result<ProjectDetailView, OpError> {
-    let today = crate::timezone::today_for_org(&mut **tx, actor.org_id()).await?;
+    let today = actor.organization()?.today();
     view_on(tx, actor, project_id, expected, today).await
 }
 

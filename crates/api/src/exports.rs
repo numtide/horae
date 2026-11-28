@@ -37,6 +37,10 @@ pub mod xlsx_cells;
 async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
     let user_id = crate::auth::session::get_session_user_id(session)
         .await
+        .map_err(|error| {
+            tracing::error!(%error, "Could not read the session of an export");
+            StatusCode::SERVICE_UNAVAILABLE
+        })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;
     let caller = crate::ops::active_caller(&state.db, user_id)

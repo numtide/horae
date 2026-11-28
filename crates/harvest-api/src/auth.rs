@@ -194,6 +194,7 @@ async fn by_session(parts: &Parts, db: &PgPool) -> Result<AuthUser, ApiError> {
 
     let user_id = horae_api::session::get_session_user_id(&session)
         .await
+        .map_err(ApiError::internal)?
         .ok_or_else(|| ApiError::unauthorized("Not authenticated"))?;
 
     // Look up the user's org. The `active` filter is what revokes a

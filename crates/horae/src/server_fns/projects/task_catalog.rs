@@ -7,7 +7,7 @@ pub async fn load_task_catalog(
     after: Option<TaskCursor>,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<TaskCatalogPage, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let viewer = PermissionRequester {
         org_id: caller.org_id,

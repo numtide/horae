@@ -29,7 +29,9 @@ async fn financial_snapshots_override_isolation_but_restore_connection_settings(
             );
             tx.commit().await.unwrap();
             for reader in [Reader::Invoice, Reader::Fees] {
-                assert_denied(read(&reader_pool, (ids.org_id, Uuid::now_v7()), &ids, reader).await);
+                assert_signed_out(
+                    read(&reader_pool, (ids.org_id, Uuid::now_v7()), &ids, reader).await,
+                );
                 assert_eq!(
                     read(&reader_pool, (ids.org_id, ids.user_id), &ids, reader)
                         .await

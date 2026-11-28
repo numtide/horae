@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM pg_stat_activity\n                               WHERE $1 = ANY (pg_blocking_pids(pid))) AS \"blocked!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4d1bfffd513cc52f813ff5781f385d7d1805542a961c306041ba92904a27ca39"
+}

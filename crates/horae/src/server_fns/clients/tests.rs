@@ -210,29 +210,24 @@ async fn profile_saves_recheck_manager_org_and_active_actor(pool: PgPool) {
         .await
         .unwrap();
     let edit = profile_edit(&before, ClientRateChange::Keep);
-    for (org, actor) in [
-        (ids.org_id, foreign.user_id),
-        (member.org_id, member.user_id),
+    // A foreign session is signed out; a member without the grant is refused.
+    for (org, actor, refused) in [
+        (ids.org_id, foreign.user_id, UNAUTHORIZED),
+        (member.org_id, member.user_id, FORBIDDEN),
     ] {
         let error = create_client_profile_record(&pool, org, actor, &profile(), "")
             .await
             .unwrap_err();
         assert!(matches!(
             error,
-            ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            }
+            ServerFnError::ServerError { code, .. } if code == refused
         ));
         let error = update_client_profile_record(&pool, org, actor, ids.client_id, &edit)
             .await
             .unwrap_err();
         assert!(matches!(
             error,
-            ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            }
+            ServerFnError::ServerError { code, .. } if code == refused
         ));
     }
     for id in [foreign.client_id, uuid::Uuid::now_v7()] {
@@ -251,26 +246,13 @@ async fn profile_saves_recheck_manager_org_and_active_actor(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    let error = create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), "")
-        .await
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        }
-    ));
-    let error = update_client_profile_record(&pool, ids.org_id, ids.user_id, ids.client_id, &edit)
-        .await
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        }
-    ));
+    // The deactivated session is signed out.
+    let created =
+        create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), "").await;
+    assert!(crate::server_fns::signed_out(&created), "{created:?}");
+    let updated =
+        update_client_profile_record(&pool, ids.org_id, ids.user_id, ids.client_id, &edit).await;
+    assert!(crate::server_fns::signed_out(&updated), "{updated:?}");
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -598,7 +580,6 @@ async fn client_details_hide_foreign_missing_and_inactive_actor_records(pool: Pg
     for (org, actor, client) in [
         (ids.org_id, ids.user_id, foreign.client_id),
         (ids.org_id, ids.user_id, uuid::Uuid::now_v7()),
-        (ids.org_id, foreign.user_id, ids.client_id),
     ] {
         let error = client_details_for_viewer(&pool, org, actor, client)
             .await
@@ -611,20 +592,19 @@ async fn client_details_hide_foreign_missing_and_inactive_actor_records(pool: Pg
             }
         ));
     }
+    // A foreign session, and then a deactivated one, is signed out.
+    let foreign_actor =
+        client_details_for_viewer(&pool, ids.org_id, foreign.user_id, ids.client_id).await;
+    assert!(
+        crate::server_fns::signed_out(&foreign_actor),
+        "{foreign_actor:?}"
+    );
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
         .execute(&pool)
         .await
         .unwrap();
-    let error = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
-        .await
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        ServerFnError::ServerError {
-            code: NOT_FOUND,
-            ..
-        }
-    ));
+    let inactive = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id).await;
+    assert!(crate::server_fns::signed_out(&inactive), "{inactive:?}");
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -654,17 +634,9 @@ async fn client_invoices_require_invoice_read_even_without_invoices(pool: PgPool
         .execute(&pool)
         .await
         .unwrap();
-    let error = client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
-        .await
-        .unwrap_err();
-    // Invoice authority is checked before the client.
-    assert!(matches!(
-        error,
-        ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        }
-    ));
+    // The deactivated session is signed out before the client is looked at.
+    let result = client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id).await;
+    assert!(crate::server_fns::signed_out(&result), "{result:?}");
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -706,19 +678,26 @@ async fn client_invoices_reject_a_winning_concurrent_revocation(pool: PgPool) {
         });
         wait_for_blocked(&pool, blocker).await;
         revocation.commit().await.unwrap();
-        let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+        let result = tokio::time::timeout(Duration::from_secs(5), run.join_next())
             .await
             .unwrap()
             .unwrap()
-            .unwrap()
-            .unwrap_err();
-        assert!(matches!(
-            error,
-            ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            }
-        ));
+            .unwrap();
+        // A deactivated session is signed out; a revoked grant is refused.
+        if deactivate {
+            assert!(crate::server_fns::signed_out(&result), "{result:?}");
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(ServerFnError::ServerError {
+                        code: FORBIDDEN,
+                        ..
+                    })
+                ),
+                "{result:?}"
+            );
+        }
     }
 }
 
@@ -964,12 +943,9 @@ async fn client_summaries_follow_project_report_visibility_and_refuse_inactive_u
         .execute(&pool)
         .await
         .unwrap();
-    assert!(matches!(
-        client_summaries_for_viewer(&pool, ids.org_id, ids.user_id).await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(
+        &client_summaries_for_viewer(&pool, ids.org_id, ids.user_id).await
     ));
 }
 
@@ -1006,12 +982,9 @@ async fn client_summaries_keep_catalog_without_projects_and_count_archived_proje
 async fn client_summaries_reject_a_foreign_actor_even_when_client_org_is_known(pool: PgPool) {
     let ids = seed(&pool, Administrator).await;
     let other = seed(&pool, Administrator).await;
-    assert!(matches!(
-        client_summaries_for_viewer(&pool, ids.org_id, other.user_id).await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
+    // A session of another organization's person is signed out here.
+    assert!(crate::server_fns::signed_out(
+        &client_summaries_for_viewer(&pool, ids.org_id, other.user_id).await
     ));
 }
 

@@ -148,7 +148,7 @@ async fn time_reads_finish_before_competing_revocation_when_read_admitted_first(
     writer.await.unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &query()).await,
-        Err(OpError::Forbidden(_))
+        Err(OpError::Unauthenticated(_))
     ));
 }
 
@@ -437,7 +437,8 @@ async fn time_reads_recheck_grants_relationships_and_activity_after_wait(pool: P
         revoke.commit().await.unwrap();
         let result = pending.await.unwrap();
         if mode == 2 {
-            assert!(matches!(result, Err(OpError::Forbidden(_))));
+            // The session is signed out by the actor load that waited.
+            assert!(matches!(result, Err(OpError::Unauthenticated(_))));
         } else {
             assert!(result.unwrap().entries.is_empty());
         }
@@ -449,8 +450,21 @@ async fn time_reads_recheck_grants_relationships_and_activity_after_wait(pool: P
 async fn time_reads_fail_closed_for_identity_and_invalid_state(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
+    // A session naming a foreign person is signed out.
     assert!(matches!(
         read(&pool, ids.org_id, foreign.user_id, &query()).await,
+        Err(OpError::Unauthenticated(_))
+    ));
+    // A token reaches the read, which refuses it.
+    let mut token = ops::begin_read(
+        &pool,
+        Caller::token(ids.org_id, foreign.user_id, Uuid::now_v7()),
+    )
+    .await
+    .unwrap();
+    let result = super::entries(&mut token.tx, &token.actor, &query()).await;
+    assert!(matches!(
+        token.finish(result).await,
         Err(OpError::Forbidden(_))
     ));
     sqlx::query!(

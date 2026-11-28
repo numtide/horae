@@ -93,11 +93,13 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
         {
             let (edit, result) = outcome.unwrap();
             if edit && !editor_first {
+                // Archived first, the manager's session is signed out (or the
+                // save conflicts with the change).
                 assert!(
                     matches!(
                         result,
                         Err(ServerFnError::ServerError {
-                            code: FORBIDDEN,
+                            code: UNAUTHORIZED,
                             ..
                         }) | Err(ServerFnError::ServerError { code: CONFLICT, .. })
                     ),
@@ -119,7 +121,12 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
                 "Widget"
             }
         );
-        // The project editor answers from stored grants, not the role.
+        // The project editor answers from stored grants, not the role. The
+        // archived manager is restored first: an archived one is signed out.
+        sqlx::query!("UPDATE users SET active=true WHERE id=$1", manager.id)
+            .execute(&pool)
+            .await
+            .unwrap();
         let manager_ids = crate::testing::SeedIds {
             user_id: manager.id,
             ..ids
@@ -219,6 +226,16 @@ async fn assert_unchanged(pool: &PgPool, org: Uuid, target: Uuid) {
     assert!(active, "unauthorized request archived the target");
 }
 
+/// A session whose person is gone, foreign or deactivated is signed out.
+#[track_caller]
+fn assert_signed_out(result: Result<(), ServerFnError>, context: impl std::fmt::Debug) {
+    assert!(
+        crate::server_fns::signed_out(&result),
+        "{context:?}: {result:?}"
+    );
+}
+
+#[track_caller]
 fn assert_forbidden(result: Result<(), ServerFnError>, context: impl std::fmt::Debug) {
     assert!(
         matches!(
@@ -281,7 +298,11 @@ async fn revoked_or_archived_managers_cannot_add_or_archive(pool: PgPool) {
         }
         for change in [Change::Create, Change::Archive] {
             let result = attempt(&pool, ids.org_id, ids.user_id, target, change).await;
-            assert_forbidden(result, (revocation, change));
+            if revocation == "archived" {
+                assert_signed_out(result, (revocation, change));
+            } else {
+                assert_forbidden(result, (revocation, change));
+            }
             assert_unchanged(&pool, ids.org_id, target).await;
         }
     }
@@ -296,7 +317,7 @@ async fn foreign_and_unknown_actors_cannot_change_local_user_access(pool: PgPool
     for actor in [foreign.user_id, Uuid::now_v7()] {
         for change in [Change::Create, Change::Archive] {
             let result = attempt(&pool, ids.org_id, actor, target, change).await;
-            assert_forbidden(result, change);
+            assert_signed_out(result, change);
             assert_unchanged(&pool, ids.org_id, target).await;
         }
     }
@@ -373,7 +394,8 @@ async fn user_mutations_recheck_revocation_after_waiting_for_organization_lock(p
                 .unwrap()
                 .unwrap(),
         };
-        assert_forbidden(result, change);
+        // The deactivated session is signed out.
+        assert_signed_out(result, change);
         assert_unchanged(&pool, ids.org_id, target).await;
     }
 }

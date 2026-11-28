@@ -310,18 +310,22 @@ async fn invoice_status_holds_its_authority_while_waiting_for_the_invoice_lock(p
             None,
             None,
         )
-        .await
-        .unwrap_err();
-        assert!(
-            matches!(
-                denied,
-                ServerFnError::ServerError {
-                    code: FORBIDDEN,
-                    ..
-                }
-            ),
-            "{denied}"
-        );
+        .await;
+        // A deactivated session is signed out; a revoked grant is refused.
+        if deactivate {
+            assert!(crate::server_fns::signed_out(&denied), "{denied:?}");
+        } else {
+            assert!(
+                matches!(
+                    denied,
+                    Err(ServerFnError::ServerError {
+                        code: FORBIDDEN,
+                        ..
+                    })
+                ),
+                "{denied:?}"
+            );
+        }
         // The void committed before the revocation, so the fee is available again.
         let reviewer = add_person(&pool, ids.org_id, BuiltInProfile::Administrator).await;
         let preview = preview::prepare(

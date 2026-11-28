@@ -139,8 +139,9 @@ async fn unauthorized_project_text_does_not_affect_export_size_limits(pool: PgPo
         .execute(&pool)
         .await
         .unwrap();
+    // The deactivated session is signed out.
     assert!(matches!(
         limits::projects(&pool, ids.org_id, ids.user_id, "active").await,
-        Err(StatusCode::FORBIDDEN)
+        Err(StatusCode::UNAUTHORIZED)
     ));
 }

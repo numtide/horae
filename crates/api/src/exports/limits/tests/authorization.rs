@@ -171,6 +171,8 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
     let before = case.stored(&pool).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for reader in READERS {
+        // A session whose person is not an active member of the organization
+        // is signed out by the export's transaction.
         for identity in [
             (case.ids.org_id, Uuid::now_v7()),
             (case.ids.org_id, foreign.user_id),
@@ -178,7 +180,7 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
         ] {
             assert_eq!(
                 case.read(&pool, identity, reader).await,
-                Err(StatusCode::FORBIDDEN)
+                Err(StatusCode::UNAUTHORIZED)
             );
         }
         for profile in [
@@ -209,7 +211,8 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
             assert_eq!(
                 case.read(&pool, (case.ids.org_id, case.ids.user_id), reader)
                     .await,
-                Err(StatusCode::FORBIDDEN)
+                Err(StatusCode::UNAUTHORIZED),
+                "a deactivated session is signed out"
             );
         }
         let other = case
@@ -265,12 +268,18 @@ async fn materialized_exports_deny_winning_revocations(pool: PgPool) {
                 let pending = spawn_read(&pool, &case, reader);
                 wait_for_blocked(&pool, pid).await;
                 writer.commit().await.unwrap();
+                // A deactivated session is signed out; a revoked grant is refused.
+                let refused = if deactivate {
+                    StatusCode::UNAUTHORIZED
+                } else {
+                    StatusCode::FORBIDDEN
+                };
                 assert_eq!(
                     tokio::time::timeout(Duration::from_secs(5), pending)
                         .await
                         .unwrap()
                         .unwrap(),
-                    Err(StatusCode::FORBIDDEN)
+                    Err(refused)
                 );
                 assert_eq!(case.stored(&pool).await, before);
             }
@@ -401,7 +410,8 @@ async fn materialized_exports_retain_authority_and_release_cancelled_reads(pool:
                 )
                 .await
                 .unwrap(),
-                Err(StatusCode::FORBIDDEN)
+                Err(StatusCode::UNAUTHORIZED),
+                "a deactivated session is signed out"
             );
             assert_eq!(case.stored(&pool).await, before);
             wait_for_other_transactions(&pool).await;
@@ -619,13 +629,20 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
             }
             writer.commit().await.unwrap();
             release.send(()).unwrap();
-            assert!(matches!(
+            // A deactivated session is signed out; a revoked grant is refused.
+            let refused = if deactivate {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::FORBIDDEN
+            };
+            assert_eq!(
                 tokio::time::timeout(Duration::from_secs(5), pending)
                     .await
                     .unwrap()
-                    .unwrap(),
-                Err(StatusCode::FORBIDDEN)
-            ));
+                    .unwrap()
+                    .map(|_| ()),
+                Err(refused)
+            );
             let first = ExportPermit::acquire().unwrap();
             let second = ExportPermit::acquire().unwrap();
             drop((first, second));

@@ -12,7 +12,7 @@ pub async fn load_person_rates(
     person_id: uuid::Uuid,
     expected_requester: PermissionRequester,
 ) -> Result<PersonRates, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     read_person_rates(&state.db, caller, person_id, expected_requester).await
 }
@@ -27,7 +27,7 @@ pub async fn update_person_rates(
     billable: RateEdit,
     cost: RateEdit,
 ) -> Result<PersonRates, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     write_person_rates(
         &state.db,

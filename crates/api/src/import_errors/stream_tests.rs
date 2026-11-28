@@ -164,7 +164,8 @@ async fn download_rechecks_after_buffered_pages_and_before_the_captured_tail(poo
             .await
             .expect("revocation is not successful EOF")
             .unwrap_err();
-        assert!(error.to_string().contains("403"), "{error}");
+        // The deactivated session is signed out.
+        assert!(error.to_string().contains("401"), "{error}");
         assert!(stream.next().await.is_none());
     }
 }
@@ -175,10 +176,12 @@ async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(p
     use axum::http::StatusCode;
     let job = archived_job(&pool).await;
     let foreign = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
+    // A session whose person is not an active member of the organization is
+    // signed out.
     for (org, actor, id, expected) in [
-        (job.org, foreign.user_id, job.id, StatusCode::FORBIDDEN),
-        (job.org, Uuid::now_v7(), job.id, StatusCode::FORBIDDEN),
-        (Uuid::now_v7(), job.actor, job.id, StatusCode::FORBIDDEN),
+        (job.org, foreign.user_id, job.id, StatusCode::UNAUTHORIZED),
+        (job.org, Uuid::now_v7(), job.id, StatusCode::UNAUTHORIZED),
+        (Uuid::now_v7(), job.actor, job.id, StatusCode::UNAUTHORIZED),
         (
             foreign.org_id,
             foreign.user_id,
@@ -208,11 +211,17 @@ async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(p
         .execute(&pool)
         .await
         .unwrap();
+        // A deactivated session is signed out; a non-administrator is refused.
+        let refused = if active {
+            StatusCode::FORBIDDEN
+        } else {
+            StatusCode::UNAUTHORIZED
+        };
         assert_eq!(
             super::download_response(&pool, job.org, job.actor, job.id)
                 .await
                 .unwrap_err(),
-            StatusCode::FORBIDDEN
+            refused
         );
     }
     sqlx::query!("UPDATE users SET active = true WHERE id = $1", job.actor)
@@ -368,7 +377,9 @@ async fn download_boundaries_recheck_after_organization_and_actor_waits(pool: Pg
                     .unwrap()
                     .unwrap()
                     .unwrap_err();
-            assert!(error.contains("403"), "{boundary:?}: {error}");
+            // A deactivated session is signed out; a revoked grant is refused.
+            let refused = if deactivate { "401" } else { "403" };
+            assert!(error.contains(refused), "{boundary:?}: {error}");
         }
     }
     reading.close().await;

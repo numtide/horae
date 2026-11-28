@@ -327,9 +327,18 @@ async fn managed_time_covers_managed_people_and_projects_only(pool: PgPool) {
 async fn foreign_and_inactive_viewers_are_refused(pool: PgPool) {
     let fixture = fixture(&pool).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
-    let mut read = begin_read(
+    // A session naming another organization is signed out before the report.
+    let signed_out = begin_read(
         &pool,
         Caller::session(foreign.org_id, fixture.viewer.user_id),
+    )
+    .await
+    .map(drop);
+    assert_eq!(signed_out, Err(OpError::unauthenticated()));
+    // A token naming it reaches the report, which refuses it.
+    let mut read = begin_read(
+        &pool,
+        Caller::token(foreign.org_id, fixture.viewer.user_id, uuid::Uuid::now_v7()),
     )
     .await
     .unwrap();
@@ -355,5 +364,5 @@ async fn foreign_and_inactive_viewers_are_refused(pool: PgPool) {
     let error = grouped(&pool, &fixture.viewer, &[TimeReadAll], "project")
         .await
         .unwrap_err();
-    assert!(matches!(error, OpError::Forbidden(_)), "{error:?}");
+    assert!(matches!(error, OpError::Unauthenticated(_)), "{error:?}");
 }

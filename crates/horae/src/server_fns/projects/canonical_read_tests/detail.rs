@@ -175,19 +175,16 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
         .execute(&pool)
         .await
         .unwrap();
-    assert!(matches!(
-        detail_view::fetch(
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(
+        &detail_view::fetch(
             &pool,
             &viewer,
             ids.project_id,
             Some(view.requester),
             today()
         )
-        .await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
+        .await
     ));
 }
 

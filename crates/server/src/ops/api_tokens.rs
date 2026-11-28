@@ -216,7 +216,14 @@ pub async fn revoke(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<Done<ApiToke
 ///
 /// Stamps `last_used_at` at most once a minute, so a busy script does not
 /// write on every request.
+///
+/// It is a token request's first statement, so it is retried on a lost
+/// connection; running it twice is harmless, the stamp included.
 pub async fn authenticate(pool: &PgPool, token: &str) -> Result<Option<Caller>, sqlx::Error> {
+    crate::db::retry_on_a_lost_connection(|| find_caller(pool, token)).await
+}
+
+async fn find_caller(pool: &PgPool, token: &str) -> Result<Option<Caller>, sqlx::Error> {
     if !token.starts_with(PREFIX) {
         return Ok(None);
     }

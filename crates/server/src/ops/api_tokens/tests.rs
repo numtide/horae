@@ -167,6 +167,39 @@ async fn a_valid_token_authenticates_as_its_owner(pool: PgPool) {
     );
 }
 
+/// A token request starts with the lookup, on the pool and outside any
+/// `begin*`: on a pooled connection the server has since closed, it goes out
+/// again on a working one instead of failing the request.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_token_lookup_on_a_lost_connection_is_retried(
+    setup: sqlx::postgres::PgPoolOptions,
+    options: sqlx::postgres::PgConnectOptions,
+) {
+    use sqlx::Connection;
+
+    let setup = setup.connect_with(options.clone()).await.unwrap();
+    let ids = seed(&setup, BuiltInProfile::Member).await;
+    let (secret, _) = create_as(&setup, &ids, "script", None).await.unwrap();
+    let pool = crate::db::pool_options(1)
+        .connect_with(options.clone())
+        .await
+        .unwrap();
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let mut other = sqlx::PgConnection::connect_with(&options).await.unwrap();
+    let ended: bool = sqlx::query_scalar("SELECT pg_terminate_backend($1)")
+        .bind(pid)
+        .fetch_one(&mut other)
+        .await
+        .unwrap();
+    assert!(ended);
+
+    let caller = authenticate(&pool, secret.expose()).await.unwrap();
+    assert_eq!(caller.map(|caller| caller.user_id), Some(ids.user_id));
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unknown_and_malformed_tokens_are_refused(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
@@ -400,9 +433,14 @@ async fn every_active_person_reads_the_harvest_account_id(pool: PgPool) {
     assert_eq!(read.finish(result).await.unwrap(), stored);
 
     set_active(&pool, ids.user_id, false).await;
-    let mut read = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+    // A session is signed out before the operation runs.
+    let signed_out = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
         .await
-        .unwrap();
+        .map(drop);
+    assert_eq!(signed_out, Err(OpError::unauthenticated()));
+    // A token reaches the operation, which refuses an inactive person.
+    let token = Caller::token(ids.org_id, ids.user_id, Uuid::now_v7());
+    let mut read = crate::ops::begin_read(&pool, token).await.unwrap();
     let result = harvest_account_id(&mut read.tx, &read.actor).await;
     let refused = read.finish(result).await;
     assert!(matches!(refused, Err(OpError::Forbidden(_))), "{refused:?}");

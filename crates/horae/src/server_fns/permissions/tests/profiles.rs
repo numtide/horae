@@ -108,9 +108,10 @@ async fn profile_command_waits_for_direct_actor_deactivation_even_on_replay(pool
         );
     wait_for_blocked(&pool, pid).await;
     revoke.commit().await.unwrap();
+    // The deactivated session is signed out, even for a replay.
     assert!(matches!(
         pending.await.unwrap(),
-        Err(e) if e == forbidden()
+        Err(e) if e == crate::ops::OpError::unauthenticated()
     ));
     assert_eq!(state(&pool, ids.org_id, user).await.revision, 1);
 }
@@ -964,10 +965,15 @@ async fn canonical_actor_tenant_and_target_checks_precede_mutation(pool: PgPool)
     let foreign = fixture(&pool).await;
     let non_admin = person(&pool, ids.org_id, false, BuiltInProfile::Administrator).await;
     let request = apply(non_admin, BuiltInProfile::Member);
-    for actor in [non_admin, foreign.user_id, Uuid::now_v7()] {
+    assert!(matches!(
+        execute(&pool, ids.org_id, non_admin, &request).await,
+        Err(e) if e == forbidden()
+    ));
+    // A session of a foreign or missing person is signed out.
+    for actor in [foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &request).await,
-            Err(e) if e == forbidden()
+            Err(e) if e == crate::ops::OpError::unauthenticated()
         ));
     }
     for user in [foreign.user_id, Uuid::now_v7()] {
@@ -988,7 +994,7 @@ async fn canonical_actor_tenant_and_target_checks_precede_mutation(pool: PgPool)
         .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(e) if e == forbidden()
+        Err(e) if e == crate::ops::OpError::unauthenticated()
     ));
     assert_eq!(state(&pool, ids.org_id, non_admin).await.revision, 0);
 }

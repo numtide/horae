@@ -269,9 +269,10 @@ async fn manager_reader_observes_direct_deactivation_before_its_actor_lock(pool:
         );
     wait_for_blocked(&pool, holder).await;
     hold.commit().await.unwrap();
+    // The session is signed out by the actor load that waited.
     assert!(matches!(
         pending.await.unwrap(),
-        Err(OpError::Forbidden(message)) if message == EDITING
+        Err(OpError::Unauthenticated(_))
     ));
 }
 
@@ -309,6 +310,6 @@ async fn manager_reader_materializes_before_a_waiting_actor_deactivation(pool: P
     revoke.await.unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, ids.project_id).await,
-        Err(OpError::Forbidden(message)) if message == EDITING
+        Err(OpError::Unauthenticated(_))
     ));
 }

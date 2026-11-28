@@ -189,14 +189,17 @@ pub async fn sheet(
     let subject_id = query.subject_id.unwrap_or(actor_id);
     // A teammate can be archived independently of the requester. Hold its
     // activity stable across discovery and the subsequent entry query too.
-    sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
-        org_id,
-        subject_id
-    )
-    .fetch_optional(&mut **tx)
-    .await?
-    .ok_or_else(|| OpError::forbidden(SHEET_FORBIDDEN))?;
+    // The actor's own row is already held: `Actor::load` locked it, active.
+    if subject_id != actor_id {
+        sqlx::query_scalar!(
+            "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
+            org_id,
+            subject_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or_else(|| OpError::forbidden(SHEET_FORBIDDEN))?;
+    }
     let subject = fetch_people(
         tx,
         requester,

@@ -447,8 +447,24 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
         (foreign.org_id, ids.user_id),
         (ids.org_id, Uuid::now_v7()),
     ] {
+        // A session naming a foreign or unknown person is signed out.
         assert!(matches!(
             read(&pool, org, actor, Context::Create, &query).await,
+            Err(OpError::Unauthenticated(_))
+        ));
+        // A token reaches the read, which refuses it.
+        let mut token = crate::ops::begin_read(&pool, Caller::token(org, actor, Uuid::now_v7()))
+            .await
+            .unwrap();
+        let result = crate::ops::projects::people::read(
+            &mut token.tx,
+            &token.actor,
+            Context::Create,
+            &query,
+        )
+        .await;
+        assert!(matches!(
+            token.finish(result).await,
             Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
@@ -458,7 +474,7 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Context::Create, &query).await,
-        Err(OpError::Forbidden(message)) if message == EDITING
+        Err(OpError::Unauthenticated(_))
     ));
     sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
         .execute(&pool)
@@ -526,10 +542,16 @@ async fn project_people_rechecks_grants_and_direct_deactivation_after_wait(pool:
         });
         wait_for_blocked(&pool, holder).await;
         revoke.commit().await.unwrap();
-        assert!(matches!(
-            pending.await.unwrap(),
-            Err(OpError::Forbidden(message)) if message == EDITING
-        ));
+        let result = pending.await.unwrap();
+        if deactivate {
+            // The session is signed out by the actor load that waited.
+            assert!(matches!(result, Err(OpError::Unauthenticated(_))));
+        } else {
+            assert!(matches!(
+                result,
+                Err(OpError::Forbidden(message)) if message == EDITING
+            ));
+        }
     }
 }
 

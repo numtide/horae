@@ -10,15 +10,20 @@ use horae_core::types::RoundingMethod;
 /// and its date picker. Invalid stored configuration must not silently default.
 #[server]
 pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
+    // No transaction checks the account here, so the read does.
     let day = sqlx::query_scalar!(
-        "SELECT week_start FROM organizations WHERE id = $1",
-        caller.org_id
+        "SELECT o.week_start FROM organizations o
+           JOIN users u ON u.org_id = o.id AND u.id = $2 AND u.active
+          WHERE o.id = $1",
+        caller.org_id,
+        caller.user_id,
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| unauthorized(crate::ops::ACCOUNT_NOT_ACTIVE))?;
     match day {
         1 => Ok(chrono::Weekday::Mon),
         2 => Ok(chrono::Weekday::Tue),
@@ -37,19 +42,21 @@ pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
 /// Any signed-in user may read it (it is not sensitive).
 #[server]
 pub async fn get_org_name() -> Result<String, ServerFnError> {
-    let user_id = session_caller().await?.user_id;
+    let user_id = unchecked_session_caller().await?.user_id;
     let state = crate::state::global_state().await;
 
+    // No transaction checks the account here, so the read does.
     let name = sqlx::query_scalar!(
         r#"SELECT o.name
              FROM organizations o
              JOIN users u ON u.org_id = o.id
-            WHERE u.id = $1"#,
+            WHERE u.id = $1 AND u.active"#,
         user_id,
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| unauthorized(crate::ops::ACCOUNT_NOT_ACTIVE))?;
 
     Ok(name)
 }
@@ -58,7 +65,7 @@ pub async fn get_org_name() -> Result<String, ServerFnError> {
 
 #[server]
 pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::branding(&mut read.tx, &read.actor).await;
@@ -70,7 +77,7 @@ pub async fn update_org_branding(
     branding: OrgBranding,
     expected: OrgBranding,
 ) -> Result<OrgBranding, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result =
@@ -83,7 +90,7 @@ pub async fn update_org_branding(
 
 #[server]
 pub async fn get_invoice_rounding() -> Result<RoundingMethod, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::invoice_rounding(&mut read.tx, &read.actor).await;
@@ -92,7 +99,7 @@ pub async fn get_invoice_rounding() -> Result<RoundingMethod, ServerFnError> {
 
 #[server]
 pub async fn set_invoice_rounding(method: RoundingMethod) -> Result<RoundingMethod, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut write = ops::begin(&state.db, caller).await.map_err(op_error)?;
     let result = ops::organization::set_invoice_rounding(&mut write.tx, &write.actor, method).await;

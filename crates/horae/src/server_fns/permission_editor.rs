@@ -21,7 +21,7 @@ const UNAVAILABLE: &str = permissions::EDITOR_UNAVAILABLE;
 pub async fn list_permission_subjects(
     after: Option<uuid::Uuid>,
 ) -> Result<PermissionSubjectPage, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     subject_page(&state.db, caller, after)
         .await
@@ -33,7 +33,7 @@ pub async fn list_permission_subjects(
 pub async fn load_permission_editor(
     user_id: uuid::Uuid,
 ) -> Result<PermissionEditor, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     editor_view(&state.db, caller, user_id)
         .await
@@ -45,7 +45,7 @@ pub async fn load_permission_editor(
 pub async fn preview_person_permissions(
     draft: ProfileDraft,
 ) -> Result<ProfilePreview, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     profile_preview(&state.db, caller, &draft)
         .await
@@ -58,7 +58,7 @@ pub async fn save_person_permissions(
     command: ProfileCommand,
     expected_requester: PermissionRequester,
 ) -> Result<ProfileOutcome, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     save_profile(
         &state.db,
@@ -78,7 +78,7 @@ pub async fn preview_permission_template_deletion(
     expected_access_revision: i64,
     expected_template_revision: i64,
 ) -> Result<TemplateDeletionPreview, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     template_deletion_preview(
         &state.db,
@@ -97,7 +97,7 @@ pub async fn save_permission_template(
     command: TemplateCommand,
     expected_requester: PermissionRequester,
 ) -> Result<TemplateOutcome, ServerFnError> {
-    let caller = session_caller_or(UNAVAILABLE).await?;
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
     save_template(
         &state.db,
@@ -116,7 +116,7 @@ pub(crate) async fn subject_page(
     caller: Caller,
     after: Option<uuid::Uuid>,
 ) -> Result<PermissionSubjectPage, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::subjects(&mut read.tx, &read.actor, after).await;
     read.finish(result).await
 }
@@ -127,7 +127,7 @@ pub(crate) async fn editor_view(
     caller: Caller,
     user_id: uuid::Uuid,
 ) -> Result<PermissionEditor, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::load(&mut read.tx, &read.actor, user_id).await;
     read.finish(result).await
 }
@@ -138,7 +138,7 @@ pub(crate) async fn profile_preview(
     caller: Caller,
     draft: &ProfileDraft,
 ) -> Result<ProfilePreview, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::preview(&mut read.tx, &read.actor, draft).await;
     read.finish(result).await
 }
@@ -151,7 +151,7 @@ pub(crate) async fn template_deletion_preview(
     expected_access_revision: i64,
     expected_template_revision: i64,
 ) -> Result<TemplateDeletionPreview, OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(ops::begin_read(db, caller).await, UNAVAILABLE)?;
     let result = permissions::editor::preview_template_deletion(
         &mut read.tx,
         &read.actor,
@@ -193,11 +193,14 @@ pub(crate) async fn save_template(
 /// `AccessChange` gate: concurrent reads and saves wait for it.
 #[cfg(feature = "server")]
 async fn access_change(db: &PgPool, caller: Caller) -> Result<ops::WriteTx, OpError> {
-    ops::begin_gated(
-        db,
-        caller,
-        OrganizationLock::AccessChange,
-        WriteIsolation::ReadCommitted,
+    authenticated(
+        ops::begin_gated(
+            db,
+            caller,
+            OrganizationLock::AccessChange,
+            WriteIsolation::ReadCommitted,
+        )
+        .await,
+        UNAVAILABLE,
     )
-    .await
 }

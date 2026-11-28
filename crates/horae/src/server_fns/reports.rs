@@ -12,9 +12,11 @@ mod tests;
 pub async fn get_time_report_access(
     expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
 ) -> Result<crate::models::time_report::TimeReportAccess, ServerFnError> {
-    let caller = session_caller_or("Report access is unavailable").await?;
+    const UNAVAILABLE: &str = "Report access is unavailable";
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let read =
+        authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
     let result = ops::time_reads::reports::access(&read.actor, expected_requester);
     read.finish(result).await.map_err(op_error)
 }
@@ -24,9 +26,11 @@ pub async fn get_time_report_access(
 pub async fn list_visible_time_report_entries(
     query: crate::models::time_report::TimeReportQuery,
 ) -> Result<crate::models::time_report::TimeReportPage, ServerFnError> {
-    let caller = session_caller_or("Time report is unavailable").await?;
+    const UNAVAILABLE: &str = "Time report is unavailable";
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let mut read =
+        authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
     let result = ops::time_reads::reports::entries(&mut read.tx, &read.actor, &query).await;
     read.finish(result).await.map_err(op_error)
 }
@@ -38,9 +42,11 @@ pub async fn list_visible_time_report_entries(
 pub async fn list_visible_time_report_groups(
     query: crate::models::time_report::TimeReportGroupQuery,
 ) -> Result<crate::models::time_report::TimeReportGroupPage, ServerFnError> {
-    let caller = session_caller_or("Time report is unavailable").await?;
+    const UNAVAILABLE: &str = "Time report is unavailable";
+    let caller = unchecked_session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
+    let mut read =
+        authenticated(ops::begin_read(&state.db, caller).await, UNAVAILABLE).map_err(op_error)?;
     let result = ops::time_reads::reports::groups::read(&mut read.tx, &read.actor, &query).await;
     read.finish(result).await.map_err(op_error)
 }
@@ -59,7 +65,7 @@ pub async fn report_time(
     user_id: Option<String>,
     tag_id: Option<String>,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
 
     let from_date = parse_date(&from, "from")?;
@@ -109,7 +115,7 @@ pub async fn report_detailed(
     user_id: Option<String>,
     tag_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
 
     let from_date = parse_date(&from, "from")?;
     let to_date = parse_date(&to, "to")?;
@@ -151,7 +157,7 @@ pub(super) async fn fetch_detailed(
 /// Collect dashboard widgets from all loaded plugins (FR-022).
 #[server]
 pub async fn get_plugin_widgets() -> Result<Vec<PluginWidget>, ServerFnError> {
-    session_caller().await?;
+    active_session_caller().await?;
     let state = crate::state::global_state().await;
     let widgets = state.plugins.collect_widgets().await;
     Ok(widgets

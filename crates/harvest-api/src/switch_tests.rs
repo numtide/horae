@@ -11,7 +11,9 @@ use tower_sessions::{MemoryStore, Session};
 /// OAuth callback (`horae-api`), under a session signed in as `user_id`.
 async fn app(pool: &PgPool, enabled: bool, user_id: Uuid) -> Router {
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);
-    horae_api::session::set_session_user_id(&session, user_id)
+    // The Harvest API reads only the person from a session.
+    session
+        .insert(horae_api::session::SESSION_USER_KEY, user_id)
         .await
         .unwrap();
     let state = test_state(pool.clone(), crate::pagination_tests::limiter());

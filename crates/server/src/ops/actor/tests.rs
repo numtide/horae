@@ -183,6 +183,104 @@ async fn an_unlocked_load_does_not_wait_for_an_access_change(pool: PgPool) {
     change.rollback().await.unwrap();
 }
 
+/// At READ COMMITTED, a load that waits for an access change's organization
+/// lock reads the person's state as that change committed it, not from the
+/// snapshot it started with.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_load_that_waited_for_an_access_change_sees_it(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    assert!(
+        load(&pool, ids.org_id, ids.user_id)
+            .await
+            .unwrap()
+            .administrator()
+    );
+    let mut change = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE organizations SET access_revision = access_revision WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&mut *change)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator = false WHERE user_id = $1",
+        ids.user_id
+    )
+    .execute(&mut *change)
+    .await
+    .unwrap();
+    let change_pid = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut *change)
+        .await
+        .unwrap();
+    let waiting = tokio::spawn({
+        let pool = pool.clone();
+        async move { load(&pool, ids.org_id, ids.user_id).await }
+    });
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        // Only a backend waiting on this change counts: tests running in
+        // parallel have lock waits of their own.
+        let blocked = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+                               WHERE $1 = ANY (pg_blocking_pids(pid))) AS "blocked!""#,
+            change_pid
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if blocked {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the load never waited for the change"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    change.commit().await.unwrap();
+    let actor = waiting.await.unwrap().unwrap();
+    assert!(actor.is_active());
+    assert!(!actor.administrator());
+}
+
+/// The organization's settings come with the actor, for every channel.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn the_actor_carries_the_organization_settings(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    sqlx::query!(
+        "UPDATE organizations SET timezone = 'Europe/Madrid', week_start = 7,
+            default_currency = 'USD', round_minutes = 15 WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut tx: Tx = pool.begin().await.unwrap();
+    for caller in [
+        Caller::session(ids.org_id, ids.user_id),
+        Caller::operator(ids.org_id),
+        Caller::session(ids.org_id, Uuid::now_v7()),
+    ] {
+        let actor = Actor::load(&mut tx, caller).await.unwrap();
+        let settings = actor.organization().unwrap();
+        assert_eq!(
+            (
+                settings.timezone.as_str(),
+                settings.week_start,
+                settings.default_currency.as_str(),
+                settings.round_minutes
+            ),
+            ("Europe/Madrid", 7, "USD", 15)
+        );
+    }
+    let missing = Actor::load(&mut tx, Caller::session(Uuid::now_v7(), ids.user_id))
+        .await
+        .unwrap();
+    assert!(missing.organization().is_err());
+}
+
 #[test]
 fn a_page_bound_to_someone_else_is_refused_with_the_domain_text() {
     let caller = Caller::session(Uuid::now_v7(), Uuid::now_v7());

@@ -493,6 +493,7 @@ async fn grouped_csv_empty_source_still_requires_canonical_authority(pool: PgPoo
         .execute(&pool)
         .await
         .unwrap();
+    // The deactivated session is signed out.
     assert_eq!(
         groups::download(
             pool,
@@ -503,6 +504,6 @@ async fn grouped_csv_empty_source_still_requires_canonical_authority(pool: PgPoo
         )
         .await
         .unwrap_err(),
-        StatusCode::FORBIDDEN
+        StatusCode::UNAUTHORIZED
     );
 }

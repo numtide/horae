@@ -24,6 +24,25 @@ use uuid::Uuid;
 
 use super::*;
 
+/// Signs `id` in as sign-in does, with their organization. An unknown id gets
+/// the person alone, like a session signed in before the organization was
+/// stored, so both ways `unchecked_session_caller` learns the organization are covered.
+async fn sign_in(pool: &PgPool, session: &Session, id: Uuid) {
+    let org = sqlx::query_scalar!("SELECT org_id FROM users WHERE id = $1", id)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+    match org {
+        Some(org) => horae_api::session::set_session_user(session, id, org)
+            .await
+            .unwrap(),
+        None => session
+            .insert(horae_api::session::SESSION_USER_KEY, id)
+            .await
+            .unwrap(),
+    }
+}
+
 mod approval_labels;
 mod cli;
 mod client_page;
@@ -312,11 +331,12 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         )
         .route(
             "/test/login/{id}",
-            post(|session: Session, Path(id): Path<Uuid>| async move {
-                horae_api::session::set_session_user_id(&session, id)
-                    .await
-                    .unwrap();
-                StatusCode::NO_CONTENT
+            post({
+                let pool = pool.clone();
+                move |session: Session, Path(id): Path<Uuid>| async move {
+                    sign_in(&pool, &session, id).await;
+                    StatusCode::NO_CONTENT
+                }
             }),
         )
         .route(

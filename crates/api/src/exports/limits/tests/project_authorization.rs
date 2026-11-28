@@ -46,9 +46,10 @@ async fn project_exports_require_current_tenant_bound_actor(pool: PgPool) {
         (ids.org_id, foreign.user_id),
         (Uuid::now_v7(), ids.user_id),
     ] {
+        // A session whose person is not an active member is signed out.
         assert!(matches!(
             projects(&pool, org, actor, "active").await,
-            Err(StatusCode::FORBIDDEN)
+            Err(StatusCode::UNAUTHORIZED)
         ));
     }
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
@@ -57,7 +58,7 @@ async fn project_exports_require_current_tenant_bound_actor(pool: PgPool) {
         .unwrap();
     assert!(matches!(
         projects(&pool, ids.org_id, ids.user_id, "active").await,
-        Err(StatusCode::FORBIDDEN)
+        Err(StatusCode::UNAUTHORIZED)
     ));
 }
 
@@ -245,7 +246,8 @@ async fn project_exports_deny_actor_revoked_during_either_authority_wait(pool: P
         };
         wait_for_blocked(&pool, pid).await;
         writer.commit().await.unwrap();
-        assert_eq!(pending.await.unwrap(), Err(StatusCode::FORBIDDEN));
+        // The deactivated session is signed out.
+        assert_eq!(pending.await.unwrap(), Err(StatusCode::UNAUTHORIZED));
     }
 }
 
@@ -412,7 +414,16 @@ async fn project_exports_release_every_captured_project_without_render_locks(poo
                 b"project export"
             );
         } else {
-            assert!(matches!(result, Err(StatusCode::FORBIDDEN)), "{change}");
+            // A deactivated session is signed out; lost access is refused.
+            let refused = if change == "deactivate" {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::FORBIDDEN
+            };
+            assert!(
+                matches!(result, Err(status) if status == refused),
+                "{change}"
+            );
         }
         let first = ExportPermit::acquire().unwrap();
         let second = ExportPermit::acquire().unwrap();
@@ -705,9 +716,10 @@ async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool
         .execute(&pool)
         .await
         .unwrap();
+    // The deactivated session is signed out.
     assert_eq!(
         authorize_projects(&pool, ids.org_id, ids.user_id, &[], &[]).await,
-        Err(StatusCode::FORBIDDEN)
+        Err(StatusCode::UNAUTHORIZED)
     );
 }
 

@@ -24,6 +24,7 @@ mod status {
     pub const NOT_FOUND: u16 = 404;
     pub const CONFLICT: u16 = 409;
     pub const INTERNAL_ERROR: u16 = 500;
+    pub const SERVICE_UNAVAILABLE: u16 = 503;
 }
 #[cfg(feature = "server")]
 pub(crate) use status::*;
@@ -42,7 +43,19 @@ pub(crate) async fn session_user_id() -> Result<uuid::Uuid, ServerFnError> {
 
     horae_api::session::get_session_user_id(&session)
         .await
+        .map_err(session_unavailable)?
         .ok_or_else(|| unauthorized("Not authenticated — please sign in."))
+}
+
+/// A session store that cannot be read is no sign-out: a 503, which the app
+/// reports as an error, not "Session ended".
+#[cfg(feature = "server")]
+fn session_unavailable(error: horae_api::session::SessionUnavailable) -> ServerFnError {
+    tracing::error!(%error, "Could not read the session");
+    err(
+        SERVICE_UNAVAILABLE,
+        "Horae is temporarily unavailable. Please try again.",
+    )
 }
 
 /// Build a `ServerFnError::ServerError` with a named status code, so error
@@ -78,6 +91,7 @@ pub(crate) fn op_error(error: crate::ops::OpError) -> ServerFnError {
     let code = match error.kind() {
         OpError::NotFound(_) => NOT_FOUND,
         OpError::Forbidden(_) => FORBIDDEN,
+        OpError::Unauthenticated(_) => UNAUTHORIZED,
         OpError::Conflict(_) => CONFLICT,
         OpError::Invalid { .. } => BAD_REQUEST,
         OpError::Internal(_) | OpError::Detailed { .. } => INTERNAL_ERROR,
@@ -159,26 +173,58 @@ pub(crate) async fn require_user() -> Result<User, ServerFnError> {
     .ok_or_else(|| unauthorized("Account is not active"))
 }
 
-/// The session's organization and person, for endpoints that need nothing
-/// else from the account. Refuses a deactivated account with the same 401 as
-/// [`require_user`]; the operation's transaction then loads the actor.
+/// The session's organization and person, for an endpoint that runs through
+/// an `ops::begin*` transaction, from the session alone: no query.
+///
+/// It does not check that the account is still active. The transaction does:
+/// loading a session actor whose person is gone or deactivated fails with
+/// `OpError::Unauthenticated`, the same 401 as [`require_user`]. An endpoint
+/// that reads the database without such a transaction takes
+/// [`active_session_caller`] instead, which is why this one is named
+/// unchecked.
 #[cfg(feature = "server")]
-pub(crate) async fn session_caller() -> Result<crate::ops::Caller, ServerFnError> {
-    let user_id = session_user_id().await?;
+pub(crate) async fn unchecked_session_caller() -> Result<crate::ops::Caller, ServerFnError> {
+    use tower_sessions::Session;
+
+    let session: Session = dioxus_fullstack::FullstackContext::extract::<Session, _>().await?;
+    let user_id = horae_api::session::get_session_user_id(&session)
+        .await
+        .map_err(session_unavailable)?
+        .ok_or_else(|| unauthorized("Not authenticated — please sign in."))?;
+    match horae_api::session::get_session_org_id(&session)
+        .await
+        .map_err(session_unavailable)?
+    {
+        Some(org_id) => Ok(crate::ops::Caller::session(org_id, user_id)),
+        // Signed in before sessions stored the organization.
+        None => checked_caller(user_id).await,
+    }
+}
+
+/// The session's caller, refusing a deactivated account before returning, for
+/// endpoints that read the database outside an `ops::begin*` transaction.
+#[cfg(feature = "server")]
+pub(crate) async fn active_session_caller() -> Result<crate::ops::Caller, ServerFnError> {
+    checked_caller(session_user_id().await?).await
+}
+
+#[cfg(feature = "server")]
+async fn checked_caller(user_id: uuid::Uuid) -> Result<crate::ops::Caller, ServerFnError> {
     let state = crate::state::global_state().await;
     crate::ops::active_caller(&state.db, user_id)
         .await
         .map_err(server_err)?
-        .ok_or_else(|| unauthorized("Account is not active"))
+        .ok_or_else(|| unauthorized(crate::ops::ACCOUNT_NOT_ACTIVE))
 }
 
-/// [`session_caller`] for endpoints that answer any failure other than a 401
-/// as `unavailable`, without exposing the cause.
+/// [`unchecked_session_caller`] for endpoints that answer any failure other
+/// than a 401, or the 503 of a session store that cannot be read, as
+/// `unavailable`, without exposing the cause.
 #[cfg(feature = "server")]
-pub(crate) async fn session_caller_or(
+pub(crate) async fn unchecked_session_caller_or(
     unavailable: &'static str,
 ) -> Result<crate::ops::Caller, ServerFnError> {
-    session_caller()
+    unchecked_session_caller()
         .await
         .map_err(|error| unavailable_unless_unauthorized(error, unavailable))
 }
@@ -187,13 +233,43 @@ pub(crate) async fn session_caller_or(
 fn unavailable_unless_unauthorized(error: ServerFnError, unavailable: &str) -> ServerFnError {
     match error {
         error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
+            code: UNAUTHORIZED | SERVICE_UNAVAILABLE,
+            ..
         } => error,
         error => {
             tracing::error!(%error, unavailable, "Unable to authenticate request");
             server_err(unavailable)
         }
     }
+}
+
+/// The `ops::begin*` of an endpoint that took [`unchecked_session_caller_or`]: the
+/// account check runs in that transaction, so a storage failure there answers
+/// `unavailable` as a failed session lookup does. Its refusals are unchanged.
+#[cfg(feature = "server")]
+pub(crate) fn authenticated<T>(
+    begun: Result<T, crate::ops::OpError>,
+    unavailable: &str,
+) -> Result<T, crate::ops::OpError> {
+    use crate::ops::OpError;
+    begun.map_err(|error| match error.kind() {
+        OpError::Internal(_) => {
+            tracing::error!(%error, unavailable, "Unable to authenticate request");
+            OpError::Internal(unavailable.to_owned())
+        }
+        _ => error,
+    })
+}
+
+/// For tests: whether `result` failed as a session whose person is gone,
+/// foreign or deactivated does, signed out with a 401.
+#[cfg(all(test, feature = "server"))]
+pub(crate) fn signed_out<T>(result: &Result<T, ServerFnError>) -> bool {
+    matches!(
+        result,
+        Err(ServerFnError::ServerError { code: UNAUTHORIZED, message, .. })
+            if message == crate::ops::ACCOUNT_NOT_ACTIVE
+    )
 }
 
 #[cfg(all(test, feature = "server"))]

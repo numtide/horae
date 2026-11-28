@@ -76,13 +76,19 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 .await
                 .unwrap();
             // The session gate sees the committed Manager. Its materialized
-            // reader must wait for and observe this winning revocation.
+            // reader must wait for and observe this winning revocation: a
+            // deactivation signs the session out, a revoked grant refuses.
             let (response, ()) =
                 tokio::join!(api.call(name, body.clone(), Some(&cookie), false), async {
                     wait_for_blocked(pool, pid).await;
                     writer.commit().await.unwrap();
                 });
-            assert_eq!(response.status(), StatusCode::FORBIDDEN, "{name}");
+            let refused = if deactivate {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::FORBIDDEN
+            };
+            assert_eq!(response.status(), refused, "{name}");
             let error = response.text().await.unwrap();
             for field in ["PRIVATE-HTTP", "total_cents", "project_name", "minutes"] {
                 assert!(!error.contains(field), "{name}: {error}");

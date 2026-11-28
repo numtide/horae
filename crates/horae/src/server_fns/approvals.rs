@@ -15,7 +15,7 @@ pub async fn submit_week(
     week_start: String,
     context: TimesheetWriteContext,
 ) -> Result<Approval, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
 
     let ws = parse_date(&week_start, "week_start")?;
@@ -43,7 +43,7 @@ pub async fn list_approvals(
     status: Option<String>,
     week_start: String,
 ) -> Result<Vec<ApprovalSummary>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     list_week(&state.db, caller, status, &week_start).await
 }
@@ -79,7 +79,7 @@ async fn approve_as(
 /// Approve a single submitted week.
 #[server]
 pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let id = parse_uuid(&approval_id, "approval_id")?;
     let state = crate::state::global_state().await;
     approve_as(&state.db, caller, &[id], &*state.plugins)
@@ -95,7 +95,7 @@ pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerF
 /// denied outright.
 #[server]
 pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let ids = approval_ids
         .iter()
         .map(|s| parse_uuid(s, "approval_id"))
@@ -111,7 +111,7 @@ pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, Ser
 /// submit (and approve) wrote.
 #[server]
 pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let approval_id = parse_uuid(&approval_id, "approval_id")?;
     let state = crate::state::global_state().await;
     reopen_as(&state.db, caller, approval_id, &*state.plugins).await?;

@@ -126,6 +126,19 @@ fn assert_forbidden<T: std::fmt::Debug>(result: Result<T, OpError>, context: imp
     );
 }
 
+/// A session whose person is inactive, foreign or unknown is signed out
+/// before the operation runs.
+#[track_caller]
+fn assert_signed_out<T: std::fmt::Debug>(
+    result: Result<T, OpError>,
+    context: impl std::fmt::Debug,
+) {
+    assert!(
+        matches!(result, Err(OpError::Unauthenticated(_))),
+        "{context:?}: {result:?}"
+    );
+}
+
 // ── Who may read and save the branding ───────────────────────────────────────
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -209,13 +222,13 @@ async fn branding_refuses_inactive_foreign_and_unknown_people_even_for_noops(poo
         .unwrap();
     let before = row_version(&pool, ids.org_id).await;
     for actor in [ids.user_id, foreign.user_id, Uuid::now_v7()] {
-        assert_forbidden(read(&pool, ids.org_id, actor).await, actor);
+        assert_signed_out(read(&pool, ids.org_id, actor).await, actor);
         for name in [None, Some("Unauthorized change")] {
             let requested = OrgBranding {
                 provider_name: name.map(str::to_owned),
                 ..default_branding()
             };
-            assert_forbidden(
+            assert_signed_out(
                 save(&pool, ids.org_id, actor, &requested).await,
                 (actor, name),
             );
@@ -234,7 +247,7 @@ async fn a_missing_organization_is_not_an_unchanged_save(pool: PgPool) {
         &default_branding(),
     )
     .await;
-    assert_forbidden(result, "missing organization");
+    assert_signed_out(result, "missing organization");
 }
 
 // ── What a save writes ───────────────────────────────────────────────────────
@@ -455,7 +468,11 @@ async fn branding_rechecks_authority_after_the_organization_wait(pool: PgPool) {
                 .unwrap()
                 .unwrap()
                 .unwrap();
-            assert_forbidden(result, (deactivate, change));
+            if deactivate {
+                assert_signed_out(result, (deactivate, change));
+            } else {
+                assert_forbidden(result, (deactivate, change));
+            }
             // The revocation itself moves the row, so compare its values.
             assert_eq!(stored(&pool, ids.org_id).await, default_branding());
         }
@@ -488,7 +505,7 @@ async fn branding_rechecks_authority_after_a_deactivation_wait(pool: PgPool) {
         .unwrap()
         .unwrap()
         .unwrap();
-    assert_forbidden(result, "deactivated");
+    assert_signed_out(result, "deactivated");
     assert_eq!(row_version(&pool, ids.org_id).await, before);
 }
 
@@ -545,7 +562,7 @@ async fn branding_holds_authority_until_its_write_commits(pool: PgPool) {
         .unwrap()
         .unwrap()
         .unwrap();
-    assert_forbidden(
+    assert_signed_out(
         save(&pool, ids.org_id, ids.user_id, &default_branding()).await,
         "after revocation",
     );
@@ -650,9 +667,22 @@ async fn the_settings_pages_need_company_write(pool: PgPool) {
 async fn an_administrator_of_another_organization_cannot_change_the_zone(pool: PgPool) {
     let ours = administrator(&pool).await;
     let theirs = administrator(&pool).await;
-    assert_forbidden(
+    assert_signed_out(
         set_zone(&pool, ours.org_id, theirs.user_id, "Asia/Tokyo").await,
-        "foreign",
+        "foreign session",
+    );
+    // A token naming the other organization reaches the operation, which
+    // refuses it.
+    let mut write = crate::ops::begin(
+        &pool,
+        Caller::token(ours.org_id, theirs.user_id, Uuid::now_v7()),
+    )
+    .await
+    .unwrap();
+    let result = set_timezone(&mut write.tx, &write.actor, "Asia/Tokyo").await;
+    assert_forbidden(
+        write.commit(result, &Recorder::default()).await,
+        "foreign token",
     );
     assert_eq!(workspace_zone(&pool, ours.org_id).await, "UTC");
 }

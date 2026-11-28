@@ -185,6 +185,16 @@ async fn snapshot(pool: &PgPool) -> serde_json::Value {
     .unwrap()
 }
 
+/// A session whose person is gone, foreign or deactivated is signed out.
+#[track_caller]
+fn assert_signed_out(result: Result<(), ServerFnError>, operation: Operation) {
+    assert!(
+        crate::server_fns::signed_out(&result),
+        "{operation:?} must sign out an inactive session: {result:?}"
+    );
+}
+
+#[track_caller]
 fn assert_denied(result: Result<(), ServerFnError>, operation: Operation) {
     assert!(
         matches!(
@@ -219,14 +229,16 @@ async fn commands_and_status_require_current_active_tenant_administrator(pool: P
             .execute(&pool)
             .await
             .unwrap();
-            assert_denied(
-                run(&pool, ids.org_id, ids.user_id, job, operation).await,
-                operation,
-            );
+            let result = run(&pool, ids.org_id, ids.user_id, job, operation).await;
+            if active {
+                assert_denied(result, operation);
+            } else {
+                assert_signed_out(result, operation);
+            }
             assert_eq!(snapshot(&pool).await, before);
         }
         for actor in [foreign.user_id, Uuid::now_v7()] {
-            assert_denied(
+            assert_signed_out(
                 run(&pool, ids.org_id, actor, job, operation).await,
                 operation,
             );
@@ -328,14 +340,16 @@ async fn import_access_rechecks_revocation_after_organization_and_actor_waits(po
                 () = wait_for_blocked(&pool, blocker) => {},
             }
             revoker.commit().await.unwrap();
-            assert_denied(
-                tokio::time::timeout(Duration::from_secs(5), pending.join_next())
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .unwrap(),
-                operation,
-            );
+            let result = tokio::time::timeout(Duration::from_secs(5), pending.join_next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            if deactivate {
+                assert_signed_out(result, operation);
+            } else {
+                assert_denied(result, operation);
+            }
             assert_eq!(snapshot(&pool).await, before);
         }
     }
@@ -434,8 +448,9 @@ async fn foreign_and_missing_jobs_never_reveal_or_change_another_tenant(pool: Pg
             );
         }
     }
+    // A session naming an organization its person is not in is signed out.
     for operation in OPERATIONS {
-        assert_denied(
+        assert_signed_out(
             run(&pool, Uuid::now_v7(), owner.user_id, job, operation).await,
             operation,
         );

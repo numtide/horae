@@ -419,16 +419,8 @@ async fn task_edit_rejects_actor_deactivated_after_waiting_for_actor_lock(pool: 
     wait_for_blocked(&pool, holder).await;
     hold.commit().await.unwrap();
     let result = pending.await.unwrap();
-    assert!(
-        matches!(
-            result,
-            Err(ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            })
-        ),
-        "{result:?}"
-    );
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(&result), "{result:?}");
     assert_eq!(
         sqlx::query_scalar!("SELECT name FROM tasks WHERE id=$1", ids.task_id)
             .fetch_one(&pool)

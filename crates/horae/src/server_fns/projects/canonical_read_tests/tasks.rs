@@ -339,12 +339,9 @@ async fn task_catalog_uses_current_actor_and_never_foreign_tasks(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    assert!(
-        tasks_for_viewer(&pool, &viewer, None, TaskRead::Catalog)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    // The deactivated session is signed out.
+    let result = tasks_for_viewer(&pool, &viewer, None, TaskRead::Catalog).await;
+    assert!(crate::server_fns::signed_out(&result), "{result:?}");
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

@@ -9,7 +9,7 @@ use axum::response::{Html, IntoResponse, Redirect};
 use tower_sessions::Session;
 
 use super::page::{LoginAssets, LoginVariant, render};
-use super::session::{clear_session, set_session_user_id};
+use super::session::{clear_session, set_session_user};
 
 /// `GET /auth/login` in dev mode — the one-click "Sign in as Admin" page.
 pub async fn login_page(State(assets): State<LoginAssets>) -> impl IntoResponse {
@@ -46,7 +46,7 @@ pub async fn dev_login_post(
             "Failed to rotate session",
         )
     })?;
-    set_session_user_id(&session, row.id)
+    set_session_user(&session, row.id, row.org_id)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write session"))?;
 
@@ -111,7 +111,7 @@ pub async fn logout_post(session: Session, body: axum::body::Bytes) -> impl Into
 /// Announces the sign-out and empties the session.
 async fn end_session(session: &Session) {
     // Capture the user before clearing the session so the logout can be announced.
-    if let Some(uid) = super::session::get_session_user_id(session).await {
+    if let Ok(Some(uid)) = super::session::get_session_user_id(session).await {
         let state = crate::state::global_state().await;
         let payload = async {
             let mut connection = state.db.acquire().await?;

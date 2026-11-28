@@ -272,13 +272,16 @@ async fn task_creation_fails_closed_for_unavailable_actor_permissions(pool: PgPo
             &TaskRateEdit::Preserve {},
         )
         .await;
+        // The deactivated session is signed out; unusable state refuses.
+        let refused = if invalid == "inactive" {
+            UNAUTHORIZED
+        } else {
+            FORBIDDEN
+        };
         assert!(
             matches!(
                 result,
-                Err(ServerFnError::ServerError {
-                    code: FORBIDDEN,
-                    ..
-                })
+                Err(ServerFnError::ServerError { code, .. }) if code == refused
             ),
             "{invalid}: {result:?}"
         );
@@ -451,15 +454,7 @@ async fn task_creation_waits_behind_the_organization_before_authorizing(pool: Pg
         .unwrap();
     revocation.commit().await.unwrap();
     let result = request.await.unwrap();
-    assert!(
-        matches!(
-            result,
-            Err(ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            })
-        ),
-        "{result:?}"
-    );
+    // The deactivated session is signed out.
+    assert!(crate::server_fns::signed_out(&result), "{result:?}");
     assert_eq!(task_count(&pool, ids.org_id).await, 1);
 }

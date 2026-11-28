@@ -539,7 +539,13 @@ async fn scoped_csv_empty_header_rechecks_activity_and_state_after_capacity(pool
             .unwrap();
         }
         assert_eq!(receiver.recv().await.unwrap(), b"queued");
-        assert_eq!(pending.await.unwrap().unwrap_err(), StatusCode::FORBIDDEN);
+        // A deactivated session is signed out; bad stored state is refused.
+        let refused = if deactivate {
+            StatusCode::UNAUTHORIZED
+        } else {
+            StatusCode::FORBIDDEN
+        };
+        assert_eq!(pending.await.unwrap().unwrap_err(), refused);
         assert!(receiver.recv().await.is_none());
     }
 }

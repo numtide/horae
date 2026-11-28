@@ -1678,7 +1678,8 @@ mod tests {
         .await
         .err()
         .expect("an inactive person read the tasks");
-        assert_eq!(refusal.status, StatusCode::FORBIDDEN);
+        // The session caller is signed out by the read's transaction.
+        assert_eq!(refusal.status, StatusCode::UNAUTHORIZED);
         released("begin_read");
     }
 

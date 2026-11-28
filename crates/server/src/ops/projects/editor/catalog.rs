@@ -65,13 +65,7 @@ pub async fn read(
             projects: &[],
         },
     );
-    let organization_currency = sqlx::query_scalar!(
-        "SELECT default_currency FROM organizations WHERE id = $1",
-        org_id,
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(storage)?;
+    let organization_currency = actor.organization()?.default_currency.clone();
     let mut clients = sqlx::query_as!(
         CreationClient,
         "SELECT id, name, currency, active, NULL::bigint AS default_rate_cents FROM clients

@@ -21,7 +21,7 @@ pub use rates::{load_person_rates, update_person_rates};
 /// report/approval identity resolver or project assignment picker.
 #[server]
 pub async fn list_people(week: chrono::NaiveDate) -> Result<PeoplePage, ServerFnError> {
-    let caller = session_caller_or("People directory is unavailable").await?;
+    let caller = unchecked_session_caller_or("People directory is unavailable").await?;
     let state = crate::state::global_state().await;
     people_page(&state.db, caller, week).await.map_err(op_error)
 }
@@ -32,7 +32,10 @@ pub(crate) async fn people_page(
     caller: Caller,
     week: chrono::NaiveDate,
 ) -> Result<PeoplePage, ops::OpError> {
-    let mut read = ops::begin_read(db, caller).await?;
+    let mut read = authenticated(
+        ops::begin_read(db, caller).await,
+        "People directory is unavailable",
+    )?;
     let result = ops::people::directory::page(&mut read.tx, &read.actor, week).await;
     read.finish(result).await
 }
@@ -42,7 +45,7 @@ pub(crate) async fn people_page(
 /// including archived people requires permission to view everyone.
 #[server]
 pub async fn list_users(include_inactive: bool) -> Result<Vec<UserListItem>, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     let mut read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
     let result = ops::people::list(&mut read.tx, &read.actor, include_inactive).await;
@@ -57,7 +60,7 @@ pub async fn create_user(
     name: String,
     profile: String,
 ) -> Result<UserListItem, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let profile = provisioning::parse_profile(&profile)
         .ok_or_else(|| err(BAD_REQUEST, "Choose one of the built-in profiles"))?;
     let state = crate::state::global_state().await;
@@ -73,7 +76,7 @@ pub async fn add_harvest_people(
     people: Vec<NewPerson>,
     activation: Activation,
 ) -> Result<AddedPeople, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let state = crate::state::global_state().await;
     add_people(
         &state.db,
@@ -91,7 +94,7 @@ pub async fn add_harvest_people(
 /// time entries are kept (FR-002).
 #[server]
 pub async fn set_user_active(user_id: String, active: bool) -> Result<UserListItem, ServerFnError> {
-    let caller = session_caller().await?;
+    let caller = unchecked_session_caller().await?;
     let user_id = parse_uuid(&user_id, "user_id")?;
     let state = crate::state::global_state().await;
     change_user_active(&state.db, &*state.plugins, caller, user_id, active).await

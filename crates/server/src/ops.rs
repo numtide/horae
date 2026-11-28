@@ -46,10 +46,49 @@ pub mod reports;
 pub mod time;
 pub mod time_reads;
 
-pub use actor::{Actor, Channel};
-pub use error::OpError;
+pub use actor::{Actor, Channel, OrganizationSettings};
+pub use error::{ACCOUNT_NOT_ACTIVE, OpError};
 
 pub type Tx = Transaction<'static, Postgres>;
+
+/// The statement that bounds a transaction's statement and idle limits, and
+/// with `"true"` also commits it asynchronously. It has no input, so `BEGIN`
+/// and it go to the server as one simple query, one round trip: `begin_with`
+/// sends its string that way, and Postgres runs every statement in it and
+/// leaves the explicit transaction open.
+///
+/// `current_setting` instead of `pg_settings`, which materializes every GUC
+/// on each call. Millisecond settings always display with a unit Postgres
+/// also accepts as interval input (ms, s, min, h, d), or as a bare 0.
+///
+/// A lock-only read commits without waiting for its WAL flush. Its FOR SHARE
+/// locks give it an xid, so a synchronous commit costs an fsync even though
+/// nothing durable was written. Locks are held and released exactly as
+/// before, and commit visibility does not depend on the flush, so concurrent
+/// access changes still wait for, or invalidate, the read. A crash can only
+/// lose the commit record of a transaction that changed no data, and its
+/// locks die with the server either way.
+macro_rules! limits {
+    ($asynchronous_commit:literal) => {
+        concat!(
+            "SELECT set_config(name, value, true)
+             FROM (
+               SELECT limits.name,
+                 (CASE WHEN current.milliseconds = 0 THEN limits.milliseconds
+                  ELSE LEAST(current.milliseconds, limits.milliseconds) END)::text AS value
+               FROM (VALUES ('statement_timeout', 5000::bigint),
+                            ('idle_in_transaction_session_timeout', 10000::bigint))
+                    AS limits(name, milliseconds)
+               CROSS JOIN LATERAL (SELECT (extract(epoch FROM current_setting(limits.name)::interval)
+                                           * 1000)::bigint AS milliseconds) current
+               UNION ALL
+               SELECT 'synchronous_commit', 'off' WHERE ",
+            $asynchronous_commit,
+            "
+             ) settings"
+        )
+    };
+}
 
 #[derive(Clone, Copy)]
 pub enum ReadIsolation {
@@ -58,7 +97,8 @@ pub enum ReadIsolation {
 }
 
 /// Begin a read whose only writes are `FOR SHARE` authority locks, with the
-/// isolation named in `BEGIN` itself rather than a separate `SET TRANSACTION`.
+/// isolation named in `BEGIN` itself rather than a separate `SET TRANSACTION`,
+/// and the [`limits!`] in the same round trip.
 ///
 /// No INSERT/UPDATE/DELETE/nextval: this transaction commits asynchronously.
 /// READ WRITE is what lets the locks be taken (READ ONLY rejects `FOR SHARE`),
@@ -69,61 +109,72 @@ pub async fn begin_lock_only_read_async_commit(
     isolation: ReadIsolation,
 ) -> Result<Tx, sqlx::Error> {
     let begin = match isolation {
-        ReadIsolation::ReadCommitted => "BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE",
-        ReadIsolation::RepeatableRead => "BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE",
+        ReadIsolation::ReadCommitted => concat!(
+            "BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE; ",
+            limits!("true")
+        ),
+        ReadIsolation::RepeatableRead => concat!(
+            "BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE; ",
+            limits!("true")
+        ),
     };
-    let mut tx = pool.begin_with(begin).await?;
-    configure_limits(&mut tx, Commit::LockOnly).await?;
-    Ok(tx)
+    begin_on_a_working_connection(pool, begin).await
+}
+
+/// `pool.begin_with(begin)`, guarding the pool against what a failure leaves.
+///
+/// On a connection that turns out to be gone, nothing has run yet, so it goes
+/// out once more, on a connection the pool checks first.
+///
+/// A database error after a fused `BEGIN` (a cancelled limits statement)
+/// leaves its connection in an aborted transaction block: sqlx counts the
+/// transaction as open only once the whole text succeeded, so its rollback
+/// guard sends nothing, and it has already taken the connection back to the
+/// pool by the time the error reaches here. The pool then checks every
+/// connection it hands out for a while, and the check closes that one.
+async fn begin_on_a_working_connection(
+    pool: &PgPool,
+    begin: &'static str,
+) -> Result<Tx, sqlx::Error> {
+    let begun = crate::db::retry_on_a_lost_connection(|| pool.begin_with(begin)).await;
+    // Any database error, not only a lost connection: this is also what
+    // keeps an aborted transaction out of the next request.
+    if let Err(sqlx::Error::Database(_)) = &begun {
+        crate::db::check_every_connection();
+    }
+    begun
 }
 
 /// Set local limits only after the caller selects its transaction isolation.
 pub async fn configure_transaction_limits(
     connection: &mut PgConnection,
 ) -> Result<(), sqlx::Error> {
-    configure_limits(connection, Commit::Durable).await
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Commit {
-    Durable,
-    LockOnly,
-}
-
-async fn configure_limits(
-    connection: &mut PgConnection,
-    commit: Commit,
-) -> Result<(), sqlx::Error> {
-    // `current_setting` instead of `pg_settings`, which materializes every GUC
-    // on each call. Millisecond settings always display with a unit Postgres
-    // also accepts as interval input (ms, s, min, h, d), or as a bare 0.
-    //
-    // A lock-only read commits without waiting for its WAL flush. Its FOR
-    // SHARE locks give it an xid, so a synchronous commit costs an fsync even
-    // though nothing durable was written. Locks are held and released exactly
-    // as before, and commit visibility does not depend on the flush, so
-    // concurrent access changes still wait for, or invalidate, the read. A
-    // crash can only lose the commit record of a transaction that changed no
-    // data, and its locks die with the server either way.
-    sqlx::query!(
-        "SELECT set_config(name, value, true)
-         FROM (
-           SELECT limits.name,
-             (CASE WHEN current.milliseconds = 0 THEN limits.milliseconds
-              ELSE LEAST(current.milliseconds, limits.milliseconds) END)::text AS value
-           FROM (VALUES ('statement_timeout', 5000::bigint),
-                        ('idle_in_transaction_session_timeout', 10000::bigint))
-                AS limits(name, milliseconds)
-           CROSS JOIN LATERAL (SELECT (extract(epoch FROM current_setting(limits.name)::interval)
-                                       * 1000)::bigint AS milliseconds) current
-           UNION ALL
-           SELECT 'synchronous_commit', 'off' WHERE $1
-         ) settings",
-        commit == Commit::LockOnly,
-    )
-    .fetch_all(connection)
-    .await?;
+    // Not `query!`: it takes only a literal, and the text is shared with the
+    // fused `BEGIN`s. The statement has no input and returns nothing used.
+    sqlx::query(limits!("false")).fetch_all(connection).await?;
     Ok(())
+}
+
+/// [`configure_transaction_limits`] fused into `begin`, a durable `BEGIN`
+/// naming its isolation.
+async fn begin_bounded(pool: &PgPool, isolation: WriteIsolation) -> Result<Tx, sqlx::Error> {
+    let begin = match isolation {
+        WriteIsolation::ReadCommitted => concat!(
+            "BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE; ",
+            limits!("false")
+        ),
+        WriteIsolation::Serializable => concat!(
+            "BEGIN ISOLATION LEVEL SERIALIZABLE, READ WRITE; ",
+            limits!("false")
+        ),
+    };
+    begin_on_a_working_connection(pool, begin).await
+}
+
+/// [`begin_bounded`] at READ COMMITTED, for writers that run a transaction
+/// of their own, such as the OAuth token endpoint.
+pub async fn begin_read_committed(pool: &PgPool) -> Result<Tx, sqlx::Error> {
+    begin_bounded(pool, WriteIsolation::ReadCommitted).await
 }
 
 /// Who is asking, before the transaction confirms it: the organization and
@@ -298,10 +349,7 @@ pub struct WriteTx {
 /// limits bound how long the actor's `FOR SHARE` locks can hold off access
 /// changes.
 pub async fn begin(pool: &PgPool, caller: Caller) -> Result<WriteTx, OpError> {
-    let mut tx = pool
-        .begin_with("BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE")
-        .await?;
-    configure_transaction_limits(&mut tx).await?;
+    let tx = begin_bounded(pool, WriteIsolation::ReadCommitted).await?;
     let (tx, actor) = load_actor(tx, caller).await?;
     Ok(WriteTx { tx, actor })
 }
@@ -370,9 +418,11 @@ pub async fn begin_read_snapshot(
                 None,
             ),
             SnapshotLimits::LockWait => {
-                let mut tx = pool
-                    .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE")
-                    .await?;
+                let mut tx = begin_on_a_working_connection(
+                    pool,
+                    "BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE",
+                )
+                .await?;
                 // The materialized CTE reads the inherited lock_timeout before
                 // bounding it, so it can be restored once authorized. The
                 // commit need not wait for a WAL flush: see
@@ -395,7 +445,7 @@ pub async fn begin_read_snapshot(
                 (tx, Some(previous))
             }
         };
-        match Actor::load(&mut tx, caller).await {
+        match Actor::load(&mut tx, caller).await.and_then(signed_in) {
             Ok(actor) => {
                 if let Some(previous) = inherited_lock_timeout {
                     let restored =
@@ -433,12 +483,7 @@ pub async fn begin_gated(
     gate: OrganizationLock,
     isolation: WriteIsolation,
 ) -> Result<WriteTx, OpError> {
-    let begin = match isolation {
-        WriteIsolation::ReadCommitted => "BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE",
-        WriteIsolation::Serializable => "BEGIN ISOLATION LEVEL SERIALIZABLE, READ WRITE",
-    };
-    let mut tx = pool.begin_with(begin).await?;
-    configure_transaction_limits(&mut tx).await?;
+    let mut tx = begin_bounded(pool, isolation).await?;
     lock_organization(&mut tx, caller.org_id, gate).await?;
     let (tx, actor) = load_actor(tx, caller).await?;
     Ok(WriteTx { tx, actor })
@@ -478,10 +523,22 @@ impl ReadTx {
 /// [`Actor::load`], rolling back when it fails: by then it may hold the
 /// organization's and person's `FOR SHARE` locks, and any gate taken before it.
 async fn load_actor(mut tx: Tx, caller: Caller) -> Result<(Tx, Actor), OpError> {
-    match Actor::load(&mut tx, caller).await {
+    match Actor::load(&mut tx, caller).await.and_then(signed_in) {
         Ok(actor) => Ok((tx, actor)),
         Err(error) => Err(roll_back(tx, error).await),
     }
+}
+
+/// Refuses a session whose person is gone or no longer active as signed out
+/// ([`OpError::Unauthenticated`]), not as a refusal the operation chooses:
+/// sessions outlive deactivation, and this is what revokes them (FR-002).
+/// The session path reads no account before the transaction, so the check
+/// lives here, in every `begin*`.
+fn signed_in(actor: Actor) -> Result<Actor, OpError> {
+    if actor.channel() == Channel::Session && !actor.is_active() {
+        return Err(OpError::unauthenticated());
+    }
+    Ok(actor)
 }
 
 /// Commits `tx` if `result` succeeded and rolls it back otherwise, before the
